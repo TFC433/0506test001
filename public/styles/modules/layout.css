@@ -1,9 +1,10 @@
 /* File: public/styles/modules/layout.css */
 /*
  * File Path: public/styles/modules/layout.css
- * Version: 1.1.38
- * Date: 2026-04-29
+ * Version: 1.1.39
+ * Date: 2026-05-06
  * Changelog: 
+ * - (v1.1.39) Opportunity Details Visual De-emphasis: Removed card border radius and aggressive Bento hover expansion.
  * - (v1.1.38) Dashboard Phase T2.1 - Trend Widget final semantics alignment.
  * - (v1.1.37) Dashboard Phase T2 - Official release of Dashboard Trend Widget with Cumulative view.
  * - (v1.1.36) Dashboard Phase T1/T1.1 - Added KPI Trend Widget styles.
@@ -73,7 +74,7 @@
     padding: var(--spacing-2) var(--spacing-6) var(--spacing-2) var(--spacing-3);
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: var(--spacing-5);
     border-radius: 0;
     box-shadow: none;
@@ -88,13 +89,16 @@
     flex-direction: row;
     align-items: center;
     gap: var(--spacing-4);
+    min-width: 0;
+    flex: 1;
 }
 
 .header-content > div {
     display: flex;
     align-items: baseline;
     gap: 12px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    min-width: 0;
 }
 
 .header-content h1 {
@@ -102,6 +106,10 @@
     font-weight: 700; 
     margin-bottom: 0;
     color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
 .page-subtitle { 
@@ -109,6 +117,9 @@
     font-size: 13px; 
     margin: 0;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
 }
 
 .header-actions {
@@ -535,4 +546,31 @@
     width: 100%;
     height: 100%;
     min-height: 280px;
+}
+
+/* ==================== Opportunity Details Visual De-emphasis ==================== */
+/* Remove all card border radius and strong shadow boundaries */
+#page-opportunity-details .dashboard-widget,
+#page-opportunity-details .opportunity-info-card,
+#page-opportunity-details .layer-card,
+#page-opportunity-details .header-card-name,
+#page-opportunity-details .header-card-mini,
+#page-opportunity-details .header-card-action-btn,
+#page-opportunity-details .big-stat-card,
+#page-opportunity-details .card-split-royal-blue,
+#page-opportunity-details .timeline-content,
+#page-opportunity-details .interaction-card {
+    border-radius: 0;
+    box-shadow: none;
+}
+
+/* Normalize aggressive Bento hover expansion */
+#page-opportunity-details .layer-card:hover,
+#page-opportunity-details .header-card-name:hover,
+#page-opportunity-details .header-card-mini:hover,
+#page-opportunity-details .big-stat-card:hover,
+#page-opportunity-details .dashboard-widget:hover,
+#page-opportunity-details .header-card-action-btn:hover {
+    transform: none;
+    box-shadow: none;
 }

@@ -68,15 +68,7 @@ body {
     align-items: center;
 }
 
-#user-display {
-    background: var(--card-bg);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--rounded-lg);
-    padding: var(--spacing-3) var(--spacing-4);
-    font-size: var(--font-size-sm);
-    font-weight: 600;
-}
+
 
 /* 響應式與手機版導覽樣式 */
 .mobile-nav-toggle { 
