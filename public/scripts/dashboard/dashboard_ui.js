@@ -84,7 +84,31 @@ const UserProfile = {
         
         // 2. 更新基本資訊
         if (nameEl) nameEl.textContent = storedName;
-        if (avatarEl) avatarEl.textContent = (storedName[0] || 'U').toUpperCase();
+        if (avatarEl) {
+            let sessionAvatar = null;
+            try {
+                const storedAvatar = sessionStorage.getItem('crmSessionAvatar');
+                sessionAvatar = storedAvatar ? JSON.parse(storedAvatar) : null;
+            } catch (e) {
+                console.warn('[UserProfile] Failed to parse session avatar data', e);
+            }
+
+            if (sessionAvatar && sessionAvatar.image && sessionAvatar.color) {
+                avatarEl.textContent = '';
+                avatarEl.style.backgroundColor = sessionAvatar.color;
+                avatarEl.style.backgroundImage = `url("${sessionAvatar.image}")`;
+                avatarEl.style.backgroundSize = '70%';
+                avatarEl.style.backgroundRepeat = 'no-repeat';
+                avatarEl.style.backgroundPosition = 'center';
+            } else {
+                avatarEl.textContent = (storedName[0] || 'U').toUpperCase();
+                avatarEl.style.backgroundColor = '';
+                avatarEl.style.backgroundImage = '';
+                avatarEl.style.backgroundSize = '';
+                avatarEl.style.backgroundRepeat = '';
+                avatarEl.style.backgroundPosition = '';
+            }
+        }
         
         // ★★★ 3. 角色 (從全域定義讀取) ★★★
         
@@ -126,6 +150,8 @@ const UserProfile = {
 
     switchView(viewName) {
         const views = document.getElementById('profile-views');
+        if (!views) return;
+        views.classList.toggle('password-view', viewName === 'password');
         if (viewName === 'password') {
             views.style.transform = 'translateX(-50%)';
         } else {

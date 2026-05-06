@@ -176,7 +176,13 @@ function initSessionUserAvatar() {
         '/assets/avatars/avatar-22.png',
         '/assets/avatars/avatar-23.png',
     ];
-    const colors = ['#6366f1', '#8b5cf6', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
+    const colors = [
+        '#4f46e5', '#6366f1', '#7c3aed', '#8b5cf6',
+        '#2563eb', '#3b82f6', '#0891b2', '#06b6d4',
+        '#0f766e', '#14b8a6', '#059669', '#10b981',
+        '#65a30d', '#ca8a04', '#d97706', '#f59e0b',
+        '#be123c', '#e11d48', '#475569', '#64748b'
+    ];
 
     let sessionData;
     try {

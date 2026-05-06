@@ -128,15 +128,19 @@
 
                     <div class="header-action-group header-action-group-user">
                         <div class="user-dropdown-container" id="user-dropdown-container">
-                            <div class="user-info" id="user-display" onclick="window.toggleUserDropdown(event)" title="使用者選單">
-                                <span class="user-avatar" id="user-avatar" aria-hidden="true"></span>
-                                
+                            <div class="user-info" id="user-display" title="使用者選單">
+                                <button type="button" class="user-profile-trigger" onclick="UserProfile.open(); window.closeUserDropdown();" title="個人帳戶設定">
+                                    <span class="user-avatar" id="user-avatar" aria-hidden="true"></span>
+                                </button>
+
                                 <span class="user-identity-text">
                                     <span class="user-identity-name" id="user-display-name"></span>
                                     <span class="user-identity-account" id="user-display-account"></span>
                                 </span>
 
-                                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M6 9l6 6 6-6"/></svg>
+                                <button type="button" class="user-menu-trigger" onclick="window.toggleUserDropdown(event)" title="使用者選單">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"><path d="M6 9l6 6 6-6"/></svg>
+                                </button>
                             </div>
 
                             <div class="user-dropdown-menu" id="user-dropdown-menu" aria-hidden="true">
@@ -337,21 +341,20 @@
                     <div class="profile-header">
                         <div class="avatar-large" id="profile-avatar">U</div>
                         
-                        <h2 id="profile-name-large" style="margin:0 0 10px 0;">User</h2>
+                        <h2 id="profile-name-large">User</h2>
                         
-                        <div style="display: flex; justify-content: center; margin-bottom: 20px;">
-                            <span id="profile-role-tag" style="padding: 5px 14px; border-radius: 20px; font-size: 0.85rem; font-weight: 500; background: #e0e0e0; color: #333;">
+                        <div class="profile-role-wrap">
+                            <span id="profile-role-tag">
                                 角色載入中...
                             </span>
                         </div>
                     </div>
 
-                    <button class="btn-block btn-primary-action" onclick="UserProfile.switchView('password')">
-                        🔐 修改密碼
-                    </button>
-                    <button class="btn-block btn-logout" onclick="logout()">
-                        登出系統
-                    </button>
+                    <div class="profile-actions">
+                        <button class="btn-block btn-primary-action" onclick="UserProfile.switchView('password')">
+                            🔐 修改密碼
+                        </button>
+                    </div>
                 </div>
 
                 <div class="view-section" id="view-password">
