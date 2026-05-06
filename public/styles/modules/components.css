@@ -1,0 +1,372 @@
+/* ==================== modules/components.css ==================== */
+/* UI 組件與通用元素 - 第5個模組 */
+
+/* 按鈕系統 */
+.action-btn {
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    gap: var(--spacing-2); 
+    padding: var(--spacing-3) var(--spacing-5);
+    border: none; 
+    border-radius: var(--rounded-lg); 
+    font-size: var(--font-size-sm);
+    font-weight: 600; 
+    cursor: pointer; 
+    transition: all 0.2s ease; 
+    text-decoration: none;
+}
+
+.action-btn.primary { 
+    background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple)); 
+    color: white; 
+    box-shadow: var(--shadow-md); 
+}
+
+.action-btn.primary:hover { 
+    transform: translateY(-2px); 
+    box-shadow: var(--shadow-lg); 
+}
+
+.action-btn.secondary { 
+    background: var(--card-bg); 
+    color: var(--text-secondary); 
+    border: 1px solid var(--border-color); 
+}
+
+.action-btn.secondary:hover { 
+    background: var(--glass-bg); 
+    color: var(--text-primary); 
+}
+
+.action-btn.danger { 
+    background: var(--accent-red); 
+    color: white; 
+}
+
+.action-btn.danger:hover { 
+    background: #dc2626; 
+    box-shadow: var(--shadow-md); 
+}
+
+.action-btn svg { 
+    width: 16px; 
+    height: 16px; 
+    flex-shrink: 0; 
+}
+
+.action-btn.icon-btn {
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    width: 44px;
+    height: 44px;
+    padding: 0;
+}
+
+.action-btn.icon-btn:hover {
+    background: var(--glass-bg);
+    color: var(--text-primary);
+}
+
+.action-btn.icon-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.btn-text {
+    transition: all 0.2s ease;
+}
+
+.action-buttons-container { 
+    display: flex; 
+    flex-wrap: wrap; 
+    gap: var(--spacing-2); 
+    align-items: center; 
+}
+
+.action-btn.small { 
+    padding: var(--spacing-2) var(--spacing-3); 
+    font-size: var(--font-size-xs); 
+    margin: 0; 
+    border: none; 
+    color: white; 
+    cursor: pointer; 
+    border-radius: var(--rounded-md); 
+    transition: all 0.2s ease; 
+    display: inline-flex; 
+    align-items: center; 
+    text-align: center; 
+    font-weight: 500; 
+}
+
+.action-btn.small:hover { 
+    transform: translateY(-1px); 
+    box-shadow: var(--shadow-sm); 
+}
+
+.action-btn.small { 
+    background-color: var(--accent-blue); 
+}
+
+.action-btn.small.secondary { 
+    background-color: var(--text-muted); 
+}
+
+.action-btn.small.warn { 
+    background-color: var(--accent-orange); 
+}
+
+.action-btn.small.info { 
+    background-color: var(--accent-blue); 
+}
+
+.action-btn.small.danger { 
+    background-color: var(--accent-red); 
+}
+
+/* 統計卡片 */
+.stats-grid {
+    display: grid;
+    /* 【修改】改為 3 欄佈局 (原本是 4) */
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-6);
+    /* 【關鍵】確保佔滿父容器的 12 欄 */
+    grid-column: span 12;
+}
+
+.stat-card {
+    background: var(--secondary-bg); 
+    border: 1px solid var(--border-color);
+    border-radius: var(--rounded-xl); 
+    padding: var(--spacing-5);
+    cursor: pointer; 
+    transition: all 0.3s ease;
+    position: relative; 
+    overflow: hidden; 
+    box-shadow: var(--shadow-md);
+}
+
+.stat-card:hover { 
+    transform: translateY(-4px); 
+    box-shadow: var(--shadow-lg); 
+    background: var(--card-bg); 
+}
+
+/* 新增卡片顏色樣式 (紫、青、藍綠) */
+.stat-card.purple .stat-icon { background: #8b5cf6; }
+.stat-card.purple { border-left: 4px solid #8b5cf6; } /* 視覺強化 */
+
+.stat-card.cyan .stat-icon { background: #06b6d4; }
+.stat-card.cyan { border-left: 4px solid #06b6d4; }
+
+.stat-card.teal .stat-icon { background: #14b8a6; }
+.stat-card.teal { border-left: 4px solid #14b8a6; }
+
+
+.stat-header { 
+    display: flex; 
+    align-items: center; 
+    gap: var(--spacing-3); 
+    margin-bottom: var(--spacing-4); 
+}
+
+.stat-icon { 
+    width: 40px; 
+    height: 40px; 
+    border-radius: var(--rounded-lg); 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+}
+
+.stat-icon svg { 
+    width: 20px; 
+    height: 20px; 
+    color: white; 
+}
+
+.stat-card.blue .stat-icon { 
+    background: var(--accent-blue); 
+}
+
+.stat-card.green .stat-icon { 
+    background: var(--accent-green); 
+}
+
+.stat-card.orange .stat-icon { 
+    background: var(--accent-orange); 
+}
+
+.stat-card.red .stat-icon { 
+    background: var(--accent-red); 
+}
+
+.stat-label { 
+    font-size: var(--font-size-sm); 
+    color: var(--text-secondary); 
+    font-weight: 600; 
+}
+
+.stat-content { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: baseline; 
+}
+
+.stat-number { 
+    font-size: var(--font-size-3xl); 
+    font-weight: 800; 
+    color: var(--text-primary); 
+    line-height: 1; 
+}
+
+.stat-trend { 
+    font-size: var(--font-size-base); 
+    font-weight: 600; 
+    color: var(--accent-green); 
+    white-space: nowrap; 
+}
+
+/* 資料表格 */
+.data-table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    background: var(--secondary-bg); 
+    border-radius: var(--rounded-lg); 
+    overflow: hidden; 
+    border: 1px solid var(--border-color); 
+}
+
+.data-table th { 
+    background: var(--primary-bg); 
+    padding: var(--spacing-4); 
+    text-align: left; 
+    font-weight: 600; 
+    color: var(--text-secondary); 
+    border-bottom: 1px solid var(--border-color); 
+    font-size: var(--font-size-sm); 
+    text-transform: uppercase; 
+}
+
+.data-table td { 
+    padding: var(--spacing-4); 
+    border-bottom: 1px solid var(--border-color); 
+    vertical-align: middle; 
+    font-size: var(--font-size-sm); 
+    color: var(--text-primary); 
+    font-weight: 500; 
+}
+
+.data-table tr:not(.locked):hover { 
+    background: var(--glass-bg); 
+}
+
+/* Locked Row Styles */
+.data-table tr.locked,
+.data-table tr.disabled {
+    background-color: var(--bg-locked);
+    color: var(--text-locked);
+    cursor: not-allowed;
+}
+
+.data-table tr.locked td,
+.data-table tr.disabled td {
+    color: var(--text-locked);
+}
+
+.data-table tr.locked button,
+.data-table tr.disabled button,
+.data-table tr.locked a,
+.data-table tr.disabled a {
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+
+/* 【新增】讓帶有品牌色的表格列顯示特殊樣式 */
+.data-table tr[style*="--card-brand-color"] {
+    background: color-mix(in srgb, var(--card-brand-color, transparent) 10%, var(--secondary-bg));
+    border-left: 4px solid var(--card-brand-color, var(--border-color));
+    transition: background 0.2s ease;
+}
+
+.data-table tr[style*="--card-brand-color"]:hover {
+    background: color-mix(in srgb, var(--card-brand-color, transparent) 20%, var(--secondary-bg));
+}
+
+.data-table tr:last-child td { 
+    border-bottom: none; 
+}
+
+/* ==================== 特殊按鈕樣式 (含動畫與亮色模式優化) ==================== */
+
+/* 1. 定義動畫 */
+@keyframes btn-shine {
+    0% { left: -100%; opacity: 0; }
+    20% { left: 100%; opacity: 0.5; }
+    100% { left: 100%; opacity: 0; }
+}
+
+@keyframes btn-pulse-shadow {
+    0% { box-shadow: 0 0 8px rgba(139, 92, 246, 0.3); }
+    50% { box-shadow: 0 0 16px rgba(139, 92, 246, 0.6); }
+    100% { box-shadow: 0 0 8px rgba(139, 92, 246, 0.3); }
+}
+
+@keyframes btn-pulse-shadow-light {
+    0% { box-shadow: 0 0 8px rgba(139, 92, 246, 0.4); }
+    50% { box-shadow: 0 0 18px rgba(139, 92, 246, 0.75); }
+    100% { box-shadow: 0 0 8px rgba(139, 92, 246, 0.4); }
+}
+
+/* 2. 按鈕基本樣式 */
+.action-btn.btn-gradient-highlight {
+    position: relative;
+    overflow: hidden;
+    border: 2px solid transparent !important;
+    background-image: linear-gradient(var(--secondary-bg), var(--secondary-bg)),
+                      linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+    background-origin: border-box;
+    background-clip: padding-box, border-box;
+    color: var(--text-primary);
+    font-weight: 700;
+    animation: btn-pulse-shadow 3s infinite ease-in-out;
+}
+
+.action-btn.btn-gradient-highlight::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 50%;
+    height: 100%;
+    background: linear-gradient(to right, transparent 0%, rgba(255, 255, 255, 0.3) 50%, transparent 100%);
+    transform: skewX(-25deg);
+    pointer-events: none;
+    animation: btn-shine 4s infinite linear;
+}
+
+.action-btn.btn-gradient-highlight:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(139, 92, 246, 0.6);
+    background-image: linear-gradient(var(--glass-bg), var(--glass-bg)), 
+                      linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+    animation: none;
+}
+
+/* ==================== 亮色模式特別優化 ==================== */
+[data-theme="light"] .action-btn.btn-gradient-highlight {
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.5); 
+    animation: btn-pulse-shadow-light 3s infinite ease-in-out;
+}
+
+[data-theme="light"] .action-btn.btn-gradient-highlight::after {
+    background: linear-gradient(to right, transparent 0%, rgba(139, 92, 246, 0.25) 50%, transparent 100%);
+}
+
+@keyframes pulse-orange {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-orange) 50%, transparent); }
+    70% { box-shadow: 0 0 0 10px color-mix(in srgb, var(--accent-orange) 0%, transparent); }
+    100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent-orange) 0%, transparent); }
+}

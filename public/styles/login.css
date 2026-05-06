@@ -1,0 +1,232 @@
+/* ==================== 基本重置與變數 ==================== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* ==================== 主題變數定義（與 main.css 保持一致） ==================== */
+:root {
+    /* 色彩 */
+    --primary-bg: #1a1d29;
+    --secondary-bg: #252836;
+    --card-bg: rgba(255, 255, 255, 0.05);
+    --glass-bg: rgba(255, 255, 255, 0.1);
+    --text-primary: #ffffff;
+    --text-secondary: #e2e8f0;
+    --text-muted: #94a3b8;
+    --accent-blue: #4f8df7;
+    --accent-purple: #8b5cf6;
+    --accent-red: #ef4444;
+    --border-color: rgba(255, 255, 255, 0.1);
+    --gradient-bg: linear-gradient(135deg, #1a1d29 0%, #2a2d3a 100%);
+
+    /* 間距與尺寸 */
+    --spacing-2: 8px;
+    --spacing-3: 12px;
+    --spacing-4: 16px;
+    --spacing-5: 20px;
+    --spacing-6: 24px;
+    --spacing-10: 40px;
+    --spacing-12: 48px;
+
+    /* 圓角 */
+    --rounded-lg: 12px;
+    --rounded-xl: 16px;
+    --rounded-2xl: 24px;
+    --rounded-full: 9999px;
+    
+    /* 陰影 */
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+}
+
+[data-theme="light"] {
+    --primary-bg: #f1f5f9;
+    --secondary-bg: #ffffff;
+    --card-bg: #ffffff;
+    --glass-bg: rgba(255, 255, 255, 0.8);
+    --text-primary: #1e293b;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --border-color: #e2e8f0;
+    --gradient-bg: linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%);
+    
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.05), 0 8px 10px -6px rgb(0 0 0 / 0.05);
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    background: var(--gradient-bg);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: var(--text-primary);
+    overflow: hidden;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+/* ==================== 登入容器 ==================== */
+.login-container {
+    padding: var(--spacing-5);
+    z-index: 1;
+    position: relative;
+}
+.login-box {
+    background: var(--card-bg);
+    backdrop-filter: blur(20px);
+    border: 1px solid var(--border-color);
+    padding: var(--spacing-12);
+    border-radius: var(--rounded-2xl);
+    box-shadow: var(--shadow-xl);
+    width: 100%;
+    max-width: 420px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+}
+.login-box::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+    border-radius: var(--rounded-2xl) var(--rounded-2xl) 0 0;
+}
+
+/* --- 【修改】LOGO 樣式 --- */
+.logo-container {
+    margin-bottom: var(--spacing-4);
+    display: flex;
+    justify-content: center;
+}
+
+.login-logo {
+    width: 100%;
+    height: auto;
+    /* 【修改】尺寸縮小 50% (原 300px -> 150px) */
+    max-width: 180px; 
+    display: block;
+}
+
+.login-box p {
+    font-size: 1rem;
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-10);
+    font-weight: 500;
+}
+
+/* ==================== 表單樣式 ==================== */
+#login-form { text-align: left; }
+.form-group { margin-bottom: var(--spacing-6); position: relative; }
+.form-group label {
+    display: block;
+    margin-bottom: var(--spacing-2);
+    font-weight: 700;
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+.form-group input {
+    width: 100%;
+    padding: var(--spacing-4) var(--spacing-5);
+    background: var(--glass-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--rounded-lg);
+    font-size: 1rem;
+    color: var(--text-primary);
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+.form-group input::placeholder { color: var(--text-muted); font-weight: 500; }
+.form-group input:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px rgba(79, 141, 247, 0.1);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* ==================== 提交按鈕 ==================== */
+.submit-btn {
+    background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+    color: white;
+    border: none;
+    padding: var(--spacing-4) var(--spacing-8);
+    border-radius: var(--rounded-lg);
+    font-size: 1rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    width: 100%;
+    box-shadow: var(--shadow-md);
+    position: relative;
+    overflow: hidden;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+.submit-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+.submit-btn:active { transform: translateY(0); }
+.submit-btn:disabled { background: var(--text-muted); cursor: not-allowed; transform: none; box-shadow: none; opacity: 0.6; }
+.submit-btn.loading::after {
+    content: ''; position: absolute; top: 50%; left: 50%;
+    width: 20px; height: 20px; margin: -10px 0 0 -10px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top: 2px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* ==================== 錯誤訊息 ==================== */
+.error-message {
+    color: var(--accent-red); margin-top: var(--spacing-5);
+    font-weight: 600; font-size: 0.9rem; min-height: 24px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: var(--rounded-lg);
+    padding: var(--spacing-2) var(--spacing-4); opacity: 0;
+    transition: all 0.3s ease;
+}
+.error-message:not(:empty) { opacity: 1; }
+.error-message::before { content: "⚠"; margin-right: var(--spacing-2); font-size: 1rem; }
+
+/* ==================== 記住我 & 忘記密碼 ==================== */
+.remember-me {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    margin: var(--spacing-4) 0;
+    font-size: 0.9rem;
+}
+.remember-me input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent-blue); cursor: pointer; }
+.remember-me label { color: var(--text-secondary); cursor: pointer; font-weight: 500; }
+.forgot-password { text-align: center; margin-top: var(--spacing-4); }
+.forgot-password a { color: var(--accent-blue); text-decoration: none; font-size: 0.9rem; font-weight: 500; transition: all 0.3s ease; }
+.forgot-password a:hover { color: var(--accent-purple); text-decoration: underline; }
+
+/* ==================== 社交登入 ==================== */
+.social-login { margin-top: var(--spacing-6); padding-top: var(--spacing-6); border-top: 1px solid var(--border-color); }
+.social-login-title { text-align: center; color: var(--text-muted); font-size: 0.85rem; margin-bottom: var(--spacing-4); }
+.social-buttons { display: flex; gap: var(--spacing-3); justify-content: center; }
+.social-btn {
+    width: var(--spacing-12); height: var(--spacing-12); border-radius: var(--rounded-lg);
+    border: 1px solid var(--border-color); background: var(--glass-bg);
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+.social-btn:hover { background: var(--secondary-bg); transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.social-btn svg { width: 20px; height: 20px; color: var(--text-primary); }
+
+/* ==================== 響應式設計 ==================== */
+@media (max-width: 480px) {
+    .login-box { padding: var(--spacing-6) var(--spacing-5); }
+}

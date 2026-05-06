@@ -1,0 +1,104 @@
+/* ==================== modules/base.css ==================== */
+/* 基本重置與字體 - 第2個模組 */
+
+/* 基本重置與字體 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    background: var(--primary-bg);
+    min-height: 100vh;
+    color: var(--text-primary);
+    overflow-x: hidden;
+    transition: background 0.3s ease, color 0.3s ease;
+    font-size: var(--font-size-base);
+}
+
+/* 輔助工具 */
+.loading { 
+    display: none; 
+    text-align: center; 
+    padding: 60px; 
+    color: var(--text-secondary); 
+}
+
+.loading.show { 
+    display: block; 
+}
+
+.spinner { 
+    border: 3px solid var(--border-color); 
+    border-top: 3px solid var(--accent-blue); 
+    border-radius: 50%; 
+    width: 40px; 
+    height: 40px; 
+    animation: spin 1s linear infinite; 
+    margin: 0 auto 16px; 
+}
+
+@keyframes spin { 
+    0% { transform: rotate(0deg); } 
+    100% { transform: rotate(360deg); } 
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.text-link { 
+    color: inherit; 
+    text-decoration: none; 
+    font-weight: 600; 
+    transition: color 0.2s ease; 
+}
+
+.text-link:hover { 
+    color: var(--accent-blue); 
+    text-decoration: underline; 
+}
+
+/* 使用者選單 */
+.user-info {
+    display: flex;
+    align-items: center;
+}
+
+#user-display {
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--rounded-lg);
+    padding: var(--spacing-3) var(--spacing-4);
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+}
+
+/* 響應式與手機版導覽樣式 */
+.mobile-nav-toggle { 
+    display: none; 
+    background: none; 
+    border: none; 
+    cursor: pointer; 
+    color: var(--text-primary); 
+    padding: 0; 
+}
+
+.mobile-nav-backdrop { 
+    display: none; 
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 100%; 
+    background: rgba(0,0,0,0.5); 
+    z-index: 999; 
+}
+
+.mobile-nav-backdrop.is-open { 
+    display: block; 
+}

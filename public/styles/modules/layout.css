@@ -1,0 +1,538 @@
+/* File: public/styles/modules/layout.css */
+/*
+ * File Path: public/styles/modules/layout.css
+ * Version: 1.1.38
+ * Date: 2026-04-29
+ * Changelog: 
+ * - (v1.1.38) Dashboard Phase T2.1 - Trend Widget final semantics alignment.
+ * - (v1.1.37) Dashboard Phase T2 - Official release of Dashboard Trend Widget with Cumulative view.
+ * - (v1.1.36) Dashboard Phase T1/T1.1 - Added KPI Trend Widget styles.
+ * - (v1.1.35) Dashboard Phase 3 - Upgrade KPI cards with visual accents, subtle hover interaction, spacing hierarchy, and trend typography.
+ * - (v1.1.34) Dashboard Phase 2-B - Tune dashboard tokens for business KPI and information-feed balance.
+ * - (v1.1.33) Dashboard Phase 2-A - Introduce local dashboard design tokens.
+ * - (v1.1.32) Dashboard Phase 1.9-E - Balance 6/6 layout and compact announcement widget.
+ * - (v1.1.31) Dashboard Phase 1.9-D - Restore fixed 3x2 KPI grid with no-overflow guard.
+ * - (v1.1.30) Dashboard Phase 1.9-C - Fix stats-grid grid span conflict for KPI announcement two-column layout.
+ * - (v1.1.29) Dashboard Phase 1.9-B - Adaptive KPI grid to preserve 3-column layout without breaking container width.
+ * - (v1.1.28) Dashboard Phase 1.9 - KPI and announcement two-column top layout.
+ * - (v1.1.27) Dashboard Phase 1.8 - Sharp dashboard blocks and half-width KPI cards.
+ * - (v1.1.26) Dashboard Phase 1.7 - Sharp compact KPI cards and temporary announcement removal.
+ * - (v1.1.25) Dashboard Phase 1.6 - Restore KPI grid and slim stat cards.
+ * - (v1.1.24) Dashboard Phase 1.5 - Density & Alignment Polish.
+ * - (v1.1.23) Dashboard Phase 1 - Industry Layout Structure (Section headers & KPI row).
+ * - (v1.1.22) Dashboard Layout Debug Grid overlay.
+ * - (v1.1.21) Centralized sidebar width variables.
+ * - (v1.1.20) Header Icon Final Polish: removed remaining button feel and standardized icon control behavior.
+ * - (v1.1.19) Header Polish V2 final format regeneration
+ * - (v1.1.19) Removed system icon button feel
+ * - (v1.1.19) Refined header typography
+ * - (v1.1.19) Scoped compact primary header actions
+ * - (v1.1.18) Header Polish V2: removed system icon button feel and refined header typography.
+ * - (v1.1.17) Header Polish V2: refined ghost icon controls and scoped compact header primary actions.
+ * - (v1.1.16) Header Refinement Patch: Added .header-ghost-btn for system controls and adjusted .header-action-group-user margin-left to spacing-4.
+ * - (v1.1.15) Header Hierarchy Patch: Implemented product-grade header grouping with distinct user identity zone using margin-left separation.
+ * - (v1.1.14) Header User Identity Patch: Implemented strict two-line flex layout with 2px gap, removed margin hacks, and normalized text line styles.
+ * - (v1.1.13) Header User Identity Spacing Patch: Increased gap to 12px and refined 2-line identity text styles.
+ * - (v1.1.5) Restored subtle border-bottom to .page-header to provide separation during scrolling.
+ * - (v1.1.5) Removed border-top from #page-content-container. Ensured border-left defines the left boundary.
+ * - (v1.1.4) Added border-left to #page-content-container to complete the content boundary.
+ * - (v1.1.3) Removed border-bottom from .page-header to seamlessly unify it with the app shell.
+ * - (v1.1.3) Added a very subtle border-top to #page-content-container.
+ * - (v1.1.2) Added flex layout to .header-content > div to place title and subtitle inline.
+ * - (v1.1.1) Modified .page-header padding to reduce height and align left edge with sidebar.
+ * - (v1.1.0) Modified .main-content to set padding: 0. Modified .page-header to sticky app bar.
+ */
+
+/* ==================== modules/layout.css ==================== */
+
+/* 應用程式佈局 */
+.app-layout {
+    display: flex;
+    min-height: 100vh;
+    position: relative;
+}
+
+/* 主要內容區域 */
+.main-content {
+    flex: 1; 
+    margin-left: var(--sidebar-width);
+    background: var(--primary-bg); 
+    min-height: 100vh;
+    transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 0;
+}
+
+/* ========== 收合狀態下主內容區的樣式 ========== */
+.app-layout.sidebar-collapsed .main-content {
+    margin-left: var(--sidebar-collapsed-width);
+}
+
+.page-header {
+    background: var(--secondary-bg);
+    border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+    padding: var(--spacing-2) var(--spacing-6) var(--spacing-2) var(--spacing-3);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-5);
+    border-radius: 0;
+    box-shadow: none;
+    margin: 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.header-content { 
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--spacing-4);
+}
+
+.header-content > div {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.header-content h1 {
+    font-size: calc(var(--font-size-xl) + 2px);
+    font-weight: 700; 
+    margin-bottom: 0;
+    color: var(--text-primary);
+}
+
+.page-subtitle { 
+    color: var(--text-secondary); 
+    font-size: 13px; 
+    margin: 0;
+    white-space: nowrap;
+}
+
+.header-actions {
+    display: flex;
+    gap: var(--spacing-5);
+    flex-wrap: wrap;
+    align-items: center;
+    margin-left: auto;
+}
+
+.header-action-group {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-3);
+    flex-wrap: nowrap;
+}
+
+.header-action-group-primary .action-btn {
+    height: 32px;
+    padding: var(--spacing-2) var(--spacing-3);
+    font-size: 14px;
+}
+
+.header-action-group-primary .action-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.header-action-group-user {
+    margin-left: var(--spacing-4);
+}
+
+.header-ghost-btn {
+    padding: 6px;
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: transparent;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none;
+    transform: none;
+}
+
+.header-ghost-btn:hover {
+    background: rgba(148, 163, 184, 0.08);
+    transform: none;
+    opacity: 1;
+}
+
+.header-ghost-btn svg {
+    width: 16px;
+    height: 16px;
+    display: block;
+}
+
+#page-content-container {
+    padding: var(--spacing-7, 28px);
+    border-left: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+/* 儀表板網格 */
+.dashboard-grid-flexible {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: var(--spacing-5);
+}
+
+.grid-col-3 { grid-column: span 3; }
+.grid-col-4 { grid-column: span 4; }
+.grid-col-5 { grid-column: span 5; }
+.grid-col-6 { grid-column: span 6; }
+.grid-col-7 { grid-column: span 7; }
+.grid-col-8 { grid-column: span 8; }
+.grid-col-12 { grid-column: span 12; }
+
+.dashboard-widget {
+    background: var(--secondary-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--rounded-xl);
+    padding: var(--spacing-6);
+    box-shadow: var(--shadow-md);
+    display: flex;
+    flex-direction: column;
+}
+
+.widget-header { 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between; 
+    margin-bottom: var(--spacing-5);
+    flex-shrink: 0;
+}
+
+.widget-title { 
+    font-size: var(--font-size-lg); 
+    font-weight: 700; 
+    color: var(--text-primary); 
+    margin: 0; 
+}
+
+.widget-content { 
+    flex-grow: 1;
+    min-height: 1px;
+}
+
+/* ==================== Dashboard Layout Debug Grid ==================== */
+.dashboard-grid-flexible.debug-grid {
+    position: relative;
+}
+
+.dashboard-grid-flexible.debug-grid::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 999;
+    background-image: repeating-linear-gradient(
+        to right,
+        transparent 0%,
+        transparent calc(100% / 12 - 1px),
+        rgba(148, 163, 184, 0.15) calc(100% / 12 - 1px),
+        rgba(148, 163, 184, 0.15) calc(100% / 12)
+    );
+}
+
+/* ==================== Header User Area Consolidation ==================== */
+
+.header-actions .action-btn.danger {
+    display: none !important;
+}
+
+.header-actions .user-info {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 6px;
+    border-radius: 0; 
+    cursor: pointer;
+    background: transparent;
+    transition: opacity 0.2s ease;
+}
+
+.header-actions .user-info:hover {
+    opacity: 0.8;
+    background: transparent;
+}
+
+.header-actions .user-info svg {
+    flex-shrink: 0;
+    margin-left: 4px;
+    opacity: 0.6;
+}
+
+/* ==================== Session User Avatar Styles ==================== */
+
+.user-avatar {
+    width: 38px;
+    height: 38px;
+    margin-right: 12px; 
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: inline-block;
+    background-color: var(--glass-bg);
+    background-size: 70%;
+    background-repeat: no-repeat;
+    background-position: center;
+    border: 1px solid rgba(148, 163, 184, 0.15); 
+}
+
+/* ==================== Header User Identity Block Styles ==================== */
+
+.user-identity-text {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    line-height: 1.15;
+    min-width: 0;
+    gap: 2px;
+}
+
+.user-identity-name {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+    margin: 0;
+}
+
+.user-identity-account {
+    font-size: 12px;
+    color: var(--text-secondary);
+    opacity: 0.65;
+    white-space: nowrap;
+    margin: 0;
+}
+
+/* ==================== Header User Dropdown ==================== */
+
+.user-dropdown-container {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.user-dropdown-menu {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 160px;
+    background: var(--secondary-bg);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    padding: 6px;
+    z-index: 200;
+    display: none;
+}
+
+.user-dropdown-container.open .user-dropdown-menu {
+    display: block;
+}
+
+.user-dropdown-menu .user-dropdown-item {
+    width: 100%;
+    display: flex !important;
+    align-items: center;
+    justify-content: flex-start;
+    margin: 0;
+    padding: 8px 12px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-primary);
+    text-align: left;
+    height: auto;
+    backdrop-filter: none;
+}
+
+.user-dropdown-menu .user-dropdown-item:hover {
+    background: var(--glass-bg);
+}
+
+.user-dropdown-menu .user-dropdown-item.danger {
+    color: var(--accent-red);
+}
+
+/* ==================== Dashboard Sharp & Dual-Column Layout (Phase 2-B) ==================== */
+
+#page-dashboard {
+    --dashboard-card-radius: 0;
+    --dashboard-kpi-card-padding: 16px 18px;
+    --dashboard-kpi-icon-size: 30px;
+    --dashboard-kpi-number-size: 36px;
+    --dashboard-kpi-number-line-height: 1.05;
+    --dashboard-kpi-label-size: 14px;
+    --dashboard-kpi-trend-size: 13px;
+    --dashboard-announcement-title-size: 14px;
+    --dashboard-announcement-body-size: 12px;
+    --dashboard-announcement-item-padding: 7px 10px;
+    --dashboard-announcement-max-height: 250px;
+}
+
+/* Sharp edges for all dashboard blocks */
+#page-dashboard .dashboard-widget {
+    border-radius: var(--dashboard-card-radius);
+}
+
+/* Fix stats-grid grid span conflict (cite: Phase 1.9-C) */
+#page-dashboard .dashboard-grid-flexible > .stats-grid.grid-col-6 {
+    grid-column: span 6;
+}
+
+/* Fixed 3x2 KPI Grid with Balance (cite: Phase 1.9-E) */
+#page-dashboard .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--spacing-5);
+    min-width: 0;
+}
+
+/* Compact Announcement Widget (cite: Phase 1.9-E) */
+#page-dashboard #announcement-widget {
+    max-height: var(--dashboard-announcement-max-height);
+    overflow: hidden;
+}
+
+#page-dashboard #announcement-widget .widget-header {
+    margin-bottom: 8px;
+}
+
+#page-dashboard #announcement-widget .widget-title {
+    font-size: var(--dashboard-announcement-title-size);
+}
+
+#page-dashboard #announcement-widget .widget-content {
+    overflow-y: auto;
+    min-height: 0;
+    font-size: var(--dashboard-announcement-body-size);
+}
+
+#page-dashboard #announcement-widget button,
+#page-dashboard #announcement-widget .action-btn,
+#page-dashboard #announcement-widget a {
+    font-size: var(--dashboard-announcement-body-size);
+}
+
+#page-dashboard #announcement-widget .announcement-item,
+#page-dashboard #announcement-widget .announcement-card,
+#page-dashboard #announcement-widget .announcement-content {
+    padding: var(--dashboard-announcement-item-padding);
+}
+
+/* Compact KPI Card Styles & Overflow Guard (cite: Phase 1.9-E) */
+#page-dashboard .stat-card {
+    padding: var(--dashboard-kpi-card-padding);
+    min-height: auto;
+    border-radius: var(--dashboard-card-radius);
+    box-shadow: var(--shadow-md);
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+#page-dashboard .stat-card:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
+}
+
+#page-dashboard .stat-label,
+#page-dashboard .stat-number,
+#page-dashboard .stat-trend {
+    min-width: 0;
+    white-space: nowrap;
+}
+
+#page-dashboard .stat-header {
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+#page-dashboard .stat-icon {
+    width: var(--dashboard-kpi-icon-size);
+    height: var(--dashboard-kpi-icon-size);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 6px;
+}
+
+#page-dashboard .stat-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+#page-dashboard .stat-label {
+    font-size: var(--dashboard-kpi-label-size);
+    font-weight: 500;
+    opacity: 0.85;
+    color: var(--text-secondary);
+}
+
+#page-dashboard .stat-number {
+    font-size: var(--dashboard-kpi-number-size);
+    line-height: var(--dashboard-kpi-number-line-height);
+    font-weight: 700;
+    margin-bottom: 4px;
+    color: var(--text-primary);
+}
+
+#page-dashboard .stat-trend {
+    margin-top: 4px;
+    font-size: var(--dashboard-kpi-trend-size);
+    font-weight: 500;
+    opacity: 0.9;
+}
+
+#page-dashboard .stat-trend.trend-positive { color: #10b981; }
+#page-dashboard .stat-trend.trend-negative { color: #ef4444; }
+#page-dashboard .stat-trend.trend-neutral { color: #94a3b8; }
+
+/* KPI Card Colors & Accents */
+#page-dashboard .stat-card.blue { border-top: 2px solid #3b82f6; }
+#page-dashboard .stat-card.blue .stat-icon { background: rgba(59, 130, 246, 0.7); color: #3b82f6; }
+
+#page-dashboard .stat-card.green { border-top: 2px solid #10b981; }
+#page-dashboard .stat-card.green .stat-icon { background: rgba(16, 185, 129, 0.7); color: #10b981; }
+
+#page-dashboard .stat-card.orange { border-top: 2px solid #f97316; }
+#page-dashboard .stat-card.orange .stat-icon { background: rgba(249, 115, 22, 0.7); color: #f97316; }
+
+#page-dashboard .stat-card.purple { border-top: 2px solid #8b5cf6; }
+#page-dashboard .stat-card.purple .stat-icon { background: rgba(139, 92, 246, 0.7); color: #8b5cf6; }
+
+#page-dashboard .stat-card.cyan { border-top: 2px solid #06b6d4; }
+#page-dashboard .stat-card.cyan .stat-icon { background: rgba(6, 182, 212, 0.7); color: #06b6d4; }
+
+#page-dashboard .stat-card.teal { border-top: 2px solid #14b8a6; }
+#page-dashboard .stat-card.teal .stat-icon { background: rgba(20, 184, 166, 0.7); color: #14b8a6; }
+
+/* ==================== KPI Trend Widget (Phase T1/T1.1/T2/T2.1) ==================== */
+#kpi-trend-widget {
+    display: flex;
+    flex-direction: column;
+}
+#kpi-trend-widget .widget-content {
+    flex: 1;
+    padding: 0;
+    overflow: hidden;
+}
+#trend-chart-container {
+    width: 100%;
+    height: 100%;
+    min-height: 280px;
+}

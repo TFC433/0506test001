@@ -1,0 +1,264 @@
+<style>
+    /* 引用週間業務的標籤樣式，讓 UI 一致 */
+    .participants-tags-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 4px 0;
+        margin-bottom: 10px;
+    }
+    .participant-tag {
+        display: inline-flex;
+        cursor: pointer;
+        user-select: none;
+    }
+    .participant-tag input[type="checkbox"] {
+        display: none; /* 隱藏原始 checkbox */
+    }
+    .tag-text {
+        padding: 6px 14px;
+        border: 1px solid var(--border-color);
+        border-radius: 20px; /* 藥丸形狀 */
+        background-color: var(--secondary-bg);
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    .participant-tag:hover .tag-text {
+        background-color: var(--glass-bg);
+        border-color: var(--accent-blue);
+    }
+    /* 選中狀態 - 藍色 */
+    .participant-tag input[type="checkbox"]:checked + .tag-text {
+        background-color: var(--accent-blue);
+        color: white;
+        border-color: var(--accent-blue);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    /* 【*** 關鍵修改：移除了 .search-result-list 和 .search-result-item 的樣式 ***】 */
+
+    /* 搜尋輸入框容器 */
+    .search-input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+    }
+    .search-input-wrapper input {
+        padding-right: 60px; 
+        cursor: pointer;
+    }
+    .search-input-wrapper input:focus {
+        cursor: text;
+    }
+    .search-icons {
+        position: absolute;
+        right: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--text-muted);
+        pointer-events: none;
+    }
+    .clear-btn {
+        pointer-events: auto;
+        cursor: pointer;
+        padding: 2px;
+        border-radius: 50%;
+        display: none;
+        font-size: 0.8rem;
+        width: 20px;
+        height: 20px;
+        text-align: center;
+        line-height: 16px;
+        background: rgba(128, 128, 128, 0.2);
+    }
+    .clear-btn:hover {
+        background-color: var(--accent-red);
+        color: white;
+    }
+    .dropdown-icon {
+        font-size: 0.7rem;
+        opacity: 0.7;
+    }
+
+    /* --- 新增：日期與時間群組樣式 --- */
+    .datetime-group {
+        display: flex;
+        gap: 12px; /* 增加間距 */
+        align-items: center;
+    }
+    .date-input-wrapper {
+        flex: 1.5; /* 日期欄位寬一點 */
+    }
+    .time-input-wrapper {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        background: var(--glass-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--rounded-lg);
+        padding: 0 12px;
+        height: 46px; /* 與 form-input 預設高度對齊 */
+        transition: all 0.2s ease;
+    }
+    .time-input-wrapper:focus-within {
+         border-color: var(--accent-blue);
+         box-shadow: 0 0 0 3px rgba(79, 143, 247, 0.1);
+    }
+    .time-input-wrapper input[type="time"] {
+        border: none;
+        background: transparent;
+        height: 100%;
+        width: 100%;
+        color: var(--text-primary);
+        font-weight: 500;
+        outline: none;
+        font-family: inherit;
+        font-size: var(--font-size-base);
+    }
+    .time-toggle {
+        margin-right: 10px;
+        width: 18px;
+        height: 18px;
+        cursor: pointer;
+        accent-color: var(--accent-blue);
+        flex-shrink: 0;
+    }
+    /* 當時間被停用時的樣式 */
+    .time-input-wrapper.disabled {
+        background: rgba(128, 128, 128, 0.1);
+        opacity: 0.6;
+        border-color: var(--border-color);
+        box-shadow: none;
+    }
+    .time-input-wrapper.disabled input[type="time"] {
+        color: var(--text-muted);
+        pointer-events: none; /* 停用時不允許點擊時間輸入框 */
+    }
+
+    /* 底部同步提示訊息 */
+    .sync-message {
+        background: rgba(79, 143, 247, 0.1);
+        padding: 12px;
+        border-radius: 8px;
+        text-align: center;
+        font-weight: 600;
+        color: var(--accent-blue);
+        font-size: 0.9rem;
+        border: 1px solid rgba(79, 143, 247, 0.2);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+    }
+</style>
+
+<div id="new-meeting-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">📅 建立會議行程</h2>
+            <button class="close-btn" onclick="closeModal('new-meeting-modal')">&times;</button>
+        </div>
+        <form id="new-meeting-form">
+            <div class="form-group" style="position: relative;">
+                <label class="form-label">選擇機會案件 *</label>
+                
+                <div class="search-input-wrapper">
+                    <input type="text" class="form-input" id="meeting-opportunity-search" 
+                           placeholder="點擊選擇或輸入搜尋... 若尚未建立機會請先建立機會" autocomplete="off" required>
+                    <input type="hidden" id="meeting-opportunity-id">
+                    
+                    <div class="search-icons">
+                        <span class="clear-btn" id="meeting-opportunity-clear" title="清除選擇">✕</span>
+                        <span class="dropdown-icon">▼</span>
+                    </div>
+                </div>
+                
+                <div id="meeting-opportunity-results" class="search-result-list"></div>
+                
+                <small style="color: var(--text-muted); margin-top: 6px; display: block; font-size: 0.8rem;">
+                    ※ 系統將依據此機會自動分類 (IoT/DT) 並同步至週報。
+                </small>
+            </div>
+            
+            <div id="manual-meeting-info" style="display: none;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">客戶公司</label>
+                        <input type="text" class="form-input" id="meeting-manual-company">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">聯絡人</label>
+                        <input type="text" class="form-input" id="meeting-manual-contact">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">會議標題 * (重點摘要)</label>
+                <input type="text" class="form-input" id="meeting-title" placeholder="例: DT與IoT介紹 / 規格提案..." required>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">我方參與人員</label>
+                <div id="meeting-participants-container" class="participants-tags-container">
+                    <span style="color: var(--text-muted); font-size: 0.9rem;">載入中...</span>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">開始日期 *</label>
+                <div class="datetime-group">
+                    <div class="date-input-wrapper">
+                        <input type="date" class="form-input" id="meeting-date" required>
+                    </div>
+                    
+                    <div class="time-input-wrapper disabled" id="meeting-time-wrapper" title="勾選以指定具體時間並顯示於標題">
+                        <input type="checkbox" id="enable-meeting-time" class="time-toggle">
+                        <input type="time" id="meeting-time" disabled>
+                    </div>
+                </div>
+                <small style="color: var(--text-muted); margin-top: 6px; display: block; font-size: 0.9rem;">
+                    ※ 勾選時間後，將會顯示於日曆標題 (例如：10:00 會議)；否則僅顯示為全天行程。
+                </small>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">會議地點</label>
+                <input type="text" class="form-input" id="meeting-location" placeholder="如: 客戶辦公室、線上會議...">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">會議內容 / 備註</label>
+                <textarea class="form-textarea" id="meeting-description" placeholder="輸入詳細議程、待辦事項或客戶需求..." rows="4"></textarea>
+            </div>
+            
+            <div class="form-group">
+                <div class="sync-message">
+                    ✨ 自動同步：Google 日曆 + 互動紀錄 + 週間業務
+                </div>
+            </div>
+            
+            <button type="submit" class="submit-btn">📅 建立並同步</button>
+        </form>
+    </div>
+</div>
+
+<div id="week-events-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">📅 本週活動行程</h2>
+            <button class="close-btn" onclick="closeModal('week-events-modal')">&times;</button>
+        </div>
+        <div id="week-events-content">
+            <div class="loading show">
+                <div class="spinner"></div>
+                <p>載入本週活動中...</p>
+            </div>
+        </div>
+    </div>
+</div>

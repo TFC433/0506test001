@@ -1,0 +1,313 @@
+/*
+ * File Path: public/styles/user-profile.css
+ * Version: 1.0.1
+ * Date: 2026-04-28
+ * Changelog: 
+ * - (v1.0.1) Applied Header User Pill Override Patch: Neutralized legacy #user-display styles (background, border, padding, font-size) to allow layout.css rules to take effect.
+ */
+
+/* public/styles/user-profile.css */
+
+/* --- Header User Button Styling (膠囊按鈕樣式) - Neutralized --- */
+#user-display {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    height: auto;
+    font-size: inherit;
+    font-weight: inherit;
+    color: inherit;
+    gap: inherit;
+    box-shadow: none;
+    cursor: pointer;
+    box-sizing: border-box;
+}
+
+#user-display:hover {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    color: inherit;
+}
+
+/* 修正內部 Icon 大小 (Neutralized hover color shift) */
+#user-display svg {
+    width: 16px;
+    height: 16px;
+    stroke-width: 2.5;
+    color: inherit;
+}
+
+#user-display:hover svg {
+    color: inherit;
+}
+
+/* --- Modal 基礎設定 --- */
+.profile-modal {
+    display: none;
+    position: fixed;
+    z-index: 2000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.profile-modal.show {
+    display: flex;
+    opacity: 1;
+}
+
+/* 搖晃動畫 */
+@keyframes modal-shake {
+    0% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    50% { transform: translateX(5px); }
+    75% { transform: translateX(-5px); }
+    100% { transform: translateX(0); }
+}
+
+.modal-shake {
+    animation: modal-shake 0.3s ease-in-out;
+}
+
+/* --- 卡片本體 --- */
+.profile-card {
+    background: #fff;
+    width: 400px;
+    border-radius: 16px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    overflow: hidden;
+    position: relative; /* 為了定位關閉按鈕 */
+    display: flex;
+    flex-direction: column;
+}
+
+/* ★★★ 新增：右上角關閉按鈕 ★★★ */
+.close-profile-btn {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    background: transparent;
+    border: none;
+    font-size: 24px;
+    color: #a0aec0;
+    cursor: pointer;
+    z-index: 10;
+    padding: 0;
+    line-height: 1;
+    transition: color 0.2s;
+}
+
+.close-profile-btn:hover {
+    color: #4a5568;
+}
+
+/* --- 視圖切換容器 --- */
+.profile-views {
+    display: flex;
+    transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+    width: 200%;
+}
+
+.view-section {
+    width: 50%;
+    padding: 30px;
+    box-sizing: border-box;
+}
+
+/* --- 視圖 1: 個人資料 --- */
+.profile-header {
+    text-align: center;
+    margin-bottom: 20px;
+    padding-top: 10px; /* 避開關閉按鈕 */
+}
+
+.avatar-large {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    font-size: 32px;
+    font-weight: bold;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 15px;
+    box-shadow: 0 4px 10px rgba(118, 75, 162, 0.3);
+}
+
+.user-role-badge {
+    background: #e2e8f0;
+    color: #4a5568;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    display: inline-block;
+    margin-top: 5px;
+}
+
+.profile-stats {
+    display: flex;
+    justify-content: space-around;
+    margin: 25px 0;
+    padding: 15px 0;
+    border-top: 1px solid #edf2f7;
+    border-bottom: 1px solid #edf2f7;
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.stat-value {
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #2d3748;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    color: #718096;
+}
+
+/* --- 視圖 2: 修改密碼表單 --- */
+.back-btn {
+    background: none;
+    border: none;
+    color: #718096;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+    padding: 0;
+}
+
+.back-btn:hover {
+    color: #2d3748;
+}
+
+/* --- 輸入框狀態 (紅綠燈) --- */
+.input-group {
+    margin-bottom: 15px;
+    position: relative;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+    color: #4a5568;
+    font-weight: 500;
+}
+
+.form-control {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    font-size: 1rem;
+    transition: all 0.2s;
+    outline: none;
+}
+
+.form-control:focus {
+    border-color: #667eea;
+}
+
+/* 驗證成功狀態 */
+.form-control.is-valid {
+    border-color: #48bb78;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%2348bb78' d='M2.3 6.73L.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+/* 驗證失敗狀態 */
+.form-control.is-invalid {
+    border-color: #f56565;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='%23f56565' viewBox='-2 -2 7 7'%3e%3cpath stroke='%23f56565' d='M0 0l3 3m0-3L0 3'/%3e%3ccircle r='.5'/%3e%3ccircle cx='3' r='.5'/%3e%3ccircle cy='3' r='.5'/%3e%3ccircle cx='3' cy='3' r='.5'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+.feedback-text {
+    font-size: 0.8rem;
+    margin-top: 4px;
+    height: 1.2em; /* 預留高度 */
+}
+
+.text-success { color: #48bb78; }
+.text-danger { color: #f56565; }
+
+/* 強度條 */
+.strength-meter {
+    height: 4px;
+    background: #edf2f7;
+    border-radius: 2px;
+    margin-top: 8px;
+    overflow: hidden;
+    display: flex;
+}
+
+.strength-segment {
+    flex: 1;
+    height: 100%;
+    margin-right: 2px;
+    background: #cbd5e0;
+    transition: background 0.3s;
+}
+
+.strength-weak .strength-segment:nth-child(1) { background: #f56565; }
+.strength-medium .strength-segment:nth-child(1),
+.strength-medium .strength-segment:nth-child(2) { background: #ecc94b; }
+.strength-strong .strength-segment { background: #48bb78; }
+
+/* 按鈕樣式 */
+.btn-block {
+    width: 100%;
+    padding: 12px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+}
+
+.btn-primary-action {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.btn-primary-action:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.btn-primary-action:disabled {
+    background: #cbd5e0;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-logout {
+    background: #fff;
+    border: 2px solid #fed7d7;
+    color: #c53030;
+    margin-top: 10px;
+}
+
+.btn-logout:hover {
+    background: #fff5f5;
+}

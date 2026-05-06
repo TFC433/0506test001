@@ -1,0 +1,302 @@
+<div id="new-opportunity-modal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+        <div class="modal-header">
+            <h2 class="modal-title">🎯 新增機會案件</h2>
+            <button class="close-btn" onclick="closeModal('new-opportunity-modal')">&times;</button>
+        </div>
+
+        <div class="wizard-steps">
+            <div class="step-item active" data-step="1">
+                <div class="step-circle">1</div>
+                <div class="step-label">鎖定對象</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" data-step="2">
+                <div class="step-circle">2</div>
+                <div class="step-label">機會內容</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step-item" data-step="3">
+                <div class="step-circle">3</div>
+                <div class="step-label">歸屬設定</div>
+            </div>
+        </div>
+
+        <form id="new-opportunity-wizard-form">
+            <input type="hidden" id="wiz-path" value="">
+            <input type="hidden" id="wiz-company-county" value="">
+            <input type="hidden" id="wiz-contact-source-id" value="">
+
+            <div class="wizard-step-content" data-step="1">
+                <h3 class="step-instruction">請問您要建立哪種類型的機會？</h3>
+                
+                <div class="entry-options-grid" id="wiz-entry-options">
+                    <div class="entry-option-card" onclick="NewOppWizard.selectPath('card')">
+                        <div class="entry-icon">📇</div>
+                        <div class="entry-title">新名片轉入</div>
+                        <div class="entry-desc">已掃描名片，<br>從「潛在客戶」 轉入</div>
+                    </div>
+                    <div class="entry-option-card" onclick="NewOppWizard.selectPath('old')">
+                        <div class="entry-icon">🏢</div>
+                        <div class="entry-title">經營老客戶</div>
+                        <div class="entry-desc">公司曾建過機會，<br>新增「新的機會案件」</div>
+                    </div>
+                    <div class="entry-option-card" onclick="NewOppWizard.selectPath('new')">
+                        <div class="entry-icon">✨</div>
+                        <div class="entry-title">全新開發</div>
+                        <div class="entry-desc">系統無相關資料，<br>手動建立「公司與聯絡人」</div>
+                    </div>
+                </div>
+
+                <div id="wiz-path-card" class="wiz-path-section" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">搜尋名片 / 選擇最近新增</label>
+                        <input type="text" class="form-input" id="wiz-card-search" placeholder="輸入姓名或公司搜尋..." onkeyup="NewOppWizard.searchCards(this.value)">
+                    </div>
+                    <div id="wiz-card-list" class="search-result-list" style="display: block; max-height: 250px; position: static;">
+                        </div>
+                </div>
+
+                <div id="wiz-path-old" class="wiz-path-section" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">搜尋已建檔公司</label>
+                        <div class="search-input-wrapper">
+                            <input type="text" class="form-input" id="wiz-company-search" placeholder="輸入公司名稱 (例如: 台積電)..." onkeyup="NewOppWizard.searchCompanies(this.value)">
+                        </div>
+                        <div id="wiz-company-results" class="search-result-list"></div>
+                    </div>
+                    
+                    <div id="wiz-old-contact-area" style="display: none; margin-top: 15px; padding: 15px; background: var(--glass-bg); border-radius: 8px;">
+                        <p style="margin-bottom: 10px;"><strong>已選定公司：</strong><span id="wiz-selected-company-name"></span></p>
+                        <div class="form-group">
+                            <label class="form-label">選擇聯絡人</label>
+                            <div class="select-wrapper">
+                                <select class="form-select" id="wiz-old-contact-select" onchange="NewOppWizard.handleContactSelect(this)">
+                                    </select>
+                            </div>
+                        </div>
+                        <div id="wiz-new-contact-inputs" style="display: none; margin-top: 10px;">
+                            <div class="form-row">
+                                <div class="form-group">
+                                    <label class="form-label">姓名 *</label>
+                                    <input type="text" class="form-input" id="wiz-new-contact-name">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">電話/手機</label>
+                                    <input type="text" class="form-input" id="wiz-new-contact-phone">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="wiz-path-new" class="wiz-path-section" style="display: none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">客戶公司 *</label>
+                            <input type="text" class="form-input" id="wiz-manual-company">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">地區 (縣市)</label>
+                            <div class="select-wrapper">
+                                <select class="form-select" id="wiz-manual-county">
+                                    </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">聯絡人姓名 *</label>
+                            <input type="text" class="form-input" id="wiz-manual-contact">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">電話/手機</label>
+                            <input type="text" class="form-input" id="wiz-manual-phone">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="wizard-step-content" data-step="2" style="display: none;">
+                <div class="alert alert-info" id="wiz-step2-summary" style="margin-bottom: 20px;">
+                    </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">機會種類 *</label>
+                        <div class="select-wrapper">
+                            <select class="form-select" id="wiz-opp-type" onchange="NewOppWizard.autoGenerateName()">
+                                </select>
+                        </div>
+                    </div>
+                     <div class="form-group">
+                        <label class="form-label">機會名稱 *</label>
+                        <input type="text" class="form-input" id="wiz-opp-name" placeholder="系統將自動生成，可修改">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">機會來源</label>
+                    <div class="select-wrapper">
+                        <select class="form-select" id="wiz-opp-source">
+                            </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">預計結案日</label>
+                        <input type="date" class="form-input" id="wiz-close-date">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">預計金額</label>
+                        <input type="text" class="form-input" id="wiz-value" placeholder="選填">
+                    </div>
+                </div>
+            </div>
+
+            <div class="wizard-step-content" data-step="3" style="display: none;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">負責業務</label>
+                        <div class="select-wrapper">
+                            <select class="form-select" id="wiz-assignee">
+                                </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">目前階段</label>
+                        <div class="select-wrapper">
+                            <select class="form-select" id="wiz-stage">
+                                </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">備註</label>
+                    <textarea class="form-textarea" id="wiz-notes" rows="3"></textarea>
+                </div>
+
+                <div class="summary-card" style="margin-top: 20px; background: var(--glass-bg); border: 1px solid var(--accent-blue);">
+                    <div style="text-align: center; color: var(--text-muted); font-size: 0.9rem; margin-bottom: 5px;">即將建立</div>
+                    <div style="text-align: center; font-weight: 700; font-size: 1.1rem; color: var(--text-primary);" id="wiz-final-preview">
+                        </div>
+                </div>
+            </div>
+
+            <div class="wizard-footer">
+                <button type="button" class="action-btn secondary" id="wiz-btn-prev" onclick="NewOppWizard.prevStep()" style="display: none;">&lt; 上一步</button>
+                <span id="wiz-btn-spacer" style="flex-grow: 1;"></span> 
+                
+                <button type="button" class="action-btn primary" id="wiz-btn-next" onclick="NewOppWizard.nextStep()">下一步 &gt;</button>
+                <button type="submit" class="action-btn primary" id="wiz-btn-submit" style="display: none;">✅ 建立機會</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="edit-opportunity-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">✏️ 編輯機會案件</h2>
+            <button class="close-btn" onclick="closeModal('edit-opportunity-modal')">&times;</button>
+        </div>
+        <form id="edit-opportunity-form">
+            <input type="hidden" id="edit-opportunity-rowIndex">
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">機會名稱 *</label>
+                    <input type="text" class="form-input" id="edit-opportunity-name" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">機會種類</label>
+                    <div class="select-wrapper">
+                        <select class="form-select" id="edit-opportunity-type">
+                            <option value="">請選擇...</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">客戶公司</label>
+                    <input type="text" class="form-input" id="edit-customer-company" disabled>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">公司所在縣市</label>
+                    <div class="select-wrapper">
+                        <select class="form-select" id="edit-company-county">
+                            <option value="">讀取中...</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">主要聯絡人</label>
+                    <input type="text" class="form-input" id="edit-main-contact" disabled>
+                </div>
+                 <div class="form-group">
+                    <label class="form-label">機會來源</label>
+                    <div class="select-wrapper">
+                        <select class="form-select" id="edit-opportunity-source">
+                            <option value="">請選擇...</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">目前階段</label>
+                    <div class="select-wrapper">
+                        <select class="form-select" id="edit-current-stage">
+                           <option value="">請選擇...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">負責業務</label>
+                    <div class="select-wrapper">
+                        <select class="form-select" id="edit-assignee">
+                            <option value="">請選擇...</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">結案日期</label> 
+                    <input type="date" class="form-input" id="edit-expected-close-date">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">機會價值</label>
+                    <input type="text" class="form-input" id="edit-opportunity-value" placeholder="如: 1,000,000">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">備註</label>
+                <textarea class="form-textarea" id="edit-opportunity-notes"></textarea>
+            </div>
+
+            <button type="submit" class="submit-btn" style="background: #ffc107; color: #212529;">💾 儲存編輯</button>
+        </form>
+    </div>
+</div>
+
+<div id="kanban-expand-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title" id="kanban-expand-title"></h2>
+            <button class="close-btn" onclick="closeModal('kanban-expand-modal')">&times;</button>
+        </div>
+        <div id="kanban-expand-content" class="widget-content">
+            <div class="loading show"><div class="spinner"></div></div>
+        </div>
+    </div>
+</div>

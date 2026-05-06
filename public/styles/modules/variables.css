@@ -1,0 +1,97 @@
+/*
+ * File Path: public/styles/modules/variables.css
+ * Version: 1.0.1
+ * Date: 2026-04-28
+ * Changelog: 
+ * - (v1.0.1) Centralized sidebar width variables.
+ */
+:root {
+    /* 色彩 - 暗色主題 (優化後) */
+    --primary-bg: #0f172a; /* Slate 900 - 更深的背景 */
+    --secondary-bg: #1e293b; /* Slate 800 - 次級背景 */
+    --card-bg: #1e293b; /* Slate 800 - 卡片背景 */
+    --glass-bg: rgba(30, 41, 59, 0.7); /* 半透明 Slate 800 */
+    --text-primary: #f8fafc; /* Slate 50 - 主要文字 */
+    --text-secondary: #cbd5e1; /* Slate 300 - 次要文字 */
+    --text-muted: #94a3b8; /* Slate 400 - 弱化文字 (對比度 > 4.5:1) */
+    --text-dark: #0f172a; /* 用於淺色背景上的深色文字 */
+    --accent-blue: #60a5fa; /* 亮藍 */
+    --accent-green: #4ade80; /* 亮綠 */
+    --accent-orange: #fb923c; /* 亮橘 */
+    --accent-purple: #a78bfa; /* 亮紫 */
+    --accent-red: #f87171; /* 亮紅 */
+    --border-color: #334155; /* Slate 700 - 邊框，與卡片背景有區別 */
+    --gradient-bg: linear-gradient(135deg, var(--primary-bg) 0%, var(--secondary-bg) 100%);
+
+    /* Sidebar Dimensions */
+    --sidebar-width: 200px;
+    --sidebar-collapsed-width: 80px;
+
+    /* 字體大小 (保持不變) */
+    --font-size-xs: 0.75rem;
+    --font-size-sm: 0.875rem;
+    --font-size-base: 1rem;
+    --font-size-lg: 1.125rem;
+    --font-size-xl: 1.25rem;
+    --font-size-2xl: 1.5rem;
+    --font-size-3xl: 2rem;
+
+    /* 間距 (保持不變) */
+    --spacing-1: 4px;
+    --spacing-2: 8px;
+    --spacing-3: 12px;
+    --spacing-4: 16px;
+    --spacing-5: 20px;
+    --spacing-6: 24px;
+    --spacing-8: 32px;
+    --spacing-10: 40px;
+
+    /* 圓角 (保持不變) */
+    --rounded-sm: 4px;
+    --rounded-md: 8px;
+    --rounded-lg: 12px;
+    --rounded-xl: 16px;
+    --rounded-2xl: 24px;
+    --rounded-full: 9999px;
+
+    /* 陰影 (略微調整) */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.2);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.2);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.4), 0 8px 10px -6px rgb(0 0 0 / 0.2);
+
+    /* Locked State Colors (Dark) */
+    --bg-locked: #1e293b; /* Slate 800 */
+    --text-locked: #94a3b8; /* Slate 400 */
+    --border-locked: #334155; /* Slate 700 */
+}
+
+[data-theme="light"] {
+    /* 色彩 - 亮色主題 (優化後) */
+    --primary-bg: #f1f5f9; /* Slate 100 - 略深的淺灰背景，突顯白色卡片 */
+    --secondary-bg: #ffffff; /* 白色 */
+    --card-bg: #ffffff; /* 白色 */
+    --glass-bg: rgba(255, 255, 255, 0.8); /* 半透明白 */
+    --text-primary: #0f172a; /* Slate 900 - 更深的文字 */
+    --text-secondary: #475569; /* Slate 600 */
+    --text-muted: #64748b; /* Slate 500 */
+    --text-dark: #ffffff; /* 用於深色背景上的淺色文字 */
+    --accent-blue: #2563eb; /* Blue 600 - 加深一點 */
+    --accent-green: #16a34a; /* Green 600 */
+    --accent-orange: #d97706; /* Amber 600 */
+    --accent-purple: #7c3aed; /* Violet 600 */
+    --accent-red: #dc2626; /* Red 600 */
+    --border-color: #cbd5e1; /* Slate 300 - 更清晰的邊框 */
+    --gradient-bg: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+
+    /* 陰影 (亮色模式陰影較淺) */
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.06);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.06);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.06);
+
+    /* Locked State Colors (Light) */
+    --bg-locked: #f1f5f9; /* Slate 100 */
+    --text-locked: #64748b; /* Slate 500 */
+    --border-locked: #cbd5e1; /* Slate 300 */
+}

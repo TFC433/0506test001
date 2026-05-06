@@ -1,0 +1,180 @@
+/* ==================== modules/forms.css ==================== */
+/* 表單與輸入元件樣式 */
+
+/* ==================== 表單基本樣式 ==================== */
+.form-group {
+    margin-bottom: var(--spacing-6);
+    position: relative;
+}
+
+.form-label {
+    display: block;
+    margin-bottom: var(--spacing-2);
+    font-weight: 700;
+    color: var(--text-primary);
+    font-size: var(--font-size-sm);
+    transition: color 0.3s ease;
+}
+
+.form-label.required::after {
+    content: " *";
+    color: var(--accent-red);
+    font-weight: 600;
+}
+
+/* ==================== 表單控件樣式 ==================== */
+.form-input, 
+.form-textarea {
+    width: 100%;
+    padding: var(--spacing-3) var(--spacing-4);
+    border: 2px solid var(--border-color);
+    border-radius: var(--rounded-lg);
+    font-size: var(--font-size-base);
+    background: var(--glass-bg);
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder {
+    color: var(--text-muted);
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.form-input:focus, 
+.form-textarea:focus {
+    outline: none;
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px rgba(79, 143, 247, 0.1);
+    background: var(--card-bg);
+}
+
+.form-input:invalid { border-color: var(--accent-red); }
+.form-input:invalid:focus {
+    border-color: var(--accent-red);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1);
+}
+
+.form-textarea {
+    height: 100px;
+    /* 【關鍵修改】加入 !important 以解決 main.css 載入順序導致的覆蓋問題 */
+    resize: vertical !important;
+    font-family: inherit;
+    line-height: 1.5;
+}
+
+/* ==================== 下拉選單樣式 ==================== */
+.select-wrapper {
+    position: relative;
+    width: 100%;
+    border: 2px solid var(--border-color);
+    border-radius: var(--rounded-lg);
+    background: var(--glass-bg);
+    transition: all 0.2s ease;
+}
+
+.select-wrapper::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: var(--spacing-4);
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23e2e8f0' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: contain;
+    pointer-events: none;
+    transition: all 0.2s ease;
+}
+
+[data-theme="light"] .select-wrapper::after {
+     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23475569' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
+}
+
+.form-select {
+    width: 100%;
+    padding: var(--spacing-3) var(--spacing-4);
+    font-size: var(--font-size-base);
+    color: var(--text-primary);
+    font-weight: 500;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+}
+
+.form-select:focus { outline: none; }
+
+.form-select:focus + .select-wrapper,
+.select-wrapper:has(.form-select:focus) {
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 0 3px rgba(79, 143, 247, 0.1);
+}
+
+.form-select option {
+    background: var(--secondary-bg);
+    color: var(--text-primary);
+    padding: var(--spacing-2);
+}
+
+/* ==================== 表單佈局與按鈕 ==================== */
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-5);
+}
+
+.form-row-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: var(--spacing-4);
+}
+
+.submit-btn {
+    background: linear-gradient(135deg, var(--accent-green) 0%, #16a34a 100%);
+    color: white;
+    border: none;
+    padding: var(--spacing-4) var(--spacing-8);
+    border-radius: var(--rounded-lg);
+    font-size: var(--font-size-base);
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    width: 100%;
+    box-shadow: 0 4px 16px rgba(34, 197, 94, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(34, 197, 94, 0.4);
+}
+.submit-btn:active { transform: translateY(0); }
+.submit-btn:disabled { background: var(--text-muted); cursor: not-allowed; transform: none; box-shadow: none; opacity: 0.6; }
+
+.btn-group {
+    display: flex;
+    gap: var(--spacing-3);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    margin-top: var(--spacing-6);
+    padding-top: var(--spacing-4);
+    border-top: 1px solid var(--border-color);
+}
+.btn-group .submit-btn {
+    min-width: 120px;
+    flex: 0 0 auto;
+}
+
+@media (max-width: 768px) {
+    .form-row, .form-row-3 { grid-template-columns: 1fr; gap: var(--spacing-4); }
+    .submit-btn { padding: var(--spacing-3) var(--spacing-6); font-size: var(--font-size-sm); }
+    .btn-group { flex-direction: column; }
+    .btn-group .submit-btn { width: 100%; }
+}

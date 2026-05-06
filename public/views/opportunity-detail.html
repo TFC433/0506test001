@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>機會詳情</title>
+    <link rel="stylesheet" href="/styles/main.css">
+    <link rel="stylesheet" href="/styles/modules/variables.css">
+    <link rel="stylesheet" href="/styles/modules/components.css">
+    <link rel="stylesheet" href="/styles/modals.css">
+
+    <style>
+        /* 【最終修正】強制確保 widget-content 及其內容可見 */
+        #opp-potential-contacts-container.widget-content {
+            display: block !important;
+            flex-grow: initial !important;
+            min-height: 50px; /* 給予一個最小高度以確保容器不會塌陷 */
+        }
+
+        /* 新增的子頁籤樣式 */
+        .sub-tabs {
+            display: flex;
+            border-bottom: 2px solid var(--border-color);
+            margin-bottom: var(--spacing-5);
+        }
+        .sub-tab-link {
+            padding: var(--spacing-3) var(--spacing-4);
+            cursor: pointer;
+            color: var(--text-muted);
+            border: none;
+            background: none;
+            border-bottom: 3px solid transparent;
+            margin-bottom: -2px; /* 讓 active 的 border 蓋過底線 */
+            transition: all 0.2s ease;
+            
+            font-size: var(--font-size-base); /* 1rem */
+            font-weight: 700; /* 加粗 */
+        }
+        
+        .sub-tab-link.active {
+            color: var(--accent-blue);
+            border-bottom-color: var(--accent-blue);
+            /* 使用 color-mix 產生 20% 透明度的 accent-blue */
+            background-color: color-mix(in srgb, var(--accent-blue) 20%, transparent); 
+            border-radius: var(--rounded-md) var(--rounded-md) 0 0; /* 頂部圓角 */
+        }
+
+        .sub-tab-link:hover {
+            color: var(--text-primary);
+            /* Hover 使用 15% 透明度，比 active 略淡 */
+            background-color: color-mix(in srgb, var(--accent-blue) 15%, transparent); 
+            border-radius: var(--rounded-md) var(--rounded-md) 0 0; /* 同樣追加圓角 */
+            border-bottom-color: var(--border-color); /* 給 hover 一個底線 */
+        }
+        
+        .sub-tab-content {
+            display: none;
+        }
+        .sub-tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="opportunity-detail-container" style="padding: 20px;">
+
+        <div id="opportunity-info-card-container" class="opportunity-info-card" style="margin-bottom: var(--spacing-6);">
+            </div>
+
+        <div id="opportunity-stage-stepper-container" class="dashboard-widget" style="margin-bottom: var(--spacing-6);">
+            <div class="widget-header" style="margin-bottom: 0;">
+                <h2 class="widget-title">機會進程</h2>
+            </div>
+            <div id="opportunity-stage-stepper" class="widget-content">
+                </div>
+        </div>
+
+        <div id="tab-content-events" class="tab-content active" style="margin-bottom: var(--spacing-6);">
+             </div>
+
+        <div id="tab-content-interactions" class="tab-content active" style="margin-bottom: var(--spacing-6);">
+            <div class="interaction-layout">
+                
+                <div class="interaction-history-section">
+        
+                    <div class="sub-tabs">
+                        <button class="sub-tab-link active" data-tab="discussion">動態牆</button>
+                        <button class="sub-tab-link" data-tab="activity">系統活動紀錄</button>
+                    </div>
+                
+                    <div id="discussion-pane" class="sub-tab-content active">
+                        <div id="discussion-timeline" class="interaction-timeline">
+                            </div>
+                    </div>
+                    <div id="activity-pane" class="sub-tab-content">
+                        <div id="activity-log-timeline" class="interaction-timeline">
+                            </div>
+                    </div>
+                
+                </div>
+
+                <div class="interaction-form-section">
+                    <h3 style="margin-bottom: 1.5rem;">新增/編輯互動</h3>
+                    <form id="new-interaction-form">
+                        <input type="hidden" id="interaction-opportunity-id">
+                        <input type="hidden" id="interaction-edit-rowIndex">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">互動類型</label>
+                                <div class="select-wrapper">
+                                    <select class="form-select" id="interaction-event-type" required></select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">互動時間</label>
+                                <input type="datetime-local" class="form-input" id="interaction-time" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">內容摘要 *</label>
+                            <textarea class="form-textarea" id="interaction-summary" placeholder="記錄互動重點..." required></textarea>
+                        </div>
+                         <div class="form-group">
+                            <label class="form-label">下次行動</label>
+                            <input type="text" class="form-input" id="interaction-next-action" placeholder="準備報價單並於下週三前寄出..."></input>
+                        </div>
+                        <button type="submit" class="submit-btn" id="interaction-submit-btn">💾 新增紀錄</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="dashboard-widget" style="margin-top: var(--spacing-6);">
+            <div class="widget-header">
+                <h2 class="widget-title">關聯聯絡人</h2>
+                <button class="action-btn primary" id="add-associated-contact-btn">+ 關聯聯絡人</button>
+            </div>
+            <div id="associated-contacts-list" class="widget-content">
+                </div>
+        </div>
+
+        <div class="dashboard-widget" style="margin-top: var(--spacing-6);">
+            <div class="widget-header">
+                <h2 class="widget-title">關聯機會</h2>
+                <button class="action-btn primary" id="add-associated-opportunity-btn">+ 關聯機會</button>
+            </div>
+            <div id="associated-opportunities-list" class="widget-content">
+                </div>
+        </div>
+
+        <div class="dashboard-widget" style="margin-top: var(--spacing-6);">
+            <div class="widget-header">
+                <h2 class="widget-title">同公司潛在聯絡人</h2>
+            </div>
+            <div id="opp-potential-contacts-container" class="widget-content">
+                </div>
+        </div>
+
+    </div>
+
+    <div id="modal-container"></div>
+
+    <script src="/scripts/core/theme-toggle.js"></script>
+    <script src="/scripts/core/utils.js"></script>
+    
+    <script src="/scripts/services/api.js"></script>
+    <script src="/scripts/services/ui.js"></script>
+    
+    <script src="/scripts/components/chip-wall.js"></script>
+
+    <script src="/scripts/opportunities/details/opportunity-stepper.js"></script>
+    <script src="/scripts/opportunities/details/opportunity-interactions.js"></script>
+    <script src="/scripts/opportunities/details/opportunity-associated-contacts.js"></script>
+    <script src="/scripts/opportunities/details/opportunity-event-reports.js"></script>
+    <script src="/scripts/opportunities/details/opportunity-info-view.js"></script>
+    <script src="/scripts/opportunities/details/opportunity-details-components.js"></script>
+    
+    <script src="/scripts/opportunities/opportunity-details-events.js"></script>
+    <script src="/scripts/opportunities/opportunity-details.js"></script>
+    <script src="/scripts/opportunities/opportunity-modals.js"></script>
+
+    <script src="/scripts/events/event-modal-manager.js"></script>
+    <script src="/scripts/events/event-editor-standalone.js"></script>
+
+</body>
+</html>

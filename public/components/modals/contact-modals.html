@@ -1,0 +1,18 @@
+<div id="interactions-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title">📋 互動紀錄</h2>
+            <button class="close-btn" onclick="closeModal('interactions-modal')">&times;</button>
+        </div>
+        <div class="search-pagination">
+            <input type="text" class="search-box" id="interactions-search" placeholder="搜尋互動紀錄..." onkeyup="searchInteractions()">
+            <div class="pagination" id="interactions-pagination"></div>
+        </div>
+        <div id="interactions-content">
+            <div class="loading show">
+                <div class="spinner"></div>
+                <p>載入互動紀錄中...</p>
+            </div>
+        </div>
+    </div>
+</div>

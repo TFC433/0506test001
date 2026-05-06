@@ -1,0 +1,68 @@
+<fieldset>
+    <legend>會議共通資訊</legend>
+    <div class="form-group">
+        <label for="event-content" class="form-label">會議內容</label>
+        <textarea class="form-textarea" id="event-content" name="eventContent" rows="5" style="resize: vertical;"></textarea>
+    </div>
+    <div class="form-group">
+        <label for="client-questions" class="form-label">客戶提問</label>
+        <textarea class="form-textarea" id="client-questions" name="clientQuestions" rows="3" style="resize: vertical;"></textarea>
+    </div>
+    <div class="form-group">
+        <label for="client-intelligence" class="form-label">客戶情報</label>
+        <textarea class="form-textarea" id="client-intelligence" name="clientIntelligence" rows="3" style="resize: vertical;"></textarea>
+    </div>
+    <div class="form-group">
+        <label for="event-notes" class="form-label">備註</label>
+        <textarea class="form-textarea" id="event-notes" name="eventNotes" rows="2" style="resize: vertical;"></textarea>
+    </div>
+</fieldset>
+
+<fieldset>
+    <legend>IOT 專屬資訊</legend>
+    
+    <div class="form-group">
+        <label for="iot-device-scale" class="form-label">設備規模</label>
+        <textarea class="form-textarea" id="iot-device-scale" name="iot_deviceScale" rows="1" placeholder="例: 機台數量、PLC 數量" style="resize: vertical;"></textarea>
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">生產線特徵 (可多選)</label>
+        <div class="participants-checkbox-group" id="iot-line-features">
+            <label><input type="checkbox" name="iot_lineFeatures" value="工具機"> <span>工具機</span></label>
+            <label><input type="checkbox" name="iot_lineFeatures" value="ROBOT"> <span>ROBOT</span></label>
+            <label><input type="checkbox" name="iot_lineFeatures" value="傳產機"> <span>傳產機</span></label>
+            <label><input type="checkbox" name="iot_lineFeatures" value="PLC"> <span>PLC</span></label>
+        </div>
+    </div>
+    
+    <div class="form-group">
+        <label for="iot-production-status" class="form-label">生產現況</label>
+        <textarea class="form-textarea" id="iot-production-status" name="iot_productionStatus" rows="3" placeholder="客戶目前生產情況" style="resize: vertical;"></textarea>
+    </div>
+    <div class="form-group">
+        <label for="iot-status" class="form-label">IoT現況</label>
+        <textarea class="form-textarea" id="iot-status" name="iot_iotStatus" rows="3" placeholder="客戶 IoT 導入情況" style="resize: vertical;"></textarea>
+    </div>
+    <div class="form-group">
+        <label class="form-label">痛點分類 (可多選)</label>
+        <div class="participants-checkbox-group" id="iot-pain-points">
+            <label><input type="checkbox" name="iot_painPoints" value="Monitoring"> <span>Monitoring</span></label>
+            <label><input type="checkbox" name="iot_painPoints" value="Improve OEE"> <span>Improve OEE</span></label>
+            <label><input type="checkbox" name="iot_painPoints" value="Reduce Man-hours"> <span>Reduce Man-hours</span></label>
+            <label><input type="checkbox" name="iot_painPoints" value="Others"> <span>Others</span></label>
+        </div>
+    </div>
+    <div class="form-group">
+        <label for="iot-pain-point-details" class="form-label">客戶痛點說明</label>
+        <textarea class="form-textarea" id="iot-pain-point-details" name="iot_painPointDetails" rows="3" style="resize: vertical;"></textarea>
+    </div>
+    <div class="form-group">
+        <label for="iot-pain-point-analysis" class="form-label">痛點分析與對策</label>
+        <textarea class="form-textarea" id="iot-pain-point-analysis" name="iot_painPointAnalysis" rows="3" style="resize: vertical;"></textarea>
+    </div>
+    <div class="form-group">
+        <label for="iot-system-architecture" class="form-label">系統架構</label>
+        <textarea class="form-textarea" id="iot-system-architecture" name="iot_systemArchitecture" rows="3" placeholder="系統架構簡圖或文字描述" style="resize: vertical;"></textarea>
+    </div>
+</fieldset>

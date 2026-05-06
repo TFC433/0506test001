@@ -1,0 +1,47 @@
+<style>
+    /* Modal 內部頁籤樣式 */
+    .link-contact-tabs {
+        display: flex;
+        border-bottom: 1px solid var(--border-color);
+        margin-bottom: var(--spacing-5);
+    }
+    .link-contact-tab {
+        padding: var(--spacing-3) var(--spacing-5);
+        cursor: pointer;
+        font-weight: 600;
+        color: var(--text-muted);
+        border-bottom: 3px solid transparent;
+        margin-bottom: -1px;
+    }
+    .link-contact-tab.active {
+        color: var(--accent-blue);
+        border-bottom-color: var(--accent-blue);
+    }
+    .link-contact-tab-content {
+        display: none;
+    }
+    .link-contact-tab-content.active {
+        display: block;
+    }
+    .search-result-list .kanban-card {
+        margin-bottom: var(--spacing-3);
+    }
+</style>
+
+<div id="link-contact-modal" class="modal">
+    <div class="modal-content" style="max-width: 900px;">
+        <div class="modal-header">
+            <h2 class="modal-title">關聯聯絡人</h2>
+            <button class="close-btn" onclick="closeModal('link-contact-modal')">&times;</button>
+        </div>
+
+        <nav class="link-contact-tabs">
+            <div class="link-contact-tab active" data-tab="from-potential">從名片新增</div>
+            <div class="link-contact-tab" data-tab="from-existing">連結現有聯絡人</div>
+            <div class="link-contact-tab" data-tab="create-new">快速建立新聯絡人</div>
+        </nav>
+
+        <div id="link-contact-content-container">
+            </div>
+    </div>
+</div>

@@ -1,0 +1,383 @@
+<style>
+    /* ==================== 事件紀錄編輯 Modal (類報告風格 V5) ==================== */
+
+    #event-log-modal .modal-content {
+        max-width: 1100px; /* 適度寬度 */
+    }
+    
+    #event-log-modal .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: var(--spacing-4);
+        margin-bottom: var(--spacing-6);
+    }
+
+    /* --- 區塊共用樣式 --- */
+    .edit-section-block {
+        margin-bottom: var(--spacing-6);
+        padding-bottom: var(--spacing-6);
+        border-bottom: 1px solid var(--border-color);
+    }
+    .edit-section-block:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+    
+    .section-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: var(--spacing-5);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--glass-bg);
+        padding: 8px 12px;
+        border-radius: 6px;
+    }
+
+    /* --- 報告式表單佈局 (核心 CSS) --- */
+    /* 將 form-group 改造成 Grid，模仿報告的 .info-item */
+    .report-like-form .form-group {
+        display: grid;
+        grid-template-columns: 120px 1fr; /* 左標題固定寬 | 右內容自適應 */
+        gap: 16px;
+        align-items: center; /* 垂直置中 */
+        margin-bottom: 12px;
+    }
+    
+    .report-like-form .form-label {
+        text-align: right;
+        margin-bottom: 0; /* 抵消原本的 margin */
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        font-weight: 600;
+        padding-top: 0;
+    }
+
+    /* 輸入框樣式微調：模仿報告的 .info-value-box */
+    .report-like-form .form-input,
+    .report-like-form .form-textarea {
+        background-color: var(--primary-bg); /* 使用較深的背景色 */
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 10px 12px;
+        font-size: 1rem;
+        color: var(--text-primary);
+        transition: all 0.2s ease;
+        box-shadow: none; /* 移除原本較重的陰影 */
+    }
+
+    .report-like-form .form-input:focus,
+    .report-like-form .form-textarea:focus {
+        background-color: var(--secondary-bg);
+        border-color: var(--accent-blue);
+        box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15); /* 柔和光暈 */
+    }
+    
+    /* --- 第一區塊：類型選擇 (4欄卡片) --- */
+    .type-select-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin-bottom: var(--spacing-5);
+    }
+    .type-select-card {
+        background: var(--secondary-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 6px;
+    }
+    .type-select-card:hover {
+        background: var(--glass-bg);
+        border-color: var(--accent-blue);
+        transform: translateY(-2px);
+    }
+    .type-select-card.selected {
+        background: color-mix(in srgb, var(--accent-blue) 10%, var(--secondary-bg));
+        border-color: var(--accent-blue);
+        box-shadow: 0 0 0 1px var(--accent-blue);
+    }
+    .type-select-icon { font-size: 1.5rem; }
+    .type-select-title { font-weight: 600; font-size: 0.9rem; color: var(--text-primary); }
+
+    /* --- 第二區塊：雙欄佈局 --- */
+    .split-layout-container {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 30px; /* 增加欄間距 */
+        align-items: start;
+    }
+    
+    /* 右欄：參與人員 (膠囊樣式) */
+    .tags-input-container {
+        background: var(--primary-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 10px;
+        min-height: 42px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+    .participant-pill-tag {
+        padding: 4px 12px;
+        border: 1px solid var(--border-color);
+        border-radius: 20px;
+        background-color: var(--secondary-bg);
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        font-weight: 500;
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.2s ease;
+    }
+    .participant-pill-tag:hover { border-color: var(--accent-blue); color: var(--text-primary); }
+    .participant-pill-tag.selected {
+        background-color: var(--accent-blue);
+        color: white;
+        border-color: var(--accent-blue);
+    }
+    
+    /* 紅色警示框樣式 (修正歷史時間) */
+    .warning-input {
+        border-color: var(--accent-red) !important;
+        background-color: color-mix(in srgb, var(--accent-red) 5%, var(--primary-bg)) !important;
+    }
+    .warning-hint {
+        color: var(--accent-red);
+        font-size: 0.8rem;
+        margin-top: 4px;
+        display: block;
+        text-align: right; /* 靠右對齊輸入框 */
+    }
+    
+    /* 針對動態載入的表單內容，也套用報告樣式 */
+    #event-form-container .form-group {
+        display: grid;
+        grid-template-columns: 120px 1fr;
+        gap: 16px;
+        align-items: start; /* 多行文字框需要靠上對齊 */
+        margin-bottom: 12px;
+    }
+    #event-form-container .form-label {
+        text-align: right;
+        margin-bottom: 0;
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        font-weight: 600;
+        padding-top: 10px; /* 與 input 文字基線對齊 */
+    }
+
+    /* 響應式調整 */
+    @media (max-width: 768px) {
+        .report-like-form .form-group, 
+        #event-form-container .form-group {
+            grid-template-columns: 1fr; /* 手機上恢復垂直堆疊 */
+            gap: 6px;
+        }
+        .report-like-form .form-label,
+        #event-form-container .form-label {
+            text-align: left;
+            padding-top: 0;
+        }
+        .split-layout-container {
+            grid-template-columns: 1fr;
+            gap: var(--spacing-6);
+        }
+        .type-select-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    /* --- 保留 Wizard 樣式 (勿刪) --- */
+    .wizard-steps { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding: 0 20px; }
+    .step-item { display: flex; flex-direction: column; align-items: center; position: relative; z-index: 2; color: var(--text-muted); font-weight: 500; opacity: 0.6; transition: all 0.3s ease; }
+    .step-item.active { color: var(--accent-blue); opacity: 1; }
+    .step-circle { width: 36px; height: 36px; border-radius: 50%; background-color: var(--card-bg); border: 2px solid var(--text-muted); display: flex; align-items: center; justify-content: center; font-weight: 700; margin-bottom: 8px; transition: all 0.3s ease; }
+    .step-item.active .step-circle { border-color: var(--accent-blue); background-color: var(--accent-blue); color: white; box-shadow: 0 0 10px rgba(96, 165, 250, 0.4); }
+    .step-line { flex-grow: 1; height: 2px; background-color: var(--border-color); margin: 0 15px; margin-bottom: 20px; }
+    .event-entry-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 10px; }
+    .event-entry-card { background: var(--card-bg); border: 2px solid var(--border-color); border-radius: var(--rounded-lg); padding: 30px 20px; text-align: center; cursor: pointer; transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    .event-entry-card:hover { border-color: var(--accent-blue); background: var(--glass-bg); transform: translateY(-4px); box-shadow: var(--shadow-lg); }
+    .event-entry-card.selected { border-color: var(--accent-blue); background: color-mix(in srgb, var(--accent-blue) 10%, var(--card-bg)); }
+    .type-entry-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
+    .type-card { background: var(--secondary-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px 10px; cursor: pointer; transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; height: 100%; }
+    .type-card:hover { background: var(--glass-bg); border-color: var(--accent-blue); transform: translateY(-2px); }
+    .type-card.selected { background: color-mix(in srgb, var(--accent-blue) 10%, var(--secondary-bg)); border-color: var(--accent-blue); box-shadow: 0 0 0 1px var(--accent-blue); }
+    .type-icon { font-size: 1.5rem; width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; background: var(--primary-bg); border-radius: 50%; flex-shrink: 0; margin-bottom: 5px; }
+    .tag-selection-area { background: var(--glass-bg); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+    .tag-group-label { font-size: 0.9rem; font-weight: 600; color: var(--text-muted); margin-bottom: 10px; display: block; }
+    .tags-container { display: flex; flex-wrap: wrap; gap: 8px; }
+    .wiz-tag { padding: 6px 14px; border: 1px solid var(--border-color); border-radius: 20px; background-color: var(--secondary-bg); color: var(--text-secondary); font-size: 0.9rem; font-weight: 500; cursor: pointer; user-select: none; transition: all 0.2s ease; }
+    .wiz-tag:hover { border-color: var(--accent-blue); }
+    .wiz-tag.selected { background-color: var(--accent-blue); color: white; border-color: var(--accent-blue); box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+</style>
+
+<div id="event-log-modal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2 class="modal-title" id="event-log-modal-title">✏️ 編輯事件紀錄</h2>
+            <div class="action-buttons">
+                <button class="close-btn" onclick="closeModal('event-log-modal')">&times;</button>
+            </div>
+        </div>
+        
+        <form id="event-log-form" class="report-like-form">
+            <input type="hidden" id="event-log-eventId" name="eventId">
+            <input type="hidden" id="event-log-opportunityId" name="opportunityId">
+            <input type="hidden" id="event-log-companyId" name="companyId">
+            <input type="hidden" id="event-log-type" name="eventType">
+
+            <div id="event-link-section" style="display: none;"></div>
+
+            <div class="edit-section-block">
+                <div class="section-title">1. 事件定義</div>
+                
+                <div class="type-select-grid">
+                    <div class="type-select-card" data-type="general" onclick="selectEventTypeForEdit('general', this)">
+                        <div class="type-select-icon">📝</div>
+                        <div class="type-select-title">一般紀錄</div>
+                    </div>
+                    <div class="type-select-card" data-type="iot" onclick="selectEventTypeForEdit('iot', this)">
+                        <div class="type-select-icon">🏭</div>
+                        <div class="type-select-title">IoT (物聯網)</div>
+                    </div>
+                    <div class="type-select-card" data-type="dt" onclick="selectEventTypeForEdit('dt', this)">
+                        <div class="type-select-icon">📊</div>
+                        <div class="type-select-title">DT (數位雙生)</div>
+                    </div>
+                    <div class="type-select-card" data-type="dx" onclick="selectEventTypeForEdit('dx', this)">
+                        <div class="type-select-icon">🚀</div>
+                        <div class="type-select-title">DX (開發案件)</div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="event-log-name" class="form-label">事件名稱 *</label>
+                    <input type="text" class="form-input" id="event-log-name" name="eventName" required placeholder="例如：需求訪談、產品簡報...">
+                </div>
+            </div>
+
+            <div class="edit-section-block">
+                <div class="split-layout-container">
+                    <div class="left-col">
+                        <div class="section-title">2. 時空資訊</div>
+                        
+                        <div class="form-group">
+                            <label for="event-log-createdTime" class="form-label" style="color:var(--accent-red);">發生時間</label>
+                            <div>
+                                <input type="datetime-local" class="form-input warning-input" id="event-log-createdTime" name="createdTime">
+                                <small class="warning-hint">⚠️ 修改此欄位將變更歷史排序</small>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="event-log-location" class="form-label">會議地點</label>
+                            <input type="text" class="form-input" id="event-log-location" name="visitPlace" placeholder="例如：客戶會議室、線上...">
+                        </div>
+                    </div>
+
+                    <div class="right-col">
+                        <div class="section-title">3. 與會人員</div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">我方人員</label>
+                            <div id="edit-our-participants-container" class="tags-input-container">
+                                <span style="color: var(--text-muted); font-size: 0.9rem;">載入中...</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">客戶人員</label>
+                            <div style="width: 100%;">
+                                <div id="edit-client-participants-container" class="tags-input-container" style="margin-bottom: 8px;">
+                                    <span style="color: var(--text-muted); font-size: 0.9rem;">載入中...</span>
+                                </div>
+                                <input type="text" class="form-input" id="edit-manual-participants" placeholder="其他人員 (逗號分隔)..." style="font-size: 0.9rem;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="edit-section-block" style="border-bottom: none;">
+                <div class="section-title">4. 詳細內容</div>
+                <div id="event-form-container"></div>
+            </div>
+
+            <div class="btn-group" style="margin-top: 0; padding-top: 0; border-top: none;">
+                <button type="button" class="action-btn danger" id="event-log-delete-btn" style="display: none; margin-right: auto;">🗑️ 刪除事件</button>
+                <button type="submit" class="action-btn primary" id="event-log-submit-btn">💾 儲存變更</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="new-event-wizard-modal" class="modal">
+    <div class="modal-content" style="max-width: 900px;">
+        <div class="modal-header">
+            <h2 class="modal-title">📝 新增事件紀錄</h2>
+            <button class="close-btn" onclick="closeModal('new-event-wizard-modal')">&times;</button>
+        </div>
+        <div class="wizard-steps">
+            <div class="step-item active" data-wiz-step="1"><div class="step-circle">1</div><div class="step-label">鎖定對象</div></div>
+            <div class="step-line"></div>
+            <div class="step-item" data-wiz-step="2"><div class="step-circle">2</div><div class="step-label">定義事件</div></div>
+            <div class="step-line"></div>
+            <div class="step-item" data-wiz-step="3"><div class="step-circle">3</div><div class="step-label">與會人員</div></div>
+        </div>
+        <form id="event-wizard-form" onsubmit="return false;">
+            <div class="wizard-step-content" data-wiz-content="1">
+                <h3 class="step-instruction">請問這個事件的關聯對象是？</h3>
+                <div class="event-entry-grid">
+                    <div class="event-entry-card" onclick="EventWizard.selectTargetType('opportunity', this)">
+                        <div class="entry-icon" style="width: 60px; height: 60px; font-size: 2.5rem; display: flex; align-items: center; justify-content: center;">🎯</div>
+                        <div class="entry-title">機會案件</div>
+                        <div class="entry-desc">代表特定的合作或訂單，<br>如MTU，機會導向的事件紀錄。</div>
+                    </div>
+                    <div class="event-entry-card" onclick="EventWizard.selectTargetType('company', this)">
+                        <div class="entry-icon" style="width: 60px; height: 60px; font-size: 2.5rem; display: flex; align-items: center; justify-content: center;">🏢</div>
+                        <div class="entry-title">公司總覽</div>
+                        <div class="entry-desc">互動中沒有特定的機會背景，<br>如SI、代理商、MTB的商談紀錄</div>
+                    </div>
+                </div>
+                <div id="wiz-target-search-area" style="margin-top: 20px; display: none;">
+                     <div class="form-group"><label class="form-label" id="wiz-search-label">搜尋名稱</label><div class="search-input-wrapper"><input type="text" class="form-input" id="wiz-target-search" placeholder="點擊輸入搜尋，或直接從下方選擇..." onkeyup="EventWizard.searchTargets(this.value)" onclick="EventWizard.searchTargets(this.value)"></div><div id="wiz-target-results" class="search-result-list"></div></div>
+                </div>
+            </div>
+            <div class="wizard-step-content" data-wiz-content="2" style="display: none;">
+                <div class="type-entry-grid">
+                    <div class="type-card selected" onclick="EventWizard.selectEventType('general', this)"><div class="type-icon">📝</div><div class="type-info"><div class="type-title">一般紀錄</div><div class="type-desc"></div></div></div>
+                    <div class="type-card" onclick="EventWizard.selectEventType('iot', this)"><div class="type-icon">🏭</div><div class="type-info"><div class="type-title">IoT</div><div class="type-desc"></div></div></div>
+                    <div class="type-card" onclick="EventWizard.selectEventType('dt', this)"><div class="type-icon">📊</div><div class="type-info"><div class="type-title">DT</div><div class="type-desc"></div></div></div>
+                    <div class="type-card" onclick="EventWizard.selectEventType('dx', this)"><div class="type-icon">🚀</div><div class="type-info"><div class="type-title">DX</div><div class="type-desc"></div></div></div>
+                </div>
+                <div class="form-row"><div class="form-group"><label class="form-label">事件名稱 *</label><input type="text" class="form-input" id="wiz-event-name" placeholder="例如：需求訪談、產品簡報..."></div><div class="form-group"><label class="form-label">發生時間 *</label><input type="datetime-local" class="form-input" id="wiz-event-time"></div></div>
+                <div class="form-group"><label class="form-label">會議地點</label><input type="text" class="form-input" id="wiz-event-location" placeholder="例如：客戶會議室、Teams線上..."></div>
+            </div>
+            <div class="wizard-step-content" data-wiz-content="3" style="display: none;">
+                <h3 class="step-instruction">請問有哪些人參與？</h3>
+                <div class="tag-selection-area"><span class="tag-group-label">我方人員 (點擊選取)</span><div class="tags-container" id="wiz-our-participants"><span style="color: var(--text-muted);">載入中...</span></div></div>
+                <div class="tag-selection-area"><span class="tag-group-label">客戶人員 (點擊選取)</span><div class="tags-container" id="wiz-client-participants"><span style="color: var(--text-muted);">請先鎖定對象以載入聯絡人</span></div></div>
+                <div class="form-group"><input type="text" class="form-input" id="wiz-manual-participants" placeholder="手動輸入其他與會者 (用逗號分隔)"></div>
+            </div>
+            <div class="wizard-footer">
+                <button type="button" class="action-btn secondary" id="wiz-prev-btn" onclick="EventWizard.prevStep()" style="display: none;">&lt; 上一步</button>
+                <span style="flex-grow: 1;"></span>
+                <button type="button" class="action-btn primary" id="wiz-next-btn" onclick="EventWizard.nextStep()">下一步 &gt;</button>
+                <button type="button" class="action-btn primary" id="wiz-create-btn" onclick="EventWizard.create()" style="display: none;">✅ 建立並編輯詳情</button>
+            </div>
+        </form>
+    </div>
+</div>

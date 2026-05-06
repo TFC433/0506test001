@@ -1,0 +1,200 @@
+<div id="event-log-report-modal" class="modal">
+    <div class="modal-content large">
+        <div class="modal-header">
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <h2 class="modal-title">📄 事件紀錄報告</h2>
+                <button class="action-btn danger" id="report-delete-event-btn" style="padding: 6px 14px; font-size: 0.9rem; opacity: 0.9;">🗑️ 刪除</button>
+            </div>
+
+            <div class="action-buttons">
+                <button class="action-btn warn" id="edit-event-log-btn">✏️ 編輯</button>
+                <button class="close-btn" onclick="closeModal('event-log-report-modal')">&times;</button>
+            </div>
+        </div>
+        <div id="event-log-report-content" class="report-view">
+             </div>
+    </div>
+</div>
+
+<style>
+.modal-content.large {
+    max-width: 1200px;
+}
+.report-view { 
+    padding: 10px; 
+    background-color: var(--primary-bg);
+}
+
+/* --- 1. 標頭區 (動態色 + 不換行按鈕) --- */
+.report-header {
+    /* 預設背景 */
+    --header-color: var(--accent-purple); 
+    background: color-mix(in srgb, var(--header-color) 15%, var(--primary-bg));
+    border: 1px solid color-mix(in srgb, var(--header-color) 30%, var(--border-color));
+    padding: 20px 25px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    transition: all 0.3s ease;
+}
+
+.report-title {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    line-height: 1.3;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.report-header .card-tag {
+    font-size: 0.9rem;
+    padding: 4px 10px;
+    border-radius: 20px;
+    vertical-align: middle;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.header-meta-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+    border-top: 1px solid color-mix(in srgb, var(--header-color) 20%, var(--border-color));
+    padding-top: 12px;
+}
+
+/* 強制按鈕不換行 */
+#event-log-report-modal .modal-header .action-buttons {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2);
+    flex-wrap: nowrap; 
+    overflow-x: auto; 
+    padding-bottom: 4px; 
+}
+
+#event-log-report-modal .modal-header .action-buttons .action-btn {
+    white-space: nowrap; 
+    flex-shrink: 0; 
+}
+
+
+/* --- 2. 資訊區塊 (垂直卡片佈局 - 統一底色) --- */
+.report-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.report-section {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 24px;
+    box-shadow: var(--shadow-sm);
+}
+
+.section-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin-bottom: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* --- 3. 欄位內容 (左標題 + 右模擬輸入框) --- */
+.info-item {
+    display: grid;
+    grid-template-columns: 140px 1fr; 
+    gap: 16px;
+    padding: 12px 0;
+    align-items: start; 
+}
+
+.info-label {
+    font-weight: 600;
+    color: var(--text-muted);
+    font-size: 0.95rem;
+    padding-top: 10px; 
+    text-align: right;
+}
+
+/* 模擬輸入框樣式 */
+.info-value-box {
+    background-color: var(--primary-bg);
+    border: 1px solid var(--border-color);
+    padding: 10px 12px;
+    border-radius: 8px;
+    min-height: 42px; 
+    height: auto; 
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap; 
+    gap: 8px;
+    color: var(--text-primary);
+    font-size: 1rem;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* --- 4. 人員膠囊 (Pills) --- */
+.participants-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    width: 100%;
+}
+
+.participant-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    background-color: var(--secondary-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    transition: all 0.2s ease;
+}
+
+/* 我方人員膠囊 */
+.participant-pill.our-side {
+    background-color: color-mix(in srgb, var(--accent-blue) 10%, var(--secondary-bg));
+    border-color: color-mix(in srgb, var(--accent-blue) 30%, var(--border-color));
+    color: var(--accent-blue);
+}
+/* 客戶人員膠囊 (淡綠底) */
+.participant-pill.client-side {
+    background-color: color-mix(in srgb, var(--accent-green) 10%, var(--secondary-bg));
+    border-color: color-mix(in srgb, var(--accent-green) 30%, var(--border-color));
+    color: var(--accent-green);
+}
+
+
+/* --- PDF 列印優化 --- */
+@media print {
+    .report-header, .report-section, .info-value-box {
+        box-shadow: none;
+        border: 1px solid #ccc !important;
+        background-color: #fff !important;
+        color: #000 !important;
+    }
+    .participant-pill {
+        border: 1px solid #999;
+        background: none !important;
+        color: #000 !important;
+    }
+    .modal-header .action-buttons, #report-delete-event-btn {
+        display: none !important;
+    }
+}
+</style>

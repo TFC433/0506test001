@@ -1,0 +1,37 @@
+{
+  "name": "tfc-crm-system",
+  "version": "1.0.0",
+  "description": "TFC CRM系統 - 以機會為核心的客戶關係管理",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "test": "node test.js"
+  },
+  "keywords": [
+    "CRM",
+    "Google Sheets",
+    "Calendar",
+    "Node.js"
+  ],
+  "author": "TFC Team",
+  "license": "MIT",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@highcharts/map-collection": "^2.3.2",
+    "@supabase/supabase-js": "^2.93.2",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "googleapis": "^126.0.1",
+    "highcharts": "^12.5.0",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

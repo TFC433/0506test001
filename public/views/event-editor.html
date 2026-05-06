@@ -1,0 +1,266 @@
+<div id="standalone-event-modal" class="modal" style="display: none; z-index: 2000;">
+    <div class="modal-content" style="width: 95%; max-width: 1400px; height: 92vh; max-height: 92vh; padding: 0; display: flex; flex-direction: column; border-radius: 16px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: none;">
+        
+        <div class="modal-header" style="flex-shrink: 0; background: #ffffff; padding: 16px 32px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <div style="background: var(--accent-blue); width: 4px; height: 24px; border-radius: 2px;"></div>
+                <div>
+                    <h2 class="modal-title" id="standalone-modal-title" style="font-size: 1.25rem; font-weight: 700; color: var(--text-primary); line-height: 1.2;">編輯事件</h2>
+                </div>
+            </div>
+            <button class="close-btn" id="standalone-close-btn" style="background: transparent; border: none; font-size: 1.8rem; line-height: 1; cursor: pointer; color: var(--text-secondary); transition: transform 0.2s;">&times;</button>
+        </div>
+        
+        <div class="modal-body" style="flex-grow: 1; overflow-y: auto; padding: 24px 40px; background-color: #f8fafc;">
+            
+            <form id="standalone-event-form">
+                <input type="hidden" id="standalone-eventId" name="eventId">
+                <input type="hidden" id="standalone-opportunityId" name="opportunityId">
+                <input type="hidden" id="standalone-companyId" name="companyId">
+                <input type="hidden" id="standalone-type" name="eventType">
+
+                <div id="standalone-event-link-section" style="display: none;"></div>
+
+                <div class="iso-card" style="padding: 16px 24px; margin-bottom: 24px;">
+                    <label class="section-label" style="margin-bottom: 10px;">請選擇事件種類</label>
+                    <div class="type-select-grid">
+                        <div class="type-select-card" data-type="general" onclick="EventEditorStandalone.selectType('general', this)">
+                            <div class="type-icon">📝</div>
+                            <div class="type-text">一般紀錄</div>
+                        </div>
+                        <div class="type-select-card" data-type="iot" onclick="EventEditorStandalone.selectType('iot', this)">
+                            <div class="type-icon">🏭</div>
+                            <div class="type-text">IoT 物聯網</div>
+                        </div>
+                        <div class="type-select-card" data-type="dt" onclick="EventEditorStandalone.selectType('dt', this)">
+                            <div class="type-icon">📊</div>
+                            <div class="type-text">DT 數位雙生</div>
+                        </div>
+                        <div class="type-select-card" data-type="dx" onclick="EventEditorStandalone.selectType('dx', this)">
+                            <div class="type-icon">🚀</div>
+                            <div class="type-text">DX 開發案件</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="iso-card">
+                    <div class="form-group" style="margin-bottom: 24px;">
+                        <label for="standalone-name" class="iso-label">事件名稱 <span style="color: var(--accent-red)">*</span></label>
+                        <input type="text" class="iso-input large-input" id="standalone-name" name="eventName" required placeholder="例如：需求訪談、產品簡報...">
+                    </div>
+
+                    <div class="split-layout">
+                        <div class="layout-col">
+                            <h4 class="col-title">時空資訊</h4>
+                            <div class="form-group">
+                                <label for="standalone-createdTime" class="iso-label">發生時間</label>
+                                <input type="datetime-local" class="iso-input" id="standalone-createdTime" name="createdTime">
+                            </div>
+                            <div class="form-group">
+                                <label for="standalone-location" class="iso-label">地點</label>
+                                <input type="text" class="iso-input" id="standalone-location" name="visitPlace" placeholder="輸入地點...">
+                            </div>
+                        </div>
+
+                        <div class="layout-col">
+                            <h4 class="col-title">參與人員</h4>
+                            
+                            <div class="form-group">
+                                <label class="iso-label">我方人員 <span class="hint-text">(點擊選取)</span></label>
+                                <div id="standalone-our-participants-container" class="tags-input-container">
+                                    <span style="color: var(--text-muted); font-size: 0.9rem;">載入中...</span>
+                                </div>
+                                <label class="sub-label">手動追加成員</label>
+                                <input type="text" class="iso-input" id="standalone-manual-our-participants" placeholder="輸入姓名 (逗號分隔)...">
+                            </div>
+
+                            <div class="form-group">
+                                <label class="iso-label">客戶人員 <span class="hint-text">(點擊選取)</span></label>
+                                <div id="standalone-client-participants-container" class="tags-input-container client-tags">
+                                    <span style="color: var(--text-muted); font-size: 0.9rem;">載入中...</span>
+                                </div>
+                                <label class="sub-label">手動追加成員</label>
+                                <input type="text" class="iso-input" id="standalone-manual-participants" placeholder="輸入姓名 (逗號分隔)...">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="workspace-container" class="workspace-grid">
+                    
+                    <div class="main-column">
+                        <div class="iso-card full-height flex-column-card">
+                            <h3 class="card-title">詳細內容</h3>
+                            
+                            <div class="form-group flex-grow-group">
+                                <label class="iso-label">會議內容</label>
+                                <textarea class="form-textarea flex-grow-input" id="standalone-content" name="eventContent" placeholder="請輸入會議紀錄..."></textarea>
+                            </div>
+
+                            <div class="form-group flex-grow-group">
+                                <label class="iso-label">客戶提問</label>
+                                <textarea class="form-textarea flex-grow-input" id="standalone-questions" name="clientQuestions" placeholder="客戶提出的問題..."></textarea>
+                            </div>
+                            
+                            <div class="form-group flex-grow-group">
+                                <label class="iso-label">客戶情報</label>
+                                <textarea class="form-textarea flex-grow-input" id="standalone-intelligence" name="clientIntelligence" placeholder="收集到的情報..."></textarea>
+                            </div>
+
+                            <div class="form-group flex-grow-group">
+                                <label class="iso-label">備註</label>
+                                <textarea class="form-textarea flex-grow-input" id="standalone-notes" name="eventNotes" placeholder="其他備註事項..."></textarea>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="side-column" id="standalone-specific-wrapper" style="display: none;">
+                        <div class="iso-card full-height" id="specific-info-card" style="transition: background-color 0.3s ease, border-color 0.3s ease;">
+                            <h3 class="card-title" id="specific-card-title" style="transition: color 0.3s ease; border-bottom-color: inherit;">專屬資訊</h3>
+                            <div id="standalone-specific-container" class="dynamic-form-content"></div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </form>
+        </div>
+
+        <div class="modal-footer" style="flex-shrink: 0; background: #ffffff; padding: 16px 32px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
+            <button type="button" class="action-btn danger ghost" id="standalone-delete-btn" style="display: none;">🗑️ 刪除事件</button>
+            <div style="margin-left: auto; display: flex; gap: 12px;">
+                <button type="button" class="action-btn secondary" onclick="EventEditorStandalone.close()" style="min-width: 100px;">取消</button>
+                <button type="button" class="action-btn primary" id="standalone-submit-btn" onclick="document.getElementById('standalone-event-form').dispatchEvent(new Event('submit', {cancelable: true}))" style="min-width: 120px; box-shadow: 0 4px 6px rgba(79, 141, 247, 0.2);">儲存</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        #standalone-event-modal {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --card-radius: 12px;
+            --input-radius: 8px;
+        }
+
+        /* 卡片容器 */
+        .iso-card {
+            background: #ffffff; border-radius: var(--card-radius); padding: 24px; margin-bottom: 24px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); border: 1px solid rgba(226, 232, 240, 0.8);
+            height: 100%;
+        }
+        
+        .flex-column-card { display: flex; flex-direction: column; }
+        .flex-grow-group { display: flex; flex-direction: column; flex-grow: 1; margin-bottom: 20px; }
+        .flex-grow-group:last-child { margin-bottom: 0; }
+        .flex-grow-input { flex-grow: 1; height: 100%; min-height: 120px; overflow: hidden; resize: none; }
+
+        .card-title {
+            font-size: 1.05rem; font-weight: 700; color: var(--text-primary); margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #f1f5f9;
+            flex-shrink: 0;
+        }
+        .col-title {
+            font-size: 0.9rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 16px;
+        }
+        .section-label {
+            font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: block;
+        }
+        .hint-text {
+            font-weight: normal; color: var(--text-muted); font-size: 0.8em; margin-left: 6px;
+        }
+        
+        /* 【新增】手動輸入小標題樣式 */
+        .sub-label {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 12px; /* 與上方膠囊區拉開距離 */
+            margin-bottom: 6px; /* 與下方輸入框保持適當距離 */
+            font-weight: 500;
+        }
+
+        /* 排版 */
+        .workspace-grid { display: grid; grid-template-columns: 1fr; gap: 24px; }
+        .workspace-grid.has-sidebar { grid-template-columns: 6fr 4fr; align-items: stretch; }
+        .split-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+        @media (max-width: 992px) {
+            .workspace-grid.has-sidebar { grid-template-columns: 1fr; } 
+            .split-layout { grid-template-columns: 1fr; gap: 24px; }
+        }
+
+        /* 輸入框 (標準樣式) */
+        .iso-input, .form-input, .form-textarea, textarea {
+            width: 100%; padding: 10px 14px; border-radius: var(--input-radius);
+            border: 1px solid #cbd5e1; background-color: #fff; color: var(--text-primary);
+            font-size: 0.95rem; line-height: 1.5; transition: all 0.2s ease;
+        }
+        .iso-input:focus, .form-input:focus, textarea:focus {
+            border-color: var(--accent-blue); box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15); outline: none;
+        }
+        .large-input { font-size: 1.1rem; padding: 12px; font-weight: 500; }
+        
+        /* 移除 Ghost Input 樣式，改用標準樣式 */
+        /* .ghost-input { ... } */
+
+        /* 類型選擇 */
+        .type-select-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+        .type-select-card {
+            background: #ffffff; border: 1px solid var(--border-color); border-radius: var(--input-radius);
+            padding: 12px; cursor: pointer; transition: all 0.2s ease; text-align: center;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+            opacity: 0.7; filter: grayscale(100%);
+        }
+        .type-select-card:hover { 
+            border-color: var(--accent-blue); transform: translateY(-1px); opacity: 1; filter: grayscale(0%);
+        }
+        .type-select-card.selected {
+            background-color: #eff6ff; border-color: var(--accent-blue); box-shadow: 0 0 0 1px var(--accent-blue);
+            opacity: 1; filter: grayscale(0%); font-weight: 700;
+        }
+        .type-icon { font-size: 1.4rem; }
+        .type-text { font-weight: 600; font-size: 0.95rem; color: var(--text-primary); }
+
+        /* 人員標籤 */
+        .tags-input-container {
+            min-height: 44px; padding: 6px; border: 1px solid #cbd5e1; border-radius: var(--input-radius);
+            background-color: #fff; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+        }
+        .participant-pill-tag {
+            padding: 4px 12px; border-radius: 20px; font-size: 0.85rem; cursor: pointer; user-select: none;
+            background: #f1f5f9; color: #64748b; transition: all 0.2s ease; border: 1px solid transparent; font-weight: 500;
+        }
+        .tags-input-container:not(.client-tags) .participant-pill-tag.selected {
+            background-color: var(--accent-blue); color: white;
+        }
+        .client-tags .participant-pill-tag.selected {
+            background-color: var(--accent-green); color: white;
+        }
+
+        /* Checkbox Group */
+        .checkbox-group {
+            display: flex; flex-wrap: wrap; gap: 16px; padding: 8px 0;
+        }
+        .checkbox-group label {
+            display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.95rem; color: var(--text-primary);
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: 18px; height: 18px; accent-color: var(--accent-blue); cursor: pointer; margin: 0;
+        }
+
+        #standalone-specific-container .form-group { margin-bottom: 16px; }
+        #standalone-specific-container textarea { min-height: 80px; overflow: hidden; resize: none; }
+        
+        .iso-label, .form-label { display: block; margin-bottom: 6px; font-weight: 600; color: var(--text-secondary); font-size: 0.9rem; }
+        
+        #standalone-event-modal .action-btn { border-radius: 8px; font-weight: 600; }
+        #standalone-event-modal .action-btn.ghost { background: transparent; border: 1px solid var(--accent-red); color: var(--accent-red); padding: 8px 16px; font-size: 0.9rem; }
+        #standalone-event-modal .action-btn.ghost:hover { background: var(--accent-red); color: white; }
+    </style>
+    
+    <script src="/scripts/core/theme-toggle.js"></script>
+    <script src="/scripts/core/utils.js"></script>
+    <script src="/scripts/services/api.js"></script>
+    <script src="/scripts/services/ui.js"></script>
+    
+    <script src="/scripts/events/event-editor-standalone.js"></script>
+</div>

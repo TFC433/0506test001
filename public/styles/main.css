@@ -1,0 +1,21 @@
+/* ==================== main.css - 入口文件 ==================== */
+/* 模組化CSS架構 - 統一載入所有樣式模組 */
+
+/* 基礎設定模組 */
+@import url('./modules/variables.css');   /* 主題與設計系統變數 */
+@import url('./modules/base.css');        /* 基本重置與字體 */
+
+/* 【新增】將 forms.css 和 modals.css 的內容納入模組系統 */
+@import url('forms.css');
+@import url('modals.css');
+
+/* 佈局系統模組 */
+@import url('./modules/layout.css');      /* 應用程式佈局 */
+@import url('./modules/navigation.css');  /* 側邊欄 */
+
+/* UI組件模組 */
+@import url('./modules/components.css');  /* UI組件與通用元素 */
+@import url('./modules/features.css');    /* 業務功能組件 */
+
+/* 響應式模組 */
+@import url('./modules/responsive.css');  /* 響應式與手機版導覽樣式 + 新增優化 */

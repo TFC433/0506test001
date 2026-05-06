@@ -1,0 +1,476 @@
+<style>
+    /* --- 機敏警示卡片 --- */
+    .confidential-card {
+        background-color: #fef2f2;
+        border: 1px solid #fee2e2;
+        border-left: 4px solid #ef4444;
+        border-radius: var(--rounded-lg);
+        padding: 1rem 1.5rem;
+        margin-bottom: 1.5rem;
+        display: flex; align-items: flex-start; gap: 1rem;
+        box-shadow: 0 2px 4px rgba(239, 68, 68, 0.05);
+    }
+    .confidential-icon-wrapper {
+        background-color: #fee2e2; color: #991b1b;
+        width: 32px; height: 32px; border-radius: 50%;
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .confidential-content h3 { color: #991b1b; font-size: 1rem; font-weight: 700; margin: 0 0 0.25rem 0; }
+    .confidential-content p { color: #7f1d1d; font-size: 0.85rem; margin: 0; line-height: 1.4; }
+
+    /* --- 控制面板 --- */
+    .control-panel-card {
+        background: white; padding: 0.75rem 1rem; border-radius: var(--rounded-lg);
+        box-shadow: 0 1px 2px rgba(0,0,0,0.05); margin-bottom: 1.5rem; border: 1px solid #e5e7eb;
+        display: flex; align-items: center; gap: 1rem;
+    }
+    .panel-title { font-size: 1.1rem; font-weight: 700; color: #1e293b; white-space: nowrap; margin-right: auto; }
+    .panel-actions { display: flex; align-items: center; gap: 1rem; flex: 1; justify-content: flex-end; }
+    .search-box-wrapper { flex: 0 0 300px; }
+    .search-box { width: 100%; border-radius: 99px; }
+
+    /* --- Chip Wall (順序條) --- */
+    .chip-wall-container {
+        background: white; padding: 1rem 1.5rem;
+        border-radius: var(--rounded-lg); border: 1px solid #e5e7eb;
+        margin-bottom: 1.5rem; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        transition: opacity 0.3s, filter 0.3s;
+    }
+    .chip-wall-container.disabled {
+        opacity: 0.8;
+        pointer-events: none;
+        background-color: var(--bg-locked, #f1f5f9);
+        position: relative;
+        overflow: hidden;
+    }
+    .chip-wall-container.disabled::after {
+        content: "";
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: repeating-linear-gradient(
+            45deg,
+            rgba(0,0,0,0.02),
+            rgba(0,0,0,0.02) 10px,
+            transparent 10px,
+            transparent 20px
+        );
+        pointer-events: none;
+        z-index: 10;
+    }
+    [data-theme="light"] .chip-wall-container.disabled::after {
+        background: repeating-linear-gradient(
+            45deg,
+            rgba(0,0,0,0.03),
+            rgba(0,0,0,0.03) 10px,
+            transparent 10px,
+            transparent 20px
+        );
+    }
+
+    .chip-wall-title {
+        font-size: 0.85rem; font-weight: 600; color: #64748b; margin-bottom: 0.75rem;
+        display: flex; justify-content: space-between; align-items: center;
+    }
+    .chip-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .chip-item {
+        background-color: #f1f5f9; color: #475569; padding: 0.3rem 0.8rem; border-radius: 999px;
+        font-size: 0.85rem; font-weight: 500; cursor: grab; user-select: none;
+        transition: all 0.2s ease; border: 1px solid transparent; display: flex; align-items: center; gap: 0.5rem;
+    }
+    .chip-item:hover { background-color: #e2e8f0; transform: translateY(-1px); }
+    .chip-item.dragging { opacity: 0.5; border: 1px dashed #94a3b8; background: #fff; }
+    .chip-count { background-color: #cbd5e1; color: #334155; font-size: 0.7rem; padding: 0px 5px; border-radius: 10px; }
+
+    /* --- 表格樣式 --- */
+    .category-group-widget {
+        margin-bottom: 2rem; border: 1px solid #e5e7eb; border-radius: var(--rounded-lg);
+        background: white; box-shadow: 0 1px 3px rgba(0,0,0,0.1); scroll-margin-top: 100px;
+        overflow-x: auto;
+    }
+    .category-header {
+        background-color: #f8fafc; padding: 0.75rem 1.5rem; border-bottom: 1px solid #e5e7eb;
+        display: flex; justify-content: space-between; align-items: center;
+        position: sticky; left: 0; min-width: 1000px; z-index: 5;
+    }
+    .category-title { font-size: 1rem; font-weight: 700; color: #334155; display: flex; align-items: center; gap: 0.5rem; }
+
+    .product-table { border-collapse: collapse; table-layout: fixed; width: max-content; min-width: 100%; }
+    
+    .product-table th, .product-table td {
+        padding: 0.6rem 1rem;
+        border-bottom: 1px solid #f1f5f9;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        font-size: 0.9rem; vertical-align: middle;
+        text-align: left;
+    }
+
+    .product-table th { 
+        background-color: #f8fafc; color: #64748b; font-weight: 600; font-size: 0.8rem;
+        position: relative; user-select: none;
+    }
+
+    .resizer {
+        position: absolute; top: 0; right: 0; width: 8px; height: 100%; cursor: col-resize; z-index: 10;
+        transform: translateX(50%);
+    }
+    .resizer:hover, .resizer.resizing { background: rgba(59, 130, 246, 0.5); }
+
+    .product-table tbody tr { cursor: pointer; transition: background 0.1s; }
+    .product-table tbody tr:not(.locked):hover { background-color: var(--glass-bg, #f8fafc); }
+
+    .product-table tr.locked { background-color: var(--bg-locked); color: var(--text-locked); }
+    .product-table tr.locked td { color: var(--text-locked); }
+
+    /* Tag 樣式 */
+    .tag-pill {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 99px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: middle;
+    }
+    
+    .tag-spec { background-color: #eff6ff; color: #1d4ed8; }
+    .tag-price { background-color: #ecfdf5; color: #047857; font-family: monospace; }
+    
+    .sensitive-value { 
+        font-family: monospace; font-weight: 600; cursor: pointer; 
+        display: inline-block; padding: 2px 10px; border-radius: 99px;
+    }
+    .sensitive-value.masked { color: #94a3b8; background: #f1f5f9; }
+    .sensitive-value.revealed { color: #dc2626; background: #fef2f2; }
+
+    /* 無痕編輯樣式 */
+    .form-control.seamless {
+        border: 1px solid transparent; background: transparent; border-radius: 0; padding: 0 4px;
+        width: 100%; color: inherit; font-family: inherit; font-size: inherit; height: 100%; line-height: 1.5; transition: all 0.2s;
+        text-align: left;
+    }
+    .form-control.seamless:focus { outline: none; border-bottom: 2px solid #3b82f6; background-color: #f0f9ff; }
+    .form-control.seamless[type="number"] { text-align: left; }
+    
+    /* Loading Overlay */
+    .overlay-loading {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(255, 255, 255, 0.7); z-index: 9999;
+        display: none; align-items: center; justify-content: center;
+        flex-direction: column; gap: 1rem; backdrop-filter: blur(2px);
+    }
+    .overlay-loading.active { display: flex; }
+
+    /* --- [Modal 樣式優化] --- */
+    .modal-body {
+        background-color: #fff;
+        padding: 1.5rem;
+    }
+
+    .modal-grid-layout {
+        display: grid;
+        grid-template-columns: 1.5fr 1fr; /* 左寬右窄 */
+        gap: 2rem; /* 增加左右欄位間距 */
+        align-items: start;
+    }
+
+    /* 讓某個元素跨越兩欄 (用於備註) */
+    .full-width {
+        grid-column: 1 / -1;
+    }
+
+    /* ★ 恢復 Section Card 樣式 (紅色卡片框架用) ★ */
+    .section-card {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 1.25rem;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem; /* 欄位垂直間距 */
+    }
+    
+    .section-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #1e293b;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #f1f5f9;
+        margin-bottom: 0.5rem; /* 與下方內容的距離 */
+        display: flex; align-items: center; gap: 0.5rem;
+    }
+
+    /* 特殊卡片：機敏資料 (紅色框架) */
+    .section-card.sensitive {
+        border-color: #fecaca;
+        background: #fffafa;
+    }
+    .section-card.sensitive .section-title {
+        color: #991b1b;
+        border-bottom-color: #fee2e2;
+    }
+
+    /* 一般區塊 (非卡片) */
+    .section-block {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+    .section-block .section-title {
+        border-bottom: 2px solid #f1f5f9;
+    }
+
+    .modal-form-group { margin-bottom: 0; /* 由 gap 控制間距 */ }
+
+    .modal-form-group label {
+        display: block; font-size: 0.85rem; font-weight: 600; color: #94a3b8;
+        margin-bottom: 0.35rem; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+
+    /* 通用輸入框 (編輯模式) */
+    .modal-form-control {
+        width: 100%; padding: 0.6rem 0.8rem; border: 1px solid #cbd5e1;
+        border-radius: 6px; font-size: 1rem; color: #334155; transition: all 0.2s; background: #fff;
+    }
+    .modal-form-control:focus {
+        outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    /* ★ 資料框 (檢視模式) - 除了成本欄位以外 ★ */
+    .modal-form-control:disabled:not(.cost-input-original), 
+    .modal-form-control[readonly]:not(.cost-input-original) {
+        background-color: #f8fafc; /* 淺灰底 */
+        border: 1px solid #e2e8f0; /* 淺邊框 */
+        color: #0f172a;            /* 深黑字 */
+        font-weight: 500;
+        cursor: default;
+        opacity: 1;
+    }
+    .modal-form-control:disabled::placeholder { color: transparent; }
+
+    /* --- 特殊欄位樣式 --- */
+    
+    /* 1. 分類 Tag (檢視模式) */
+    .view-category-tag {
+        display: none; padding: 0.4rem 1rem;
+        background-color: #eff6ff; color: #1d4ed8;
+        border-radius: 99px; font-size: 0.95rem; font-weight: 600;
+        border: 1px solid #dbeafe; width: fit-content;
+    }
+
+    /* 2. 分類編輯區 (編輯模式) */
+    .edit-category-wrapper {
+        display: flex; flex-direction: column; gap: 0.5rem;
+    }
+    .category-action-btn {
+        font-size: 0.85rem; color: #2563eb; background: none; border: none; 
+        cursor: pointer; padding: 0; text-align: left; width: fit-content;
+        text-decoration: underline; text-underline-offset: 2px;
+    }
+    .category-action-btn:hover { color: #1d4ed8; }
+
+    /* 3. ★ 成本欄位 (維持原始樣式) ★ */
+    .cost-input-original {
+        color: #b91c1c !important;
+        font-weight: 700 !important;
+        letter-spacing: 1px;
+        background-color: transparent !important; 
+        border: 1px solid transparent !important;
+    }
+    /* 編輯模式下的成本輸入框 (真實數字) */
+    .cost-input-original:not(:disabled) {
+        background-color: #fff !important;
+        border: 1px solid #cbd5e1 !important;
+    }
+
+    /* --- 視圖模式切換控制 --- */
+    .view-mode .edit-element { display: none !important; }
+    .view-mode .view-element { display: block !important; }
+    .view-element { display: none; }
+
+    /* Modal Header & Actions */
+    .modal-header {
+        border-bottom: 1px solid #f1f5f9; padding: 1rem 1.5rem; background: white;
+        display: flex; justify-content: space-between; align-items: center;
+        border-top-left-radius: 16px; border-top-right-radius: 16px;
+    }
+    .modal-title { font-size: 1.25rem; font-weight: 700; color: #1e293b; margin: 0; }
+    
+    .btn-icon {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 36px; height: 36px; border-radius: 50%; border: none;
+        background: transparent; color: #64748b; cursor: pointer; transition: all 0.2s;
+    }
+    .btn-icon:hover { background-color: #f1f5f9; color: #1e293b; transform: translateY(-1px); }
+    .btn-icon.primary { color: #2563eb; background: #eff6ff; }
+    .btn-icon.primary:hover { background: #dbeafe; color: #1d4ed8; }
+    .btn-icon.danger { color: #ef4444; }
+    .btn-icon.danger:hover { background: #fef2f2; color: #dc2626; }
+
+    .modal-actions { display: flex; gap: 0.5rem; align-items: center; }
+</style>
+
+<div id="global-loading-overlay" class="overlay-loading">
+    <div class="spinner"></div><p style="font-weight:600; color:#334155;">正在處理資料...</p>
+</div>
+
+<div class="dashboard-grid-flexible">
+    <div class="grid-col-12">
+        <div class="confidential-card">
+            <div class="confidential-icon-wrapper">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            </div>
+            <div class="confidential-content">
+                <h3>機密成本資料 (Confidential)</h3>
+                <p>僅限授權人員查閱。成本欄位已加密。點擊表格列可查看完整詳情。</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid-col-12">
+        <div class="control-panel-card">
+            <div class="panel-title">市場商品管理</div>
+            <div class="panel-actions">
+                <div class="search-box-wrapper">
+                    <input type="text" id="product-search-input" class="search-box" placeholder="搜尋名稱、種類、規格...">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid-col-12" id="chip-wall-area">
+        <div class="chip-wall-container">
+            <div class="chip-wall-title">
+                <span>分類排序 (拖曳調整)</span>
+                <span id="order-save-status" style="font-size:0.75rem; color:#94a3b8;"></span>
+            </div>
+            <div class="chip-list" id="category-chip-list"></div>
+        </div>
+    </div>
+
+    <div class="grid-col-12" id="product-groups-container">
+        <div class="loading show"><div class="spinner"></div><p>載入中...</p></div>
+    </div>
+</div>
+
+<div id="product-detail-modal" class="modal view-mode" 
+     data-backdrop="static" 
+     data-bs-backdrop="static" 
+     data-keyboard="false"
+     style="background-color: rgba(0,0,0,0.5);"> 
+    
+    <div class="modal-content" style="max-width: 900px; border-radius: 16px; padding: 0; overflow: hidden; display: flex; flex-direction: column; max-height: 90vh;">
+        
+        <div class="modal-header">
+            <h3 class="modal-title" id="modal-title">商品詳細資訊</h3>
+            <div class="modal-actions">
+                <button id="btn-modal-edit" class="btn-icon" title="編輯">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                </button>
+                <button id="btn-modal-save" class="btn-icon primary edit-element" title="儲存">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                </button>
+                <button id="btn-modal-cancel" class="btn-icon danger edit-element" title="取消">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+                <button class="btn-icon close-modal-btn" title="關閉">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="modal-body" style="overflow-y: auto;">
+            <form id="product-detail-form" onsubmit="return false;">
+                <div class="modal-grid-layout">
+                    
+                    <div class="section-block">
+                        <div class="section-title">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                            基本資料
+                        </div>
+                        
+                        <div class="modal-form-group">
+                            <label>商品名稱 (Name)</label>
+                            <input type="text" name="name" class="modal-form-control" required disabled>
+                        </div>
+                        
+                        <div class="modal-form-group">
+                            <label>分類 (Category)</label>
+                            
+                            <div id="view-category-display" class="view-category-tag view-element"></div>
+
+                            <div class="edit-category-wrapper edit-element">
+                                <div id="category-select-mode">
+                                    <select name="category_select" class="modal-form-control" id="input-category-select">
+                                        </select>
+                                    <div style="margin-top:4px; text-align:right;">
+                                        <button type="button" id="btn-to-manual" class="category-action-btn">＋ 手動輸入新分類</button>
+                                    </div>
+                                </div>
+
+                                <div id="category-manual-mode" style="display:none;">
+                                    <input type="text" name="category_text" id="input-category-text" class="modal-form-control" placeholder="請輸入新分類名稱">
+                                    <div style="margin-top:4px; text-align:right;">
+                                        <button type="button" id="btn-to-select" class="category-action-btn" style="color:#64748b;">↩ 取消，返回選單</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="modal-form-group">
+                            <label>規格 (Spec)</label>
+                            <input type="text" name="spec" class="modal-form-control" disabled>
+                        </div>
+                    </div>
+
+                    <div class="section-card sensitive">
+                        <div class="section-title">
+                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                            成本與定價
+                        </div>
+                        
+                        <div class="modal-form-group">
+                            <label style="color:#b91c1c;">成本 (Cost)</label>
+                            <div class="input-wrapper">
+                                <input type="text" id="input-cost-display" class="modal-form-control cost-input-original" value="******" readonly disabled>
+                                
+                                <input type="number" name="cost" id="input-cost-real" class="modal-form-control cost-input-original" style="display:none;" placeholder="輸入成本">
+                            </div>
+                            <small class="view-element" style="color:#ef4444; font-size:0.75rem; margin-top:4px; display:block;">* 機密資料，僅授權人員可編輯</small>
+                        </div>
+
+                        <div class="modal-form-group">
+                            <label>MTB 報價</label>
+                            <input type="number" name="priceMtb" class="modal-form-control" placeholder="-" disabled>
+                        </div>
+
+                        <div class="modal-form-group">
+                            <label>SI 報價</label>
+                            <input type="number" name="priceSi" class="modal-form-control" placeholder="-" disabled>
+                        </div>
+
+                        <div class="modal-form-group">
+                            <label>MTU 報價</label>
+                            <input type="number" name="priceMtu" class="modal-form-control" placeholder="-" disabled>
+                        </div>
+
+                    </div>
+
+                    <div class="section-block full-width">
+                        <div class="section-title">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                            備註說明 (Description)
+                        </div>
+                        <div class="modal-form-group">
+                            <textarea name="description" class="modal-form-control" rows="3" placeholder="無備註" disabled></textarea>
+                        </div>
+                    </div>
+                    
+                    <input type="hidden" name="id">
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

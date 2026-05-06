@@ -1,0 +1,42 @@
+<fieldset>
+    <legend>會議共通資訊</legend>
+    <div class="form-group">
+        <label for="event-name" class="form-label">事件名稱 *</label>
+        <input type="text" class="form-input" id="event-name" name="eventName" required>
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">我方與會人員</label>
+        <div class="participants-checkbox-group" id="our-participants-container">
+            <p style="color: var(--text-muted);">載入中...</p>
+        </div>
+    </div>
+    
+    <div class="form-group">
+        <label for="client-participants" class="form-label">客戶與會人員</label>
+        <div id="client-participants-container">
+            <input type="text" class="form-input" id="client-participants" name="clientParticipants" placeholder="請先選擇關聯對象以載入聯絡人...">
+        </div>
+    </div>
+    
+    <div class="form-group">
+        <label for="visit-place" class="form-label">會議地點</label>
+        <input type="text" class="form-input" id="visit-place" name="visitPlace">
+    </div>
+    <div class="form-group">
+        <label for="event-content" class="form-label">會議內容</label>
+        <textarea class="form-textarea" id="event-content" name="eventContent" rows="5"></textarea>
+    </div>
+    <div class="form-group">
+        <label for="client-questions" class="form-label">客戶提問</label>
+        <textarea class="form-textarea" id="client-questions" name="clientQuestions" rows="3"></textarea>
+    </div>
+    <div class="form-group">
+        <label for="client-intelligence" class="form-label">客戶情報</label>
+        <textarea class="form-textarea" id="client-intelligence" name="clientIntelligence" rows="3"></textarea>
+    </div>
+    <div class="form-group">
+        <label for="event-notes" class="form-label">備註</label>
+        <textarea class="form-textarea" id="event-notes" name="eventNotes" rows="2"></textarea>
+    </div>
+</fieldset>

@@ -1,0 +1,398 @@
+/*
+ * File Path: public/styles/modules/navigation.css
+ * Version: 1.1.10
+ * Date: 2026-04-28
+ * Changelog: 
+ * - (v1.1.10) Sidebar Logo Dual Mode (Expanded vs Collapsed).
+ * - (v1.1.9) Sidebar UX S-2.1: Force display of group-hidden items in collapsed state.
+ * - (v1.1.8) Sidebar UX S-2: Clean icon rail in collapsed state with CSS tooltips.
+ * - (v1.1.7) Centralized sidebar width variables.
+ * - (v1.1.6) Sidebar Final Polish: fixed internal order, enhanced active state, adjusted vertical spacing, and improved alignment.
+ * - (v1.1.5) Sidebar Phase B-2: added collapsible Main group, adjusted default expansion states, reordered internal items, and removed admin separator line.
+ * - (v1.1.4) Sidebar Phase B-1: fixed group state semantics, cleaned collapsible header pointer behavior, and normalized admin active styling.
+ * - (v1.1.3) Sidebar Phase B: implemented collapsible grouped navigation
+ * - (v1.1.2) Sidebar Phase A: refined navigation density, removed hover motion, simplified active state, and normalized section labels.
+ * - (v1.1.1) Applied Header Consolidation D1 Patch: Visually hide .theme-toggle.
+ * - (v1.1.0) Modified .sidebar to remove border-right for visual fusion with header.
+ * - Modified .sidebar-header to remove border-bottom to unify the logo area.
+ */
+
+/* ==================== modules/navigation.css ==================== */
+/* 側邊欄 - 第4個模組 */
+
+/* 側邊欄 */
+.sidebar {
+    width: var(--sidebar-width);
+    background: var(--secondary-bg);
+    border-right: none;
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: fixed;
+    height: 100vh;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+}
+
+/* LOGO 區域維持置中 */
+.sidebar-header {
+    padding: var(--spacing-6);
+    border-bottom: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: padding 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.logo {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
+.sidebar-logo {
+    width: 100%;
+    max-width: 120px; 
+    height: auto;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: block;
+}
+
+.sidebar-logo-icon {
+    display: none;
+}
+
+.sidebar-nav { 
+    flex: 1; 
+    padding: 12px 0 24px 0; 
+    overflow-y: auto;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+.sidebar-nav::-webkit-scrollbar {
+    display: none;
+}
+
+.nav-list { 
+    list-style: none; 
+    padding: 0 var(--spacing-4); 
+}
+
+.nav-item { 
+    margin-bottom: var(--spacing-1); 
+}
+
+/* 區域標籤樣式 (覆蓋 HTML inline 樣式) */
+.nav-header {
+    font-size: 11px !important;
+    letter-spacing: 0.05em !important;
+    color: rgba(148, 163, 184, 0.7) !important;
+    margin-top: 16px !important;
+    margin-bottom: 6px !important;
+    padding: 0 12px 0 24px !important;
+    background: none !important;
+    border: none !important;
+}
+
+/* --- Phase B 展開收合機制 --- */
+.nav-collapsible {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    cursor: pointer !important;
+}
+
+.nav-collapsible svg {
+    width: 14px;
+    height: 14px;
+    opacity: 0.6;
+    transition: transform 0.15s ease;
+}
+
+.nav-collapsible.collapsed svg {
+    transform: rotate(-90deg);
+}
+
+.nav-item[data-group] {
+    transition: opacity 0.15s ease;
+}
+
+.nav-item.group-hidden {
+    display: none !important;
+}
+
+/* --- 導航連結樣式 --- */
+.nav-link {
+    display: flex; 
+    align-items: center; 
+    gap: 12px;
+    padding: 0 12px 0 24px; 
+    border-radius: 8px;
+    text-decoration: none; 
+    color: var(--text-secondary);
+    transition: all 0.2s ease; 
+    position: relative; 
+    font-weight: 500;
+    height: 36px;
+    justify-content: flex-start; 
+    border-left: 2px solid transparent;
+}
+
+.nav-link:hover { 
+    background: var(--glass-bg); 
+    color: var(--text-primary); 
+    transform: none; 
+}
+
+.nav-text {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.nav-item.active .nav-link { 
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(99, 102, 241, 0.18)); 
+    color: var(--text-primary); 
+    box-shadow: none; 
+    font-weight: 600; 
+    border-left: 2px solid rgba(124, 58, 237, 0.6);
+}
+
+svg.nav-icon { 
+    min-width: 18px; 
+    width: 18px; 
+    height: 18px; 
+    transition: all 0.2s ease;
+    color: var(--text-secondary); 
+    opacity: 0.7;
+}
+
+.nav-item.active .nav-link svg.nav-icon {
+    color: var(--text-primary); 
+    opacity: 1;
+}
+
+/* 側邊欄釘選與收合狀態樣式 */
+.sidebar-footer {
+    padding: var(--spacing-4);
+    margin-top: auto;
+    border-top: 1px solid var(--border-color);
+}
+
+#sidebar-pin-toggle {
+    width: 100%;
+    background: transparent;
+    border: none;
+    height: 56px;
+}
+
+#sidebar-pin-toggle .nav-icon svg {
+    width: 24px;
+    height: 24px;
+    color: var(--text-secondary);
+    transition: color 0.2s ease;
+    opacity: 1;
+}
+
+#sidebar-pin-toggle:hover {
+    background: var(--glass-bg);
+    color: var(--text-primary);
+}
+#sidebar-pin-toggle:hover .nav-icon svg {
+    color: var(--text-primary);
+}
+
+/* ==================== 收合狀態下的核心樣式 ==================== */
+.app-layout.sidebar-collapsed .sidebar {
+    width: var(--sidebar-collapsed-width);
+}
+
+.app-layout.sidebar-collapsed .sidebar-header {
+    padding-left: 0;
+    padding-right: 0;
+    justify-content: center;
+}
+
+.app-layout.sidebar-collapsed .sidebar-logo {
+    max-width: 40px; 
+}
+
+.app-layout.sidebar-collapsed .sidebar-logo-full {
+    display: none;
+}
+
+.app-layout.sidebar-collapsed .sidebar-logo-icon {
+    display: block;
+}
+
+.app-layout.sidebar-collapsed #sidebar-pin-toggle {
+    justify-content: center;
+}
+
+.app-layout.sidebar-collapsed .sidebar .nav-text {
+    display: none;
+}
+
+/* 確保全側邊欄收合時隱藏 chevron 標示 */
+.app-layout.sidebar-collapsed .nav-collapsible svg {
+    display: none;
+}
+
+/* 確保全側邊欄收合時完全隱藏群組標題 (Icon Rail 模式) */
+.app-layout.sidebar-collapsed .nav-header {
+    display: none !important;
+}
+
+/* 強制在 Icon Rail 模式下顯示所有項目，忽略群組收合狀態 */
+.app-layout.sidebar-collapsed .nav-item.group-hidden {
+    display: block !important;
+}
+
+/* 收合時的連結樣式修正 */
+.app-layout.sidebar-collapsed .nav-link {
+    padding: 0; /* 重置 padding */
+    justify-content: center; /* 強制置中 */
+}
+
+.app-layout.sidebar-collapsed .nav-item.active .nav-link {
+    background: transparent;
+    box-shadow: none;
+    border-left-color: transparent;
+}
+
+.app-layout.sidebar-collapsed .nav-link:hover {
+    background: transparent; 
+    transform: none;
+}
+
+/* 圖示樣式修正 */
+.app-layout.sidebar-collapsed svg.nav-icon {
+    width: 40px;
+    height: 40px;
+    padding: 10px; 
+    border-radius: var(--rounded-lg);
+    flex-shrink: 0;
+}
+
+.app-layout.sidebar-collapsed .nav-item.active svg.nav-icon {
+    background: linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(99, 102, 241, 0.18));
+    color: var(--text-primary);
+    padding: 10px; 
+    opacity: 1;
+}
+
+.app-layout.sidebar-collapsed .nav-link:hover svg.nav-icon {
+    background: var(--glass-bg);
+}
+
+/* --- Icon Rail Tooltips --- */
+.app-layout.sidebar-collapsed #sidebar-pin-toggle {
+    position: relative;
+}
+
+.app-layout.sidebar-collapsed .nav-link:hover .nav-text,
+.app-layout.sidebar-collapsed #sidebar-pin-toggle:hover .nav-text {
+    display: block;
+    position: absolute;
+    left: 100%;
+    top: 50%;
+    transform: translateY(-50%);
+    margin-left: 12px;
+    background: var(--card-bg);
+    color: var(--text-primary);
+    padding: 6px 12px;
+    border-radius: var(--rounded-md);
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--border-color);
+    font-size: 13px;
+    white-space: nowrap;
+    z-index: 2000;
+    pointer-events: none;
+}
+
+/* 主題切換按鈕 */
+.theme-toggle {
+    display: none !important;
+    
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--rounded-lg);
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(20px);
+}
+
+.theme-toggle:hover {
+    transform: scale(1.05);
+    background: var(--glass-bg);
+}
+
+.theme-toggle svg {
+    width: 20px;
+    height: 20px;
+    color: var(--text-primary);
+    transition: all 0.3s ease;
+}
+
+.theme-toggle .sun-icon { display: none; }
+.theme-toggle .moon-icon { display: block; }
+[data-theme="light"] .theme-toggle .sun-icon { display: block; }
+[data-theme="light"] .theme-toggle .moon-icon { display: none; }
+
+/* 手機版隱藏釘選按鈕 */
+@media (max-width: 768px) {
+    .sidebar-footer {
+        display: none;
+    }
+}
+
+/* ==================== Admin 專屬隔離區樣式 (Confidential Zone) ==================== */
+
+/* 1. 結構隔離：減少間距並移除分隔線 */
+.nav-item.admin-restricted {
+    margin-top: var(--spacing-1);
+    padding-top: 0;
+}
+
+/* 2. 平時狀態：微微的淡紅色系背景 + 深紅文字 + 鎖頭對齊 */
+.nav-item.admin-restricted .nav-link {
+    background-color: rgba(239, 68, 68, 0.08); /* 極淡紅 */
+    color: #991b1b; /* 深紅/鐵鏽紅 */
+}
+
+.nav-item.admin-restricted .nav-link .nav-icon {
+    color: #991b1b;
+}
+
+/* 3. 懸停狀態：稍微加深背景 */
+.nav-item.admin-restricted .nav-link:hover {
+    background-color: rgba(239, 68, 68, 0.15);
+    color: #7f1d1d; /* 更深的紅 */
+    transform: none; /* 移除位移維持 Phase A 規範 */
+}
+
+/* 4. 選中狀態：與一般 active state 風格一致，但保留警示色系 */
+.nav-item.admin-restricted.active .nav-link {
+    background: rgba(239, 68, 68, 0.12);
+    color: #7f1d1d;
+    box-shadow: none;
+}
+
+.nav-item.admin-restricted.active .nav-link .nav-icon {
+    color: #7f1d1d;
+    opacity: 1;
+}
+
+/* 5. 收合狀態下的微調 (確保分隔線樣式正確) */
+.app-layout.sidebar-collapsed .nav-item.admin-restricted {
+    margin-top: var(--spacing-1);
+    padding-top: 0;
+}
+
+.app-layout.sidebar-collapsed .nav-item.admin-restricted.active svg.nav-icon {
+    background: rgba(239, 68, 68, 0.12);
+    color: #7f1d1d;
+    opacity: 1;
+}
