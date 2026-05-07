@@ -515,22 +515,22 @@
 
 /* KPI Card Colors & Accents */
 #page-dashboard .stat-card.blue { border-top: 2px solid #3b82f6; }
-#page-dashboard .stat-card.blue .stat-icon { background: color-mix(in srgb, #3b82f6 14%, var(--secondary-bg)); color: #60a5fa; }
+#page-dashboard .stat-card.blue .stat-icon { background: color-mix(in srgb, #3b82f6 70%, var(--secondary-bg)); color: #60a5fa; }
 
 #page-dashboard .stat-card.green { border-top: 2px solid #10b981; }
-#page-dashboard .stat-card.green .stat-icon { background: color-mix(in srgb, #10b981 14%, var(--secondary-bg)); color: #34d399; }
+#page-dashboard .stat-card.green .stat-icon { background: color-mix(in srgb, #10b981 70%, var(--secondary-bg)); color: #34d399; }
 
 #page-dashboard .stat-card.orange { border-top: 2px solid #f97316; }
-#page-dashboard .stat-card.orange .stat-icon { background: color-mix(in srgb, #f97316 14%, var(--secondary-bg)); color: #fb923c; }
+#page-dashboard .stat-card.orange .stat-icon { background: color-mix(in srgb, #f97316 70%, var(--secondary-bg)); color: #fb923c; }
 
 #page-dashboard .stat-card.purple { border-top: 2px solid #8b5cf6; }
-#page-dashboard .stat-card.purple .stat-icon { background: color-mix(in srgb, #8b5cf6 14%, var(--secondary-bg)); color: #a78bfa; }
+#page-dashboard .stat-card.purple .stat-icon { background: color-mix(in srgb, #8b5cf6 70%, var(--secondary-bg)); color: #a78bfa; }
 
 #page-dashboard .stat-card.cyan { border-top: 2px solid #06b6d4; }
-#page-dashboard .stat-card.cyan .stat-icon { background: color-mix(in srgb, #06b6d4 14%, var(--secondary-bg)); color: #22d3ee; }
+#page-dashboard .stat-card.cyan .stat-icon { background: color-mix(in srgb, #06b6d4 70%, var(--secondary-bg)); color: #22d3ee; }
 
 #page-dashboard .stat-card.teal { border-top: 2px solid #14b8a6; }
-#page-dashboard .stat-card.teal .stat-icon { background: color-mix(in srgb, #14b8a6 14%, var(--secondary-bg)); color: #2dd4bf; }
+#page-dashboard .stat-card.teal .stat-icon { background: color-mix(in srgb, #14b8a6 70%, var(--secondary-bg)); color: #2dd4bf; }
 
 /* ==================== KPI Trend Widget (Phase T1/T1.1/T2/T2.1) ==================== */
 #kpi-trend-widget {
