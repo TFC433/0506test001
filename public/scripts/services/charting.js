@@ -1,4 +1,10 @@
 // public/scripts/services/charting.js
+/**
+ * @version 1.0.1
+ * @date 2026-05-07
+ * @changelog
+ * - [Phase A] Tightened shared Highcharts text, grid, legend, and tooltip contrast for operational dashboard readability.
+ */
 // 職責：專門處理所有 Highcharts 圖表的通用主題和建立邏輯
 
 /**
@@ -13,14 +19,17 @@ function getHighchartsThemeOptions() {
     const rootStyle = getComputedStyle(document.documentElement);
     const textColorPrimary = rootStyle.getPropertyValue('--text-primary').trim() || (isDark ? '#f1f5f9' : '#1e293b');
     const textColorSecondary = rootStyle.getPropertyValue('--text-secondary').trim() || (isDark ? '#cbd5e1' : '#475569');
-    const gridLineColor = isDark ? 'rgba(255, 255, 255, 0.1)' : '#e2e8f0';
-    const tooltipBg = isDark ? 'rgba(31, 41, 55, 0.85)' : 'rgba(255, 255, 255, 0.85)';
+    const textColorMuted = rootStyle.getPropertyValue('--text-muted').trim() || (isDark ? '#94a3b8' : '#64748b');
+    const borderColor = rootStyle.getPropertyValue('--border-color').trim() || (isDark ? '#334155' : '#cbd5e1');
+    const surfaceColor = rootStyle.getPropertyValue('--secondary-bg').trim() || (isDark ? '#1e293b' : '#ffffff');
+    const gridLineColor = isDark ? 'rgba(148, 163, 184, 0.22)' : 'rgba(100, 116, 139, 0.22)';
+    const tooltipBg = isDark ? 'rgba(15, 23, 42, 0.96)' : 'rgba(255, 255, 255, 0.98)';
     const chartColors = ['#60a5fa', '#4ade80', '#fb923c', '#a78bfa', '#f87171', '#14b8a6', '#ec4899', '#6366f1']; // 主題顏色
 
     // 統一的標籤樣式 (非粗體、無外框、使用次要文字顏色)
     const commonLabelStyle = {
-        color: textColorSecondary,
-        fontWeight: 'normal', // 確保不是粗體
+        color: textColorMuted,
+        fontWeight: '500', // 確保圖表輔助文字維持可讀
         textOutline: 'none'   // 確保沒有外框
     };
 
@@ -28,6 +37,7 @@ function getHighchartsThemeOptions() {
         colors: chartColors, // 使用定義好的顏色
         chart: {
             backgroundColor: 'transparent',
+            plotBorderColor: borderColor,
             style: {
                 fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif'
             }
@@ -71,7 +81,7 @@ function getHighchartsThemeOptions() {
         },
         legend: {
             itemStyle: { // 圖例項目樣式
-                color: textColorSecondary,
+                color: textColorPrimary,
                 fontWeight: '500' // 圖例可以稍微加粗
             },
             itemHoverStyle: { color: textColorPrimary }
@@ -79,13 +89,14 @@ function getHighchartsThemeOptions() {
         tooltip: {
             backgroundColor: tooltipBg,
             style: { color: textColorPrimary },
-            borderWidth: 0,
+            borderColor: borderColor,
+            borderWidth: 1,
             shadow: false
         },
         plotOptions: {
             series: { // 所有系列的基礎設定
                 marker: {
-                    radius: 3
+                    radius: 2
                 },
                 dataLabels: {
                     style: commonLabelStyle // 為所有系列的 dataLabels 設定基礎樣式
@@ -137,7 +148,11 @@ function getHighchartsThemeOptions() {
         // 儲存文字顏色供內部參考 (可選)
         textColors: {
             primary: textColorPrimary,
-            secondary: textColorSecondary
+            secondary: textColorSecondary,
+            muted: textColorMuted,
+            border: borderColor,
+            surface: surfaceColor,
+            grid: gridLineColor
         }
     };
 }

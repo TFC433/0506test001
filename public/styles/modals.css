@@ -1,4 +1,10 @@
 /* ==================== 模態框基本樣式 ==================== */
+/*
+ * Version: 1.0.1
+ * Date: 2026-05-07
+ * Changelog:
+ * - (v1.0.1) Phase A operational SaaS migration: reduced modal, modal search, modal-table, and loading container radius.
+ */
 .modal {
     display: none;
     position: fixed;
@@ -23,7 +29,7 @@
     border: 1px solid var(--border-color);
     margin: 2vh auto;
     padding: var(--spacing-8);
-    border-radius: var(--rounded-2xl);
+    border-radius: 6px;
     width: 90%;
     max-width: 1200px;
     max-height: 90vh;
@@ -85,7 +91,7 @@
 .search-box {
     padding: var(--spacing-3) var(--spacing-4);
     border: 2px solid var(--border-color);
-    border-radius: var(--rounded-lg);
+    border-radius: var(--rounded-sm);
     font-size: var(--font-size-base);
     width: 300px;
     background: var(--glass-bg);
@@ -121,7 +127,7 @@
     position: relative;
     background: var(--primary-bg);
     border: 1px solid var(--border-color);
-    border-radius: var(--rounded-lg);
+    border-radius: var(--rounded-sm);
     max-height: 60vh;
     overflow-y: auto;
     z-index: 100;
@@ -231,7 +237,7 @@
 .loading-overlay.show { display: flex; }
 .loading-content {
     background: var(--secondary-bg); border: 1px solid var(--border-color);
-    padding: var(--spacing-10); border-radius: var(--rounded-2xl);
+    padding: var(--spacing-10); border-radius: 6px;
     text-align: center; box-shadow: var(--shadow-xl);
 }
 .loading-content .spinner {

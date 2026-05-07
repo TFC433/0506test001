@@ -1,10 +1,12 @@
 /**
  * public/scripts/products/products.js
  * 商品管理前端模組
- * * @version 5.2.0 (Phase 4 Frontend Optimization)
+ * * @version 5.2.1 (Product Cost Operational SaaS Alignment)
+ * * @date 2026-05-07
  * @description 
  * 1. 實作前端 Dirty Checking (只送出有變更的資料)。
  * 2. 增加 DOM 元素檢測，防止 textContent of null 錯誤。
+ * 3. [UI] Tokenized generated category badges and focus ring to align Product Cost with operational SaaS theme cleanup.
  */
 
 window.ProductManager = {
@@ -166,7 +168,7 @@ window.ProductManager = {
         }
 
         if (data.length === 0) {
-            container.innerHTML = `<div style="text-align:center; padding:2rem; color:#888;">無資料</div>`;
+            container.innerHTML = `<div style="text-align:center; padding:2rem; color:var(--text-muted);">無資料</div>`;
             return;
         }
 
@@ -203,15 +205,15 @@ window.ProductManager = {
         displayCats.forEach(cat => {
             const items = groups[cat];
             const isNewGroup = items.some(i => i._isNew);
-            const titleStyle = isNewGroup ? 'color:#2563eb;' : '';
+            const titleStyle = isNewGroup ? 'color:var(--accent-blue);' : '';
 
             html += `
                 <div class="category-group-widget" id="group-${cat}">
                     <div class="category-header">
                         <div class="category-title" style="${titleStyle}">
                             ${cat} 
-                            <span style="font-size:0.8rem; color:#64748b; background:#e2e8f0; padding:1px 8px; border-radius:10px; margin-left:8px;">${items.length}</span>
-                            ${isNewGroup ? '<span style="font-size:0.75rem; color:#fff; background:#2563eb; padding:1px 6px; border-radius:4px; margin-left:8px;">New</span>' : ''}
+                            <span class="category-count-badge">${items.length}</span>
+                            ${isNewGroup ? '<span class="category-new-badge">New</span>' : ''}
                         </div>
                     </div>
                     <table class="product-table">
@@ -325,7 +327,7 @@ window.ProductManager = {
                 if (target) {
                     target.scrollIntoView({ behavior: 'smooth', block: 'start' });
                     target.style.transition = 'box-shadow 0.3s';
-                    target.style.boxShadow = '0 0 0 4px rgba(59,130,246,0.3)';
+                    target.style.boxShadow = '0 0 0 3px color-mix(in srgb, var(--accent-blue) 30%, transparent)';
                     setTimeout(() => target.style.boxShadow = 'none', 800);
                 }
             });

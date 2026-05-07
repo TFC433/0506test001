@@ -1,8 +1,8 @@
 /**
  * public/scripts/companies/company-list.js
  * 職責：管理「公司總覽列表頁」
- * * @version 7.7.0 (Phase 10: Backend Opportunity Counting)
- * * @date 2026-04-15
+ * * @version 7.7.1 (Company List Operational SaaS Alignment)
+ * * @date 2026-05-07
  * * @description 
  * * 1. [PATCH] Removed heavy frontend dependency on /api/opportunities?page=0 payload.
  * * 2. [PATCH] Consumes backend-provided opportunityCount natively.
@@ -10,6 +10,7 @@
  * * 4. [Fix] submitQuickCreateCompany: Navigation after create uses companyId.
  * * 5. [Contract] All operations (delete, navigate) use companyId exclusively.
  * * 6. [Patch] Added dashboardManager.markStale() on successful mutations (create, delete).
+ * * 7. [UI] Tokenized Company List local surfaces, tabs, count chip, toast, and quick-create styling.
  */
 
 // ==================== 全域變數 ====================
@@ -25,27 +26,27 @@ function _injectCompanyListStyles() {
     style.id = 'company-list-upgraded-styles';
     style.innerHTML = `
         /* Table Styles */
-        .comp-list-container { width: 100%; overflow-x: auto; background: var(--card-bg, #fff); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .comp-list-container { width: 100%; overflow-x: auto; background: var(--card-bg); border-radius: var(--rounded-sm); box-shadow: none; border: 1px solid var(--border-color); }
         .comp-list-table { width: 100%; border-collapse: collapse; min-width: 900px; }
-        .comp-list-table th { padding: 12px 16px; text-align: left; background: var(--glass-bg, #f8fafc); color: var(--text-secondary, #64748b); font-weight: 600; font-size: 0.9rem; border-bottom: 1px solid var(--border-color, #e2e8f0); white-space: nowrap; }
-        .comp-list-table td { padding: 12px 16px; border-bottom: 1px solid var(--border-color, #e2e8f0); vertical-align: middle; font-size: 0.95rem; color: var(--text-main, #334155); }
-        .comp-list-table tr:hover { background-color: var(--glass-bg, #f8fafc); }
+        .comp-list-table th { padding: 12px 16px; text-align: left; background: var(--primary-bg); color: var(--text-secondary); font-weight: 600; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+        .comp-list-table td { padding: 12px 16px; border-bottom: 1px solid var(--border-color); vertical-align: middle; font-size: 0.95rem; color: var(--text-primary); }
+        .comp-list-table tr:hover { background-color: var(--glass-bg); }
         
         /* Badges & Chips */
         .comp-type-chip { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 0.8rem; color: white; font-weight: 500; }
         .comp-status-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; color: white; }
-        .comp-opp-count { display: inline-block; padding: 2px 8px; border-radius: 6px; background: #f3f4f6; color: #1f2937; font-weight: 700; font-size: 0.85rem; }
+        .comp-opp-count { display: inline-block; padding: 2px 8px; border-radius: 6px; background: var(--glass-bg); color: var(--text-primary); border: 1px solid var(--border-color); font-weight: 700; font-size: 0.85rem; }
         
         /* Sortable Header */
         .comp-list-table th.sortable { cursor: pointer; user-select: none; transition: color 0.2s; }
-        .comp-list-table th.sortable:hover { color: var(--accent-blue, #2563eb); }
+        .comp-list-table th.sortable:hover { color: var(--accent-blue); }
         
         /* Buttons */
-        .btn-mini-delete { background: none; border: none; color: #9ca3af; cursor: pointer; padding: 6px; border-radius: 4px; transition: all 0.2s; }
-        .btn-mini-delete:hover { color: #ef4444; background: #fee2e2; }
+        .btn-mini-delete { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 6px; border-radius: 4px; transition: background-color 0.2s, color 0.2s; }
+        .btn-mini-delete:hover { color: var(--accent-red); background: color-mix(in srgb, var(--accent-red) 12%, var(--secondary-bg)); }
         
         /* Links */
-        .text-link { color: var(--accent-blue, #2563eb); text-decoration: none; font-weight: 500; }
+        .text-link { color: var(--accent-blue); text-decoration: none; font-weight: 500; }
         .text-link:hover { text-decoration: underline; }
 
         /* Toast Notification Styles */
@@ -61,22 +62,23 @@ function _injectCompanyListStyles() {
         .toast {
             min-width: 250px;
             padding: 12px 20px;
-            background: #fff;
-            color: #333;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            background: var(--secondary-bg);
+            color: var(--text-primary);
+            border-radius: var(--rounded-sm);
+            box-shadow: none;
             display: flex;
             align-items: center;
             opacity: 0;
             transform: translateY(20px);
-            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
-            border-left: 4px solid #3b82f6;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--accent-blue);
         }
         .toast.show { opacity: 1; transform: translateY(0); }
-        .toast-success { border-left-color: #22c55e; }
-        .toast-error { border-left-color: #ef4444; }
-        .toast-warning { border-left-color: #f59e0b; }
-        .toast-info { border-left-color: #3b82f6; }
+        .toast-success { border-left-color: var(--accent-green); }
+        .toast-error { border-left-color: var(--accent-red); }
+        .toast-warning { border-left-color: var(--accent-orange); }
+        .toast-info { border-left-color: var(--accent-blue); }
     `;
     document.head.appendChild(style);
 }
@@ -151,8 +153,8 @@ async function loadCompaniesListPage() {
                     <div style="display: flex; align-items: baseline; gap: 15px;">
                         <h2 class="widget-title" style="margin: 0;">公司總覽</h2>
                     </div>
-                    <div id="company-type-tabs" class="companies-tabs" style="display: flex; gap: 4px; background: var(--bg-hover, #f1f5f9); padding: 4px; border-radius: 8px;">
-                        <button class="tab-btn active" data-action="switch-type-tab" data-value="all" style="background: white; border: none; padding: 8px 16px; font-weight: 600; color: var(--accent-blue); border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.2s;">全部</button>
+                    <div id="company-type-tabs" class="companies-tabs" style="display: flex; gap: 4px; background: var(--primary-bg); padding: 4px; border: 1px solid var(--border-color); border-radius: var(--rounded-sm);">
+                        <button class="tab-btn active" data-action="switch-type-tab" data-value="all" style="background: var(--secondary-bg); border: 1px solid var(--border-color); padding: 8px 16px; font-weight: 600; color: var(--accent-blue); border-radius: var(--rounded-sm); box-shadow: none; cursor: pointer; transition: background-color 0.2s, color 0.2s;">全部</button>
                     </div>
                 </div>
                 
@@ -173,7 +175,7 @@ async function loadCompaniesListPage() {
 
                 </div>
 
-                <div id="company-quick-create-card" style="display: none; margin: 0 1.5rem 1.5rem; padding: 1.25rem; background-color: var(--secondary-bg); border: 2px solid var(--accent-blue); border-radius: var(--rounded-lg); box-shadow: 0 4px 12px rgba(0,0,0,0.1); animation: slideDown 0.3s ease-out;">
+                <div id="company-quick-create-card" style="display: none; margin: 0 1.5rem 1.5rem; padding: 1.25rem; background-color: var(--secondary-bg); border: 1px solid color-mix(in srgb, var(--accent-blue) 40%, var(--border-color)); border-radius: var(--rounded-sm); box-shadow: none; animation: slideDown 0.3s ease-out;">
                     <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
                         <div style="font-weight: 700; color: var(--accent-blue); display: flex; align-items: center; gap: 0.5rem; white-space: nowrap;">
                             <span style="font-size: 1.2rem;">🏢</span> 新增公司
@@ -241,10 +243,11 @@ function handleCompanyListClick(e) {
             companyListFilters.type = payload.value;
             document.querySelectorAll('#company-type-tabs .tab-btn').forEach(tBtn => {
                 const isActive = tBtn.dataset.value === companyListFilters.type;
-                tBtn.style.background = isActive ? 'white' : 'transparent';
+                tBtn.style.background = isActive ? 'var(--secondary-bg)' : 'transparent';
                 tBtn.style.fontWeight = isActive ? '600' : '500';
                 tBtn.style.color = isActive ? 'var(--accent-blue)' : 'var(--text-muted)';
-                tBtn.style.boxShadow = isActive ? '0 1px 3px rgba(0,0,0,0.1)' : 'none';
+                tBtn.style.boxShadow = 'none';
+                tBtn.style.border = isActive ? '1px solid var(--border-color)' : '1px solid transparent';
                 if (isActive) tBtn.classList.add('active');
                 else tBtn.classList.remove('active');
             });
@@ -337,9 +340,9 @@ function renderCompaniesTable(companies) {
                 </tr></thead><tbody>`;
 
     companies.forEach((c, i) => {
-        const typeColor = typeColors.get(c.companyType) || '#9ca3af';
-        const stageColor = stageColors.get(c.customerStage) || '#6b7280';
-        const ratingColor = ratingColors.get(c.engagementRating) || '#6b7280';
+        const typeColor = typeColors.get(c.companyType) || 'var(--text-muted)';
+        const stageColor = stageColors.get(c.customerStage) || 'var(--text-muted)';
+        const ratingColor = ratingColors.get(c.engagementRating) || 'var(--text-muted)';
         
         const navParams = JSON.stringify({ 
             companyId: c.companyId
@@ -451,8 +454,8 @@ function renderCompanyTypeTabs(options = []) {
     tabs.forEach(t => {
         const isActive = companyListFilters.type === t.value;
         const style = isActive 
-            ? `background: white; border: none; padding: 8px 16px; font-weight: 600; color: var(--accent-blue); border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.2s;` 
-            : `background: transparent; border: none; padding: 8px 16px; font-weight: 500; color: var(--text-muted); border-radius: 6px; box-shadow: none; cursor: pointer; transition: all 0.2s;`;
+            ? `background: var(--secondary-bg); border: 1px solid var(--border-color); padding: 8px 16px; font-weight: 600; color: var(--accent-blue); border-radius: var(--rounded-sm); box-shadow: none; cursor: pointer; transition: background-color 0.2s, color 0.2s;`
+            : `background: transparent; border: 1px solid transparent; padding: 8px 16px; font-weight: 500; color: var(--text-muted); border-radius: var(--rounded-sm); box-shadow: none; cursor: pointer; transition: background-color 0.2s, color 0.2s;`;
         
         html += `<button class="tab-btn ${isActive ? 'active' : ''}" data-action="switch-type-tab" data-value="${t.value}" style="${style}">${t.label}</button>`;
     });

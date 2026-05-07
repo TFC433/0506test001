@@ -1,8 +1,9 @@
 /**
  * public/scripts/dashboard/dashboard_widgets.js
- * @version 1.4.6
- * @date 2026-04-29
+ * @version 1.4.7
+ * @date 2026-05-07
  * @changelog
+ * - Phase A operational SaaS migration: routed KPI trend chart through shared chart theme and removed light-only tooltip styling.
  * - Dashboard Phase T3-Revenue Visual Final Polish
  * - Restore legend to top-center position
  * - Move "成交金額" legend item to the end (legendIndex: 99)
@@ -291,7 +292,11 @@ const DashboardWidgets = {
 
         const viewLabel = currentView === 'cumulative' ? '（累積）' : '（月增）';
 
-        Highcharts.chart('trend-chart-container', {
+        const renderChart = typeof createThemedChart === 'function'
+            ? createThemedChart
+            : (elementId, options) => Highcharts.chart(elementId, options);
+
+        renderChart('trend-chart-container', {
             chart: { type: 'areaspline', backgroundColor: 'transparent', style: { fontFamily: 'inherit' } },
             title: { text: null },
             xAxis: { categories: categories, crosshair: true },
@@ -407,12 +412,11 @@ const DashboardWidgets = {
                     top: 100%;
                     left: 50%;
                     transform: translateX(-50%);
-                    background: rgba(255, 255, 255, 0.98);
-                    backdrop-filter: blur(10px);
+                    background: var(--secondary-bg);
                     border: 1px solid var(--border-color);
-                    box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+                    box-shadow: var(--shadow-lg);
                     padding: 12px;
-                    border-radius: 8px;
+                    border-radius: var(--rounded-sm);
                     width: 220px;
                     z-index: 1000;
                     margin-top: 10px;
@@ -447,7 +451,7 @@ const DashboardWidgets = {
                     font-weight: 700;
                     margin-bottom: 8px;
                     text-align: center;
-                    color: var(--primary-color);
+                    color: var(--accent-blue);
                     border-bottom: 1px solid var(--border-color);
                     padding-bottom: 4px;
                 }
@@ -495,8 +499,8 @@ const DashboardWidgets = {
                     margin-top: 4px;
                 }
 
-                .text-success { color: #10b981; font-weight: 600; }
-                .text-danger { color: #ef4444; font-weight: 600; }
+                .text-success { color: var(--accent-green); font-weight: 600; }
+                .text-danger { color: var(--accent-red); font-weight: 600; }
             `;
             document.head.appendChild(style);
         }

@@ -1,9 +1,10 @@
 /* File: public/styles/modules/layout.css */
 /*
  * File Path: public/styles/modules/layout.css
- * Version: 1.1.39
- * Date: 2026-05-06
+ * Version: 1.1.40
+ * Date: 2026-05-07
  * Changelog: 
+ * - (v1.1.40) Phase A operational SaaS migration: tightened dashboard surface contrast, radius, hover, and KPI icon readability.
  * - (v1.1.39) Opportunity Details Visual De-emphasis: Removed card border radius and aggressive Bento hover expansion.
  * - (v1.1.38) Dashboard Phase T2.1 - Trend Widget final semantics alignment.
  * - (v1.1.37) Dashboard Phase T2 - Official release of Dashboard Trend Widget with Cumulative view.
@@ -203,9 +204,9 @@
 .dashboard-widget {
     background: var(--secondary-bg);
     border: 1px solid var(--border-color);
-    border-radius: var(--rounded-xl);
+    border-radius: var(--rounded-sm);
     padding: var(--spacing-6);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-sm);
     display: flex;
     flex-direction: column;
 }
@@ -379,7 +380,7 @@
 /* ==================== Dashboard Sharp & Dual-Column Layout (Phase 2-B) ==================== */
 
 #page-dashboard {
-    --dashboard-card-radius: 0;
+    --dashboard-card-radius: var(--rounded-sm);
     --dashboard-kpi-card-padding: 16px 18px;
     --dashboard-kpi-icon-size: 30px;
     --dashboard-kpi-number-size: 36px;
@@ -447,16 +448,17 @@
     padding: var(--dashboard-kpi-card-padding);
     min-height: auto;
     border-radius: var(--dashboard-card-radius);
-    box-shadow: var(--shadow-md);
+    box-shadow: var(--shadow-sm);
     width: 100%;
     min-width: 0;
     overflow: hidden;
-    transition: transform 120ms ease, box-shadow 120ms ease;
+    transition: background-color 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
 #page-dashboard .stat-card:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
+    transform: none;
+    border-color: color-mix(in srgb, var(--border-color) 70%, var(--text-secondary));
+    box-shadow: var(--shadow-sm);
 }
 
 #page-dashboard .stat-label,
@@ -490,7 +492,6 @@
 #page-dashboard .stat-label {
     font-size: var(--dashboard-kpi-label-size);
     font-weight: 500;
-    opacity: 0.85;
     color: var(--text-secondary);
 }
 
@@ -506,7 +507,6 @@
     margin-top: 4px;
     font-size: var(--dashboard-kpi-trend-size);
     font-weight: 500;
-    opacity: 0.9;
 }
 
 #page-dashboard .stat-trend.trend-positive { color: #10b981; }
@@ -515,22 +515,22 @@
 
 /* KPI Card Colors & Accents */
 #page-dashboard .stat-card.blue { border-top: 2px solid #3b82f6; }
-#page-dashboard .stat-card.blue .stat-icon { background: rgba(59, 130, 246, 0.7); color: #3b82f6; }
+#page-dashboard .stat-card.blue .stat-icon { background: color-mix(in srgb, #3b82f6 14%, var(--secondary-bg)); color: #60a5fa; }
 
 #page-dashboard .stat-card.green { border-top: 2px solid #10b981; }
-#page-dashboard .stat-card.green .stat-icon { background: rgba(16, 185, 129, 0.7); color: #10b981; }
+#page-dashboard .stat-card.green .stat-icon { background: color-mix(in srgb, #10b981 14%, var(--secondary-bg)); color: #34d399; }
 
 #page-dashboard .stat-card.orange { border-top: 2px solid #f97316; }
-#page-dashboard .stat-card.orange .stat-icon { background: rgba(249, 115, 22, 0.7); color: #f97316; }
+#page-dashboard .stat-card.orange .stat-icon { background: color-mix(in srgb, #f97316 14%, var(--secondary-bg)); color: #fb923c; }
 
 #page-dashboard .stat-card.purple { border-top: 2px solid #8b5cf6; }
-#page-dashboard .stat-card.purple .stat-icon { background: rgba(139, 92, 246, 0.7); color: #8b5cf6; }
+#page-dashboard .stat-card.purple .stat-icon { background: color-mix(in srgb, #8b5cf6 14%, var(--secondary-bg)); color: #a78bfa; }
 
 #page-dashboard .stat-card.cyan { border-top: 2px solid #06b6d4; }
-#page-dashboard .stat-card.cyan .stat-icon { background: rgba(6, 182, 212, 0.7); color: #06b6d4; }
+#page-dashboard .stat-card.cyan .stat-icon { background: color-mix(in srgb, #06b6d4 14%, var(--secondary-bg)); color: #22d3ee; }
 
 #page-dashboard .stat-card.teal { border-top: 2px solid #14b8a6; }
-#page-dashboard .stat-card.teal .stat-icon { background: rgba(20, 184, 166, 0.7); color: #14b8a6; }
+#page-dashboard .stat-card.teal .stat-icon { background: color-mix(in srgb, #14b8a6 14%, var(--secondary-bg)); color: #2dd4bf; }
 
 /* ==================== KPI Trend Widget (Phase T1/T1.1/T2/T2.1) ==================== */
 #kpi-trend-widget {
@@ -560,7 +560,7 @@
 #page-opportunity-details .card-split-royal-blue,
 #page-opportunity-details .timeline-content,
 #page-opportunity-details .interaction-card {
-    border-radius: 0;
+    border-radius: var(--rounded-sm);
     box-shadow: none;
 }
 

@@ -1,8 +1,9 @@
 // public/scripts/internal-ops/internal-ops-dev-projects.js
 /**
- * @version 1.0.16
- * @date 2026-04-24
+ * @version 1.0.17
+ * @date 2026-05-07
  * @changelog
+ * - [1.0.17] UI Patch: Tokenized Dev Projects inline table controls, progress tracks, and muted text for Internal Ops operational contrast.
  * - [1.0.16] UI Layout Tuning Patch: column width tuning (fixed devStage/status), limit collaborators display (<=2 +N), font-size reduction for text heavy cols, strictly no layout logic changes.
  * - [1.0.15] UI Polish Patch: implemented conditional operation column. column appears in operation mode only. toggle moved to top control. strictly no data changes, sorting logic preserved.
  * - [1.0.14] UI Polish Patch: merge assignee and collaborators into a single "人員" column with a schedule-like label/value layout. Implemented conditional collaborators row so it hides when empty. strictly no data changes.
@@ -220,27 +221,27 @@ window.renderDevProjects = function(data) {
                 tProgText = `${tProg}%`;
                 
                 const diff = aVal - tProg;
-                if (diff <= -10) cueHtml = `<span style="color:#c62828; font-size:0.75rem; font-weight: bold; white-space: nowrap;">落後</span>`;
-                else if (diff >= 10) cueHtml = `<span style="color:#2e7d32; font-size:0.75rem; font-weight: bold; white-space: nowrap;">超前</span>`;
+                if (diff <= -10) cueHtml = `<span style="color:var(--accent-red); font-size:0.75rem; font-weight: bold; white-space: nowrap;">落後</span>`;
+                else if (diff >= 10) cueHtml = `<span style="color:var(--accent-green); font-size:0.75rem; font-weight: bold; white-space: nowrap;">超前</span>`;
             }
         }
 
         return `
             <div style="display: flex; flex-direction: column; gap: 6px; width: 100%; min-width: 200px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 0.8rem; color: #6b7280; width: 28px; flex-shrink: 0; text-align: right; white-space: nowrap;">實際</span>
-                    <div style="width: 70px; height: 6px; background: #e5e7eb; border-radius: 3px; overflow: hidden; flex-shrink: 0;">
+                    <span style="font-size: 0.8rem; color: var(--text-muted); width: 28px; flex-shrink: 0; text-align: right; white-space: nowrap;">實際</span>
+                    <div style="width: 70px; height: 6px; background: var(--glass-bg); border-radius: 3px; overflow: hidden; flex-shrink: 0;">
                         <div style="width: ${clampedAVal}%; height: 100%; background: ${aColor.text};"></div>
                     </div>
                     <span style="color:${aColor.text}; font-size: 0.8rem; font-weight: 600; width: 36px; text-align: right; flex-shrink: 0;">${actualProgressText}</span>
                     <span style="width: 30px; flex-shrink: 0;"></span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 0.8rem; color: #6b7280; width: 28px; flex-shrink: 0; text-align: right; white-space: nowrap;">理論</span>
-                    <div style="width: 70px; height: 6px; background: ${tProgText === '-' ? 'transparent' : '#f3f4f6'}; border: ${tProgText === '-' ? 'none' : '1px dashed #d1d5db'}; border-radius: 3px; overflow: hidden; flex-shrink: 0;">
-                        <div style="width: ${clampedTVal}%; height: 100%; background: #9ca3af;"></div>
+                    <span style="font-size: 0.8rem; color: var(--text-muted); width: 28px; flex-shrink: 0; text-align: right; white-space: nowrap;">理論</span>
+                    <div style="width: 70px; height: 6px; background: ${tProgText === '-' ? 'transparent' : 'var(--glass-bg)'}; border: ${tProgText === '-' ? 'none' : '1px dashed var(--border-color)'}; border-radius: 3px; overflow: hidden; flex-shrink: 0;">
+                        <div style="width: ${clampedTVal}%; height: 100%; background: var(--text-muted);"></div>
                     </div>
-                    <span style="color: ${tProgText === '-' ? '#9ca3af' : '#6b7280'}; font-size: 0.8rem; font-weight: 600; width: 36px; text-align: right; flex-shrink: 0;">${tProgText}</span>
+                    <span style="color: ${tProgText === '-' ? 'var(--text-muted)' : 'var(--text-secondary)'}; font-size: 0.8rem; font-weight: 600; width: 36px; text-align: right; flex-shrink: 0;">${tProgText}</span>
                     <span style="width: 30px; flex-shrink: 0; text-align: left;">${cueHtml}</span>
                 </div>
             </div>
@@ -251,12 +252,12 @@ window.renderDevProjects = function(data) {
         const scheduleHtml = `
             <div style="display: flex; flex-direction: column; gap: 4px; min-width: 110px;">
                 <div style="display: flex; justify-content: space-between; font-size: 0.8rem; gap: 8px;">
-                    <span style="color: #9ca3af; white-space: nowrap;">開始</span>
-                    <span style="color: #6b7280; white-space: nowrap;">${item.startDate || '-'}</span>
+                    <span style="color: var(--text-muted); white-space: nowrap;">開始</span>
+                    <span style="color: var(--text-secondary); white-space: nowrap;">${item.startDate || '-'}</span>
                 </div>
                 <div style="display: flex; justify-content: space-between; font-size: 0.8rem; gap: 8px;">
-                    <span style="color: #9ca3af; white-space: nowrap;">預計完成</span>
-                    <span style="color: #6b7280; white-space: nowrap;">${item.estCompletionDate || '-'}</span>
+                    <span style="color: var(--text-muted); white-space: nowrap;">預計完成</span>
+                    <span style="color: var(--text-secondary); white-space: nowrap;">${item.estCompletionDate || '-'}</span>
                 </div>
             </div>
         `;
@@ -270,7 +271,7 @@ window.renderDevProjects = function(data) {
 
         let oppHtml = '-';
         if (item.assigneeCode && item.projectName) {
-            oppHtml = `<a href="#" title="${item.projectName || ''}" style="color: #1976d2; text-decoration: none; font-weight: 600;" onclick="event.preventDefault(); window.CRM_APP.navigateTo('opportunity-details', {opportunityId: '${item.assigneeCode}'})">${item.projectName}</a>`;
+            oppHtml = `<a href="#" title="${item.projectName || ''}" style="color: var(--accent-blue); text-decoration: none; font-weight: 600;" onclick="event.preventDefault(); window.CRM_APP.navigateTo('opportunity-details', {opportunityId: '${item.assigneeCode}'})">${item.projectName}</a>`;
         } else if (item.projectName) {
             oppHtml = `<strong title="${item.projectName || ''}">${item.projectName}</strong>`;
         }
@@ -279,8 +280,8 @@ window.renderDevProjects = function(data) {
         const assigneeText = item.assigneeName || '-';
         personnelHtml += `
             <div style="display:grid; grid-template-columns:64px 1fr; column-gap:8px; font-size:0.8rem;">
-                <span style="color:#9ca3af; white-space:nowrap;">負責人</span>
-                <span style="color:#6b7280; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${assigneeText}">${assigneeText}</span>
+                <span style="color:var(--text-muted); white-space:nowrap;">負責人</span>
+                <span style="color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${assigneeText}">${assigneeText}</span>
             </div>
         `;
 
@@ -294,8 +295,8 @@ window.renderDevProjects = function(data) {
                 }
                 personnelHtml += `
                     <div style="display:grid; grid-template-columns:64px 1fr; column-gap:8px; font-size:0.8rem;">
-                        <span style="color:#9ca3af; white-space:nowrap;">協作成員</span>
-                        <span style="color:#6b7280; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${fullJoinedNames}">${displayNames}</span>
+                        <span style="color:var(--text-muted); white-space:nowrap;">協作成員</span>
+                        <span style="color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${fullJoinedNames}">${displayNames}</span>
                     </div>
                 `;
             }
@@ -325,8 +326,8 @@ window.renderDevProjects = function(data) {
 
     return `
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 4px;">
-            <div style="font-size: 0.9rem; color: #6b7280; font-weight: 500;">共 ${data.length} 筆</div>
-            <button onclick="window.toggleDevTableActions()" class="internal-ops-btn" style="padding: 4px 10px; font-size: 0.8rem; cursor: pointer; border: 1px solid #d1d5db; background: #fff; color: #374151; font-weight: 500; border-radius: 4px;">
+            <div style="font-size: 0.9rem; color: var(--text-secondary); font-weight: 500;">共 ${data.length} 筆</div>
+            <button onclick="window.toggleDevTableActions()" class="internal-ops-btn" style="padding: 4px 10px; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-secondary); font-weight: 500; border-radius: var(--rounded-sm);">
                 ${window.__isDevActionMode ? '結束操作' : '操作模式'}
             </button>
         </div>
@@ -338,8 +339,8 @@ window.renderDevProjects = function(data) {
                     <th>關聯機會</th>
                     <th>關聯功能</th>
                     <th>人員</th>
-                    <th onclick="window.handleDevProjectSort('devStage', event)" style="width: 100px; cursor:pointer; user-select:none;" title="點擊依開發階段排序">開發階段<span style="color:#1976d2;">${getSortIcon('devStage')}</span></th>
-                    <th onclick="window.handleDevProjectSort('status', event)" style="width: 90px; cursor:pointer; user-select:none;" title="點擊依狀態排序">狀態<span style="color:#1976d2;">${getSortIcon('status')}</span></th>
+                    <th onclick="window.handleDevProjectSort('devStage', event)" style="width: 100px; cursor:pointer; user-select:none;" title="點擊依開發階段排序">開發階段<span style="color:var(--accent-blue);">${getSortIcon('devStage')}</span></th>
+                    <th onclick="window.handleDevProjectSort('status', event)" style="width: 90px; cursor:pointer; user-select:none;" title="點擊依狀態排序">狀態<span style="color:var(--accent-blue);">${getSortIcon('status')}</span></th>
                     <th>開發時程</th>
                     <th>進度</th>
                     ${window.__isDevActionMode ? '<th style="width: 70px; text-align: center;">操作</th>' : ''}

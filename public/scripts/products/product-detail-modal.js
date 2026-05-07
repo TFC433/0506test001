@@ -4,6 +4,10 @@
  * [獨立模組] 商品詳細視窗管理器
  * 負責處理 Modal 的顯示、編輯模式切換、資料填入與儲存
  * Fix: 2025-01 強制阻擋背景點擊冒泡，防止全域腳本誤關視窗
+ * Version: 1.0.1
+ * Date: 2026-05-07
+ * Changelog:
+ * - (v1.0.1) Tokenized Product Cost modal empty-category and success-state colors for dark/light theme consistency.
  */
 class ProductDetailModal {
     constructor() {
@@ -127,9 +131,9 @@ class ProductDetailModal {
         if (this.elements.viewCategoryDisplay) {
             this.elements.viewCategoryDisplay.textContent = p.category || '未分類';
             if (!p.category) {
-                this.elements.viewCategoryDisplay.style.backgroundColor = '#f1f5f9';
-                this.elements.viewCategoryDisplay.style.color = '#64748b';
-                this.elements.viewCategoryDisplay.style.borderColor = '#e2e8f0';
+                this.elements.viewCategoryDisplay.style.backgroundColor = 'var(--glass-bg)';
+                this.elements.viewCategoryDisplay.style.color = 'var(--text-muted)';
+                this.elements.viewCategoryDisplay.style.borderColor = 'var(--border-color)';
             } else {
                 this.elements.viewCategoryDisplay.style.backgroundColor = '';
                 this.elements.viewCategoryDisplay.style.color = '';
@@ -279,7 +283,7 @@ class ProductDetailModal {
             if (this.elements.title) {
                 const titleOriginal = this.elements.title.textContent;
                 this.elements.title.textContent = '✓ 儲存成功';
-                this.elements.title.style.color = '#16a34a';
+                this.elements.title.style.color = 'var(--accent-green)';
                 setTimeout(() => {
                     this.elements.title.textContent = titleOriginal;
                     this.elements.title.style.color = '';

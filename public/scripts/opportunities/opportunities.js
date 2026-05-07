@@ -1,12 +1,13 @@
 // public/scripts/opportunities/opportunities.js
 /**
  * 職責：管理「機會案件列表頁」的篩選、列表渲染與操作
- * @version 8.5.0 (Phase 9 - Metadata Decoupling)
- * @date 2026-04-15
+ * @version 8.5.1 (Opportunity List Operational SaaS Alignment)
+ * @date 2026-05-07
  * @description 
  * - [PHASE 9] Replaced expensive `page=0` full-dataset fetch with dedicated lightweight `metadata/years` endpoint.
  * - [PHASE 9-C] Implemented Incremental Append Pagination (limit 50) to drastically reduce first-load payload and DOM render cost.
  * - [Hierarchy Fix Patch] Reordered top controls to strictly follow: Tabs -> Dropdowns -> Search -> Status/Count -> Table.
+ * - [UI] Tokenized opportunity list tabs, table surfaces, chips, and delete hover states for operational SaaS contrast.
  */
 
 // ==================== 全域變數 (此頁面專用) ====================
@@ -45,8 +46,8 @@ async function loadOpportunities(query = '') {
                     <div style="display: flex; align-items: baseline; gap: 15px;">
                         <h2 class="widget-title" style="margin: 0;">機會總覽</h2>
                     </div>
-                    <div id="opportunity-type-tabs" class="opportunity-tabs" style="display: flex; gap: 4px; background: var(--bg-hover, #f1f5f9); padding: 4px; border-radius: 8px; overflow-x: auto;">
-                        <button class="tab-btn active" data-action="switch-type-tab" data-value="all" style="background: white; border: none; padding: 8px 16px; font-weight: 600; color: var(--accent-blue); border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.2s; white-space: nowrap;">全部</button>
+                    <div id="opportunity-type-tabs" class="opportunity-tabs" style="display: flex; gap: 4px; background: var(--primary-bg); padding: 4px; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); overflow-x: auto;">
+                        <button class="tab-btn active" data-action="switch-type-tab" data-value="all" style="background: var(--secondary-bg); border: 1px solid var(--border-color); padding: 8px 16px; font-weight: 600; color: var(--accent-blue); border-radius: var(--rounded-sm); box-shadow: none; cursor: pointer; transition: background-color 0.2s, color 0.2s; white-space: nowrap;">全部</button>
                     </div>
                 </div>
 
@@ -203,8 +204,8 @@ function renderOpportunityTypeTabs(options = []) {
     tabs.forEach(t => {
         const isActive = opportunitiesListFilters.type === t.value;
         const style = isActive 
-            ? `background: white; border: none; padding: 8px 16px; font-weight: 600; color: var(--accent-blue); border-radius: 6px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.2s; white-space: nowrap;` 
-            : `background: transparent; border: none; padding: 8px 16px; font-weight: 500; color: var(--text-muted); border-radius: 6px; box-shadow: none; cursor: pointer; transition: all 0.2s; white-space: nowrap;`;
+            ? `background: var(--secondary-bg); border: 1px solid var(--border-color); padding: 8px 16px; font-weight: 600; color: var(--accent-blue); border-radius: var(--rounded-sm); box-shadow: none; cursor: pointer; transition: background-color 0.2s, color 0.2s; white-space: nowrap;`
+            : `background: transparent; border: 1px solid transparent; padding: 8px 16px; font-weight: 500; color: var(--text-muted); border-radius: var(--rounded-sm); box-shadow: none; cursor: pointer; transition: background-color 0.2s, color 0.2s; white-space: nowrap;`;
         
         html += `<button class="tab-btn ${isActive ? 'active' : ''}" data-action="switch-type-tab" data-value="${t.value}" style="${style}">${t.label}</button>`;
     });
@@ -359,10 +360,10 @@ function renderOpportunitiesTable(opportunities) {
         const style = document.createElement('style');
         style.id = styleId;
         style.innerHTML = `
-            .opp-list-container { width: 100%; overflow-x: auto; background: var(--card-bg, #fff); }
+            .opp-list-container { width: 100%; overflow-x: auto; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--rounded-sm); }
             .opp-list-table { width: 100%; border-collapse: collapse; min-width: 1000px; }
-            .opp-list-table th { padding: 12px 16px; text-align: left; background: var(--glass-bg); color: var(--text-secondary); font-weight: 600; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
-            .opp-list-table td { padding: 12px 16px; border-bottom: 1px solid var(--border-color); vertical-align: middle; font-size: 0.95rem; color: var(--text-main); }
+            .opp-list-table th { padding: 12px 16px; text-align: left; background: var(--primary-bg); color: var(--text-secondary); font-weight: 600; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
+            .opp-list-table td { padding: 12px 16px; border-bottom: 1px solid var(--border-color); vertical-align: middle; font-size: 0.95rem; color: var(--text-primary); }
             .opp-list-table tr:not(.locked):hover { background-color: var(--glass-bg); }
             
             .opp-list-table tr.locked { background-color: var(--bg-locked); color: var(--text-locked); }
@@ -370,8 +371,8 @@ function renderOpportunitiesTable(opportunities) {
 
             .opp-type-chip { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 0.8rem; color: white; white-space: nowrap; font-weight: 500; }
             .opp-sales-chip { display: inline-block; padding: 3px 12px; border-radius: 12px; font-size: 0.8rem; color: white; white-space: nowrap; font-weight: 500; }
-            .opp-channel-chip { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; border: 1px solid #e5e7eb; background-color: #f9fafb; color: #374151; white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
-            .opp-status-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; background: #f3f4f6; color: #4b5563; }
+            .opp-channel-chip { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; border: 1px solid var(--border-color); background-color: var(--glass-bg); color: var(--text-secondary); white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+            .opp-status-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; background: var(--glass-bg); color: var(--text-primary); border: 1px solid var(--border-color); }
             
             .opp-list-table th.sortable { cursor: pointer; transition: color 0.2s; }
             .opp-list-table th.sortable:hover { color: var(--accent-blue); }
@@ -379,8 +380,8 @@ function renderOpportunitiesTable(opportunities) {
 
             .col-idx { width: 60px; text-align: center !important; color: var(--text-muted); font-weight: 600; }
             .col-actions { width: 80px; text-align: center !important; }
-            .btn-mini-delete { background: none; border: none; color: #9ca3af; cursor: pointer; padding: 6px; border-radius: 4px; transition: all 0.2s; }
-            .btn-mini-delete:hover { color: #ef4444; background: #fee2e2; }
+            .btn-mini-delete { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 6px; border-radius: 4px; transition: background-color 0.2s, color 0.2s; }
+            .btn-mini-delete:hover { color: var(--accent-red); background: color-mix(in srgb, var(--accent-red) 12%, var(--secondary-bg)); }
         `;
         document.head.appendChild(style);
     }
@@ -421,8 +422,8 @@ function renderOpportunityRows(opportunities) {
 
     opportunities.forEach((opp, index) => {
         const stageName = stageNotes.get(opp.currentStage) || opp.currentStage || '-';
-        const typeColor = typeColors.get(opp.opportunityType) || '#9ca3af';
-        const modelColor = modelColors.get(opp.salesModel) || '#6b7280';
+        const typeColor = typeColors.get(opp.opportunityType) || 'var(--text-muted)';
+        const modelColor = modelColors.get(opp.salesModel) || 'var(--text-muted)';
         
         const channelText = opp.salesChannel || '-';
         const lastActivityDate = opp.effectiveLastActivity ? new Date(opp.effectiveLastActivity).toLocaleDateString('zh-TW') : '-';

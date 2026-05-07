@@ -2,9 +2,10 @@
 /**
  * public/scripts/internal-ops/internal-ops.js
  * 內部運營與進度追蹤 前端模組 - 頁面核心與模態框外殼 (Phase 4.8)
- * @version 1.8.9
- * @date 2026-04-24
+ * @version 1.8.10
+ * @date 2026-05-07
  * @changelog
+ * - [1.8.10] UI Patch: Tokenized Internal Ops widgets, tables, buttons, and modal surfaces for operational SaaS contrast and radius alignment.
  * - [1.8.9] UI Fix Patch: Removed extra inline padding from internal-ops-container to fix double padding issue and align page width with other modules.
  * - [1.8.8] UI Polish Patch: Renamed Dev Projects section title to "開發 / 支援案件追蹤".
  * - [1.8.7] Debug Patch: Injected focused trace logs for dp-status to monitor data flow consistency from config to submit payload.
@@ -93,57 +94,57 @@ window.loadInternalOpsPage = async function(params) {
         
         const style = document.createElement('style');
         style.textContent = `
-            .internal-ops-widget { background: #fff; border-radius: 8px; border: 1px solid #e5e7eb; box-shadow: 0 1px 2px rgba(0,0,0,0.05); overflow: hidden; }
-            .internal-ops-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #e5e7eb; background: #fff; }
-            .internal-ops-header h2 { margin: 0; font-size: 1.1rem; color: #111827; font-weight: 600; }
+            .internal-ops-widget { background: var(--card-bg); border-radius: var(--rounded-sm); border: 1px solid var(--border-color); box-shadow: none; overflow: hidden; }
+            .internal-ops-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border-color); background: var(--secondary-bg); }
+            .internal-ops-header h2 { margin: 0; font-size: 1.1rem; color: var(--text-primary); font-weight: 600; }
             .internal-ops-content.no-pad { padding: 0; }
             .internal-ops-content.with-pad { padding: 20px; }
             
             .internal-ops-table { width: 100%; border-collapse: collapse; min-width: 900px; }
-            .internal-ops-table th { background-color: #f9fafb; font-weight: 600; color: #4b5563; padding: 12px 20px; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 0.85rem; letter-spacing: 0.02em; }
-            .internal-ops-table td { padding: 12px 20px; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 0.9rem; color: #374151; vertical-align: middle; }
+            .internal-ops-table th { background-color: var(--primary-bg); font-weight: 600; color: var(--text-secondary); padding: 12px 20px; border-bottom: 1px solid var(--border-color); text-align: left; font-size: 0.85rem; letter-spacing: 0.02em; }
+            .internal-ops-table td { padding: 12px 20px; border-bottom: 1px solid var(--border-color); text-align: left; font-size: 0.9rem; color: var(--text-primary); vertical-align: middle; }
             .internal-ops-table tr:last-child td { border-bottom: none; }
-            .internal-ops-table tr:hover { background-color: #f3f4f6; }
+            .internal-ops-table tr:hover { background-color: var(--glass-bg); }
             
-            .member-workload-card { border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
-            .member-workload-header { background: #f9fafb; padding: 14px 20px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; transition: background-color 0.2s; }
-            .member-workload-header:hover { background: #f3f4f6; }
-            .member-workload-header h3 { margin: 0; font-size: 1.05rem; color: #111827; display: flex; align-items: center; font-weight: 600; }
-            .toggle-icon { transition: transform 0.2s ease-in-out; margin-right: 8px; flex-shrink: 0; color: #6b7280; }
+            .member-workload-card { border: 1px solid var(--border-color); border-radius: var(--rounded-sm); overflow: hidden; background: var(--card-bg); box-shadow: none; }
+            .member-workload-header { background: var(--secondary-bg); padding: 14px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; transition: background-color 0.2s; }
+            .member-workload-header:hover { background: var(--glass-bg); }
+            .member-workload-header h3 { margin: 0; font-size: 1.05rem; color: var(--text-primary); display: flex; align-items: center; font-weight: 600; }
+            .toggle-icon { transition: transform 0.2s ease-in-out; margin-right: 8px; flex-shrink: 0; color: var(--text-muted); }
             
             .internal-ops-actions { display: flex; gap: 8px; }
-            .internal-ops-btn { padding: 4px 10px; border-radius: 4px; font-size: 0.8rem; cursor: pointer; border: 1px solid #d1d5db; background: #fff; color: #374151; font-weight: 500; transition: all 0.2s; }
-            .internal-ops-btn:hover { background: #f3f4f6; }
+            .internal-ops-btn { padding: 4px 10px; border-radius: var(--rounded-sm); font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-secondary); font-weight: 500; transition: background-color 0.2s, border-color 0.2s, color 0.2s; }
+            .internal-ops-btn:hover { background: var(--glass-bg); color: var(--text-primary); }
             .progress-badge { padding: 3px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; }
 
             .collab-checkbox-group { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0; max-height: 80px; overflow-y: auto; }
-            .collab-label { font-size: 0.85rem; display: flex; align-items: center; gap: 4px; cursor: pointer; background: #f9fafb; border: 1px solid #e5e7eb; padding: 4px 8px; border-radius: 4px; }
-            .collab-label:hover { background: #f3f4f6; }
+            .collab-label { font-size: 0.85rem; display: flex; align-items: center; gap: 4px; cursor: pointer; background: var(--glass-bg); border: 1px solid var(--border-color); padding: 4px 8px; border-radius: var(--rounded-sm); }
+            .collab-label:hover { background: var(--secondary-bg); }
         `;
         pageContainer.appendChild(style);
 
         const modalHtml = `
             <div id="internal-ops-team-workload-modal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
-                <div style="background: #fff; padding: 24px; border-radius: 8px; width: 500px; max-width: 90%;">
+                <div style="background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); padding: 24px; border-radius: 6px; width: 500px; max-width: 90%;">
                     <h3 id="tw-modal-title" style="margin-top: 0; margin-bottom: 16px;">新增任務</h3>
                     <form id="tw-modal-form" onsubmit="submitTeamWorkload(event)">
                         <input type="hidden" id="tw-workId" />
                         <div style="margin-bottom: 12px;">
                             <label style="display:block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 600;">成員名稱 *</label>
-                            <select id="tw-memberName" required style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;"></select>
+                            <select id="tw-memberName" required style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary);"></select>
                         </div>
                         <div style="margin-bottom: 12px;">
                             <label style="display:block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 600;">任務標題 *</label>
-                            <input type="text" id="tw-taskTitle" required style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;" />
+                            <input type="text" id="tw-taskTitle" required style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary);" />
                         </div>
                         <div style="margin-bottom: 12px;">
                             <label style="display:block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 600;">任務類型</label>
-                            <select id="tw-taskType" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;"></select>
+                            <select id="tw-taskType" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary);"></select>
                         </div>
                         <div style="display: flex; gap: 12px; margin-bottom: 12px;">
                             <div style="flex: 1;">
                                 <label style="display:block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 600;">狀態</label>
-                                <select id="tw-status" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;">
+                                <select id="tw-status" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary);">
                                     <option value="未開始">未開始</option>
                                     <option value="進行中">進行中</option>
                                     <option value="卡關">卡關</option>
@@ -152,26 +153,26 @@ window.loadInternalOpsPage = async function(params) {
                             </div>
                             <div style="flex: 1;">
                                 <label style="display:block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 600;">進度 (%)</label>
-                                <input type="number" id="tw-progress" min="0" max="100" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;" />
+                                <input type="number" id="tw-progress" min="0" max="100" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary);" />
                             </div>
                         </div>
                         <div style="display: flex; gap: 12px; margin-bottom: 12px;">
                             <div style="flex: 1;">
                                 <label style="display:block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 600;">開始日期</label>
-                                <input type="date" id="tw-startDate" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;" />
+                                <input type="date" id="tw-startDate" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary);" />
                             </div>
                             <div style="flex: 1;">
                                 <label style="display:block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 600;">預計截止日期</label>
-                                <input type="date" id="tw-dueDate" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;" />
+                                <input type="date" id="tw-dueDate" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary);" />
                             </div>
                         </div>
                         <div style="margin-bottom: 20px;">
                             <label style="display:block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 600;">備註</label>
-                            <textarea id="tw-notes" rows="2" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;"></textarea>
+                            <textarea id="tw-notes" rows="2" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary);"></textarea>
                         </div>
                         <div style="display: flex; justify-content: flex-end; gap: 10px;">
                             <button type="button" onclick="closeTeamWorkloadModal()" class="internal-ops-btn" style="padding: 8px 16px;">取消</button>
-                            <button type="submit" class="action-btn primary" style="padding: 8px 16px; border: none; background: #1976d2; color: #fff; border-radius: 4px; cursor: pointer;">儲存</button>
+                            <button type="submit" class="action-btn primary" style="padding: 8px 16px; border: none; background: var(--accent-blue); color: white; border-radius: var(--rounded-sm); cursor: pointer;">儲存</button>
                         </div>
                     </form>
                 </div>
@@ -181,31 +182,31 @@ window.loadInternalOpsPage = async function(params) {
 
         const devProjectModalHtml = `
             <div id="internal-ops-dev-project-modal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
-                <div style="background: #fff; padding: 24px; border-radius: 8px; width: 600px; max-width: 90%;">
+                <div style="background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); padding: 24px; border-radius: 6px; width: 600px; max-width: 90%;">
                     <h3 id="dp-modal-title" style="margin-top: 0; margin-bottom: 16px;">新增開發案件</h3>
                     <form id="dp-modal-form" onsubmit="submitDevProject(event)">
                         <input type="hidden" id="dp-devId" />
                         <div style="margin-bottom: 12px;">
                             <label style="display:block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 600;">開發案件名稱 *</label>
-                            <input type="text" id="dp-productName" required style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;" />
+                            <input type="text" id="dp-productName" required style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary);" />
                         </div>
                         <div style="margin-bottom: 12px;">
                             <label style="display:block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 600;">關聯機會</label>
-                            <input type="text" id="dp-projectSearch" placeholder="🔍 搜尋機會名稱或客戶..." style="width: 100%; padding: 6px 8px; margin-bottom: 6px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-size: 0.85rem;" oninput="window.filterDevProjectOpportunities()" />
-                            <select id="dp-projectName" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;"></select>
+                            <input type="text" id="dp-projectSearch" placeholder="🔍 搜尋機會名稱或客戶..." style="width: 100%; padding: 6px 8px; margin-bottom: 6px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary); font-size: 0.85rem;" oninput="window.filterDevProjectOpportunities()" />
+                            <select id="dp-projectName" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary);"></select>
                         </div>
                         <div style="margin-bottom: 12px;">
                             <label style="display:block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 600;">關聯功能</label>
-                            <input type="text" id="dp-featureName" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;" />
+                            <input type="text" id="dp-featureName" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary);" />
                         </div>
                         <div style="display: flex; gap: 12px; margin-bottom: 12px;">
                             <div style="flex: 1;">
                                 <label style="display:block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 600;">負責人 *</label>
-                                <select id="dp-assigneeName" required style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;"></select>
+                                <select id="dp-assigneeName" required style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary);"></select>
                             </div>
                             <div style="flex: 1;">
                                 <label style="display:block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 600;">開發階段</label>
-                                <select id="dp-devStage" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;"></select>
+                                <select id="dp-devStage" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary);"></select>
                             </div>
                         </div>
                         <div style="margin-bottom: 12px;">
@@ -216,7 +217,7 @@ window.loadInternalOpsPage = async function(params) {
                         <div style="display: flex; gap: 12px; margin-bottom: 12px;">
                             <div style="flex: 1;">
                                 <label style="display:block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 600;">狀態</label>
-                                <select id="dp-status" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;">
+                                <select id="dp-status" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary);">
                                 </select>
                             </div>
                             <div style="flex: 1;">
@@ -224,8 +225,8 @@ window.loadInternalOpsPage = async function(params) {
                                 <div style="display: flex; align-items: center; gap: 10px;">
                                     <input type="range" id="dp-progress-slider" min="0" max="100" step="1" value="0" style="flex: 1;" oninput="document.getElementById('dp-progress').value = this.value" />
                                     <div style="display: flex; align-items: center;">
-                                        <input type="number" id="dp-progress" min="0" max="100" value="0" style="width: 50px; padding: 4px 6px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; text-align: right;" oninput="let v = parseInt(this.value)||0; v = Math.min(Math.max(v,0),100); this.value = v; document.getElementById('dp-progress-slider').value = v;" />
-                                        <span style="margin-left: 4px; font-weight: 600; color: #1976d2;">%</span>
+                                        <input type="number" id="dp-progress" min="0" max="100" value="0" style="width: 50px; padding: 4px 6px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary); text-align: right;" oninput="let v = parseInt(this.value)||0; v = Math.min(Math.max(v,0),100); this.value = v; document.getElementById('dp-progress-slider').value = v;" />
+                                        <span style="margin-left: 4px; font-weight: 600; color: var(--accent-blue);">%</span>
                                     </div>
                                 </div>
                             </div>
@@ -233,20 +234,20 @@ window.loadInternalOpsPage = async function(params) {
                         <div style="display: flex; gap: 12px; margin-bottom: 12px;">
                             <div style="flex: 1;">
                                 <label style="display:block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 600;">開始日期</label>
-                                <input type="date" id="dp-startDate" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;" />
+                                <input type="date" id="dp-startDate" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary);" />
                             </div>
                             <div style="flex: 1;">
                                 <label style="display:block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 600;">預計完成日</label>
-                                <input type="date" id="dp-estCompletionDate" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;" />
+                                <input type="date" id="dp-estCompletionDate" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary);" />
                             </div>
                         </div>
                         <div style="margin-bottom: 20px;">
                             <label style="display:block; margin-bottom: 4px; font-size: 0.9rem; font-weight: 600;">備註</label>
-                            <textarea id="dp-notes" rows="2" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px;"></textarea>
+                            <textarea id="dp-notes" rows="2" style="width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: var(--rounded-sm); background-color: var(--secondary-bg); color: var(--text-primary);"></textarea>
                         </div>
                         <div style="display: flex; justify-content: flex-end; gap: 10px;">
                             <button type="button" onclick="closeDevProjectModal()" class="internal-ops-btn" style="padding: 8px 16px;">取消</button>
-                            <button type="submit" class="action-btn primary" style="padding: 8px 16px; border: none; background: #1976d2; color: #fff; border-radius: 4px; cursor: pointer;">儲存</button>
+                            <button type="submit" class="action-btn primary" style="padding: 8px 16px; border: none; background: var(--accent-blue); color: white; border-radius: var(--rounded-sm); cursor: pointer;">儲存</button>
                         </div>
                     </form>
                 </div>
@@ -364,7 +365,7 @@ async function populateDevProjectDropdowns() {
             `).join('');
         } else {
             assigneeSelect.innerHTML = '<option value="">(無可用成員)</option>';
-            collabContainer.innerHTML = '<span style="color:#9ca3af; font-size:0.8rem;">(無可用成員)</span>';
+            collabContainer.innerHTML = '<span style="color:var(--text-muted); font-size:0.8rem;">(無可用成員)</span>';
         }
 
         const stages = config['開發階段'] || [];

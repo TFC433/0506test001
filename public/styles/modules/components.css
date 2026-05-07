@@ -1,4 +1,10 @@
 /* ==================== modules/components.css ==================== */
+/*
+ * Version: 1.0.1
+ * Date: 2026-05-07
+ * Changelog:
+ * - (v1.0.1) Phase A operational SaaS migration: reduced shared stat-card, stat-icon, and data-table radius.
+ */
 /* UI 組件與通用元素 - 第5個模組 */
 
 /* 按鈕系統 */
@@ -9,7 +15,7 @@
     gap: var(--spacing-2); 
     padding: var(--spacing-3) var(--spacing-5);
     border: none; 
-    border-radius: var(--rounded-lg); 
+    border-radius: var(--rounded-lg);
     font-size: var(--font-size-sm);
     font-weight: 600; 
     cursor: pointer; 
@@ -138,7 +144,7 @@
 .stat-card {
     background: var(--secondary-bg); 
     border: 1px solid var(--border-color);
-    border-radius: var(--rounded-xl); 
+    border-radius: var(--rounded-sm);
     padding: var(--spacing-5);
     cursor: pointer; 
     transition: all 0.3s ease;
@@ -174,7 +180,7 @@
 .stat-icon { 
     width: 40px; 
     height: 40px; 
-    border-radius: var(--rounded-lg); 
+    border-radius: var(--rounded-sm);
     display: flex; 
     align-items: center; 
     justify-content: center; 
@@ -233,7 +239,7 @@
     width: 100%; 
     border-collapse: collapse; 
     background: var(--secondary-bg); 
-    border-radius: var(--rounded-lg); 
+    border-radius: var(--rounded-sm);
     overflow: hidden; 
     border: 1px solid var(--border-color); 
 }

@@ -1,8 +1,8 @@
 /*
  * Project: TFC CRM
  * File: public/scripts/opportunities/details/opportunity-interactions.js
- * Version: v8.0.22 (Phase 8.10.18 - Timeline Stabilization & CSS Polish)
- * Date: 2026-04-14
+ * Version: v8.0.23 (Opportunity Operational Surface Alignment)
+ * Date: 2026-05-07
  * Changelog: 
  * - Phase 8 Interaction UI: operation-key rowIndex -> interactionId for edit/delete
  * - Phase 8.10.2 Fix: Relaxed strict result.success check to prevent unreachable markStale on 204/raw responses
@@ -21,6 +21,7 @@
  * - Phase 8.10.16 Patch: Final structural ownership fix. Introduced .crm-timeline-content wrapper to guarantee vertical line accurately follows true rendered item height without viewport clamping.
  * - Phase 8.10.17 Patch: Precision fix to remove stale SPA CSS injections and guarantee only one consistent timeline center line exists.
  * - Phase 8.10.18 Polish: Stabilized box-sizing, content overflow wrapping, and added strict SPA bleed protection for timeline line ownership.
+ * - Phase 8.10.19 UI: Tokenized timeline surfaces and reduced operational card radius/shadow for dark/light consistency.
  */
 // public/scripts/opportunities/details/opportunity-interactions.js
 // 職責：專門管理「互動與新增」頁籤的所有 UI 與功能
@@ -298,13 +299,13 @@ const OpportunityInteractions = (() => {
                 overflow-y: auto;
                 padding-right: 12px;
                 scrollbar-width: thin;
-                scrollbar-color: var(--border-color, #cbd5e1) transparent;
+                scrollbar-color: var(--border-color) transparent;
             }
             #discussion-pane::-webkit-scrollbar, #activity-pane::-webkit-scrollbar {
                 width: 6px;
             }
             #discussion-pane::-webkit-scrollbar-thumb, #activity-pane::-webkit-scrollbar-thumb {
-                background-color: var(--border-color, #cbd5e1);
+                background-color: var(--border-color);
                 border-radius: 4px;
             }
 
@@ -342,7 +343,7 @@ const OpportunityInteractions = (() => {
                 bottom: 0;
                 left: 50%;
                 width: 2px;
-                background: var(--border-color, #e2e8f0);
+                background: var(--border-color);
                 transform: translateX(-50%);
                 z-index: 1;
             }
@@ -372,9 +373,9 @@ const OpportunityInteractions = (() => {
                 width: 16px;
                 height: 16px;
                 border-radius: 50%;
-                background: var(--primary-color, #4f46e5);
-                border: 3px solid var(--bg-color, #ffffff);
-                box-shadow: 0 0 0 2px var(--border-color, #cbd5e1);
+                background: var(--accent-blue);
+                border: 3px solid var(--secondary-bg);
+                box-shadow: 0 0 0 2px var(--border-color);
                 z-index: 2;
             }
 
@@ -383,11 +384,11 @@ const OpportunityInteractions = (() => {
                 box-sizing: border-box;
                 position: relative;
                 width: calc(50% - 32px); /* Leaves exactly 32px gap from center line */
-                background: var(--card-bg, #ffffff);
-                border: 1px solid var(--border-color, #e2e8f0);
-                border-radius: 10px;
+                background: var(--secondary-bg);
+                border: 1px solid var(--border-color);
+                border-radius: var(--rounded-sm);
                 padding: 16px 20px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+                box-shadow: none;
                 z-index: 2;
             }
 
@@ -413,31 +414,31 @@ const OpportunityInteractions = (() => {
             .crm-timeline-item.left .crm-timeline-card::before {
                 right: -9px;
                 border-width: 7px 0 7px 9px;
-                border-color: transparent transparent transparent var(--border-color, #e2e8f0);
+                border-color: transparent transparent transparent var(--border-color);
             }
             .crm-timeline-item.left .crm-timeline-card::after {
                 right: -7px;
                 border-width: 6px 0 6px 8px;
-                border-color: transparent transparent transparent var(--card-bg, #ffffff);
+                border-color: transparent transparent transparent var(--secondary-bg);
             }
 
             /* Right Card Arrow */
             .crm-timeline-item.right .crm-timeline-card::before {
                 left: -9px;
                 border-width: 7px 9px 7px 0;
-                border-color: transparent var(--border-color, #e2e8f0) transparent transparent;
+                border-color: transparent var(--border-color) transparent transparent;
             }
             .crm-timeline-item.right .crm-timeline-card::after {
                 left: -7px;
                 border-width: 6px 8px 6px 0;
-                border-color: transparent var(--card-bg, #ffffff) transparent transparent;
+                border-color: transparent var(--secondary-bg) transparent transparent;
             }
 
             /* --- Readability & Typography (Timeline) --- */
             .crm-timeline-card .card-header {
                 font-size: 1rem;
                 font-weight: 600;
-                color: var(--text-color, #1e293b);
+                color: var(--text-primary);
                 margin-bottom: 8px;
                 display: flex;
                 align-items: center;
@@ -445,13 +446,13 @@ const OpportunityInteractions = (() => {
             }
             .crm-timeline-card .feed-time {
                 font-size: 0.75rem;
-                color: var(--text-muted, #94a3b8);
+                color: var(--text-muted);
                 font-weight: 400;
             }
             .crm-timeline-card .card-body {
                 font-size: 0.9rem;
                 line-height: 1.6;
-                color: var(--text-secondary, #475569);
+                color: var(--text-secondary);
                 margin-bottom: 12px;
                 word-break: break-word;
                 overflow-wrap: anywhere; /* Safety: strict overflow containment */
@@ -460,12 +461,12 @@ const OpportunityInteractions = (() => {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                border-top: 1px dashed var(--border-color, #e2e8f0);
+                border-top: 1px dashed var(--border-color);
                 padding-top: 10px;
                 font-size: 0.8rem;
             }
             .crm-timeline-card .footer-meta {
-                color: var(--text-muted, #64748b);
+                color: var(--text-muted);
             }
             .crm-timeline-card .footer-actions {
                 display: flex;
@@ -474,9 +475,9 @@ const OpportunityInteractions = (() => {
 
             /* --- Right Panel Structure & Typography --- */
             .interaction-form-section {
-                background-color: var(--secondary-bg, #f8fafc);
-                border: 1px solid var(--border-color, #e2e8f0);
-                border-radius: 12px;
+                background-color: var(--secondary-bg);
+                border: 1px solid var(--border-color);
+                border-radius: var(--rounded-sm);
                 padding: 24px;
                 height: fit-content;
             }
@@ -485,7 +486,7 @@ const OpportunityInteractions = (() => {
                 font-size: 1.1rem;
                 margin-bottom: 1.2rem !important;
                 color: var(--text-primary);
-                border-bottom: 1px solid var(--border-color, #e2e8f0);
+                border-bottom: 1px solid var(--border-color);
                 padding-bottom: 12px;
             }
 
@@ -531,14 +532,14 @@ const OpportunityInteractions = (() => {
                     left: -9px;
                     right: auto;
                     border-width: 7px 9px 7px 0;
-                    border-color: transparent var(--border-color, #e2e8f0) transparent transparent;
+                    border-color: transparent var(--border-color) transparent transparent;
                 }
                 .crm-timeline-item.left .crm-timeline-card::after,
                 .crm-timeline-item.right .crm-timeline-card::after {
                     left: -7px;
                     right: auto;
                     border-width: 6px 8px 6px 0;
-                    border-color: transparent var(--card-bg, #ffffff) transparent transparent;
+                    border-color: transparent var(--secondary-bg) transparent transparent;
                 }
                 #discussion-pane, #activity-pane {
                     height: auto;

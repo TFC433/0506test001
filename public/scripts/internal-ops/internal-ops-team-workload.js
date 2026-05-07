@@ -1,8 +1,9 @@
 // public/scripts/internal-ops/internal-ops-team-workload.js
 /**
- * @version 1.0.11
- * @date 2026-04-22
+ * @version 1.0.12
+ * @date 2026-05-07
  * @changelog
+ * - [1.0.12] UI Patch: Tokenized Team Workload member cards and task pills for Internal Ops operational contrast and radius alignment.
  * - [1.0.11] UI Cleanup Patch: Cleaned up Team Workload header area. Removed top filter bar and overload tag for visual clarity. Subtitle moved closer to title, global toggle repositioned cleanly. Workload sorting and all core logic perfectly preserved.
  * - [1.0.10] Feature & UI Polish Patch: Added lightweight frontend filter state and overload indicator.
  * - [1.0.9] UI Polish & Phase B Patch: Applied final UI polish (Part A) and lightweight progress annotation (Part B).
@@ -48,7 +49,7 @@ window.renderTeamWorkload = function(data) {
             if (header) {
                 const title = header.querySelector('.widget-title');
                 if (title && !title.querySelector('.tw-subtitle')) {
-                    title.insertAdjacentHTML('beforeend', '<span class="tw-subtitle" style="font-size:0.85rem; color:#6b7280; font-weight:normal; margin-left:12px;">依任務角色與狀態加權計算負荷分數</span>');
+                    title.insertAdjacentHTML('beforeend', '<span class="tw-subtitle" style="font-size:0.85rem; color:var(--text-muted); font-weight:normal; margin-left:12px;">依任務角色與狀態加權計算負荷分數</span>');
                 }
             }
         }
@@ -239,19 +240,19 @@ window.renderTeamWorkload = function(data) {
         <div class="team-workload-scope" style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start;">
         <style>
             .team-workload-scope .member-card {
-                border: 1px solid #e5e7eb;
-                border-radius: 12px;
+                border: 1px solid var(--border-color);
+                border-radius: var(--rounded-sm);
                 overflow: hidden;
-                box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
-                transition: box-shadow 0.2s ease, border-color 0.2s ease;
+                box-shadow: none;
+                transition: background-color 0.2s, border-color 0.2s;
                 width: 100%;
                 max-width: 320px;
                 flex: 1 1 260px;
-                background-color: #ffffff;
+                background-color: var(--card-bg);
             }
             .team-workload-scope .member-card:hover {
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-                border-color: #d1d5db;
+                background-color: var(--glass-bg);
+                border-color: var(--text-muted);
             }
             .team-workload-scope .member-header {
                 padding: 16px 20px;
@@ -262,7 +263,7 @@ window.renderTeamWorkload = function(data) {
                 gap: 8px;
             }
             .team-workload-scope .member-body {
-                border-top: 1px solid rgba(0,0,0,0.05);
+                border-top: 1px solid var(--border-color);
                 background: transparent;
                 padding: 16px 20px;
             }
@@ -272,7 +273,7 @@ window.renderTeamWorkload = function(data) {
                 justify-content: space-between;
                 margin: 0;
                 font-size: 1.15rem;
-                color: #111827;
+                color: var(--text-primary);
                 font-weight: 700;
                 width: 100%;
             }
@@ -288,20 +289,20 @@ window.renderTeamWorkload = function(data) {
                 border: 1px solid transparent;
             }
             .team-workload-scope .task-pill-main {
-                background: #eef2ff;
-                border-color: #dbeafe;
-                color: #374151;
+                background: color-mix(in srgb, var(--accent-blue) 12%, var(--secondary-bg));
+                border-color: color-mix(in srgb, var(--accent-blue) 22%, var(--border-color));
+                color: var(--text-secondary);
             }
             .team-workload-scope .task-pill-collab {
-                background: #f9fafb;
-                border-color: #e5e7eb;
-                color: #374151;
+                background: var(--glass-bg);
+                border-color: var(--border-color);
+                color: var(--text-secondary);
             }
         </style>
     `;
 
     if (memberCardsData.length === 0) {
-        html += `<div style="width:100%; padding:30px; text-align:center; color:#9ca3af; font-size:0.9rem;">目前沒有資料</div>`;
+        html += `<div style="width:100%; padding:30px; text-align:center; color:var(--text-muted); font-size:0.9rem;">目前沒有資料</div>`;
     }
 
     memberCardsData.forEach(cardData => {
@@ -313,14 +314,14 @@ window.renderTeamWorkload = function(data) {
 
         const workloadBarHtml = `
             <div style="display: flex; flex-direction: column; width: 100%; gap: 4px;" title="負荷狀態: ${levelName}&#10;分數: ${loadScore.toFixed(1)}&#10;比例: ${workloadPercentText}%">
-                <div style="width: 100%; height: 6px; background: rgba(0,0,0,0.06); border-radius: 4px; overflow: hidden; display: flex;">
+                <div style="width: 100%; height: 6px; background: var(--glass-bg); border-radius: 4px; overflow: hidden; display: flex;">
                     <div style="width: ${barWidth}%; height: 100%; background: ${barHex}; transition: width 0.4s ease-out;"></div>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 2px;">
-                    <div style="font-size: 0.95rem; font-weight: 600; color: #374151;">
+                    <div style="font-size: 0.95rem; font-weight: 600; color: var(--text-secondary);">
                         總共任務 ${totalTasks}
                     </div>
-                    <div style="font-size: 0.8rem; color: #6b7280;">
+                    <div style="font-size: 0.8rem; color: var(--text-muted);">
                         （主負責 ${groupData.main}；協作 ${groupData.collab}）
                     </div>
                 </div>
@@ -336,9 +337,9 @@ window.renderTeamWorkload = function(data) {
             
             let cueHtml = '';
             if (t._isBehind) {
-                cueHtml = `<span style="font-size: 0.75rem; font-weight: 600; color: #c62828;">落後</span>`;
+                cueHtml = `<span style="font-size: 0.75rem; font-weight: 600; color: var(--accent-red);">落後</span>`;
             } else if (t._isAhead) {
-                cueHtml = `<span style="font-size: 0.75rem; font-weight: 600; color: #2e7d32;">超前</span>`;
+                cueHtml = `<span style="font-size: 0.75rem; font-weight: 600; color: var(--accent-green);">超前</span>`;
             }
 
             return `
@@ -349,12 +350,12 @@ window.renderTeamWorkload = function(data) {
             `;
         };
 
-        let mainHtml = '<span style="color: #9ca3af; font-size: 0.85rem;">無</span>';
+        let mainHtml = '<span style="color: var(--text-muted); font-size: 0.85rem;">無</span>';
         if (mainTasks.length > 0) {
             mainHtml = `<div style="display: flex; flex-wrap: wrap; gap: 8px;">${mainTasks.map(t => renderPill(t, 'main')).join('')}</div>`;
         }
 
-        let collabHtml = '<span style="color: #9ca3af; font-size: 0.85rem;">無</span>';
+        let collabHtml = '<span style="color: var(--text-muted); font-size: 0.85rem;">無</span>';
         if (collabTasks.length > 0) {
             collabHtml = `<div style="display: flex; flex-wrap: wrap; gap: 8px;">${collabTasks.map(t => renderPill(t, 'collab')).join('')}</div>`;
         }
@@ -371,11 +372,11 @@ window.renderTeamWorkload = function(data) {
                 </div>
                 <div class="member-body" style="display: ${window.__workloadExpanded ? 'block' : 'none'};">
                     <div style="margin-bottom: 12px;">
-                        <h4 style="font-size: 0.85rem; font-weight: 600; color: #374151; margin: 0 0 8px 0;">主負責任務</h4>
+                        <h4 style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin: 0 0 8px 0;">主負責任務</h4>
                         ${mainHtml}
                     </div>
-                    <div style="border-top: 1px solid #f3f4f6; padding-top: 12px;">
-                        <h4 style="font-size: 0.85rem; font-weight: 600; color: #374151; margin: 0 0 8px 0;">協作任務</h4>
+                    <div style="border-top: 1px solid var(--border-color); padding-top: 12px;">
+                        <h4 style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin: 0 0 8px 0;">協作任務</h4>
                         ${collabHtml}
                     </div>
                 </div>
