@@ -4,9 +4,10 @@
 /**
  * services/opportunity-service.js
  * 機會案件業務邏輯層 (Service Layer)
- * @version 8.12.2 (Phase A - Identity & Empty Contact Patch)
- * @date 2026-04-17
+ * @version 8.12.3 (Phase B - External Tag Support)
+ * @date 2026-05-08
  * @description 
+ * - [PHASE B] Added companyName projection to linkedContacts mapping using existing allCompanies cache.
  * - [PATCH] Prevent empty/whitespace contact creation during scaffolding.
  * - [PATCH] Fixed modifier extraction to correctly resolve string identities and req.user.name for create and modify flows.
  * - [PATCH] Added system interaction logging for Create Opportunity (Phase A).
@@ -214,10 +215,15 @@ class OpportunityService {
                 allCompaniesPromise
             ]);
 
-            const linkedContacts = (linkedContactsFromCache || []).map(contact => ({
-                ...contact,
-                position: contact.jobTitle || contact.position 
-            }));
+            // [Phase B Patch] Appended companyName projection using allCompanies
+            const linkedContacts = (linkedContactsFromCache || []).map(contact => {
+                const comp = (allCompanies || []).find(c => c.companyId === contact.companyId);
+                return {
+                    ...contact,
+                    position: contact.jobTitle || contact.position,
+                    companyName: comp ? comp.companyName : null
+                };
+            });
             
             const interactions = (scopedInteractions || [])
                 .sort((a, b) => new Date(b.interactionTime || b.createdTime) - new Date(a.interactionTime || a.createdTime));

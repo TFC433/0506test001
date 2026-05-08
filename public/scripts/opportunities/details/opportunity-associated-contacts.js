@@ -2,11 +2,12 @@
 /**
  * ============================================================================
  * File: public/scripts/opportunities/details/opportunity-associated-contacts.js
- * Version: v8.0.8 (Relationship Workflow Stabilization)
+ * Version: v8.0.9 (External Company Tagging)
  * Date: 2026-05-08
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-08: Added localized company normalization and external-company tag rendering for linked contacts.
  * - 2026-05-08: Relationship lifecycle stabilization restores explicit detail reloads after contact relationship mutations.
  * - 2026-05-08: Unified CORE + RAW contact search delegates add-contact flow to the shared relationship modal.
  * - 2026-05-08: Manage-mode UX cleanup uses lightweight title action and preserves rail edit action removal.
@@ -164,6 +165,13 @@ const OpportunityContacts = (() => {
             return;
         }
 
+        // [Phase B] Localized company name normalizer
+        const _normalize = (str) => {
+            if (!str || typeof str !== 'string') return '';
+            return str.toLowerCase().replace(/股份有限公司|有限公司|公司|\(.*\)|（.*）/g, '').replace(/\s+/g, '').trim();
+        };
+        const oppCompanyNorm = _normalize(_opportunityInfo.customerCompany);
+
         let railHTML = `<div class="opp-rail-contact-list${_isManageMode ? ' is-managing' : ''}">`;
         _linkedContacts.forEach(contact => {
             const isMainContact = (contact.name === _opportunityInfo.mainContact);
@@ -173,6 +181,11 @@ const OpportunityContacts = (() => {
             const safeContactName = String(contact.name || '').replace(/'/g, "\\'");
             const safeOpportunityId = String(_opportunityInfo.opportunityId || '').replace(/'/g, "\\'");
             const safeDriveLink = contact.driveLink ? contact.driveLink.replace(/'/g, "\\'") : '';
+            
+            // [Phase B] Determine external company tag condition
+            const contactCompanyNorm = _normalize(contact.companyName);
+            const isExternal = contact.companyName && contactCompanyNorm && (contactCompanyNorm !== oppCompanyNorm);
+
             let actionButtons = '';
 
             if (isManual) {
@@ -193,6 +206,7 @@ const OpportunityContacts = (() => {
                             ${isMainContact ? '👑 ' : ''}${contact.name || '-'}${roleText ? `<span class="opp-rail-contact-role">｜${roleText}</span>` : ''}
                         </div>
                         ${isMainContact ? '<span class="card-tag assignee">主要</span>' : ''}
+                        ${isExternal ? `<span class="card-tag" style="background: var(--glass-bg); color: var(--text-secondary); border: 1px solid var(--border-color); margin-left: 4px;">外部｜${contact.companyName}</span>` : ''}
                     </div>
                     <div class="opp-rail-actions">${actionButtons}</div>
                 </div>`;
