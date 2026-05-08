@@ -1,3 +1,14 @@
+<!--
+ * File Path: public/views/opportunity-detail.html
+ * Version: 1.5.0
+ * Date: 2026-05-08
+ * Changelog:
+ * - (v1.5.0) Operational consistency polish: normalized major section spacing, workspace density rhythm, and local radius language across workspace, context rail, and timeline containers.
+ * - (v1.4.0) Opportunity Detail Workspace Header composition migration: moved the existing Stepper mount into the primary workspace flow, preserved full-width timeline, and kept Context Rail secondary.
+ * - (v1.3.0) Workspace Header composition migration: preserved Timeline full-width separation, kept Stepper workflow reintegration below the workspace header, and aligned shell hierarchy for Bento decomposition into operational workspace structure.
+ * - (v1.2.0) Workspace Header hierarchy correction: restored full-width timeline, de-escalated context rail, and reintegrated stepper into workspace hierarchy.
+ * - (v1.1.0) Operational Workspace Layout Skeleton Migration: separated workspace, isolated timeline zone, introduced context rail, and applied minimal-diff structural regrouping.
+ -->
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -59,16 +70,65 @@
         .sub-tab-content.active {
             display: block;
         }
+        .opp-layout-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+            gap: var(--spacing-6);
+            align-items: start;
+        }
+
+        .opp-workspace-shell,
+        .opp-workspace-header {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-5);
+            width: 100%;
+        }
+
+        .opp-main-info {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-5);
+            min-width: 0;
+        }
+
+        .opp-timeline-zone,
+        .opp-context-rail {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-6);
+            width: 100%;
+        }
+
+        .opp-timeline-zone {
+            margin-top: var(--spacing-7);
+        }
+
+        .opp-context-rail > .dashboard-widget,
+        #opportunity-stage-stepper-container,
+        .opp-timeline-zone > .tab-content {
+            border-radius: var(--rounded-md);
+        }
+
+        @media (max-width: 1024px) {
+            .opp-layout-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
 
     <div id="opportunity-detail-container">
 
-        <div id="opportunity-info-card-container" class="opportunity-info-card" style="margin-bottom: var(--spacing-6);">
+        <div class="opp-workspace-shell">
+            <div class="opp-workspace-header">
+                <div class="opp-layout-grid">
+                    <div class="opp-main-info">
+        <div id="opportunity-info-card-container" class="opportunity-info-card">
             </div>
 
-        <div id="opportunity-stage-stepper-container" class="dashboard-widget" style="margin-bottom: var(--spacing-6);">
+        <div id="opportunity-stage-stepper-container" class="dashboard-widget">
             <div class="widget-header" style="margin-bottom: 0;">
                 <h2 class="widget-title">機會進程</h2>
             </div>
@@ -76,10 +136,44 @@
                 </div>
         </div>
 
-        <div id="tab-content-events" class="tab-content active" style="margin-bottom: var(--spacing-6);">
+                    </div>
+
+            <div class="opp-context-rail">
+        <div class="dashboard-widget">
+            <div class="widget-header">
+                <h2 class="widget-title">關聯聯絡人</h2>
+                <button class="action-btn primary" id="add-associated-contact-btn">+ 關聯聯絡人</button>
+            </div>
+            <div id="associated-contacts-list" class="widget-content">
+                </div>
+        </div>
+
+        <div class="dashboard-widget">
+            <div class="widget-header">
+                <h2 class="widget-title">關聯機會</h2>
+                <button class="action-btn primary" id="add-associated-opportunity-btn">+ 關聯機會</button>
+            </div>
+            <div id="associated-opportunities-list" class="widget-content">
+                </div>
+        </div>
+
+        <div class="dashboard-widget">
+            <div class="widget-header">
+                <h2 class="widget-title">同公司潛在聯絡人</h2>
+            </div>
+            <div id="opp-potential-contacts-container" class="widget-content">
+                </div>
+        </div>
+            </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="opp-timeline-zone">
+        <div id="tab-content-events" class="tab-content active">
              </div>
 
-        <div id="tab-content-interactions" class="tab-content active" style="margin-bottom: var(--spacing-6);">
+        <div id="tab-content-interactions" class="tab-content active">
             <div class="interaction-layout">
                 
                 <div class="interaction-history-section">
@@ -131,30 +225,6 @@
             </div>
         </div>
 
-        <div class="dashboard-widget" style="margin-top: var(--spacing-6);">
-            <div class="widget-header">
-                <h2 class="widget-title">關聯聯絡人</h2>
-                <button class="action-btn primary" id="add-associated-contact-btn">+ 關聯聯絡人</button>
-            </div>
-            <div id="associated-contacts-list" class="widget-content">
-                </div>
-        </div>
-
-        <div class="dashboard-widget" style="margin-top: var(--spacing-6);">
-            <div class="widget-header">
-                <h2 class="widget-title">關聯機會</h2>
-                <button class="action-btn primary" id="add-associated-opportunity-btn">+ 關聯機會</button>
-            </div>
-            <div id="associated-opportunities-list" class="widget-content">
-                </div>
-        </div>
-
-        <div class="dashboard-widget" style="margin-top: var(--spacing-6);">
-            <div class="widget-header">
-                <h2 class="widget-title">同公司潛在聯絡人</h2>
-            </div>
-            <div id="opp-potential-contacts-container" class="widget-content">
-                </div>
         </div>
 
     </div>
