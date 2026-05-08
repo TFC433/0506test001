@@ -2,11 +2,12 @@
 /**
  * ============================================================================
  * File: public/scripts/contacts/contact-potential-manager.js
- * Version: v8.0.2 (Right Rail Density Reduction)
+ * Version: v8.0.3 (Opportunity Potential Contact Filtering)
  * Date: 2026-05-08
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-08: Opportunity potential contact hide-after-association filtering skips already matched contacts in opportunity context.
  * - 2026-05-08: Right rail density reduction.
  * - 2026-05-08: Potential contacts chip-only opportunity rendering.
  * - 2026-05-08: Secondary rail operational noise reduction.
@@ -89,25 +90,26 @@ const PotentialContactsManager = (() => {
         const comparisonSet = new Set(comparisonList.map(item => item[comparisonKey]));
 
         if (context === 'opportunity') {
+            const visiblePotentialContacts = potentialContacts.filter(contact => !comparisonSet.has(contact[comparisonKey]));
+            if (visiblePotentialContacts.length === 0) {
+                container.innerHTML = '<div class="opp-rail-empty">尚無同公司潛在聯絡人</div>';
+                return;
+            }
+
             let railHTML = '<div class="opp-rail-chip-wall">';
             const safeOpportunityId = String(opportunityId || '').replace(/"/g, '&quot;');
-            potentialContacts.forEach(contact => {
+            visiblePotentialContacts.forEach(contact => {
                 const contactJsonString = JSON.stringify(contact).replace(/'/g, "&apos;");
-                const isAlreadyHandled = comparisonSet.has(contact[comparisonKey]);
-                const statusText = isAlreadyHandled ? '已處理' : '';
                 const roleText = contact.position ? `｜${contact.position}` : '';
                 const safeDriveLink = contact.driveLink ? contact.driveLink.replace(/'/g, "\\'") : '';
                 const driveLinkBtn = contact.driveLink
                     ? `<button class="action-btn small info" title="預覽名片" onclick="showBusinessCardPreview('${safeDriveLink}')">名片</button>`
                     : '';
-                const actionButton = isAlreadyHandled
-                    ? ''
-                    : `<button class="action-btn small primary" title="關聯至此機會" onclick='PotentialContactsManager.handleLinkContact(${contactJsonString}, "${safeOpportunityId}")'>+</button>`;
+                const actionButton = `<button class="action-btn small primary" title="關聯至此機會" onclick='PotentialContactsManager.handleLinkContact(${contactJsonString}, "${safeOpportunityId}")'>+</button>`;
 
                 railHTML += `
                     <div class="opp-rail-chip">
                         <span class="opp-rail-chip-main">${contact.name || '-'}<span class="opp-rail-chip-meta">${roleText}</span></span>
-                        ${statusText ? `<span class="contact-card-status upgraded">${statusText}</span>` : ''}
                         <div class="opp-rail-actions">
                             ${actionButton}
                             ${driveLinkBtn}

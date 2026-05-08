@@ -2,11 +2,12 @@
 /**
  * ============================================================================
  * File: public/scripts/opportunities/details/opportunity-associated-contacts.js
- * Version: v8.0.5 (Right Rail Density Reduction)
+ * Version: v8.0.6 (RAW-to-CORE Association Payload Fix)
  * Date: 2026-05-08
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-08: RAW-to-CORE association payload completion sends contact identity fields for backend scaffolding.
  * - 2026-05-08: Right rail density reduction.
  * - 2026-05-08: Associated contacts manage-mode collapse hides per-item actions by default.
  * - 2026-05-08: Secondary rail operational noise reduction.
@@ -114,10 +115,24 @@ const OpportunityContacts = (() => {
         showConfirmDialog(confirmMsg, async () => {
             showLoading('正在關聯聯絡人...');
             try {
-                // 使用純 contactId 進行關聯，不依賴 rowIndex
+                const contactPayload = {
+                    contactId: contact.contactId,
+                    name: contact.name,
+                    company: contact.company || contact.companyName,
+                    companyName: contact.companyName || contact.company,
+                    position: contact.position,
+                    mobile: contact.mobile,
+                    phone: contact.phone,
+                    email: contact.email,
+                    rowIndex: contact.rowIndex,
+                    sourceId: contact.sourceId,
+                    source: contact.source,
+                    driveLink: contact.driveLink
+                };
+
                 const result = await authedFetch(`/api/opportunities/${opportunityId}/contacts`, {
                     method: 'POST',
-                    body: JSON.stringify({ contactId: contact.contactId })
+                    body: JSON.stringify(contactPayload)
                 });
 
                 if (result.success) {
