@@ -2,11 +2,14 @@
 /**
  * ============================================================================
  * File: public/scripts/opportunities/details/opportunity-associated-contacts.js
- * Version: v8.0.7 (Rail Edit Action Removal)
+ * Version: v8.0.8 (Relationship Workflow Stabilization)
  * Date: 2026-05-08
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-08: Relationship lifecycle stabilization restores explicit detail reloads after contact relationship mutations.
+ * - 2026-05-08: Unified CORE + RAW contact search delegates add-contact flow to the shared relationship modal.
+ * - 2026-05-08: Manage-mode UX cleanup uses lightweight title action and preserves rail edit action removal.
  * - 2026-05-08: Associated-contact rail edit action removal keeps the rail as secondary relationship context.
  * - 2026-05-08: RAW-to-CORE association payload completion sends contact identity fields for backend scaffolding.
  * - 2026-05-08: Right rail density reduction.
@@ -93,12 +96,11 @@ const OpportunityContacts = (() => {
                 });
 
                 if (result.success) {
-                    // 【*** 移除衝突 ***】
-                    // 移除下方的局部刷新和手動通知，authedFetch 會處理整頁刷新和通知
-                    // showNotification('名片歸檔成功！', 'success');
                     closeModal('link-business-card-modal'); // 確保關閉的是歸檔 modal
-                    // await loadOpportunityDetailPage(_opportunityInfo.opportunityId);
-                    // 【*** 移除結束 ***】
+                    _isManageMode = false;
+                    if (typeof window.loadOpportunityDetailPage === 'function') {
+                        await window.loadOpportunityDetailPage(_opportunityInfo.opportunityId);
+                    }
                 } else {
                     throw new Error(result.error || '歸檔失敗');
                 }
@@ -137,12 +139,11 @@ const OpportunityContacts = (() => {
                 });
 
                 if (result.success) {
-                    // 【*** 移除衝突 ***】
-                    // 移除下方的局部刷新和手動通知，authedFetch 會處理整頁刷新和通知
-                    // showNotification('聯絡人關聯成功！', 'success');
                     closeModal('link-contact-modal');
-                    // await loadOpportunityDetailPage(opportunityId);
-                    // 【*** 移除結束 ***】
+                    _isManageMode = false;
+                    if (typeof window.loadOpportunityDetailPage === 'function') {
+                        await window.loadOpportunityDetailPage(opportunityId);
+                    }
                 } else {
                     throw new Error(result.error || '關聯失敗');
                 }
@@ -205,6 +206,11 @@ const OpportunityContacts = (() => {
 
     // 【新增】顯示連結聯絡人的 Modal (Phase 8 Repair)
     function showLinkContactModal(opportunityId) {
+        if (typeof window.showLinkContactModal === 'function' && window.showLinkContactModal !== showLinkContactModal) {
+            window.showLinkContactModal(opportunityId);
+            return;
+        }
+
         const existingModal = document.getElementById('link-contact-modal');
         if (existingModal) existingModal.remove();
 
@@ -379,11 +385,10 @@ const OpportunityContacts = (() => {
                     body: JSON.stringify({ mainContact: newMainContactName })
                 });
                 if (result.success) {
-                    // 【*** 移除衝突 ***】
-                    // 移除下方的局部刷新和手動通知，authedFetch 會處理整頁刷新和通知
-                    // showNotification('主要聯絡人已更新', 'success');
-                    // await loadOpportunityDetailPage(opportunityId);
-                    // 【*** 移除結束 ***】
+                    _isManageMode = false;
+                    if (typeof window.loadOpportunityDetailPage === 'function') {
+                        await window.loadOpportunityDetailPage(opportunityId);
+                    }
                 } else {
                     throw new Error(result.error || '更新失敗');
                 }
@@ -407,11 +412,10 @@ const OpportunityContacts = (() => {
                     method: 'DELETE'
                 });
                 if (result.success) {
-                    // 【*** 移除衝突 ***】
-                    // 移除下方的局部刷新和手動通知，authedFetch 會處理整頁刷新和通知
-                    // showNotification('聯絡人關聯已刪除', 'success');
-                    // await loadOpportunityDetailPage(opportunityId);
-                    // 【*** 移除結束 ***】
+                    _isManageMode = false;
+                    if (typeof window.loadOpportunityDetailPage === 'function') {
+                        await window.loadOpportunityDetailPage(opportunityId);
+                    }
                 } else {
                     throw new Error(result.error || '刪除關聯失敗');
                 }
@@ -429,6 +433,7 @@ const OpportunityContacts = (() => {
     function init(opportunityInfo, linkedContacts) {
         _opportunityInfo = opportunityInfo;
         _linkedContacts = linkedContacts;
+        _isManageMode = false;
         _render();
         
         // 綁定「+ 關聯聯絡人」按鈕的點擊事件
@@ -441,7 +446,7 @@ const OpportunityContacts = (() => {
                 manageBtn = document.createElement('button');
                 manageBtn.type = 'button';
                 manageBtn.id = 'manage-associated-contact-btn';
-                manageBtn.className = 'action-btn small secondary';
+                manageBtn.className = 'opp-rail-manage-link';
                 addBtn.before(manageBtn);
             }
             if (manageBtn) {
@@ -464,7 +469,8 @@ const OpportunityContacts = (() => {
         showLinkBusinessCardModal, 
         _handleLinkBusinessCard,
         showLinkContactModal,    // 新增公開
-        _handleLinkExistingContact // 新增公開，供 onclick 使用
+        _handleLinkExistingContact, // 新增公開，供 onclick 使用
+        resetManageMode: () => { _isManageMode = false; }
     };
 })();
 

@@ -1,9 +1,11 @@
 // data/opportunity-sql-writer.js
 /**
  * OpportunitySqlWriter
- * * @version 1.1.0 (Phase 7 - Contact Linking SQL)
- * @date 2026-02-06
+ * * @version 1.1.1 (Contact Link Schema Alignment)
+ * @date 2026-05-08
  * @description 負責將機會案件寫入 Supabase 'opportunities' 資料表。
+ * - [PATCH] Aligned opportunity_contact_links payload with actual schema.
+ * - [PATCH] Replaced nonexistent link_status write field with schema-backed status.
  * - [PATCH] Normalize empty date strings to null for PostgreSQL compatibility.
  * - [PATCH] Added missing mapping for drive_link in updateOpportunity.
  * - [FEAT] Added linkContact and unlinkContact methods for SQL-based linking.
@@ -194,7 +196,7 @@ class OpportunitySqlWriter {
             .upsert({
                 opportunity_id: opportunityId,
                 contact_id: contactId,
-                link_status: 'active',
+                status: 'active',
                 updated_time: now,
                 updated_by: modifier
             }, { onConflict: 'opportunity_id, contact_id' });

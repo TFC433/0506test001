@@ -3,8 +3,11 @@
 // ============================================================================
 // public/scripts/opportunity-details/opportunity-details-components.js
 // 職責：整合機會詳細頁面組件，處理編輯邏輯與資料存取
-// * @version 1.1.8 (Right Rail Density Reduction)
+// * @version 1.1.9 (Relationship Workflow Stabilization)
 // * @date 2026-05-08
+// * @changelog 2026-05-08: Relationship lifecycle stabilization adds manage-mode rail support for associated opportunities.
+// * @changelog 2026-05-08: Parent opportunity unlink fix uses the passed opportunityId and refreshes detail state.
+// * @changelog 2026-05-08: Manage-mode UX cleanup hides remove-parent actions outside management mode.
 // * @changelog 2026-05-08: Right rail density reduction tightens chip spacing and lowers secondary control weight.
 // * @changelog 2026-05-08: Associated contacts manage-mode collapse support hides per-item actions by default.
 // * @changelog 2026-05-08: Potential contacts chip-only opportunity rendering support reduces rail operational noise.
@@ -185,6 +188,17 @@ function _injectStylesForOppInfoCard() {
             padding: 2px 6px;
             font-size: var(--font-size-xs);
             min-height: 0;
+        }
+        #opportunity-detail-container .opp-rail-manage-link {
+            border: 0;
+            background: transparent;
+            color: var(--text-muted);
+            padding: 0;
+            font-size: var(--font-size-xs);
+            cursor: pointer;
+        }
+        #opportunity-detail-container .opp-rail-manage-link:hover {
+            color: var(--accent-blue);
         }
         #opportunity-detail-container .opp-rail-empty {
             padding: var(--spacing-3);
@@ -589,15 +603,24 @@ const OpportunityInfoCard = (() => {
 
 // OpportunityAssociatedOpps 保持不變
 const OpportunityAssociatedOpps = (() => {
+    let _isManageMode = false;
+
     async function _handleRemoveParentLink(opportunityId, rowIndex) {
         showConfirmDialog('您確定要移除此母機會關聯嗎？', async () => {
             showLoading('正在移除關聯...');
             try {
-                const result = await authedFetch(`/api/opportunities/${opportunityInfo.opportunityId}`, {
+                const result = await authedFetch(`/api/opportunities/${opportunityId}`, {
                     method: 'PUT',
                     body: JSON.stringify({ parentOpportunityId: '', modifier: getCurrentUser() })
                 });
-                if (!result.success) throw new Error(result.error || '移除失敗');
+                if (result.success) {
+                    _isManageMode = false;
+                    if (typeof window.loadOpportunityDetailPage === 'function') {
+                        await window.loadOpportunityDetailPage(opportunityId);
+                    }
+                } else {
+                    throw new Error(result.error || '移除失敗');
+                }
             } catch (error) {
                 if (error.message !== 'Unauthorized') showNotification(`移除關聯失敗: ${error.message}`, 'error');
             } finally { hideLoading(); }
@@ -612,6 +635,22 @@ const OpportunityAssociatedOpps = (() => {
         let html = '';
         addButton.style.display = 'flex'; 
         addButton.onclick = () => showLinkOpportunityModal(opportunityInfo.opportunityId, opportunityInfo.rowIndex);
+        const header = addButton.closest('.widget-header');
+        let manageBtn = document.getElementById('manage-associated-opportunity-btn');
+        if (header && !manageBtn) {
+            manageBtn = document.createElement('button');
+            manageBtn.type = 'button';
+            manageBtn.id = 'manage-associated-opportunity-btn';
+            manageBtn.className = 'opp-rail-manage-link';
+            addButton.before(manageBtn);
+        }
+        if (manageBtn) {
+            manageBtn.textContent = _isManageMode ? '完成' : '管理';
+            manageBtn.onclick = () => {
+                _isManageMode = !_isManageMode;
+                render(details);
+            };
+        }
         const safeId = value => String(value || '').replace(/'/g, "\\'");
         const childItems = childOpportunities || [];
 
@@ -619,7 +658,7 @@ const OpportunityAssociatedOpps = (() => {
             html += `
                 <div class="opp-rail-chip">
                     <a href="#" class="text-link opp-rail-chip-main" onclick="event.preventDefault(); CRM_APP.navigateTo('opportunity-details', { opportunityId: '${safeId(parentOpportunity.opportunityId)}' })">${parentOpportunity.opportunityName}</a>
-                    <button class="action-btn small danger" onclick="OpportunityAssociatedOpps._handleRemoveParentLink('${safeId(opportunityInfo.opportunityId)}', ${opportunityInfo.rowIndex})" title="移除母機會關聯">移除</button>
+                    ${_isManageMode ? `<button class="action-btn small danger" onclick="OpportunityAssociatedOpps._handleRemoveParentLink('${safeId(opportunityInfo.opportunityId)}', ${opportunityInfo.rowIndex})" title="移除母機會關聯">移除</button>` : ''}
                 </div>`;
             addButton.textContent = '編輯母機會';
         } else {
@@ -636,5 +675,9 @@ const OpportunityAssociatedOpps = (() => {
 
         container.innerHTML = `<div class="opp-rail-chip-wall">${html || '<div class="opp-rail-empty">尚無關聯機會</div>'}</div>`;
     }
-    return { render, _handleRemoveParentLink };
+    return {
+        render,
+        _handleRemoveParentLink,
+        resetManageMode: () => { _isManageMode = false; }
+    };
 })();

@@ -1,8 +1,11 @@
 /**
  * public/scripts/opportunities/opportunity-modals.js
- * @version v5.0.10
- * @date 2026-04-17
+ * @version v5.0.11
+ * @date 2026-05-08
  * @changelog
+ * - Relationship lifecycle stabilization restores explicit Opportunity Detail reloads after link mutations
+ * - Unified CORE + RAW contact search fixes existing contact endpoint wiring
+ * - Parent opportunity link refreshes detail page after successful save
  * - Fix empty contact creation by trimming mainContact in payload
  * - Fix wizard card search residual input state
  * - Add success notification after opportunity creation
@@ -630,7 +633,7 @@ async function searchAndRenderContacts(type, query) {
     resultsContainer.innerHTML = '<div class="loading show"><div class="spinner" style="width:20px;height:20px"></div></div>';
     
     const apiUrl = type === 'existing' 
-        ? `/api/contact-list?q=${encodeURIComponent(query || '')}` 
+        ? `/api/contacts/list?q=${encodeURIComponent(query || '')}`
         : `/api/contacts?q=${encodeURIComponent(query || '')}`;
     
     try {
@@ -664,7 +667,11 @@ async function handleLinkContact(contactData, type) {
         email: contactData.email,
         rowIndex: contactData.rowIndex, 
         company: contactData.companyName || contactData.company,
-        contactId: contactData.contactId
+        companyName: contactData.companyName || contactData.company,
+        contactId: contactData.contactId,
+        sourceId: contactData.sourceId,
+        source: contactData.source,
+        driveLink: contactData.driveLink
     };
 
     try {
@@ -673,7 +680,15 @@ async function handleLinkContact(contactData, type) {
             method: 'POST',
             body: JSON.stringify(payload)
         });
-        if (result.success) closeModal('link-contact-modal');
+        if (result.success) {
+            closeModal('link-contact-modal');
+            if (typeof OpportunityContacts !== 'undefined' && typeof OpportunityContacts.resetManageMode === 'function') {
+                OpportunityContacts.resetManageMode();
+            }
+            if (typeof window.loadOpportunityDetailPage === 'function') {
+                await window.loadOpportunityDetailPage(window.currentDetailOpportunityId);
+            }
+        }
         else throw new Error(result.error);
     } catch (error) {
         if (error.message !== 'Unauthorized') showNotification(`關聯失敗: ${error.message}`, 'error');
@@ -734,7 +749,15 @@ async function handleLinkOpportunity(currentOppId, parentOppId) {
             method: 'PUT',
             body: JSON.stringify({ parentOpportunityId: parentOppId })
         });
-        if (result.success) closeModal('link-opportunity-modal');
+        if (result.success) {
+            closeModal('link-opportunity-modal');
+            if (typeof OpportunityAssociatedOpps !== 'undefined' && typeof OpportunityAssociatedOpps.resetManageMode === 'function') {
+                OpportunityAssociatedOpps.resetManageMode();
+            }
+            if (typeof window.loadOpportunityDetailPage === 'function') {
+                await window.loadOpportunityDetailPage(currentOppId);
+            }
+        }
         else throw new Error(result.error);
     } catch (error) {
         if (error.message !== 'Unauthorized') showNotification(`關聯失敗: ${error.message}`, 'error');
