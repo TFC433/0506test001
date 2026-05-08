@@ -2,11 +2,12 @@
 /**
  * ============================================================================
  * File: public/scripts/opportunities/details/opportunity-associated-contacts.js
- * Version: v8.0.6 (RAW-to-CORE Association Payload Fix)
+ * Version: v8.0.7 (Rail Edit Action Removal)
  * Date: 2026-05-08
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-08: Associated-contact rail edit action removal keeps the rail as secondary relationship context.
  * - 2026-05-08: RAW-to-CORE association payload completion sends contact identity fields for backend scaffolding.
  * - 2026-05-08: Right rail density reduction.
  * - 2026-05-08: Associated contacts manage-mode collapse hides per-item actions by default.
@@ -165,14 +166,13 @@ const OpportunityContacts = (() => {
         let railHTML = `<div class="opp-rail-contact-list${_isManageMode ? ' is-managing' : ''}">`;
         _linkedContacts.forEach(contact => {
             const isMainContact = (contact.name === _opportunityInfo.mainContact);
-            const contactJsonString = JSON.stringify(contact).replace(/'/g, "&apos;");
             const isManual = !contact.sourceId || contact.sourceId === 'MANUAL';
             const roleText = contact.position || contact.department || '';
             const safeContactId = String(contact.contactId || '').replace(/'/g, "\\'");
             const safeContactName = String(contact.name || '').replace(/'/g, "\\'");
             const safeOpportunityId = String(_opportunityInfo.opportunityId || '').replace(/'/g, "\\'");
             const safeDriveLink = contact.driveLink ? contact.driveLink.replace(/'/g, "\\'") : '';
-            let actionButtons = `<button class="action-btn small warn" onclick='OpportunityContacts.showEditModal(${contactJsonString})'>編輯</button>`;
+            let actionButtons = '';
 
             if (isManual) {
                 actionButtons += `<button class="action-btn small info" onclick="OpportunityContacts.showLinkBusinessCardModal('${safeContactId}')" title="將掃描的名片資料歸檔至此聯絡人">名片歸檔</button>`;

@@ -1,9 +1,10 @@
 /**
  * controllers/contact.controller.js
  * 聯絡人模組控制器
- * * @version 8.3.0
- * * @date 2026-04-19
+ * * @version 8.3.1
+ * * @date 2026-05-08
  * * @description 負責處理聯絡人相關的 HTTP 請求，驗證參數，並呼叫對應的 Service。
+ * * [Fix] RAW contact search query wiring fix: GET /api/contacts now passes req.query.q to ContactService.searchContacts.
  * * [Feature] Handled `limit` parameter for searchContactList to enable dynamic CORE pagination sizing.
  * * [Feature] Handled `sort` and `order` parameters for searchContactList to enable dynamic CORE sorting.
  * * [Feature] Added deleteRawContact for physical Google Sheet row deletion.
@@ -52,10 +53,11 @@ class ContactController {
      */
     searchContacts = async (req, res) => {
         try {
-            const result = await this.contactService.getPotentialContacts();
-            res.json({ data: result });
+            const query = req.query.q || '';
+            const result = await this.contactService.searchContacts(query);
+            res.json(result);
         } catch (error) {
-            handleApiError(res, error, 'Get Potential Contacts');
+            handleApiError(res, error, 'Search Potential Contacts');
         }
     };
 
