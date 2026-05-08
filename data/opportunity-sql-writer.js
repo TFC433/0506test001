@@ -1,11 +1,14 @@
 // data/opportunity-sql-writer.js
 /**
  * OpportunitySqlWriter
- * * @version 1.1.1 (Contact Link Schema Alignment)
+ * * @version 1.1.3 (Phase 7 - Contact Linking SQL)
  * @date 2026-05-08
  * @description 負責將機會案件寫入 Supabase 'opportunities' 資料表。
- * - [PATCH] Aligned opportunity_contact_links payload with actual schema.
- * - [PATCH] Replaced nonexistent link_status write field with schema-backed status.
+ * - [PATCH] opportunity_contact_links real-schema alignment.
+ * - [PATCH] explicit link_id generation.
+ * - [PATCH] create_time/creator payload support.
+ * - [PATCH] removal of invalid audit/upsert assumptions.
+ * - [PATCH] opportunity_contact_links constraint-free linkContact flow. Replaced onConflict upsert with select-update-or-insert flow.
  * - [PATCH] Normalize empty date strings to null for PostgreSQL compatibility.
  * - [PATCH] Added missing mapping for drive_link in updateOpportunity.
  * - [FEAT] Added linkContact and unlinkContact methods for SQL-based linking.
@@ -187,24 +190,54 @@ class OpportunitySqlWriter {
      */
     async linkContact(opportunityId, contactId, modifier) {
         console.log(`🔗 [OpportunitySqlWriter] Link: ${opportunityId} <-> ${contactId}`);
-        const now = new Date().toISOString();
         
-        // Upsert to link table (assuming 'opportunity_contact_links')
-        // Using upsert to handle re-linking smoothly
-        const { error } = await supabase
+        // Step 1: Check if link exists (constraint-free flow)
+        const { data: existingLink, error: fetchError } = await supabase
             .from('opportunity_contact_links')
-            .upsert({
-                opportunity_id: opportunityId,
-                contact_id: contactId,
-                status: 'active',
-                updated_time: now,
-                updated_by: modifier
-            }, { onConflict: 'opportunity_id, contact_id' });
+            .select('link_id, opportunity_id, contact_id')
+            .eq('opportunity_id', opportunityId)
+            .eq('contact_id', contactId)
+            .maybeSingle();
 
-        if (error) {
-            console.error('[OpportunitySqlWriter] Link Error:', error);
-            throw new Error(`Link Error: ${error.message}`);
+        if (fetchError) {
+            console.error('[OpportunitySqlWriter] Link Fetch Error:', fetchError);
+            throw new Error(`Link Fetch Error: ${fetchError.message}`);
         }
+
+        if (existingLink) {
+            // Step 2a: Update existing link (strictly update status only)
+            const { error: updateError } = await supabase
+                .from('opportunity_contact_links')
+                .update({ status: 'active' })
+                .eq('opportunity_id', opportunityId)
+                .eq('contact_id', contactId);
+
+            if (updateError) {
+                console.error('[OpportunitySqlWriter] Link Update Error:', updateError);
+                throw new Error(`Link Update Error: ${updateError.message}`);
+            }
+        } else {
+            // Step 2b: Insert new link (aligned with actual schema)
+            const linkId = `OCL_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+            const now = new Date().toISOString();
+
+            const { error: insertError } = await supabase
+                .from('opportunity_contact_links')
+                .insert([{
+                    link_id: linkId,
+                    opportunity_id: opportunityId,
+                    contact_id: contactId,
+                    create_time: now,
+                    status: 'active',
+                    creator: modifier
+                }]);
+
+            if (insertError) {
+                console.error('[OpportunitySqlWriter] Link Insert Error:', insertError);
+                throw new Error(`Link Insert Error: ${insertError.message}`);
+            }
+        }
+
         return { success: true };
     }
 
