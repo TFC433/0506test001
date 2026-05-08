@@ -2,11 +2,16 @@
 /**
  * ============================================================================
  * File: public/scripts/opportunities/details/opportunity-associated-contacts.js
- * Version: v8.0.3 (Phase 8 UI Annotation)
- * Date: 2026-02-10
+ * Version: v8.0.5 (Right Rail Density Reduction)
+ * Date: 2026-05-08
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-08: Right rail density reduction.
+ * - 2026-05-08: Associated contacts manage-mode collapse hides per-item actions by default.
+ * - 2026-05-08: Secondary rail operational noise reduction.
+ * - 2026-05-08: Right context rail compact entity UI.
+ * - 2026-05-08: Associated contacts mini-card rail rendering.
  * - [Phase 8] Comment-only semantic clarification.
  * - [Phase 8] Added World Model Annotation for Relationship Ownership.
  * - Confirmed no rowIndex usage in Linkage logic.
@@ -36,6 +41,7 @@ const OpportunityContacts = (() => {
     // 模組私有變數
     let _opportunityInfo = null;
     let _linkedContacts = [];
+    let _isManageMode = false;
 
     // 處理儲存編輯後的聯絡人資料
     async function _handleSaveContact(event) {
@@ -137,61 +143,47 @@ const OpportunityContacts = (() => {
     function _render() {
         const container = document.getElementById('associated-contacts-list');
         if (!_linkedContacts || _linkedContacts.length === 0) {
-            container.innerHTML = '<div class="alert alert-info">此機會尚無關聯聯絡人。</div>';
+            container.innerHTML = '<div class="opp-rail-empty">尚無關聯聯絡人</div>';
             return;
         }
 
-        let tableHTML = `<table class="data-table"><thead><tr><th>姓名</th><th>公司</th><th>職位</th><th>聯絡方式</th><th>角色/來源</th><th>操作</th></tr></thead><tbody>`;
+        let railHTML = `<div class="opp-rail-contact-list${_isManageMode ? ' is-managing' : ''}">`;
         _linkedContacts.forEach(contact => {
             const isMainContact = (contact.name === _opportunityInfo.mainContact);
             const contactJsonString = JSON.stringify(contact).replace(/'/g, "&apos;");
-            
-            let actionButtons = `<button class="action-btn small warn" onclick='OpportunityContacts.showEditModal(${contactJsonString})'>✏️ 編輯</button>`;
-            
             const isManual = !contact.sourceId || contact.sourceId === 'MANUAL';
+            const roleText = contact.position || contact.department || '';
+            const safeContactId = String(contact.contactId || '').replace(/'/g, "\\'");
+            const safeContactName = String(contact.name || '').replace(/'/g, "\\'");
+            const safeOpportunityId = String(_opportunityInfo.opportunityId || '').replace(/'/g, "\\'");
+            const safeDriveLink = contact.driveLink ? contact.driveLink.replace(/'/g, "\\'") : '';
+            let actionButtons = `<button class="action-btn small warn" onclick='OpportunityContacts.showEditModal(${contactJsonString})'>編輯</button>`;
+
             if (isManual) {
-                actionButtons += `<button class="action-btn small info" onclick="OpportunityContacts.showLinkBusinessCardModal('${contact.contactId}')" title="將掃描的名片資料歸檔至此聯絡人">🔗 名片歸檔</button>`;
+                actionButtons += `<button class="action-btn small info" onclick="OpportunityContacts.showLinkBusinessCardModal('${safeContactId}')" title="將掃描的名片資料歸檔至此聯絡人">名片歸檔</button>`;
             } else if (contact.driveLink) {
-                // 【修改】將 a href 連結改為 onclick 按鈕
-                const safeDriveLink = contact.driveLink.replace(/'/g, "\\'");
-                actionButtons += `<button class="action-btn small info" title="預覽名片" onclick="showBusinessCardPreview('${safeDriveLink}')">💳 名片</button>`;
-                // 【修改結束】
+                actionButtons += `<button class="action-btn small info" title="預覽名片" onclick="showBusinessCardPreview('${safeDriveLink}')">名片</button>`;
             }
 
             if (!isMainContact) {
-                const newMainContactName = contact.name.replace(/'/g, "\\'");
-                // [Phase 8] Update: Removed rowIndex from parameters, only use opportunityId
-                actionButtons += `<button class="action-btn small primary" style="background: var(--accent-green);" onclick="OpportunityContacts.setAsMain('${_opportunityInfo.opportunityId}', '${newMainContactName}')">👑 設為主要</button>`;
-                
-                // 【修改】將「刪除關聯」按鈕改為只有垃圾桶圖示
-                actionButtons += `<button class="action-btn small danger" onclick="OpportunityContacts.unlink('${_opportunityInfo.opportunityId}', '${contact.contactId}', '${contact.name}')" title="刪除關聯">🗑️</button>`;
+                actionButtons += `<button class="action-btn small primary" style="background: var(--accent-green);" onclick="OpportunityContacts.setAsMain('${safeOpportunityId}', '${safeContactName}')">設為主要</button>`;
+                actionButtons += `<button class="action-btn small danger" onclick="OpportunityContacts.unlink('${safeOpportunityId}', '${safeContactId}', '${safeContactName}')" title="刪除關聯">解除</button>`;
             }
 
-            const roleAndSource = isMainContact 
-                ? '<span class="card-tag assignee">主要聯絡人</span>' 
-                : '一般聯絡人';
-            
-            const sourceText = isManual 
-                ? '<span style="font-size: 0.75rem; color: var(--text-muted); display: block;">(手動建立)</span>' 
-                : '<span style="font-size: 0.75rem; color: var(--text-muted); display: block;">(來自名片)</span>';
-
-            tableHTML += `
-                <tr>
-                    <td data-label="姓名"><strong>${contact.name}</strong></td>
-                    <td data-label="公司">${contact.companyName || '-'}</td>
-                    <td data-label="職位">${contact.position || '-'}</td>
-                    <td data-label="聯絡方式">${contact.mobile || contact.phone || '-'}</td>
-                    <td data-label="角色/來源">${roleAndSource}${sourceText}</td>
-                    <td data-label="操作">
-                        <div class="action-buttons-container">
-                            ${actionButtons}
+            railHTML += `
+                <div class="opp-rail-contact-chip">
+                    <div class="opp-rail-contact-summary">
+                        <div class="opp-rail-contact-text">
+                            ${isMainContact ? '👑 ' : ''}${contact.name || '-'}${roleText ? `<span class="opp-rail-contact-role">｜${roleText}</span>` : ''}
                         </div>
-                    </td>
-                </tr>
-            `;
+                        ${isMainContact ? '<span class="card-tag assignee">主要</span>' : ''}
+                    </div>
+                    <div class="opp-rail-actions">${actionButtons}</div>
+                </div>`;
         });
-        tableHTML += '</tbody></table>';
-        container.innerHTML = tableHTML;
+        railHTML += '</div>';
+        container.innerHTML = railHTML;
+        return;
     }
 
     // --- 公開方法 ---
@@ -428,6 +420,23 @@ const OpportunityContacts = (() => {
         const addBtn = document.getElementById('add-associated-contact-btn');
         if (addBtn) {
             addBtn.onclick = () => showLinkContactModal(_opportunityInfo.opportunityId);
+            const header = addBtn.closest('.widget-header');
+            let manageBtn = document.getElementById('manage-associated-contact-btn');
+            if (header && !manageBtn) {
+                manageBtn = document.createElement('button');
+                manageBtn.type = 'button';
+                manageBtn.id = 'manage-associated-contact-btn';
+                manageBtn.className = 'action-btn small secondary';
+                addBtn.before(manageBtn);
+            }
+            if (manageBtn) {
+                manageBtn.textContent = _isManageMode ? '完成' : '管理';
+                manageBtn.onclick = () => {
+                    _isManageMode = !_isManageMode;
+                    _render();
+                    manageBtn.textContent = _isManageMode ? '完成' : '管理';
+                };
+            }
         }
     }
 

@@ -2,11 +2,16 @@
 /**
  * ============================================================================
  * File: public/scripts/contacts/contact-potential-manager.js
- * Version: v8.0.0 (Phase 8 UI Annotation)
- * Date: 2026-02-10
+ * Version: v8.0.2 (Right Rail Density Reduction)
+ * Date: 2026-05-08
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-08: Right rail density reduction.
+ * - 2026-05-08: Potential contacts chip-only opportunity rendering.
+ * - 2026-05-08: Secondary rail operational noise reduction.
+ * - 2026-05-08: Right context rail compact entity UI.
+ * - 2026-05-08: Potential contacts compact opportunity-context rendering.
  * - [Phase 8] Added World Model & Semantic Identity annotations.
  * - Comments only, no behavior change.
  *
@@ -73,13 +78,46 @@ const PotentialContactsManager = (() => {
         }
 
         if (!potentialContacts || potentialContacts.length === 0) {
-            container.innerHTML = '<div class="alert alert-info" style="text-align:center;">在潛在客戶池中沒有找到該公司的聯絡人</div>';
+            container.innerHTML = context === 'opportunity'
+                ? '<div class="opp-rail-empty">尚無同公司潛在聯絡人</div>'
+                : '<div class="alert alert-info" style="text-align:center;">在潛在客戶池中沒有找到該公司的聯絡人</div>';
             return;
         }
 
         // [WORLD MODEL] Comparison Logic: Preparing the CORE list for efficient lookup
         // Comparison only; no write authority here.
         const comparisonSet = new Set(comparisonList.map(item => item[comparisonKey]));
+
+        if (context === 'opportunity') {
+            let railHTML = '<div class="opp-rail-chip-wall">';
+            const safeOpportunityId = String(opportunityId || '').replace(/"/g, '&quot;');
+            potentialContacts.forEach(contact => {
+                const contactJsonString = JSON.stringify(contact).replace(/'/g, "&apos;");
+                const isAlreadyHandled = comparisonSet.has(contact[comparisonKey]);
+                const statusText = isAlreadyHandled ? '已處理' : '';
+                const roleText = contact.position ? `｜${contact.position}` : '';
+                const safeDriveLink = contact.driveLink ? contact.driveLink.replace(/'/g, "\\'") : '';
+                const driveLinkBtn = contact.driveLink
+                    ? `<button class="action-btn small info" title="預覽名片" onclick="showBusinessCardPreview('${safeDriveLink}')">名片</button>`
+                    : '';
+                const actionButton = isAlreadyHandled
+                    ? ''
+                    : `<button class="action-btn small primary" title="關聯至此機會" onclick='PotentialContactsManager.handleLinkContact(${contactJsonString}, "${safeOpportunityId}")'>+</button>`;
+
+                railHTML += `
+                    <div class="opp-rail-chip">
+                        <span class="opp-rail-chip-main">${contact.name || '-'}<span class="opp-rail-chip-meta">${roleText}</span></span>
+                        ${statusText ? `<span class="contact-card-status upgraded">${statusText}</span>` : ''}
+                        <div class="opp-rail-actions">
+                            ${actionButton}
+                            ${driveLinkBtn}
+                        </div>
+                    </div>`;
+            });
+            railHTML += '</div>';
+            container.innerHTML = railHTML;
+            return;
+        }
 
         let tableHTML = `
             <table class="data-table">

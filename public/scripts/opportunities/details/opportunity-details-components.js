@@ -3,8 +3,13 @@
 // ============================================================================
 // public/scripts/opportunity-details/opportunity-details-components.js
 // 職責：整合機會詳細頁面組件，處理編輯邏輯與資料存取
-// * @version 1.1.6 (Stepper Lifecycle Stabilization)
+// * @version 1.1.8 (Right Rail Density Reduction)
 // * @date 2026-05-08
+// * @changelog 2026-05-08: Right rail density reduction tightens chip spacing and lowers secondary control weight.
+// * @changelog 2026-05-08: Associated contacts manage-mode collapse support hides per-item actions by default.
+// * @changelog 2026-05-08: Potential contacts chip-only opportunity rendering support reduces rail operational noise.
+// * @changelog 2026-05-08: Right context rail compact entity UI adds scoped chip and mini-card rendering support.
+// * @changelog 2026-05-08: Associated opportunities chip rendering replaces legacy summary/list rail markup.
 // * @changelog 2026-05-08: Stepper lifecycle re-sync after DOM rescue refreshes view mode and Stepper internal data.
 // * @changelog 2026-05-08: Stepper save/edit state stabilization clears transient edit UI after OpportunityInfoCard re-render.
 // * @changelog 2026-05-08: Neutral shell spacing recovery restores layout-only flow gap without reintroducing a visible outer card.
@@ -87,6 +92,109 @@ function _injectStylesForOppInfoCard() {
         .spec-pills-wrapper { display: flex; flex-wrap: wrap; gap: 8px; }
         .manual-override-label { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-secondary); cursor: pointer; margin-top: 4px; }
         .notes-section { margin-top: var(--spacing-6); padding-top: var(--spacing-4); border-top: 1px solid var(--border-color); }
+        #opportunity-detail-container .opp-rail-chip-wall,
+        #opportunity-detail-container .opp-rail-card-list {
+            display: flex;
+            gap: var(--spacing-2);
+        }
+        #opportunity-detail-container .opp-rail-chip-wall { flex-wrap: wrap; }
+        #opportunity-detail-container .opp-rail-card-list { flex-direction: column; }
+        #opportunity-detail-container .opp-rail-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: var(--spacing-2);
+            padding: 5px 9px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--rounded-md);
+            background: var(--primary-bg);
+            color: var(--text-secondary);
+            font-size: var(--font-size-sm);
+            line-height: 1.35;
+        }
+        #opportunity-detail-container .opp-rail-chip-main {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+        #opportunity-detail-container .opp-rail-chip-meta,
+        #opportunity-detail-container .opp-rail-mini-meta {
+            color: var(--text-muted);
+            font-size: var(--font-size-xs);
+        }
+        #opportunity-detail-container .opp-rail-mini-card {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-2);
+            padding: var(--spacing-3);
+            border: 1px solid var(--border-color);
+            border-radius: var(--rounded-md);
+            background: var(--primary-bg);
+        }
+        #opportunity-detail-container .opp-rail-mini-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: var(--spacing-2);
+        }
+        #opportunity-detail-container .opp-rail-mini-name {
+            color: var(--text-primary);
+            font-weight: 600;
+            line-height: 1.35;
+        }
+        #opportunity-detail-container .opp-rail-contact-list {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-2);
+        }
+        #opportunity-detail-container .opp-rail-contact-chip {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-1);
+            padding: 6px 9px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--rounded-md);
+            background: var(--primary-bg);
+        }
+        #opportunity-detail-container .opp-rail-contact-summary {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: var(--spacing-2);
+            min-width: 0;
+        }
+        #opportunity-detail-container .opp-rail-contact-text {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--text-primary);
+            font-size: var(--font-size-sm);
+            line-height: 1.35;
+        }
+        #opportunity-detail-container .opp-rail-contact-role {
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+        #opportunity-detail-container .opp-rail-contact-list:not(.is-managing) .opp-rail-actions {
+            display: none;
+        }
+        #opportunity-detail-container .opp-rail-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--spacing-1);
+        }
+        #opportunity-detail-container .opp-rail-actions .action-btn.small {
+            padding: 2px 6px;
+            font-size: var(--font-size-xs);
+            min-height: 0;
+        }
+        #opportunity-detail-container .opp-rail-empty {
+            padding: var(--spacing-3);
+            border: 1px dashed var(--border-color);
+            border-radius: var(--rounded-md);
+            color: var(--text-muted);
+            background: var(--primary-bg);
+            font-size: var(--font-size-sm);
+            text-align: center;
+        }
     `;
     document.head.appendChild(style);
 }
@@ -504,17 +612,29 @@ const OpportunityAssociatedOpps = (() => {
         let html = '';
         addButton.style.display = 'flex'; 
         addButton.onclick = () => showLinkOpportunityModal(opportunityInfo.opportunityId, opportunityInfo.rowIndex);
+        const safeId = value => String(value || '').replace(/'/g, "\\'");
+        const childItems = childOpportunities || [];
+
         if (parentOpportunity) {
-            html += `<div class="summary-item" style="margin-bottom: 1rem;"><span class="summary-label">母機會</span><div style="display: flex; align-items: center; gap: 10px;"><span class="summary-value" style="font-size: 1rem;"><a href="#" class="text-link" onclick="event.preventDefault(); CRM_APP.navigateTo('opportunity-details', { opportunityId: '${parentOpportunity.opportunityId}' })">${parentOpportunity.opportunityName}</a></span><button class="action-btn small danger" style="padding: 2px 6px; font-size: 0.7rem;" onclick="OpportunityAssociatedOpps._handleRemoveParentLink('${opportunityInfo.opportunityId}', ${opportunityInfo.rowIndex})" title="移除母機會關聯">移除</button></div></div>`;
-            addButton.textContent = '✏️ 變更母機會';
-        } else { addButton.textContent = '+ 設定母機會'; }
-        if (childOpportunities && childOpportunities.length > 0) {
-            html += `<div class="summary-item"><span class="summary-label">子機會 (${childOpportunities.length})</span></div><ul style="list-style: none; padding-left: 1rem; margin-top: 0.5rem;">`;
-            childOpportunities.forEach(child => { html += `<li style="margin-bottom: 0.5rem;"><a href="#" class="text-link" onclick="event.preventDefault(); CRM_APP.navigateTo('opportunity-details', { opportunityId: '${child.opportunityId}' })">${child.opportunityName}</a></li>`; });
-            html += `</ul>`;
+            html += `
+                <div class="opp-rail-chip">
+                    <a href="#" class="text-link opp-rail-chip-main" onclick="event.preventDefault(); CRM_APP.navigateTo('opportunity-details', { opportunityId: '${safeId(parentOpportunity.opportunityId)}' })">${parentOpportunity.opportunityName}</a>
+                    <button class="action-btn small danger" onclick="OpportunityAssociatedOpps._handleRemoveParentLink('${safeId(opportunityInfo.opportunityId)}', ${opportunityInfo.rowIndex})" title="移除母機會關聯">移除</button>
+                </div>`;
+            addButton.textContent = '編輯母機會';
+        } else {
+            addButton.textContent = '+ 新增母機會';
         }
-        if (!parentOpportunity && (!childOpportunities || childOpportunities.length === 0)) html = '<div class="alert alert-info">尚無關聯機會。</div>';
-        container.innerHTML = html;
+
+        childItems.forEach(child => {
+            html += `
+                <a href="#" class="opp-rail-chip text-link" onclick="event.preventDefault(); CRM_APP.navigateTo('opportunity-details', { opportunityId: '${safeId(child.opportunityId)}' })">
+                    <span class="opp-rail-chip-main">${child.opportunityName}</span>
+                    <span class="opp-rail-chip-meta">子機會</span>
+                </a>`;
+        });
+
+        container.innerHTML = `<div class="opp-rail-chip-wall">${html || '<div class="opp-rail-empty">尚無關聯機會</div>'}</div>`;
     }
     return { render, _handleRemoveParentLink };
 })();
