@@ -3,8 +3,10 @@
 // ============================================================================
 // public/scripts/opportunity-details/opportunity-details-components.js
 // 職責：整合機會詳細頁面組件，處理編輯邏輯與資料存取
-// * @version 1.1.5 (Neutral Shell Spacing Recovery)
+// * @version 1.1.6 (Stepper Lifecycle Stabilization)
 // * @date 2026-05-08
+// * @changelog 2026-05-08: Stepper lifecycle re-sync after DOM rescue refreshes view mode and Stepper internal data.
+// * @changelog 2026-05-08: Stepper save/edit state stabilization clears transient edit UI after OpportunityInfoCard re-render.
 // * @changelog 2026-05-08: Neutral shell spacing recovery restores layout-only flow gap without reintroducing a visible outer card.
 // * @changelog 2026-05-08: Opportunity info wrapper visual neutralization removes giant outer card regression while preserving inner operational card framing.
 // * @changelog 2026-05-08: Preserves natural DOM flow stabilization for Stepper placement.
@@ -130,6 +132,9 @@ const OpportunityInfoCard = (() => {
         const stepperSlot = container.querySelector('[data-stepper-slot="opportunity-stage-stepper"]');
         if (stepperContainer && stepperSlot) {
             stepperSlot.replaceWith(stepperContainer);
+            if (window.OpportunityStepper && typeof window.OpportunityStepper.init === 'function') {
+                window.OpportunityStepper.init(opp);
+            }
         }
 
         // 預先生成編輯表單，以便切換時使用

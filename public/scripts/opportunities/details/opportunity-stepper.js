@@ -1,7 +1,9 @@
 // public/scripts/opportunities/details/opportunity-stepper.js
 // 職責：專門管理「機會進程」區塊的所有 UI 渲染與互動邏輯
-// * @version 2.2.1 (Phase 8.10 Stale Refresh Fix)
-// * @date 2026-03-12
+// * @version 2.2.2 (Stepper Save Completion Fix)
+// * @date 2026-05-08
+// * @changelog 2026-05-08: Stepper save completion restores view mode after successful save.
+// * @changelog 2026-05-08: Stepper local state refresh applies saved stage and history before re-render.
 // (V2.2 - 修正：_saveChanges 使用正確的 opportunityId 取代 rowIndex)
 
 const OpportunityStepper = (() => {
@@ -94,6 +96,19 @@ const OpportunityStepper = (() => {
             });
 
             if (result.success) {
+                _opportunityInfo = {
+                    ...(_opportunityInfo || {}),
+                    currentStage: newCurrentStage,
+                    stageHistory: newStageHistory
+                };
+
+                const hintContainer = document.getElementById('stepper-edit-hint');
+                if (hintContainer) {
+                    hintContainer.style.display = 'none';
+                }
+
+                _renderViewMode();
+
                 // [Phase 8.10 Dashboard Refresh Fix] Kanban Data heavily relies on Stage
                 if (window.dashboardManager && typeof window.dashboardManager.markStale === 'function') {
                     window.dashboardManager.markStale();
