@@ -2,9 +2,11 @@
 // -------------------------------------------------------------------------
 // 檔案職責：專門負責「機會核心資訊」的純顯示模式 (Read-Only UI)
 // UI 風格：Operational Workspace Header Composition
-// 版本：1.5.0
+// 版本：1.6.0
 // 修改日期：2026-05-08
 // 修改紀錄：
+// [2026-05-08] Opportunity Detail visual system decoupling from legacy dashboard surfaces.
+// [2026-05-08] Core info card frame visibility correction using solid workspace frame variables.
 // [2026-05-08] Operational typography rhythm refinement for labels, values, and section titles.
 // [2026-05-08] Workspace density tuning to reduce vertical looseness while preserving readability.
 // [2026-05-08] Radius consistency normalization across workspace info cards and inline badges.
@@ -59,8 +61,8 @@ const OpportunityInfoView = (() => {
                 justify-content: space-between;
                 align-items: flex-start;
                 gap: var(--spacing-3);
-                background-color: color-mix(in srgb, var(--secondary-bg) 38%, var(--primary-bg));
-                border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
+                background-color: var(--primary-bg);
+                border: 1px solid var(--border-color);
                 border-radius: var(--rounded-md);
                 box-shadow: none;
                 padding: var(--spacing-3);
@@ -94,8 +96,8 @@ const OpportunityInfoView = (() => {
 
             /* --- 通用工作區區塊 --- */
             .layer-card {
-                background-color: color-mix(in srgb, var(--secondary-bg) 45%, var(--primary-bg));
-                border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
+                background-color: var(--secondary-bg);
+                border: 1px solid var(--border-color);
                 border-radius: var(--rounded-md);
                 box-shadow: none;
                 padding: var(--spacing-3);

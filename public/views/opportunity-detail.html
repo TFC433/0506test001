@@ -1,8 +1,9 @@
 <!--
  * File Path: public/views/opportunity-detail.html
- * Version: 1.5.0
+ * Version: 1.6.0
  * Date: 2026-05-08
  * Changelog:
+ * - (v1.6.0) Opportunity Detail visual system decoupling: downgraded Stepper dashboard-widget styling and decoupled Context Rail legacy widget weight with scoped workspace overrides.
  * - (v1.5.0) Operational consistency polish: normalized major section spacing, workspace density rhythm, and local radius language across workspace, context rail, and timeline containers.
  * - (v1.4.0) Opportunity Detail Workspace Header composition migration: moved the existing Stepper mount into the primary workspace flow, preserved full-width timeline, and kept Context Rail secondary.
  * - (v1.3.0) Workspace Header composition migration: preserved Timeline full-width separation, kept Stepper workflow reintegration below the workspace header, and aligned shell hierarchy for Bento decomposition into operational workspace structure.
@@ -108,6 +109,58 @@
         #opportunity-stage-stepper-container,
         .opp-timeline-zone > .tab-content {
             border-radius: var(--rounded-md);
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper-container {
+            background: var(--secondary-bg);
+            border: 1px solid var(--border-color);
+            box-shadow: none;
+            padding: var(--spacing-3);
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper-container .widget-header {
+            padding-bottom: var(--spacing-2);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper-container .widget-title {
+            font-size: var(--font-size-sm);
+            font-weight: 650;
+            color: var(--text-secondary);
+        }
+
+        #opportunity-detail-container .opp-context-rail {
+            gap: var(--spacing-4);
+        }
+
+        #opportunity-detail-container .opp-context-rail > .dashboard-widget {
+            background: var(--primary-bg);
+            border: 1px solid var(--border-color);
+            box-shadow: none;
+            padding: var(--spacing-3);
+        }
+
+        #opportunity-detail-container .opp-context-rail .widget-header {
+            gap: var(--spacing-2);
+            padding-bottom: var(--spacing-2);
+            margin-bottom: var(--spacing-2);
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        #opportunity-detail-container .opp-context-rail .widget-title {
+            font-size: var(--font-size-sm);
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        #opportunity-detail-container .opp-context-rail .action-btn.primary {
+            padding: 6px 10px;
+            font-size: var(--font-size-xs);
+            box-shadow: none;
+        }
+
+        #opportunity-detail-container .opp-context-rail .widget-content {
+            padding: 0;
         }
 
         @media (max-width: 1024px) {
