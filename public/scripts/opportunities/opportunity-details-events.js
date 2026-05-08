@@ -4,9 +4,10 @@
 /**
  * Project: TFC CRM
  * File: public/scripts/opportunities/opportunity-details-events.js
- * Version: 8.1.4
- * Date: 2026-03-13
+ * Version: 8.1.5
+ * Date: 2026-05-08
  * Changelog:
+ * - [STABILITY] Edit/view layout stability correction: clear display override when returning to view mode after structural decoupling.
  * - [FIX] _getCompanyContacts now correctly resolves companyId from companyList before fetching company details, fixing ID-based routing.
  * - [FIX] Added window.dashboardManager.markStale() to save() success branch to force dashboard refresh upon return.
  * - [FIX] _initSpecQuantities: Robust handling for JSON string, CSV string, or Object to prevent .split() crash.
@@ -105,7 +106,7 @@ const OpportunityInfoCardEvents = (() => {
             }
         } else {
             editMode.style.display = 'none';
-            displayMode.style.display = 'block';
+            displayMode.style.display = '';
         }
     }
 

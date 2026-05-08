@@ -2,9 +2,13 @@
 // -------------------------------------------------------------------------
 // 檔案職責：專門負責「機會核心資訊」的純顯示模式 (Read-Only UI)
 // UI 風格：Operational Workspace Header Composition
-// 版本：1.6.0
+// 版本：1.8.0
 // 修改日期：2026-05-08
 // 修改紀錄：
+// [2026-05-08] Neutral shell spacing recovery for stable inner card flow.
+// [2026-05-08] Notes bottom visual closure correction after wrapper neutralization.
+// [2026-05-08] Structural decoupling stabilization: removed display: contents orchestration and flex order sandwiching.
+// [2026-05-08] Natural DOM flow restoration with a stable Stepper placement slot.
 // [2026-05-08] Opportunity Detail visual system decoupling from legacy dashboard surfaces.
 // [2026-05-08] Core info card frame visibility correction using solid workspace frame variables.
 // [2026-05-08] Operational typography rhythm refinement for labels, values, and section titles.
@@ -44,17 +48,6 @@ const OpportunityInfoView = (() => {
                 box-sizing: border-box;
                 position: relative;
             }
-
-            #opportunity-info-card-container,
-            #opportunity-info-display-mode:not([style*="none"]),
-            .opp-view-container {
-                display: contents;
-            }
-
-            .opp-name-strip { order: 1; }
-            #opportunity-stage-stepper-container { order: 2; }
-            .opp-operational-grid { order: 3; }
-            .opp-notes-block { order: 4; }
 
             .opp-name-strip {
                 display: flex;
@@ -272,6 +265,10 @@ const OpportunityInfoView = (() => {
                 padding-top: 6px;
             }
 
+            .opp-notes-block {
+                margin-bottom: var(--spacing-3);
+            }
+
             /* RWD */
             @media (max-width: 1200px) {
                 .opp-operational-grid {
@@ -422,6 +419,8 @@ const OpportunityInfoView = (() => {
                         </div>
                     </div>
                 </div>
+
+                <div data-stepper-slot="opportunity-stage-stepper"></div>
 
                 <div class="opp-operational-grid">
                     <div class="layer-card op-card-basic">

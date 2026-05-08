@@ -1,8 +1,10 @@
 <!--
  * File Path: public/views/opportunity-detail.html
- * Version: 1.6.0
+ * Version: 1.8.0
  * Date: 2026-05-08
  * Changelog:
+ * - (v1.8.0) Neutral shell spacing recovery: corrected workspace-to-timeline gap and restored notes bottom visual closure without reintroducing an outer card shell.
+ * - (v1.7.0) Structural decoupling stabilization: restored natural DOM flow, stabilized Stepper placement, and removed dependency on display: contents orchestration.
  * - (v1.6.0) Opportunity Detail visual system decoupling: downgraded Stepper dashboard-widget styling and decoupled Context Rail legacy widget weight with scoped workspace overrides.
  * - (v1.5.0) Operational consistency polish: normalized major section spacing, workspace density rhythm, and local radius language across workspace, context rail, and timeline containers.
  * - (v1.4.0) Opportunity Detail Workspace Header composition migration: moved the existing Stepper mount into the primary workspace flow, preserved full-width timeline, and kept Context Rail secondary.
@@ -102,7 +104,7 @@
         }
 
         .opp-timeline-zone {
-            margin-top: var(--spacing-7);
+            margin-top: var(--spacing-8);
         }
 
         .opp-context-rail > .dashboard-widget,
@@ -179,8 +181,6 @@
                 <div class="opp-layout-grid">
                     <div class="opp-main-info">
         <div id="opportunity-info-card-container" class="opportunity-info-card">
-            </div>
-
         <div id="opportunity-stage-stepper-container" class="dashboard-widget">
             <div class="widget-header" style="margin-bottom: 0;">
                 <h2 class="widget-title">機會進程</h2>
@@ -188,6 +188,7 @@
             <div id="opportunity-stage-stepper" class="widget-content">
                 </div>
         </div>
+            </div>
 
                     </div>
 

@@ -3,8 +3,13 @@
 // ============================================================================
 // public/scripts/opportunity-details/opportunity-details-components.js
 // 職責：整合機會詳細頁面組件，處理編輯邏輯與資料存取
-// * @version 1.1.2 (Phase 8.6A Perf Patch)
-// * @date 2026-03-11
+// * @version 1.1.5 (Neutral Shell Spacing Recovery)
+// * @date 2026-05-08
+// * @changelog 2026-05-08: Neutral shell spacing recovery restores layout-only flow gap without reintroducing a visible outer card.
+// * @changelog 2026-05-08: Opportunity info wrapper visual neutralization removes giant outer card regression while preserving inner operational card framing.
+// * @changelog 2026-05-08: Preserves natural DOM flow stabilization for Stepper placement.
+// * @changelog 2026-05-08: Natural DOM flow restoration, Stepper placement stabilization, and edit/view layout stability correction.
+// * @changelog 2026-05-08: Preserves existing Stepper DOM node instead of relying on display: contents orchestration.
 // (依賴 OpportunityInfoView 進行顯示模式渲染)
 
 function _injectStylesForOppInfoCard() {
@@ -16,12 +21,21 @@ function _injectStylesForOppInfoCard() {
     style.innerHTML = `
         /* 容器基礎樣式 */
         .opportunity-info-card {
+            background-color: transparent;
+            padding: 0;
+            border-radius: 0;
+            border: none;
+            margin-bottom: 0;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-5);
+        }
+        #opportunity-info-edit-mode {
             background-color: var(--secondary-bg);
             padding: var(--spacing-6);
-            border-radius: var(--rounded-xl);
+            border-radius: var(--rounded-md);
             border: 1px solid var(--border-color);
-            margin-bottom: var(--spacing-6);
-            transition: all 0.3s ease;
         }
         /* 編輯模式專用樣式 (保留原本邏輯) */
         .info-card-header {
@@ -98,6 +112,7 @@ const OpportunityInfoCard = (() => {
         _injectStylesForOppInfoCard();
         const container = document.getElementById('opportunity-info-card-container');
         if (!container) return;
+        const stepperContainer = document.getElementById('opportunity-stage-stepper-container');
 
         // 【修改點】直接呼叫 OpportunityInfoView 來產生顯示模式 HTML
         const displayModeHtml = OpportunityInfoView 
@@ -111,6 +126,11 @@ const OpportunityInfoCard = (() => {
             <div id="opportunity-info-edit-mode" style="display: none;">
                 </div>
         `;
+
+        const stepperSlot = container.querySelector('[data-stepper-slot="opportunity-stage-stepper"]');
+        if (stepperContainer && stepperSlot) {
+            stepperSlot.replaceWith(stepperContainer);
+        }
 
         // 預先生成編輯表單，以便切換時使用
         _generateEditFormHTML(opp).then(html => {
