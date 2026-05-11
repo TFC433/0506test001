@@ -3,8 +3,10 @@
 // ============================================================================
 // public/scripts/opportunity-details/opportunity-details-components.js
 // 職責：整合機會詳細頁面組件，處理編輯邏輯與資料存取
-// * @version 1.1.10 (Context Rail Surface Recovery)
+// * @version 1.1.12 (Rail Entity Productization)
 // * @date 2026-05-11
+// * @changelog 2026-05-11: Opportunity Detail rail entity productization: tune relationship entity items with restrained radius and row-like padding for clearer operational readability.
+// * @changelog 2026-05-11: Opportunity Detail rail contrast tuning: add subtle micro-elevation to rail entity chips/cards for improved nested-surface readability.
 // * @changelog 2026-05-11: Opportunity Detail context rail surface recovery: elevate rail chips/mini-cards/empty states to `--secondary-bg` to resolve primary-on-primary contrast collision.
 // * @changelog 2026-05-08: Relationship lifecycle stabilization adds manage-mode rail support for associated opportunities.
 // * @changelog 2026-05-08: Parent opportunity unlink fix uses the passed opportunityId and refreshes detail state.
@@ -107,10 +109,11 @@ function _injectStylesForOppInfoCard() {
             display: inline-flex;
             align-items: center;
             gap: var(--spacing-2);
-            padding: 5px 9px;
+            padding: 10px 12px;
             border: 1px solid var(--border-color);
-            border-radius: var(--rounded-md);
+            border-radius: 6px;
             background: var(--secondary-bg);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
             color: var(--text-secondary);
             font-size: var(--font-size-sm);
             line-height: 1.35;
@@ -128,10 +131,11 @@ function _injectStylesForOppInfoCard() {
             display: flex;
             flex-direction: column;
             gap: var(--spacing-2);
-            padding: var(--spacing-3);
+            padding: 10px 12px;
             border: 1px solid var(--border-color);
-            border-radius: var(--rounded-md);
+            border-radius: 6px;
             background: var(--secondary-bg);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
         }
         #opportunity-detail-container .opp-rail-mini-head {
             display: flex;
@@ -153,10 +157,11 @@ function _injectStylesForOppInfoCard() {
             display: flex;
             flex-direction: column;
             gap: var(--spacing-1);
-            padding: 6px 9px;
+            padding: 10px 12px;
             border: 1px solid var(--border-color);
-            border-radius: var(--rounded-md);
+            border-radius: 6px;
             background: var(--secondary-bg);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
         }
         #opportunity-detail-container .opp-rail-contact-summary {
             display: flex;

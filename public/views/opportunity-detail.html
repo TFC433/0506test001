@@ -1,8 +1,10 @@
 <!--
  * File Path: public/views/opportunity-detail.html
- * Version: 1.8.0
- * Date: 2026-05-08
+ * Version: 1.8.2
+ * Date: 2026-05-11
  * Changelog:
+ * - (v1.8.2) Opportunity Detail radius consistency alignment: keep right context-rail sections on the same restrained operational radius language as primary cards.
+ * - (v1.8.1) Opportunity Detail surface consistency alignment: unify right context-rail sections with Operational SaaS Level-1 card surfaces.
  * - (v1.8.0) Neutral shell spacing recovery: corrected workspace-to-timeline gap and restored notes bottom visual closure without reintroducing an outer card shell.
  * - (v1.7.0) Structural decoupling stabilization: restored natural DOM flow, stabilized Stepper placement, and removed dependency on display: contents orchestration.
  * - (v1.6.0) Opportunity Detail visual system decoupling: downgraded Stepper dashboard-widget styling and decoupled Context Rail legacy widget weight with scoped workspace overrides.
@@ -136,8 +138,9 @@
         }
 
         #opportunity-detail-container .opp-context-rail > .dashboard-widget {
-            background: var(--primary-bg);
+            background: var(--secondary-bg);
             border: 1px solid var(--border-color);
+            border-radius: var(--rounded-md);
             box-shadow: none;
             padding: var(--spacing-3);
         }

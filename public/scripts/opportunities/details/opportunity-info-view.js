@@ -2,9 +2,11 @@
 // -------------------------------------------------------------------------
 // 檔案職責：專門負責「機會核心資訊」的純顯示模式 (Read-Only UI)
 // UI 風格：Operational Workspace Header Composition
-// 版本：1.8.1
+// 版本：1.8.2
 // 修改日期：2026-05-11
 // 修改紀錄：
+// [2026-05-11] Opportunity Detail operational card ordering refinement: align middle workspace cards to Basic Info / Business Context / Opportunity Overview / Key Dates.
+// [2026-05-11] Opportunity Detail radius consistency alignment: preserve Level-1 title surface on the same operational card radius language as `.layer-card`.
 // [2026-05-11] Opportunity Detail surface hierarchy recovery: elevate `.opp-name-strip` to `--secondary-bg` to restore Level 1 workspace contrast.
 // [2026-05-08] Neutral shell spacing recovery for stable inner card flow.
 // [2026-05-08] Notes bottom visual closure correction after wrapper neutralization.
@@ -442,20 +444,6 @@ const OpportunityInfoView = (() => {
                         </div>
                     </div>
 
-                    <div class="layer-card op-card-dates">
-                        <div class="inner-card-title">關鍵日期</div>
-                        <div class="dates-content">
-                            <div class="date-row">
-                                <span class="date-key">建立日期</span>
-                                <span class="date-val">${createdDate}</span>
-                            </div>
-                            <div class="date-row">
-                                <span class="date-key">預計結案</span>
-                                <span class="date-val">${closeDate}</span>
-                            </div>
-                        </div>
-                    </div>
-
                     <div class="layer-card op-card-business">
                         <div class="inner-card-title">商務脈絡</div>
                         <div class="field-list">
@@ -505,6 +493,21 @@ const OpportunityInfoView = (() => {
                             ${specsContent}
                         </div>
                     </div>
+
+                    <div class="layer-card op-card-dates">
+                        <div class="inner-card-title">關鍵日期</div>
+                        <div class="dates-content">
+                            <div class="date-row">
+                                <span class="date-key">建立日期</span>
+                                <span class="date-val">${createdDate}</span>
+                            </div>
+                            <div class="date-row">
+                                <span class="date-key">預計結案</span>
+                                <span class="date-val">${closeDate}</span>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
 
                 <div class="layer-card opp-notes-block">
