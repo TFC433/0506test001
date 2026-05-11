@@ -2,9 +2,10 @@
 // -------------------------------------------------------------------------
 // 檔案職責：專門負責「機會核心資訊」的純顯示模式 (Read-Only UI)
 // UI 風格：Operational Workspace Header Composition
-// 版本：1.8.0
-// 修改日期：2026-05-08
+// 版本：1.8.1
+// 修改日期：2026-05-11
 // 修改紀錄：
+// [2026-05-11] Opportunity Detail surface hierarchy recovery: elevate `.opp-name-strip` to `--secondary-bg` to restore Level 1 workspace contrast.
 // [2026-05-08] Neutral shell spacing recovery for stable inner card flow.
 // [2026-05-08] Notes bottom visual closure correction after wrapper neutralization.
 // [2026-05-08] Structural decoupling stabilization: removed display: contents orchestration and flex order sandwiching.
@@ -54,7 +55,7 @@ const OpportunityInfoView = (() => {
                 justify-content: space-between;
                 align-items: flex-start;
                 gap: var(--spacing-3);
-                background-color: var(--primary-bg);
+                background-color: var(--secondary-bg);
                 border: 1px solid var(--border-color);
                 border-radius: var(--rounded-md);
                 box-shadow: none;

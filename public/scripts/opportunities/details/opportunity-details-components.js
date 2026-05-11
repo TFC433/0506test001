@@ -3,8 +3,9 @@
 // ============================================================================
 // public/scripts/opportunity-details/opportunity-details-components.js
 // 職責：整合機會詳細頁面組件，處理編輯邏輯與資料存取
-// * @version 1.1.9 (Relationship Workflow Stabilization)
-// * @date 2026-05-08
+// * @version 1.1.10 (Context Rail Surface Recovery)
+// * @date 2026-05-11
+// * @changelog 2026-05-11: Opportunity Detail context rail surface recovery: elevate rail chips/mini-cards/empty states to `--secondary-bg` to resolve primary-on-primary contrast collision.
 // * @changelog 2026-05-08: Relationship lifecycle stabilization adds manage-mode rail support for associated opportunities.
 // * @changelog 2026-05-08: Parent opportunity unlink fix uses the passed opportunityId and refreshes detail state.
 // * @changelog 2026-05-08: Manage-mode UX cleanup hides remove-parent actions outside management mode.
@@ -109,7 +110,7 @@ function _injectStylesForOppInfoCard() {
             padding: 5px 9px;
             border: 1px solid var(--border-color);
             border-radius: var(--rounded-md);
-            background: var(--primary-bg);
+            background: var(--secondary-bg);
             color: var(--text-secondary);
             font-size: var(--font-size-sm);
             line-height: 1.35;
@@ -130,7 +131,7 @@ function _injectStylesForOppInfoCard() {
             padding: var(--spacing-3);
             border: 1px solid var(--border-color);
             border-radius: var(--rounded-md);
-            background: var(--primary-bg);
+            background: var(--secondary-bg);
         }
         #opportunity-detail-container .opp-rail-mini-head {
             display: flex;
@@ -155,7 +156,7 @@ function _injectStylesForOppInfoCard() {
             padding: 6px 9px;
             border: 1px solid var(--border-color);
             border-radius: var(--rounded-md);
-            background: var(--primary-bg);
+            background: var(--secondary-bg);
         }
         #opportunity-detail-container .opp-rail-contact-summary {
             display: flex;
@@ -205,7 +206,7 @@ function _injectStylesForOppInfoCard() {
             border: 1px dashed var(--border-color);
             border-radius: var(--rounded-md);
             color: var(--text-muted);
-            background: var(--primary-bg);
+            background: var(--secondary-bg);
             font-size: var(--font-size-sm);
             text-align: center;
         }

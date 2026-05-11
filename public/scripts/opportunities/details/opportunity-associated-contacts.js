@@ -168,7 +168,7 @@ const OpportunityContacts = (() => {
         // [Phase B] Localized company name normalizer
         const _normalize = (str) => {
             if (!str || typeof str !== 'string') return '';
-            return str.toLowerCase().replace(/股份有限公司|有限公司|公司|\(.*\)|（.*）/g, '').replace(/\s+/g, '').trim();
+            return str.toLowerCase().replace(/股份有限公司|有限公司|公司|\(.*?\)|（.*?）/g, '').replace(/\s+/g, '').trim();
         };
         const oppCompanyNorm = _normalize(_opportunityInfo.customerCompany);
 
@@ -185,6 +185,9 @@ const OpportunityContacts = (() => {
             // [Phase B] Determine external company tag condition
             const contactCompanyNorm = _normalize(contact.companyName);
             const isExternal = contact.companyName && contactCompanyNorm && (contactCompanyNorm !== oppCompanyNorm);
+            const contactNameHTML = contact.driveLink
+                ? `<a href="#" class="opp-rail-contact-name-link" onclick="event.preventDefault(); showBusinessCardPreview('${safeDriveLink}')">${contact.name || '-'}</a>`
+                : (contact.name || '-');
 
             let actionButtons = '';
 
@@ -203,7 +206,7 @@ const OpportunityContacts = (() => {
                 <div class="opp-rail-contact-chip">
                     <div class="opp-rail-contact-summary">
                         <div class="opp-rail-contact-text">
-                            ${isMainContact ? '👑 ' : ''}${contact.name || '-'}${roleText ? `<span class="opp-rail-contact-role">｜${roleText}</span>` : ''}
+                            ${isMainContact ? '👑 ' : ''}${contactNameHTML}${roleText ? `<span class="opp-rail-contact-role">｜${roleText}</span>` : ''}
                         </div>
                         ${isMainContact ? '<span class="card-tag assignee">主要</span>' : ''}
                         ${isExternal ? `<span class="card-tag" style="background: var(--glass-bg); color: var(--text-secondary); border: 1px solid var(--border-color); margin-left: 4px;">外部｜${contact.companyName}</span>` : ''}

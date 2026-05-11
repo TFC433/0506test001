@@ -18,6 +18,7 @@
 let allSearchedContacts = [];
 let companySearchTimeout;
 let linkOppSearchTimeout;
+let isLinkingContact = false;
 
 // ==================== Wizard 核心邏輯 (新增機會專用) ====================
 const NewOppWizard = {
@@ -658,6 +659,8 @@ async function searchAndRenderContacts(type, query) {
 }
 
 async function handleLinkContact(contactData, type) {
+    if (isLinkingContact) return;
+    isLinkingContact = true;
     showLoading('正在關聯...');
     const payload = {
         name: contactData.name,
@@ -693,6 +696,7 @@ async function handleLinkContact(contactData, type) {
     } catch (error) {
         if (error.message !== 'Unauthorized') showNotification(`關聯失敗: ${error.message}`, 'error');
     } finally {
+        isLinkingContact = false;
         hideLoading();
     }
 }
