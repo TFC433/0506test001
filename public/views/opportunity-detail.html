@@ -1,8 +1,16 @@
 <!--
  * File Path: public/views/opportunity-detail.html
- * Version: 1.8.3
+ * Version: 1.8.5
  * Date: 2026-05-11
  * Changelog:
+ * - (v1.8.5) Opportunity Detail Visual Language Spec v1 implementation.
+ * - (v1.8.5) Section heading hierarchy refinement for operational metadata headings.
+ * - (v1.8.5) Field/value hierarchy refinement for clearer scan rhythm.
+ * - (v1.8.5) Divider rhythm refinement for calmer internal operational data separation.
+ * - (v1.8.5) Operational action hierarchy refinement for restrained workspace controls.
+ * - (v1.8.4) Opportunity Detail Pure Style Pass A: operationalize legacy header action button styling.
+ * - (v1.8.4) Opportunity Detail typography alignment: unify workspace and rail section-heading language.
+ * - (v1.8.4) Opportunity Detail divider rhythm alignment: standardize internal operational data separation styling.
  * - (v1.8.3) Opportunity Detail radius correction: restore restrained operational small-radius language for Level-1 workspace sections.
  * - (v1.8.3) Roll back unintended rounded-md escalation introduced during radius consistency alignment.
  * - (v1.8.2) Opportunity Detail radius consistency alignment: keep right context-rail sections on the same restrained operational radius language as primary cards.
@@ -151,19 +159,31 @@
             gap: var(--spacing-2);
             padding-bottom: var(--spacing-2);
             margin-bottom: var(--spacing-2);
-            border-bottom: 1px solid var(--border-color);
+            border-bottom: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
         }
 
         #opportunity-detail-container .opp-context-rail .widget-title {
-            font-size: var(--font-size-sm);
+            font-size: var(--font-size-xs);
             font-weight: 600;
-            color: var(--text-secondary);
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.32px;
         }
 
         #opportunity-detail-container .opp-context-rail .action-btn.primary {
+            background: var(--primary-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
             padding: 6px 10px;
             font-size: var(--font-size-xs);
             box-shadow: none;
+            transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+        }
+
+        #opportunity-detail-container .opp-context-rail .action-btn.primary:hover {
+            background: var(--secondary-bg);
+            border-color: var(--border-color);
+            color: var(--text-primary);
         }
 
         #opportunity-detail-container .opp-context-rail .widget-content {

@@ -2,9 +2,17 @@
 // -------------------------------------------------------------------------
 // 檔案職責：專門負責「機會核心資訊」的純顯示模式 (Read-Only UI)
 // UI 風格：Operational Workspace Header Composition
-// 版本：1.8.4
+// 版本：1.8.6
 // 修改日期：2026-05-11
 // 修改紀錄：
+// [2026-05-11] Opportunity Detail Visual Language Spec v1 implementation.
+// [2026-05-11] Section heading hierarchy refinement for operational metadata headings.
+// [2026-05-11] Field/value hierarchy refinement for clearer scan rhythm.
+// [2026-05-11] Divider rhythm refinement for calmer internal operational data separation.
+// [2026-05-11] Operational action hierarchy refinement for restrained workspace controls.
+// [2026-05-11] Opportunity Detail Pure Style Pass A: operationalize legacy header action button styling.
+// [2026-05-11] Opportunity Detail typography alignment: unify workspace and rail section-heading language.
+// [2026-05-11] Opportunity Detail divider rhythm alignment: standardize internal operational data separation styling.
 // [2026-05-11] Opportunity Detail title surface radius alignment: unify opportunity header with restrained operational small-radius language.
 // [2026-05-11] Opportunity Detail grid proportion refinement: tune middle operational workspace cards to 2-3.5-3-1.5 layout balance.
 // [2026-05-11] Opportunity Detail grid proportion alignment: sync operational card widths with 3-3-2-2 business layout.
@@ -121,17 +129,17 @@ const OpportunityInfoView = (() => {
             .field-row {
                 display: flex;
                 flex-direction: column;
-                gap: var(--spacing-1);
+                gap: var(--spacing-2);
                 min-width: 0;
-                padding-top: 6px;
-                border-top: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+                padding-top: var(--spacing-2);
+                border-top: 1px solid color-mix(in srgb, var(--border-color) 35%, transparent);
             }
 
             .field-value {
                 font-size: 0.98rem;
-                font-weight: 650;
+                font-weight: 600;
                 color: var(--text-primary);
-                line-height: 1.32;
+                line-height: 1.4;
                 word-break: break-word;
             }
 
@@ -142,42 +150,48 @@ const OpportunityInfoView = (() => {
 
             /* 統一標題樣式 (預設灰色) */
             .unified-label {
-                font-size: 0.76rem;
-                font-weight: 500;
+                font-size: var(--font-size-xs);
+                font-weight: 450;
                 color: var(--text-muted);
                 text-transform: uppercase;
-                letter-spacing: 0.25px;
-                line-height: 1.15;
+                letter-spacing: 0.32px;
+                line-height: 1.2;
             }
 
             /* 內部卡片標題 (預設灰色) */
             .inner-card-title {
-                font-size: 0.78rem;
-                font-weight: 650;
-                color: var(--text-secondary);
+                font-size: var(--font-size-xs);
+                font-weight: 600;
+                color: var(--text-muted);
                 margin-bottom: 0;
-                padding-bottom: 6px;
-                border-bottom: 1px solid color-mix(in srgb, var(--border-color) 75%, transparent);
+                padding-bottom: var(--spacing-2);
+                border-bottom: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
                 text-transform: uppercase;
-                letter-spacing: 0.3px;
+                letter-spacing: 0.32px;
             }
 
             .header-card-action-btn {
                 align-items: center;
                 justify-content: center;
                 padding: var(--spacing-3) var(--spacing-4);
-                background: linear-gradient(135deg, #f97316, #ea580c);
-                border: 1px solid #c2410c;
+                background: var(--primary-bg);
+                border: 1px solid var(--border-color);
                 border-radius: var(--rounded-md);
-                box-shadow: 0 2px 4px rgba(249, 115, 22, 0.3);
+                box-shadow: none;
                 display: flex;
                 flex-direction: column;
                 gap: 6px;
                 cursor: pointer;
                 text-align: center;
-                color: white;
+                color: var(--text-secondary);
                 font-weight: 700;
                 text-decoration: none;
+                transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+            }
+            .header-card-action-btn:hover {
+                background: var(--secondary-bg);
+                border-color: var(--border-color);
+                color: var(--text-primary);
             }
             .edit-btn-content {
                 display: flex;
@@ -256,12 +270,12 @@ const OpportunityInfoView = (() => {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                padding-bottom: 6px;
-                border-bottom: 1px dashed var(--border-color);
+                padding-top: var(--spacing-2);
+                border-top: 1px solid color-mix(in srgb, var(--border-color) 35%, transparent);
             }
-            .date-row:last-child { border-bottom: none; padding-bottom: 0; }
-            .date-key { font-size: 0.78rem; color: var(--text-muted); font-weight: 500; }
-            .date-val { font-size: 0.95rem; color: var(--text-primary); font-weight: 650; font-family: monospace; }
+            .date-row:last-child { padding-bottom: 0; }
+            .date-key { font-size: var(--font-size-xs); color: var(--text-muted); font-weight: 450; text-transform: uppercase; letter-spacing: 0.32px; }
+            .date-val { font-size: 0.95rem; color: var(--text-primary); font-weight: 600; line-height: 1.4; font-family: monospace; }
 
             .notes-text-clean {
                 font-size: 0.98rem;
@@ -284,7 +298,7 @@ const OpportunityInfoView = (() => {
 
             @media (max-width: 900px) {
                 .opp-name-strip { flex-direction: column; }
-                .header-card-action-btn { width: 100%; align-items: center; justify-content: center; background: var(--accent-orange); }
+                .header-card-action-btn { width: 100%; align-items: center; justify-content: center; background: var(--primary-bg); }
                 .opp-operational-grid,
                 .op-card-business .field-list,
                 .field-list {
