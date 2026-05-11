@@ -1,9 +1,12 @@
 /* File: public/styles/modules/layout.css */
 /*
  * File Path: public/styles/modules/layout.css
- * Version: 1.1.40
- * Date: 2026-05-07
+ * Version: 1.1.42
+ * Date: 2026-05-11
  * Changelog: 
+ * - (v1.1.42) Opportunity Detail radius correction: restore restrained operational small-radius language for Level-1 workspace sections.
+ * - (v1.1.42) Roll back unintended rounded-md escalation introduced during radius consistency alignment.
+ * - (v1.1.41) Opportunity Detail radius consistency alignment: allow Level-1 operational sections to use the shared restrained operational radius language.
  * - (v1.1.40) Phase A operational SaaS migration: tightened dashboard surface contrast, radius, hover, and KPI icon readability.
  * - (v1.1.39) Opportunity Details Visual De-emphasis: Removed card border radius and aggressive Bento hover expansion.
  * - (v1.1.38) Dashboard Phase T2.1 - Trend Widget final semantics alignment.

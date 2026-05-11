@@ -2,9 +2,12 @@
 // -------------------------------------------------------------------------
 // 檔案職責：專門負責「機會核心資訊」的純顯示模式 (Read-Only UI)
 // UI 風格：Operational Workspace Header Composition
-// 版本：1.8.2
+// 版本：1.8.4
 // 修改日期：2026-05-11
 // 修改紀錄：
+// [2026-05-11] Opportunity Detail title surface radius alignment: unify opportunity header with restrained operational small-radius language.
+// [2026-05-11] Opportunity Detail grid proportion refinement: tune middle operational workspace cards to 2-3.5-3-1.5 layout balance.
+// [2026-05-11] Opportunity Detail grid proportion alignment: sync operational card widths with 3-3-2-2 business layout.
 // [2026-05-11] Opportunity Detail operational card ordering refinement: align middle workspace cards to Basic Info / Business Context / Opportunity Overview / Key Dates.
 // [2026-05-11] Opportunity Detail radius consistency alignment: preserve Level-1 title surface on the same operational card radius language as `.layer-card`.
 // [2026-05-11] Opportunity Detail surface hierarchy recovery: elevate `.opp-name-strip` to `--secondary-bg` to restore Level 1 workspace contrast.
@@ -59,7 +62,7 @@ const OpportunityInfoView = (() => {
                 gap: var(--spacing-3);
                 background-color: var(--secondary-bg);
                 border: 1px solid var(--border-color);
-                border-radius: var(--rounded-md);
+                border-radius: var(--rounded-sm);
                 box-shadow: none;
                 padding: var(--spacing-3);
                 width: 100%;
@@ -84,7 +87,7 @@ const OpportunityInfoView = (() => {
 
             .opp-operational-grid {
                 display: grid;
-                grid-template-columns: minmax(150px, 0.8fr) minmax(150px, 0.8fr) minmax(260px, 1.5fr) minmax(220px, 1.1fr);
+                grid-template-columns: minmax(0, 2fr) minmax(0, 3.5fr) minmax(0, 3fr) minmax(0, 1.5fr);
                 gap: var(--spacing-3);
                 width: 100%;
                 align-items: stretch;
