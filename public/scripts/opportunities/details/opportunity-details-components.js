@@ -3,8 +3,11 @@
 // ============================================================================
 // public/scripts/opportunity-details/opportunity-details-components.js
 // 職責：整合機會詳細頁面組件，處理編輯邏輯與資料存取
-// * @version 1.1.12 (Rail Entity Productization)
+// * @version 1.1.13 (Value Hierarchy Pass A)
 // * @date 2026-05-11
+// * @changelog 2026-05-11: Opportunity Detail Value Hierarchy Pass A.
+// * @changelog 2026-05-11: Operational scan hierarchy refinement for right-rail empty states.
+// * @changelog 2026-05-11: Empty state productization refinement for quieter metadata-like fallbacks.
 // * @changelog 2026-05-11: Opportunity Detail rail entity productization: tune relationship entity items with restrained radius and row-like padding for clearer operational readability.
 // * @changelog 2026-05-11: Opportunity Detail rail contrast tuning: add subtle micro-elevation to rail entity chips/cards for improved nested-surface readability.
 // * @changelog 2026-05-11: Opportunity Detail context rail surface recovery: elevate rail chips/mini-cards/empty states to `--secondary-bg` to resolve primary-on-primary contrast collision.
@@ -208,11 +211,12 @@ function _injectStylesForOppInfoCard() {
         }
         #opportunity-detail-container .opp-rail-empty {
             padding: var(--spacing-3);
-            border: 1px dashed var(--border-color);
+            border: 1px solid color-mix(in srgb, var(--border-color) 45%, transparent);
             border-radius: var(--rounded-md);
             color: var(--text-muted);
             background: var(--secondary-bg);
-            font-size: var(--font-size-sm);
+            font-size: var(--font-size-xs);
+            font-weight: 450;
             text-align: center;
         }
     `;
@@ -679,7 +683,7 @@ const OpportunityAssociatedOpps = (() => {
                 </a>`;
         });
 
-        container.innerHTML = `<div class="opp-rail-chip-wall">${html || '<div class="opp-rail-empty">尚無關聯機會</div>'}</div>`;
+        container.innerHTML = `<div class="opp-rail-chip-wall">${html || '<div class="opp-rail-empty">無關聯機會</div>'}</div>`;
     }
     return {
         render,

@@ -2,9 +2,13 @@
 // -------------------------------------------------------------------------
 // 檔案職責：專門負責「機會核心資訊」的純顯示模式 (Read-Only UI)
 // UI 風格：Operational Workspace Header Composition
-// 版本：1.8.6
+// 版本：1.8.7
 // 修改日期：2026-05-11
 // 修改紀錄：
+// [2026-05-11] Opportunity Detail Value Hierarchy Pass A.
+// [2026-05-11] Operational scan hierarchy refinement for key company, owner, contact, and value fields.
+// [2026-05-11] Monetary value typography refinement with tabular numeric rhythm.
+// [2026-05-11] Empty state productization refinement for quieter metadata-like fallbacks.
 // [2026-05-11] Opportunity Detail Visual Language Spec v1 implementation.
 // [2026-05-11] Section heading hierarchy refinement for operational metadata headings.
 // [2026-05-11] Field/value hierarchy refinement for clearer scan rhythm.
@@ -137,15 +141,29 @@ const OpportunityInfoView = (() => {
 
             .field-value {
                 font-size: 0.98rem;
-                font-weight: 600;
+                font-weight: 500;
                 color: var(--text-primary);
                 line-height: 1.4;
                 word-break: break-word;
             }
 
+            .op-card-basic .field-row:nth-child(2) .field-value,
+            .op-card-business .field-row:nth-child(1) .field-value {
+                font-weight: 600;
+            }
+
+            .op-card-business .field-row:nth-child(3) .field-value,
+            .op-card-business .field-row:nth-child(4) .field-value,
+            .split-contact-row > span:not(.contact-prefix):not(.job-title-badge) {
+                font-weight: 550;
+            }
+
             .field-value.val-money {
                 font-family: 'Roboto Mono', monospace;
-                font-weight: 700;
+                font-size: 1rem;
+                font-weight: 650;
+                font-variant-numeric: tabular-nums;
+                letter-spacing: 0;
             }
 
             /* 統一標題樣式 (預設灰色) */
@@ -277,6 +295,14 @@ const OpportunityInfoView = (() => {
             .date-key { font-size: var(--font-size-xs); color: var(--text-muted); font-weight: 450; text-transform: uppercase; letter-spacing: 0.32px; }
             .date-val { font-size: 0.95rem; color: var(--text-primary); font-weight: 600; line-height: 1.4; font-family: monospace; }
 
+            .empty-inline {
+                color: var(--text-muted);
+                font-size: var(--font-size-sm);
+                font-style: normal;
+                font-weight: 450;
+                padding: 4px 0;
+            }
+
             .notes-text-clean {
                 font-size: 0.98rem;
                 color: var(--text-primary);
@@ -362,7 +388,7 @@ const OpportunityInfoView = (() => {
         const titleHtml = targetTitle ? `<span class="job-title-badge">${targetTitle}</span>` : '';
 
         // 2. 規格 Tags 生成
-        let specsContent = '<span style="color:var(--text-muted); font-style:italic; padding:4px;">(尚未指定規格)</span>';
+        let specsContent = '<span class="empty-inline">無指定規格</span>';
         
         let parsed = {};
         const rawSpec = opp.potentialSpecification;
@@ -411,7 +437,7 @@ const OpportunityInfoView = (() => {
         const createdDate = opp.createdTime ? opp.createdTime.split('T')[0] : '-';
         const closeDate = opp.expectedCloseDate ? opp.expectedCloseDate.split('T')[0] : '-';
         
-        const notesContent = opp.notes || '<span style="color:var(--text-muted);">(無備註內容)</span>';
+        const notesContent = opp.notes || '<span class="empty-inline">無備註</span>';
 
         // [PATCH] Support multiple field names for Probability (SQL vs Sheet)
         const displayProbability = getFirst(opp, ['orderProbability', 'winProbability', 'win_probability'], '-') || '-';
