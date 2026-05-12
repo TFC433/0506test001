@@ -3,10 +3,11 @@
 /**
  * services/workflow-service.js
  * 工作流程服務
- * * @version 5.0.2 (Phase 5 Refactoring - Full Modal Creation Bridge & Naming Fix)
- * @date 2026-03-13
+ * * @version 5.0.3 (Opportunity Workflow Initialization Normalization)
+ * @date 2026-05-11
  * @description 負責處理跨模組的複雜業務流程，例如「機會轉訂單」、「聯絡人升級」等。
  * 依賴注入：OpportunityService, InteractionService, ContactService
+ * @changelog 2026-05-11: Opportunity workflow initialization normalization phase 2: centralize create-time stage initialization authority and remove remaining hardcoded workflow fallback.
  */
 
 class WorkflowService {
@@ -104,7 +105,7 @@ class WorkflowService {
                     opportunityName: rawContactData.opportunityName || `${rawContactData.name} - 初始商機`,
                     mainContact: rawContactData.mainContact || rawContactData.name,
                     customerCompany: rawContactData.customerCompany || rawContactData.company,
-                    currentStage: rawContactData.currentStage || '01_初步接觸'
+                    currentStage: rawContactData.currentStage
                 };
 
                 const oppResult = await this.opportunityService.createOpportunity(oppPayload, user);

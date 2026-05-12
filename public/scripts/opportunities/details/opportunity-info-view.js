@@ -1,4 +1,8 @@
 // public/scripts/opportunities/details/opportunity-info-view.js
+// Version: 8.8
+// Date: 2026-05-12
+// Changelog:
+// [2026-05-12] Opportunity Detail header action alignment: match opportunity-name edit button to restrained stepper utility action style.
 // -------------------------------------------------------------------------
 // 檔案職責：專門負責「機會核心資訊」的純顯示模式 (Read-Only UI)
 // UI 風格：Operational Workspace Header Composition
@@ -192,24 +196,27 @@ const OpportunityInfoView = (() => {
                 align-items: center;
                 justify-content: center;
                 padding: var(--spacing-3) var(--spacing-4);
-                background: var(--primary-bg);
-                border: 1px solid var(--border-color);
-                border-radius: var(--rounded-md);
+                background: transparent;
+                border: 1px solid transparent;
+                border-radius: var(--rounded-sm);
                 box-shadow: none;
                 display: flex;
                 flex-direction: column;
                 gap: 6px;
                 cursor: pointer;
                 text-align: center;
-                color: var(--text-secondary);
+                color: var(--text-muted);
                 font-weight: 700;
                 text-decoration: none;
+                transform: none;
                 transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
             }
             .header-card-action-btn:hover {
-                background: var(--secondary-bg);
-                border-color: var(--border-color);
-                color: var(--text-primary);
+                background: color-mix(in srgb, var(--border-color) 28%, transparent);
+                border-color: color-mix(in srgb, var(--border-color) 64%, transparent);
+                color: var(--text-secondary);
+                box-shadow: none;
+                transform: none;
             }
             .edit-btn-content {
                 display: flex;

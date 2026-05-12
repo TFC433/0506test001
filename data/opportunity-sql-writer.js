@@ -1,7 +1,7 @@
 // data/opportunity-sql-writer.js
 /**
  * OpportunitySqlWriter
- * * @version 1.1.4 (Opportunity Workflow Initialization Normalization)
+ * * @version 1.1.5 (Opportunity Workflow Initialization Normalization Phase 2)
  * @date 2026-05-11
  * @description 負責將機會案件寫入 Supabase 'opportunities' 資料表。
  * - [PATCH] opportunity_contact_links real-schema alignment.
@@ -11,6 +11,7 @@
  * - [PATCH] opportunity_contact_links constraint-free linkContact flow. Replaced onConflict upsert with select-update-or-insert flow.
  * - [PATCH] Normalize empty date strings to null for PostgreSQL compatibility.
  * - [PATCH] Added missing mapping for drive_link in updateOpportunity.
+ * - [PATCH] Opportunity workflow initialization normalization phase 2: centralize create-time stage initialization authority and remove remaining hardcoded workflow fallback.
  * - [PATCH] Opportunity workflow initialization normalization: remove hardcoded default stage fallback and initialize stage history from config-driven current stage.
  * - [FEAT] Added linkContact and unlinkContact methods for SQL-based linking.
  */

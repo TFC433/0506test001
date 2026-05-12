@@ -4,9 +4,10 @@
 /**
  * services/opportunity-service.js
  * 機會案件業務邏輯層 (Service Layer)
- * @version 8.12.3 (Phase B - External Tag Support)
- * @date 2026-05-08
+ * @version 8.12.4 (Opportunity Workflow Initialization Normalization)
+ * @date 2026-05-11
  * @description 
+ * - [PATCH] Opportunity workflow initialization normalization phase 2: centralize create-time stage initialization authority and remove remaining hardcoded workflow fallback.
  * - [PHASE B] Added companyName projection to linkedContacts mapping using existing allCompanies cache.
  * - [PATCH] Prevent empty/whitespace contact creation during scaffolding.
  * - [PATCH] Fixed modifier extraction to correctly resolve string identities and req.user.name for create and modify flows.
@@ -111,6 +112,15 @@ class OpportunityService {
     async createOpportunity(opportunityData, user) {
         try {
             const modifier = this._resolveModifier(user);
+
+            if (!opportunityData.currentStage) {
+                const systemConfig = await this.systemService.getSystemConfig();
+                const initialStage = (systemConfig['機會階段'] || [])[0];
+                if (!initialStage || !initialStage.value) {
+                    throw new Error('Cannot create opportunity: missing configured initial opportunity stage.');
+                }
+                opportunityData = { ...opportunityData, currentStage: initialStage.value };
+            }
 
             if (opportunityData.customerCompany) {
                 const normalizedComp = this._normalizeCompanyName(opportunityData.customerCompany);
