@@ -2,11 +2,14 @@
 /**
  * ============================================================================
  * File: public/scripts/opportunities/details/opportunity-associated-contacts.js
- * Version: v8.0.9 (External Company Tagging)
- * Date: 2026-05-08
+ * Version: v8.0.12 (Opportunity Detail Linked Contact Style Regression Fix)
+ * Date: 2026-05-12
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-12: Opportunity Detail linked-contact style regression fix: remove box-model and font-shorthand overrides from scoped utility polish.
+ * - 2026-05-12: Opportunity Detail linked-contact style polish: lighten management actions and normalize business-card name-link typography.
+ * - 2026-05-12: Opportunity Detail contact interaction polish: move business-card preview to contact names, enrich linked contacts with RAW drive links, and add confirmation before potential-contact linking.
  * - 2026-05-08: Added localized company normalization and external-company tag rendering for linked contacts.
  * - 2026-05-08: Relationship lifecycle stabilization restores explicit detail reloads after contact relationship mutations.
  * - 2026-05-08: Unified CORE + RAW contact search delegates add-contact flow to the shared relationship modal.
@@ -48,6 +51,52 @@ const OpportunityContacts = (() => {
     let _opportunityInfo = null;
     let _linkedContacts = [];
     let _isManageMode = false;
+
+    function _ensureScopedStyles() {
+        if (document.getElementById('opp-associated-contacts-styles')) return;
+
+        const style = document.createElement('style');
+        style.id = 'opp-associated-contacts-styles';
+        style.textContent = `
+            #associated-contacts-list .opp-rail-contact-name-link {
+                color: inherit;
+                font-weight: inherit;
+                text-decoration: none;
+                cursor: pointer;
+            }
+
+            #associated-contacts-list .opp-rail-contact-name-link:hover,
+            #associated-contacts-list .opp-rail-contact-name-link:active,
+            #associated-contacts-list .opp-rail-contact-name-link:visited {
+                color: inherit;
+                text-decoration: none;
+            }
+
+            #associated-contacts-list .opp-rail-contact-name-link:hover {
+                opacity: 0.88;
+            }
+
+            #associated-contacts-list .opp-rail-contact-list.is-managing .opp-rail-contact-action-btn {
+                background: transparent;
+                color: var(--text-secondary);
+                box-shadow: none;
+                transform: none;
+            }
+
+            #associated-contacts-list .opp-rail-contact-list.is-managing .opp-rail-contact-action-btn:hover {
+                background: color-mix(in srgb, var(--secondary-bg) 76%, var(--border-color));
+                color: var(--text-primary);
+                box-shadow: none;
+                transform: none;
+            }
+
+            #associated-contacts-list .opp-rail-contact-list.is-managing .opp-rail-contact-action-btn.danger:hover {
+                color: var(--accent-red);
+                background: color-mix(in srgb, var(--accent-red) 8%, var(--secondary-bg));
+            }
+        `;
+        document.head.appendChild(style);
+    }
 
     // 處理儲存編輯後的聯絡人資料
     async function _handleSaveContact(event) {
@@ -192,14 +241,12 @@ const OpportunityContacts = (() => {
             let actionButtons = '';
 
             if (isManual) {
-                actionButtons += `<button class="action-btn small info" onclick="OpportunityContacts.showLinkBusinessCardModal('${safeContactId}')" title="將掃描的名片資料歸檔至此聯絡人">名片歸檔</button>`;
-            } else if (contact.driveLink) {
-                actionButtons += `<button class="action-btn small info" title="預覽名片" onclick="showBusinessCardPreview('${safeDriveLink}')">名片</button>`;
+                actionButtons += `<button class="action-btn small info opp-rail-contact-action-btn" onclick="OpportunityContacts.showLinkBusinessCardModal('${safeContactId}')" title="將掃描的名片資料歸檔至此聯絡人">名片歸檔</button>`;
             }
 
             if (!isMainContact) {
-                actionButtons += `<button class="action-btn small primary" style="background: var(--accent-green);" onclick="OpportunityContacts.setAsMain('${safeOpportunityId}', '${safeContactName}')">設為主要</button>`;
-                actionButtons += `<button class="action-btn small danger" onclick="OpportunityContacts.unlink('${safeOpportunityId}', '${safeContactId}', '${safeContactName}')" title="刪除關聯">解除</button>`;
+                actionButtons += `<button class="action-btn small primary opp-rail-contact-action-btn" onclick="OpportunityContacts.setAsMain('${safeOpportunityId}', '${safeContactName}')">設為主要</button>`;
+                actionButtons += `<button class="action-btn small danger opp-rail-contact-action-btn" onclick="OpportunityContacts.unlink('${safeOpportunityId}', '${safeContactId}', '${safeContactName}')" title="刪除關聯">解除</button>`;
             }
 
             railHTML += `
@@ -448,6 +495,7 @@ const OpportunityContacts = (() => {
 
     // 初始化模組
     function init(opportunityInfo, linkedContacts) {
+        _ensureScopedStyles();
         _opportunityInfo = opportunityInfo;
         _linkedContacts = linkedContacts;
         _isManageMode = false;

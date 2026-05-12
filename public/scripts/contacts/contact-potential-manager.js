@@ -2,11 +2,12 @@
 /**
  * ============================================================================
  * File: public/scripts/contacts/contact-potential-manager.js
- * Version: v8.0.3 (Opportunity Potential Contact Filtering)
- * Date: 2026-05-08
+ * Version: v8.0.4 (Opportunity Detail Contact Interaction Polish)
+ * Date: 2026-05-12
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-12: Opportunity Detail contact interaction polish: move business-card preview to contact names, enrich linked contacts with RAW drive links, and add confirmation before potential-contact linking.
  * - 2026-05-08: Opportunity potential contact hide-after-association filtering skips already matched contacts in opportunity context.
  * - 2026-05-08: Right rail density reduction.
  * - 2026-05-08: Potential contacts chip-only opportunity rendering.
@@ -102,17 +103,16 @@ const PotentialContactsManager = (() => {
                 const contactJsonString = JSON.stringify(contact).replace(/'/g, "&apos;");
                 const roleText = contact.position ? `｜${contact.position}` : '';
                 const safeDriveLink = contact.driveLink ? contact.driveLink.replace(/'/g, "\\'") : '';
-                const driveLinkBtn = contact.driveLink
-                    ? `<button class="action-btn small info" title="預覽名片" onclick="showBusinessCardPreview('${safeDriveLink}')">名片</button>`
-                    : '';
-                const actionButton = `<button class="action-btn small primary" title="關聯至此機會" onclick='PotentialContactsManager.handleLinkContact(${contactJsonString}, "${safeOpportunityId}")'>+</button>`;
+                const contactNameHTML = contact.driveLink
+                    ? `<a href="#" class="opp-rail-contact-name-link" onclick="event.preventDefault(); showBusinessCardPreview('${safeDriveLink}')">${contact.name || '-'}</a>`
+                    : (contact.name || '-');
+                const actionButton = `<button class="action-btn small primary" title="關聯至此機會" onclick='PotentialContactsManager.confirmAndLinkContact(${contactJsonString}, "${safeOpportunityId}")'>+</button>`;
 
                 railHTML += `
                     <div class="opp-rail-chip">
-                        <span class="opp-rail-chip-main">${contact.name || '-'}<span class="opp-rail-chip-meta">${roleText}</span></span>
+                        <span class="opp-rail-chip-main">${contactNameHTML}<span class="opp-rail-chip-meta">${roleText}</span></span>
                         <div class="opp-rail-actions">
                             ${actionButton}
-                            ${driveLinkBtn}
                         </div>
                     </div>`;
             });
@@ -259,10 +259,63 @@ const PotentialContactsManager = (() => {
     }
 
     // 返回公開的 API
+    async function confirmAndLinkContact(contactData, opportunityId) {
+        const contactName = contactData.name || '-';
+        const confirmMsg = contactData.contactId
+            ? `將把「${contactName}」加入此機會的關聯聯絡人。`
+            : `此名片將建立正式聯絡人，並將「${contactName}」關聯至此機會。`;
+        const confirmModal = document.getElementById('confirm-modal');
+
+        if (confirmModal) {
+            const titleElement = confirmModal.querySelector('.modal-title, h2, h3');
+            const confirmButton = confirmModal.querySelector('#btn-confirm-yes');
+            const cancelButton = confirmModal.querySelector('#btn-confirm-no, .btn-secondary, .btn-cancel');
+
+            if (titleElement) titleElement.textContent = '確認建立聯絡人關聯？';
+            if (confirmButton) confirmButton.textContent = '確認連結';
+            if (cancelButton) cancelButton.textContent = '取消';
+        }
+
+        showConfirmDialog(confirmMsg, async () => {
+            showLoading('正在關聯聯絡人...');
+
+            const payload = {
+                name: contactData.name,
+                position: contactData.position,
+                mobile: contactData.mobile,
+                phone: contactData.phone,
+                email: contactData.email,
+                rowIndex: contactData.rowIndex,
+                company: contactData.company,
+            };
+
+            if (contactData.contactId) {
+                payload.contactId = contactData.contactId;
+            }
+
+            try {
+                const result = await authedFetch(`/api/opportunities/${opportunityId}/contacts`, {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+
+                if (!result.success) throw new Error(result.error || '關聯建立失敗');
+
+                showNotification('聯絡人關聯成功！', 'success');
+                await loadOpportunityDetailPage(opportunityId);
+            } catch (error) {
+                if (error.message !== 'Unauthorized') showNotification(`關聯失敗: ${error.message}`, 'error');
+            } finally {
+                hideLoading();
+            }
+        });
+    }
+
     return {
         render,
         handleFileContact,
-        handleLinkContact
+        handleLinkContact,
+        confirmAndLinkContact
     };
 })();
 

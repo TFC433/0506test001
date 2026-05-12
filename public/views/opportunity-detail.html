@@ -1,8 +1,11 @@
 <!--
  * File Path: public/views/opportunity-detail.html
- * Version: 1.8.11
- * Date: 2026-05-11
+ * Version: 1.8.14
+ * Date: 2026-05-12
  * Changelog:
+ * - (v1.8.14) Opportunity Detail width balance pass: tune narrow-desktop pipeline density and rebalance middle card proportions to 2-3-3-2.
+ * - (v1.8.13) Opportunity Detail adaptive density pass: use fluid rail and pipeline sizing to improve narrower desktop compatibility without global zoom.
+ * - (v1.8.12) Opportunity Detail responsive width compatibility: add intermediate desktop rules to reduce right-rail pressure and protect workspace/pipeline layout.
  * - (v1.8.11) Opportunity Detail arrow-segment border refinement: clean directional stage borders and remove pipeline edge rendering artifacts while preserving independent CRM stage blocks.
  * - (v1.8.10) Opportunity Detail pipeline refinement pass B: restore unified CRM pipeline strip framing while softening future-stage visual weight.
  * - (v1.8.9) Opportunity Detail pipeline finish refinement: clean segmented workflow borders, soften unreached stages, and strengthen current operational stage emphasis.
@@ -93,7 +96,7 @@
         }
         .opp-layout-grid {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+            grid-template-columns: minmax(0, 1fr) clamp(220px, 22vw, 340px);
             gap: var(--spacing-6);
             align-items: start;
         }
@@ -104,6 +107,7 @@
             flex-direction: column;
             gap: var(--spacing-5);
             width: 100%;
+            min-width: 0;
         }
 
         .opp-main-info {
@@ -119,6 +123,7 @@
             flex-direction: column;
             gap: var(--spacing-6);
             width: 100%;
+            min-width: 0;
         }
 
         .opp-timeline-zone {
@@ -174,10 +179,15 @@
 
         #opportunity-detail-container #opportunity-stage-stepper {
             padding: 0;
+            min-width: 0;
         }
 
         #opportunity-detail-container #opportunity-stage-stepper .stage-stepper-container {
-            --pipeline-step-height: 42px;
+            --pipeline-step-height: clamp(38px, 3.1vw, 42px);
+            --pipeline-step-min: clamp(96px, 9vw, 136px);
+            --pipeline-step-name-size: clamp(0.6875rem, 0.66rem + 0.18vw, 0.75rem);
+            --pipeline-step-pad-start: clamp(8px, 0.9vw, 10px);
+            --pipeline-step-pad-end: clamp(12px, 1.4vw, 18px);
             --pipeline-cut: 12px;
             display: flex;
             align-items: stretch;
@@ -199,7 +209,7 @@
 
         #opportunity-detail-container #opportunity-stage-stepper .stage-step {
             flex: 1 1 0;
-            min-width: 136px;
+            min-width: var(--pipeline-step-min);
             display: flex;
             flex-direction: row;
             align-items: center;
@@ -208,7 +218,7 @@
             min-height: var(--pipeline-step-height);
             text-align: left;
             position: relative;
-            padding: 7px 18px 7px 10px;
+            padding: 7px var(--pipeline-step-pad-end) 7px var(--pipeline-step-pad-start);
             background: transparent;
             border: 0;
             border-radius: 0;
@@ -258,7 +268,7 @@
             max-width: 100%;
             margin-top: 0;
             color: var(--text-secondary);
-            font-size: var(--font-size-xs);
+            font-size: var(--pipeline-step-name-size);
             font-weight: 600;
             line-height: 1.35;
             position: relative;
@@ -427,6 +437,14 @@
 
         #opportunity-detail-container .opp-context-rail .widget-content {
             padding: 0;
+        }
+
+        @media (max-width: 1800px) {
+            #opportunity-detail-container #opportunity-stage-stepper .stage-stepper-container {
+                --pipeline-step-min: 122px;
+                --pipeline-step-pad-start: 9px;
+                --pipeline-step-pad-end: 16px;
+            }
         }
 
         @media (max-width: 1024px) {

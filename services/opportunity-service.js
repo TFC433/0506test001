@@ -4,9 +4,13 @@
 /**
  * services/opportunity-service.js
  * 機會案件業務邏輯層 (Service Layer)
- * @version 8.12.4 (Opportunity Workflow Initialization Normalization)
- * @date 2026-05-11
+ * @version 8.12.8 (Opportunity Detail Contact Interaction Polish)
+ * @date 2026-05-12
  * @description 
+ * - [PATCH] Opportunity Detail contact interaction polish: move business-card preview to contact names, enrich linked contacts with RAW drive links, and add confirmation before potential-contact linking.
+ * - [PATCH] Opportunity Detail potential contacts RAW mapping fix: support Chinese Google Sheet contact fields for same-company discovery.
+ * - [PATCH] Opportunity Detail potential contacts aggregation: include RAW same-company contacts alongside CORE contacts using normalized company matching.
+ * - [PATCH] Opportunity Detail company normalization alignment: unify same-company matching normalization for relationship discovery preparation.
  * - [PATCH] Opportunity workflow initialization normalization phase 2: centralize create-time stage initialization authority and remove remaining hardcoded workflow fallback.
  * - [PHASE B] Added companyName projection to linkedContacts mapping using existing allCompanies cache.
  * - [PATCH] Prevent empty/whitespace contact creation during scaffolding.
@@ -75,8 +79,8 @@ class OpportunityService {
         return name
             .toLowerCase()
             .trim()
-            .replace(/股份有限公司|有限公司|公司/g, '')
-            .replace(/\(.*\)/g, '')
+            .replace(/股份有限公司|有限公司|公司|\(.*?\)|（.*?）/g, '')
+            .replace(/\s+/g, '')
             .trim();
     }
 
@@ -245,6 +249,33 @@ class OpportunityService {
             
             const matchedCompany = (allCompanies || []).find(c => this._normalizeCompanyName(c.companyName) === normalizedOppCompany);
             
+            const normalizeText = (value) => (value || '').toString().trim().toLowerCase();
+            const normalizePhone = (value) => (value || '').toString().replace(/\D+/g, '');
+            const isLikelySamePerson = (left, right) => {
+                if (!left || !right) return false;
+                if (left.contactId && right.contactId && left.contactId === right.contactId) return true;
+                if (left.rowIndex && right.rowIndex && left.rowIndex === right.rowIndex) return true;
+
+                const leftName = normalizeText(left.name);
+                const rightName = normalizeText(right.name);
+                const leftCompany = this._normalizeCompanyName(left.companyName || left.company || left.organization);
+                const rightCompany = this._normalizeCompanyName(right.companyName || right.company || right.organization);
+                if (!leftName || !rightName || !leftCompany || !rightCompany) return false;
+                if (leftName !== rightName || leftCompany !== rightCompany) return false;
+
+                const leftEmail = normalizeText(left.email);
+                const rightEmail = normalizeText(right.email);
+                if (leftEmail && rightEmail) return leftEmail === rightEmail;
+
+                const leftPhones = [normalizePhone(left.mobile), normalizePhone(left.phone)].filter(Boolean);
+                const rightPhones = [normalizePhone(right.mobile), normalizePhone(right.phone)].filter(Boolean);
+                if (leftPhones.length > 0 && rightPhones.length > 0) {
+                    return leftPhones.some(phone => rightPhones.includes(phone));
+                }
+
+                return true;
+            };
+
             let potentialContacts = [];
             if (matchedCompany && this.contactSqlReader) {
                 const companyContacts = await this.contactSqlReader.getContactsByCompanyId(matchedCompany.companyId);
@@ -253,6 +284,66 @@ class OpportunityService {
                     company: matchedCompany.companyName,
                     position: c.jobTitle || c.position
                 }));
+            }
+
+            const rawReader = this.contactWriter && this.contactWriter.contactReader;
+            if (normalizedOppCompany && rawReader && typeof rawReader.getContacts === 'function') {
+                const rawContacts = await rawReader.getContacts();
+                const mapRawContact = (raw) => ({
+                    name: raw.name || raw.姓名 || '',
+                    company: raw.company || raw.companyName || raw.organization || raw.公司 || '',
+                    companyName: raw.companyName || raw.company || raw.organization || raw.公司 || '',
+                    jobTitle: raw.jobTitle || raw.position || raw.職位 || '',
+                    position: raw.position || raw.jobTitle || raw.職位 || '',
+                    department: raw.department || raw.部門 || '',
+                    phone: raw.phone || raw.電話 || '',
+                    mobile: raw.mobile || raw.手機 || '',
+                    email: raw.email || raw.電子郵件 || '',
+                    website: raw.website || raw.網址 || '',
+                    address: raw.address || raw.地址 || '',
+                    driveLink: raw.driveLink || raw.driveUrl || raw['Drive連結'] || '',
+                    rowIndex: raw.rowIndex || raw.rawId || raw['原始ID'] || '',
+                    status: raw.status || raw.狀態 || '',
+                    source: raw.source || 'RAW'
+                });
+                const rawPotentialContacts = (rawContacts || [])
+                    .map(mapRawContact)
+                    .filter(contact => {
+                        const normalizedCompany = this._normalizeCompanyName(contact.companyName || contact.company);
+                        const status = (contact.status || '').toString().trim();
+                        return Boolean(
+                            (contact.name || '').toString().trim() &&
+                            normalizedCompany &&
+                            normalizedCompany === normalizedOppCompany &&
+                            !['已升級', '已歸檔', 'Dropped'].includes(status)
+                        );
+                    });
+
+                linkedContacts.forEach(linkedContact => {
+                    const matchedRaw = rawPotentialContacts.find(rawContact => isLikelySamePerson(linkedContact, rawContact));
+                    if (matchedRaw) {
+                        if (!linkedContact.driveLink && matchedRaw.driveLink) linkedContact.driveLink = matchedRaw.driveLink;
+                        if (!linkedContact.rowIndex && matchedRaw.rowIndex) linkedContact.rowIndex = matchedRaw.rowIndex;
+                    }
+                });
+
+                potentialContacts.forEach(coreContact => {
+                    const matchedRaw = rawPotentialContacts.find(rawContact => isLikelySamePerson(coreContact, rawContact));
+                    if (matchedRaw) {
+                        if (!coreContact.driveLink && matchedRaw.driveLink) coreContact.driveLink = matchedRaw.driveLink;
+                        if (!coreContact.rowIndex && matchedRaw.rowIndex) coreContact.rowIndex = matchedRaw.rowIndex;
+                    }
+                });
+
+                const mergedPotentialContacts = [...potentialContacts];
+                rawPotentialContacts.forEach(rawContact => {
+                    const isDuplicate = mergedPotentialContacts.some(existing => isLikelySamePerson(existing, rawContact))
+                        || linkedContacts.some(existing => isLikelySamePerson(existing, rawContact));
+                    if (!isDuplicate) {
+                        mergedPotentialContacts.push(rawContact);
+                    }
+                });
+                potentialContacts = mergedPotentialContacts;
             }
 
             let mainContactJobTitle = '';

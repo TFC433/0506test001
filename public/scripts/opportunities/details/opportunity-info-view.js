@@ -1,7 +1,9 @@
 // public/scripts/opportunities/details/opportunity-info-view.js
-// Version: 8.8
+// Version: 8.10
 // Date: 2026-05-12
 // Changelog:
+// [2026-05-12] Opportunity Detail width balance pass: tune narrow-desktop pipeline density and rebalance middle card proportions to 2-3-3-2.
+// [2026-05-12] Opportunity Detail responsive width compatibility: add intermediate desktop rules to reduce right-rail pressure and protect workspace/pipeline layout.
 // [2026-05-12] Opportunity Detail header action alignment: match opportunity-name edit button to restrained stepper utility action style.
 // -------------------------------------------------------------------------
 // 檔案職責：專門負責「機會核心資訊」的純顯示模式 (Read-Only UI)
@@ -103,7 +105,7 @@ const OpportunityInfoView = (() => {
 
             .opp-operational-grid {
                 display: grid;
-                grid-template-columns: minmax(0, 2fr) minmax(0, 3.5fr) minmax(0, 3fr) minmax(0, 1.5fr);
+                grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) minmax(0, 3fr) minmax(0, 2fr);
                 gap: var(--spacing-3);
                 width: 100%;
                 align-items: stretch;
@@ -323,7 +325,7 @@ const OpportunityInfoView = (() => {
             }
 
             /* RWD */
-            @media (max-width: 1200px) {
+            @media (max-width: 1360px) {
                 .opp-operational-grid {
                     grid-template-columns: repeat(2, minmax(0, 1fr));
                 }
