@@ -1,7 +1,8 @@
 // public/scripts/opportunities/details/opportunity-stepper.js
 // 職責：專門管理「機會進程」區塊的所有 UI 渲染與互動邏輯
-// * @version 2.2.2 (Stepper Save Completion Fix)
-// * @date 2026-05-08
+// * @version 2.2.3 (Stepper Edit State Class Sync Fix)
+// * @date 2026-05-11
+// * @changelog 2026-05-11: Stepper edit-mode visual state class synchronization keeps pending, completed, and skipped classes mutually exclusive.
 // * @changelog 2026-05-08: Stepper save completion restores view mode after successful save.
 // * @changelog 2026-05-08: Stepper local state refresh applies saved stage and history before re-render.
 // (V2.2 - 修正：_saveChanges 使用正確的 opportunityId 取代 rowIndex)
@@ -15,23 +16,22 @@ const OpportunityStepper = (() => {
         const iconEl = step.querySelector('.step-circle');
         const allSteps = Array.from(step.parentElement.children);
         const index = allSteps.indexOf(step);
+        step.classList.remove('pending', 'completed', 'skipped');
         
         switch (step.dataset.status) {
             case 'pending':
                 step.dataset.status = 'completed';
                 step.classList.add('completed');
-                step.classList.remove('skipped');
                 iconEl.innerHTML = '✓';
                 break;
             case 'completed':
                 step.dataset.status = 'skipped';
-                step.classList.remove('completed');
                 step.classList.add('skipped');
                 iconEl.innerHTML = '✕';
                 break;
             case 'skipped':
                 step.dataset.status = 'pending';
-                step.classList.remove('skipped');
+                step.classList.add('pending');
                 iconEl.innerHTML = index + 1;
                 break;
         }
