@@ -2,11 +2,13 @@
 /**
  * ============================================================================
  * File: public/scripts/opportunities/details/opportunity-associated-contacts.js
- * Version: v8.0.12 (Opportunity Detail Linked Contact Style Regression Fix)
+ * Version: v8.0.14 (Opportunity Detail Contact Refinement)
  * Date: 2026-05-12
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-12: Opportunity Detail contact refinement: normalize clickable contact name weight and allow archived RAW business cards to enrich linked contacts without displaying archived rows as candidates.
+ * - 2026-05-12: Opportunity Detail contact UI polish: normalize potential-contact name-link typography and box linked-contact management actions consistently.
  * - 2026-05-12: Opportunity Detail linked-contact style regression fix: remove box-model and font-shorthand overrides from scoped utility polish.
  * - 2026-05-12: Opportunity Detail linked-contact style polish: lighten management actions and normalize business-card name-link typography.
  * - 2026-05-12: Opportunity Detail contact interaction polish: move business-card preview to contact names, enrich linked contacts with RAW drive links, and add confirmation before potential-contact linking.
@@ -60,7 +62,7 @@ const OpportunityContacts = (() => {
         style.textContent = `
             #associated-contacts-list .opp-rail-contact-name-link {
                 color: inherit;
-                font-weight: inherit;
+                font-weight: 400;
                 text-decoration: none;
                 cursor: pointer;
             }
@@ -77,21 +79,26 @@ const OpportunityContacts = (() => {
             }
 
             #associated-contacts-list .opp-rail-contact-list.is-managing .opp-rail-contact-action-btn {
-                background: transparent;
+                background: color-mix(in srgb, var(--secondary-bg) 82%, var(--border-color));
                 color: var(--text-secondary);
+                outline: 1px solid color-mix(in srgb, var(--border-color) 68%, transparent);
+                outline-offset: 0;
+                border-radius: var(--rounded-sm);
                 box-shadow: none;
                 transform: none;
             }
 
             #associated-contacts-list .opp-rail-contact-list.is-managing .opp-rail-contact-action-btn:hover {
-                background: color-mix(in srgb, var(--secondary-bg) 76%, var(--border-color));
+                background: color-mix(in srgb, var(--secondary-bg) 62%, var(--border-color));
                 color: var(--text-primary);
+                outline-color: color-mix(in srgb, var(--border-color) 88%, transparent);
                 box-shadow: none;
                 transform: none;
             }
 
             #associated-contacts-list .opp-rail-contact-list.is-managing .opp-rail-contact-action-btn.danger:hover {
                 color: var(--accent-red);
+                outline-color: color-mix(in srgb, var(--accent-red) 40%, var(--border-color));
                 background: color-mix(in srgb, var(--accent-red) 8%, var(--secondary-bg));
             }
         `;

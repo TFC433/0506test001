@@ -1,8 +1,10 @@
 <!--
  * File Path: public/views/opportunity-detail.html
- * Version: 1.8.14
+ * Version: 1.8.16
  * Date: 2026-05-12
  * Changelog:
+ * - (v1.8.16) Opportunity Detail pipeline typography refinement: slightly reduce workflow label density for improved narrow-desktop fit.
+ * - (v1.8.15) Opportunity Detail right-rail refinement: slightly reduce adaptive rail minimum width for improved narrow-desktop balance.
  * - (v1.8.14) Opportunity Detail width balance pass: tune narrow-desktop pipeline density and rebalance middle card proportions to 2-3-3-2.
  * - (v1.8.13) Opportunity Detail adaptive density pass: use fluid rail and pipeline sizing to improve narrower desktop compatibility without global zoom.
  * - (v1.8.12) Opportunity Detail responsive width compatibility: add intermediate desktop rules to reduce right-rail pressure and protect workspace/pipeline layout.
@@ -96,7 +98,7 @@
         }
         .opp-layout-grid {
             display: grid;
-            grid-template-columns: minmax(0, 1fr) clamp(220px, 22vw, 340px);
+            grid-template-columns: minmax(0, 1fr) clamp(210px, 21vw, 340px);
             gap: var(--spacing-6);
             align-items: start;
         }
@@ -185,7 +187,7 @@
         #opportunity-detail-container #opportunity-stage-stepper .stage-stepper-container {
             --pipeline-step-height: clamp(38px, 3.1vw, 42px);
             --pipeline-step-min: clamp(96px, 9vw, 136px);
-            --pipeline-step-name-size: clamp(0.6875rem, 0.66rem + 0.18vw, 0.75rem);
+            --pipeline-step-name-size: clamp(0.625rem, 0.61rem + 0.16vw, 0.70rem);
             --pipeline-step-pad-start: clamp(8px, 0.9vw, 10px);
             --pipeline-step-pad-end: clamp(12px, 1.4vw, 18px);
             --pipeline-cut: 12px;

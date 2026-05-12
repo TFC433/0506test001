@@ -2,11 +2,13 @@
 /**
  * ============================================================================
  * File: public/scripts/contacts/contact-potential-manager.js
- * Version: v8.0.4 (Opportunity Detail Contact Interaction Polish)
+ * Version: v8.0.6 (Opportunity Detail Contact Refinement)
  * Date: 2026-05-12
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-12: Opportunity Detail contact refinement: normalize clickable contact name weight and allow archived RAW business cards to enrich linked contacts without displaying archived rows as candidates.
+ * - 2026-05-12: Opportunity Detail contact UI polish: normalize potential-contact name-link typography and box linked-contact management actions consistently.
  * - 2026-05-12: Opportunity Detail contact interaction polish: move business-card preview to contact names, enrich linked contacts with RAW drive links, and add confirmation before potential-contact linking.
  * - 2026-05-08: Opportunity potential contact hide-after-association filtering skips already matched contacts in opportunity context.
  * - 2026-05-08: Right rail density reduction.
@@ -52,6 +54,32 @@
 // 職責：共用的潛在聯絡人管理模組，處理顯示、建檔與關聯邏輯
 
 const PotentialContactsManager = (() => {
+    function _ensureScopedStyles() {
+        if (document.getElementById('opp-potential-contacts-styles')) return;
+
+        const style = document.createElement('style');
+        style.id = 'opp-potential-contacts-styles';
+        style.textContent = `
+            #opp-potential-contacts-container .opp-rail-contact-name-link {
+                color: inherit;
+                font-weight: 400;
+                text-decoration: none;
+                cursor: pointer;
+            }
+
+            #opp-potential-contacts-container .opp-rail-contact-name-link:hover,
+            #opp-potential-contacts-container .opp-rail-contact-name-link:active,
+            #opp-potential-contacts-container .opp-rail-contact-name-link:visited {
+                color: inherit;
+                text-decoration: none;
+            }
+
+            #opp-potential-contacts-container .opp-rail-contact-name-link:hover {
+                opacity: 0.88;
+            }
+        `;
+        document.head.appendChild(style);
+    }
 
     /**
      * 渲染潛在聯絡人列表的核心函式
@@ -64,6 +92,7 @@ const PotentialContactsManager = (() => {
      * @param {string} [options.opportunityId] - (可選) 在 'opportunity' 情境下需要提供
      */
     function render(options) {
+        _ensureScopedStyles();
         const {
             containerSelector,
             potentialContacts,

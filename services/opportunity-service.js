@@ -4,9 +4,10 @@
 /**
  * services/opportunity-service.js
  * 機會案件業務邏輯層 (Service Layer)
- * @version 8.12.8 (Opportunity Detail Contact Interaction Polish)
+ * @version 8.12.9 (Opportunity Detail Contact Refinement)
  * @date 2026-05-12
  * @description 
+ * - [PATCH] Opportunity Detail contact refinement: normalize clickable contact name weight and allow archived RAW business cards to enrich linked contacts without displaying archived rows as candidates.
  * - [PATCH] Opportunity Detail contact interaction polish: move business-card preview to contact names, enrich linked contacts with RAW drive links, and add confirmation before potential-contact linking.
  * - [PATCH] Opportunity Detail potential contacts RAW mapping fix: support Chinese Google Sheet contact fields for same-company discovery.
  * - [PATCH] Opportunity Detail potential contacts aggregation: include RAW same-company contacts alongside CORE contacts using normalized company matching.
@@ -306,21 +307,24 @@ class OpportunityService {
                     status: raw.status || raw.狀態 || '',
                     source: raw.source || 'RAW'
                 });
-                const rawPotentialContacts = (rawContacts || [])
+                const rawEnrichmentContacts = (rawContacts || [])
                     .map(mapRawContact)
                     .filter(contact => {
                         const normalizedCompany = this._normalizeCompanyName(contact.companyName || contact.company);
-                        const status = (contact.status || '').toString().trim();
                         return Boolean(
                             (contact.name || '').toString().trim() &&
                             normalizedCompany &&
-                            normalizedCompany === normalizedOppCompany &&
-                            !['已升級', '已歸檔', 'Dropped'].includes(status)
+                            normalizedCompany === normalizedOppCompany
                         );
                     });
 
+                const rawPotentialContacts = rawEnrichmentContacts.filter(contact => {
+                    const status = (contact.status || '').toString().trim();
+                    return !['已升級', '已歸檔', 'Dropped'].includes(status);
+                });
+
                 linkedContacts.forEach(linkedContact => {
-                    const matchedRaw = rawPotentialContacts.find(rawContact => isLikelySamePerson(linkedContact, rawContact));
+                    const matchedRaw = rawEnrichmentContacts.find(rawContact => isLikelySamePerson(linkedContact, rawContact));
                     if (matchedRaw) {
                         if (!linkedContact.driveLink && matchedRaw.driveLink) linkedContact.driveLink = matchedRaw.driveLink;
                         if (!linkedContact.rowIndex && matchedRaw.rowIndex) linkedContact.rowIndex = matchedRaw.rowIndex;
@@ -328,7 +332,7 @@ class OpportunityService {
                 });
 
                 potentialContacts.forEach(coreContact => {
-                    const matchedRaw = rawPotentialContacts.find(rawContact => isLikelySamePerson(coreContact, rawContact));
+                    const matchedRaw = rawEnrichmentContacts.find(rawContact => isLikelySamePerson(coreContact, rawContact));
                     if (matchedRaw) {
                         if (!coreContact.driveLink && matchedRaw.driveLink) coreContact.driveLink = matchedRaw.driveLink;
                         if (!coreContact.rowIndex && matchedRaw.rowIndex) coreContact.rowIndex = matchedRaw.rowIndex;
