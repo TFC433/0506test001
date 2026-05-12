@@ -1,8 +1,14 @@
 <!--
  * File Path: public/views/opportunity-detail.html
- * Version: 1.8.5
+ * Version: 1.8.11
  * Date: 2026-05-11
  * Changelog:
+ * - (v1.8.11) Opportunity Detail arrow-segment border refinement: clean directional stage borders and remove pipeline edge rendering artifacts while preserving independent CRM stage blocks.
+ * - (v1.8.10) Opportunity Detail pipeline refinement pass B: restore unified CRM pipeline strip framing while softening future-stage visual weight.
+ * - (v1.8.9) Opportunity Detail pipeline finish refinement: clean segmented workflow borders, soften unreached stages, and strengthen current operational stage emphasis.
+ * - (v1.8.8) Opportunity Detail workflow pipeline redesign: replace circle-stepper presentation with restrained operational CRM pipeline-strip styling while preserving config-driven workflow semantics.
+ * - (v1.8.7) Opportunity Detail stepper pipeline-flow visual refinement: add restrained directional stage-flow presentation while preserving config-driven workflow semantics.
+ * - (v1.8.6) Opportunity Detail stepper visual presentation redesign: refresh workflow stage trace styling while preserving config-driven workflow semantics.
  * - (v1.8.5) Opportunity Detail Visual Language Spec v1 implementation.
  * - (v1.8.5) Section heading hierarchy refinement for operational metadata headings.
  * - (v1.8.5) Field/value hierarchy refinement for clearer scan rhythm.
@@ -129,18 +135,251 @@
             background: var(--secondary-bg);
             border: 1px solid var(--border-color);
             box-shadow: none;
-            padding: var(--spacing-3);
+            padding: var(--spacing-4);
         }
 
         #opportunity-detail-container #opportunity-stage-stepper-container .widget-header {
+            align-items: center;
+            gap: var(--spacing-2);
             padding-bottom: var(--spacing-2);
-            border-bottom: 1px solid var(--border-color);
+            margin-bottom: var(--spacing-2) !important;
+            border-bottom: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
         }
 
         #opportunity-detail-container #opportunity-stage-stepper-container .widget-title {
-            font-size: var(--font-size-sm);
-            font-weight: 650;
+            font-size: var(--font-size-xs);
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.32px;
+            line-height: 1.2;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper-container #edit-stepper-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-muted);
+            box-shadow: none;
+            padding: 5px 8px;
+            transform: none;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper-container #edit-stepper-btn:hover {
+            background: color-mix(in srgb, var(--border-color) 28%, transparent);
+            border-color: color-mix(in srgb, var(--border-color) 64%, transparent);
             color: var(--text-secondary);
+            box-shadow: none;
+            transform: none;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper {
+            padding: 0;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-stepper-container {
+            --pipeline-step-height: 42px;
+            --pipeline-cut: 12px;
+            display: flex;
+            align-items: stretch;
+            gap: 4px;
+            padding: 0;
+            margin-top: var(--spacing-3);
+            background: transparent;
+            border: 0;
+            border-radius: 0;
+            overflow-x: auto;
+            overflow-y: hidden;
+            position: relative;
+            scrollbar-width: none;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-stepper-container::-webkit-scrollbar {
+            display: none;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step {
+            flex: 1 1 0;
+            min-width: 136px;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: flex-start;
+            gap: var(--spacing-2);
+            min-height: var(--pipeline-step-height);
+            text-align: left;
+            position: relative;
+            padding: 7px 18px 7px 10px;
+            background: transparent;
+            border: 0;
+            border-radius: 0;
+            clip-path: none;
+            isolation: isolate;
+            z-index: 1;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step::before,
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step::after {
+            content: '';
+            position: absolute;
+            clip-path: polygon(0 0, calc(100% - var(--pipeline-cut)) 0, 100% 50%, calc(100% - var(--pipeline-cut)) 100%, 0 100%);
+            pointer-events: none;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step::before {
+            inset: 0;
+            background: color-mix(in srgb, var(--border-color) 78%, var(--text-muted));
+            z-index: -2;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step::after {
+            inset: 1px;
+            background: color-mix(in srgb, var(--primary-bg) 84%, var(--secondary-bg));
+            z-index: -1;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .step-circle {
+            width: 24px;
+            height: 24px;
+            min-width: 24px;
+            border-radius: var(--rounded-sm);
+            border: 1px solid color-mix(in srgb, var(--border-color) 62%, var(--text-muted));
+            background: color-mix(in srgb, var(--secondary-bg) 84%, var(--primary-bg));
+            color: var(--text-secondary);
+            font-size: var(--font-size-xs);
+            font-weight: 650;
+            line-height: 1;
+            position: relative;
+            z-index: 1;
+            transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .step-name {
+            min-width: 0;
+            max-width: 100%;
+            margin-top: 0;
+            color: var(--text-secondary);
+            font-size: var(--font-size-xs);
+            font-weight: 600;
+            line-height: 1.35;
+            position: relative;
+            z-index: 1;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.completed {
+            background: transparent;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.completed::before {
+            background: color-mix(in srgb, var(--accent-blue) 36%, var(--border-color));
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.completed::after {
+            background: color-mix(in srgb, var(--accent-blue) 12%, var(--secondary-bg));
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.completed .step-circle {
+            background: color-mix(in srgb, var(--accent-blue) 18%, var(--secondary-bg));
+            border-color: color-mix(in srgb, var(--accent-blue) 48%, var(--border-color));
+            color: color-mix(in srgb, var(--accent-blue) 76%, var(--text-primary));
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.completed .step-name {
+            color: var(--text-secondary);
+            font-weight: 600;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.current {
+            background: transparent;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.current::before {
+            background: color-mix(in srgb, var(--accent-blue) 64%, var(--border-color));
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.current::after {
+            background: color-mix(in srgb, var(--accent-blue) 68%, var(--text-primary));
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.current .step-circle {
+            background: color-mix(in srgb, var(--secondary-bg) 94%, var(--accent-blue));
+            border-color: color-mix(in srgb, var(--secondary-bg) 70%, var(--accent-blue));
+            color: color-mix(in srgb, var(--accent-blue) 82%, var(--text-primary));
+            transform: none;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.current .step-name {
+            color: var(--secondary-bg);
+            font-weight: 700;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.pending {
+            background: transparent;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.pending::before {
+            background: color-mix(in srgb, var(--border-color) 54%, transparent);
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.pending::after {
+            background: color-mix(in srgb, var(--primary-bg) 94%, var(--secondary-bg));
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.pending .step-circle {
+            background: color-mix(in srgb, var(--primary-bg) 82%, var(--secondary-bg));
+            border-color: color-mix(in srgb, var(--border-color) 54%, transparent);
+            color: color-mix(in srgb, var(--text-muted) 86%, var(--text-secondary));
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.pending .step-name {
+            color: color-mix(in srgb, var(--text-muted) 88%, var(--border-color));
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.skipped {
+            background: transparent;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.skipped::before {
+            background: color-mix(in srgb, var(--accent-red) 32%, var(--border-color));
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.skipped::after {
+            background: color-mix(in srgb, var(--accent-red) 8%, var(--secondary-bg));
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-step.skipped .step-circle {
+            background: color-mix(in srgb, var(--accent-red) 14%, var(--secondary-bg));
+            border-color: color-mix(in srgb, var(--accent-red) 40%, var(--border-color));
+            color: color-mix(in srgb, var(--accent-red) 74%, var(--text-primary));
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-stepper-container.edit-mode .step-circle:hover {
+            border-color: var(--accent-blue);
+            transform: none;
+            box-shadow: none;
+        }
+
+        #opportunity-detail-container #opportunity-stage-stepper .stage-stepper-container.edit-mode .step-name:hover {
+            background-color: color-mix(in srgb, var(--accent-blue) 9%, transparent);
+        }
+
+        @media (max-width: 768px) {
+            #opportunity-detail-container #opportunity-stage-stepper .stage-stepper-container {
+                flex-wrap: wrap;
+                gap: var(--spacing-2);
+                overflow-x: visible;
+            }
+
+            #opportunity-detail-container #opportunity-stage-stepper .stage-step {
+                flex-basis: 25%;
+                min-width: 120px;
+                padding-right: 10px;
+                border-radius: var(--rounded-sm);
+            }
+
+            #opportunity-detail-container #opportunity-stage-stepper .stage-step::before,
+            #opportunity-detail-container #opportunity-stage-stepper .stage-step::after {
+                clip-path: inset(0 round var(--rounded-sm));
+            }
         }
 
         #opportunity-detail-container .opp-context-rail {
