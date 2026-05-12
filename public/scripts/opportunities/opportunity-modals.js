@@ -1,8 +1,9 @@
 /**
  * public/scripts/opportunities/opportunity-modals.js
- * @version v5.0.11
- * @date 2026-05-08
+ * @version v5.0.12
+ * @date 2026-05-11
  * @changelog
+ * - Opportunity workflow initialization normalization: remove hardcoded default stage fallback and initialize stage history from config-driven current stage.
  * - Relationship lifecycle stabilization restores explicit Opportunity Detail reloads after link mutations
  * - Unified CORE + RAW contact search fixes existing contact endpoint wiring
  * - Parent opportunity link refreshes detail page after successful save
@@ -56,7 +57,7 @@ const NewOppWizard = {
                 
                 // 預設選取第一個階段
                 const stages = window.CRM_APP.systemConfig['機會階段'] || [];
-                const defaultStage = stages.length > 0 ? stages[0].value : '01_初步接觸';
+                const defaultStage = stages.length > 0 ? stages[0].value : '';
                 populateSelect('wiz-stage', stages, defaultStage);
                 
                 populateSelect('wiz-assignee', window.CRM_APP.systemConfig['團隊成員'], getCurrentUser());

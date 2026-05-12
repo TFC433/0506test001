@@ -1,8 +1,8 @@
 // data/opportunity-sql-writer.js
 /**
  * OpportunitySqlWriter
- * * @version 1.1.3 (Phase 7 - Contact Linking SQL)
- * @date 2026-05-08
+ * * @version 1.1.4 (Opportunity Workflow Initialization Normalization)
+ * @date 2026-05-11
  * @description 負責將機會案件寫入 Supabase 'opportunities' 資料表。
  * - [PATCH] opportunity_contact_links real-schema alignment.
  * - [PATCH] explicit link_id generation.
@@ -11,6 +11,7 @@
  * - [PATCH] opportunity_contact_links constraint-free linkContact flow. Replaced onConflict upsert with select-update-or-insert flow.
  * - [PATCH] Normalize empty date strings to null for PostgreSQL compatibility.
  * - [PATCH] Added missing mapping for drive_link in updateOpportunity.
+ * - [PATCH] Opportunity workflow initialization normalization: remove hardcoded default stage fallback and initialize stage history from config-driven current stage.
  * - [FEAT] Added linkContact and unlinkContact methods for SQL-based linking.
  */
 
@@ -37,6 +38,7 @@ class OpportunitySqlWriter {
         // [Date Normalization]
         // PostgreSQL rejects "" for date types. Convert "" to null.
         const expectedCloseDate = (data.expectedCloseDate === "") ? null : data.expectedCloseDate;
+        const initialStageHistory = data.stageHistory ? data.stageHistory : (data.currentStage ? `C:${data.currentStage}` : JSON.stringify([]));
 
         // Map DTO to DB Columns
         const dbPayload = {
@@ -73,7 +75,7 @@ class OpportunitySqlWriter {
             drive_link: data.driveFolderLink,
             
             // History
-            stage_history: data.stageHistory ? data.stageHistory : JSON.stringify([]),
+            stage_history: initialStageHistory,
             
             // Metadata
             created_time: now,
