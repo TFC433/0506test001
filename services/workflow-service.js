@@ -4,10 +4,11 @@ const { supabase } = require('../config/supabase');
 /**
  * services/workflow-service.js
  * 撌乩?瘚???
- * * @version 5.0.8 (Workflow Ownership Migration Phase 1)
+ * * @version 5.0.9 (Workflow Ownership Migration Phase 1)
  * @date 2026-05-13
  * @description 鞎痊??頝冽芋蝯?銴?璆剖?瘚?嚗?憒???閮?蝯∩犖??????
  * 靘陷瘜典嚗pportunityService, InteractionService, ContactService
+ * @changelog 2026-05-13: Complete manual opportunity and quick-add SQL contact lifecycle with MANUAL sourceId and relationship linking.
  * @changelog 2026-05-13: Complete verified RAW business-card field mapping for opportunity upgrade CORE contact creation.
  * @changelog 2026-05-13: Normalize RAW business-card upgrade contact name from verified mainContact payload field before CORE contact creation.
  * @changelog 2026-05-13: Hotfix RAW business-card opportunity relationship creation to use existing addContactToOpportunity service API.
@@ -202,6 +203,23 @@ class WorkflowService {
         return await this.fileContact(rowIndex, user);
     }
 
+    async createManualContact(contactData, user) {
+        const hasValue = (value) => String(value || '').trim() !== '';
+        const contactName = hasValue(contactData.name) ? contactData.name : contactData.mainContact;
+
+        if (!hasValue(contactName)) {
+            throw new Error('Cannot create manual contact: missing name.');
+        }
+
+        return await this.contactService.createContact({
+            ...contactData,
+            sourceId: 'MANUAL',
+            name: contactName,
+            company: hasValue(contactData.company) ? contactData.company : (contactData.customerCompany || contactData.companyName),
+            phone: hasValue(contactData.phone) ? contactData.phone : contactData.contactPhone
+        }, this._resolveModifier(user));
+    }
+
     /**
      * [Phase 8 Bridge] ??銝?祆??遣蝡?(?舀 Wizard 'old' ??'new' 頝臬?)
      * ?交 OpportunityController ??瘙蒂憪晷蝯行敹?Service
@@ -214,6 +232,22 @@ class WorkflowService {
             const modifierObj = typeof user === 'string' ? { displayName: user } : (user || { displayName: 'System' });
             
             const result = await this.opportunityService.createOpportunity(opportunityData, modifierObj);
+            const hasRowIndex = opportunityData.rowIndex !== undefined && opportunityData.rowIndex !== null && opportunityData.rowIndex !== '';
+            const hasContactId = Boolean(opportunityData.contactId);
+            const hasMainContact = String(opportunityData.mainContact || '').trim() !== '';
+
+            if (!hasRowIndex && result && result.id && hasContactId) {
+                await this.opportunityService.addContactToOpportunity(result.id, {
+                    contactId: opportunityData.contactId,
+                    name: opportunityData.mainContact || opportunityData.name
+                }, modifierObj);
+            } else if (!hasRowIndex && result && result.id && hasMainContact) {
+                const contactResult = await this.createManualContact(opportunityData, modifierObj);
+                await this.opportunityService.addContactToOpportunity(result.id, {
+                    contactId: contactResult.id,
+                    name: opportunityData.mainContact
+                }, modifierObj);
+            }
             return result;
         } catch (error) {
             console.error('[WorkflowService] createOpportunity Error:', error);

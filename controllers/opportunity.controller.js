@@ -1,8 +1,9 @@
 // controllers/opportunity.controller.js
 /**
  * OpportunityController
- * * @version 6.2.1 (Workflow Ownership Migration Phase 1)
+ * * @version 6.2.2 (Workflow Ownership Migration Phase 1)
  * @date 2026-05-13
+ * @changelog 2026-05-13: Complete quick-add manual contact lifecycle by creating MANUAL SQL contact before opportunity linking.
  * @changelog 2026-05-13: Workflow ownership migration phase 1: move RAW lifecycle orchestration into WorkflowService and reduce OpportunityService to relationship semantics only.
  * @description 機會案件控制器，擴展支援獨立的 Metadata API Fetch。
  */
@@ -169,6 +170,16 @@ class OpportunityController {
                 const result = await this.opportunityService.addContactToOpportunity(
                     opportunityId,
                     { contactId: payload.contactId, name: payload.name },
+                    req.user
+                );
+                return res.json(result);
+            }
+
+            if (!hasRowIndex && !hasContactId && payload.name) {
+                const contactResult = await this.workflowService.createManualContact(payload, req.user);
+                const result = await this.opportunityService.addContactToOpportunity(
+                    opportunityId,
+                    { contactId: contactResult.id, name: payload.name },
                     req.user
                 );
                 return res.json(result);
