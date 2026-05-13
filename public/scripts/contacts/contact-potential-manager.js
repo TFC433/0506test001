@@ -2,11 +2,12 @@
 /**
  * ============================================================================
  * File: public/scripts/contacts/contact-potential-manager.js
- * Version: v8.0.6 (Opportunity Detail Contact Refinement)
+ * Version: v8.0.7 (Opportunity Detail Linked Contact Enrichment)
  * Date: 2026-05-12
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-12: Opportunity Detail linked contact enrichment: use global RAW business-card pool for linked-contact driveLink enrichment and unify contact typography.
  * - 2026-05-12: Opportunity Detail contact refinement: normalize clickable contact name weight and allow archived RAW business cards to enrich linked contacts without displaying archived rows as candidates.
  * - 2026-05-12: Opportunity Detail contact UI polish: normalize potential-contact name-link typography and box linked-contact management actions consistently.
  * - 2026-05-12: Opportunity Detail contact interaction polish: move business-card preview to contact names, enrich linked contacts with RAW drive links, and add confirmation before potential-contact linking.
@@ -76,6 +77,17 @@ const PotentialContactsManager = (() => {
 
             #opp-potential-contacts-container .opp-rail-contact-name-link:hover {
                 opacity: 0.88;
+            }
+
+            #opp-potential-contacts-container .opp-rail-chip-main {
+                font-size: var(--font-size-sm);
+                font-weight: 400;
+            }
+
+            #opp-potential-contacts-container .opp-rail-chip-meta {
+                font-size: var(--font-size-xs);
+                color: var(--text-muted);
+                font-weight: 400;
             }
         `;
         document.head.appendChild(style);

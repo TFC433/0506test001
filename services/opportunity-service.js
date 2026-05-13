@@ -4,9 +4,10 @@
 /**
  * services/opportunity-service.js
  * 機會案件業務邏輯層 (Service Layer)
- * @version 8.12.9 (Opportunity Detail Contact Refinement)
+ * @version 8.12.10 (Opportunity Detail Linked Contact Enrichment)
  * @date 2026-05-12
  * @description 
+ * - [PATCH] Opportunity Detail linked contact enrichment: use global RAW business-card pool for linked-contact driveLink enrichment and unify contact typography.
  * - [PATCH] Opportunity Detail contact refinement: normalize clickable contact name weight and allow archived RAW business cards to enrich linked contacts without displaying archived rows as candidates.
  * - [PATCH] Opportunity Detail contact interaction polish: move business-card preview to contact names, enrich linked contacts with RAW drive links, and add confirmation before potential-contact linking.
  * - [PATCH] Opportunity Detail potential contacts RAW mapping fix: support Chinese Google Sheet contact fields for same-company discovery.
@@ -252,6 +253,7 @@ class OpportunityService {
             
             const normalizeText = (value) => (value || '').toString().trim().toLowerCase();
             const normalizePhone = (value) => (value || '').toString().replace(/\D+/g, '');
+            const getNormalizedPhones = (contact) => [normalizePhone(contact.mobile), normalizePhone(contact.phone)].filter(Boolean);
             const isLikelySamePerson = (left, right) => {
                 if (!left || !right) return false;
                 if (left.contactId && right.contactId && left.contactId === right.contactId) return true;
@@ -268,13 +270,47 @@ class OpportunityService {
                 const rightEmail = normalizeText(right.email);
                 if (leftEmail && rightEmail) return leftEmail === rightEmail;
 
-                const leftPhones = [normalizePhone(left.mobile), normalizePhone(left.phone)].filter(Boolean);
-                const rightPhones = [normalizePhone(right.mobile), normalizePhone(right.phone)].filter(Boolean);
+                const leftPhones = getNormalizedPhones(left);
+                const rightPhones = getNormalizedPhones(right);
                 if (leftPhones.length > 0 && rightPhones.length > 0) {
                     return leftPhones.some(phone => rightPhones.includes(phone));
                 }
 
                 return true;
+            };
+            const findGlobalRawMatchForLinkedContact = (linkedContact, rawPool) => {
+                if (!linkedContact || !Array.isArray(rawPool) || rawPool.length === 0) return null;
+
+                const linkedName = normalizeText(linkedContact.name);
+                if (!linkedName) return null;
+
+                const candidates = rawPool.filter(rawContact => normalizeText(rawContact.name) === linkedName);
+                if (candidates.length === 0) return null;
+
+                const linkedEmail = normalizeText(linkedContact.email);
+                const linkedPhones = getNormalizedPhones(linkedContact);
+
+                const emailMatches = linkedEmail
+                    ? candidates.filter(rawContact => normalizeText(rawContact.email) === linkedEmail)
+                    : [];
+                if (emailMatches.length === 1) return emailMatches[0];
+
+                const phoneMatches = linkedPhones.length > 0
+                    ? candidates.filter(rawContact => {
+                        const rawPhones = getNormalizedPhones(rawContact);
+                        return rawPhones.length > 0 && rawPhones.some(phone => linkedPhones.includes(phone));
+                    })
+                    : [];
+                if (phoneMatches.length === 1) return phoneMatches[0];
+
+                const linkedHasSignals = Boolean(linkedEmail) || linkedPhones.length > 0;
+                if (!linkedHasSignals && candidates.length === 1) {
+                    const onlyCandidate = candidates[0];
+                    const candidateHasSignals = Boolean(normalizeText(onlyCandidate.email)) || getNormalizedPhones(onlyCandidate).length > 0;
+                    if (!candidateHasSignals) return onlyCandidate;
+                }
+
+                return null;
             };
 
             let potentialContacts = [];
@@ -288,7 +324,7 @@ class OpportunityService {
             }
 
             const rawReader = this.contactWriter && this.contactWriter.contactReader;
-            if (normalizedOppCompany && rawReader && typeof rawReader.getContacts === 'function') {
+            if (rawReader && typeof rawReader.getContacts === 'function') {
                 const rawContacts = await rawReader.getContacts();
                 const mapRawContact = (raw) => ({
                     name: raw.name || raw.姓名 || '',
@@ -307,24 +343,27 @@ class OpportunityService {
                     status: raw.status || raw.狀態 || '',
                     source: raw.source || 'RAW'
                 });
-                const rawEnrichmentContacts = (rawContacts || [])
+                const mappedRawContacts = (rawContacts || [])
                     .map(mapRawContact)
-                    .filter(contact => {
+                    .filter(contact => Boolean((contact.name || '').toString().trim()));
+
+                const rawSameCompanyContacts = normalizedOppCompany
+                    ? mappedRawContacts.filter(contact => {
                         const normalizedCompany = this._normalizeCompanyName(contact.companyName || contact.company);
                         return Boolean(
-                            (contact.name || '').toString().trim() &&
                             normalizedCompany &&
                             normalizedCompany === normalizedOppCompany
                         );
-                    });
+                    })
+                    : [];
 
-                const rawPotentialContacts = rawEnrichmentContacts.filter(contact => {
+                const rawPotentialContacts = rawSameCompanyContacts.filter(contact => {
                     const status = (contact.status || '').toString().trim();
                     return !['已升級', '已歸檔', 'Dropped'].includes(status);
                 });
 
                 linkedContacts.forEach(linkedContact => {
-                    const matchedRaw = rawEnrichmentContacts.find(rawContact => isLikelySamePerson(linkedContact, rawContact));
+                    const matchedRaw = findGlobalRawMatchForLinkedContact(linkedContact, mappedRawContacts);
                     if (matchedRaw) {
                         if (!linkedContact.driveLink && matchedRaw.driveLink) linkedContact.driveLink = matchedRaw.driveLink;
                         if (!linkedContact.rowIndex && matchedRaw.rowIndex) linkedContact.rowIndex = matchedRaw.rowIndex;
@@ -332,7 +371,7 @@ class OpportunityService {
                 });
 
                 potentialContacts.forEach(coreContact => {
-                    const matchedRaw = rawEnrichmentContacts.find(rawContact => isLikelySamePerson(coreContact, rawContact));
+                    const matchedRaw = rawSameCompanyContacts.find(rawContact => isLikelySamePerson(coreContact, rawContact));
                     if (matchedRaw) {
                         if (!coreContact.driveLink && matchedRaw.driveLink) coreContact.driveLink = matchedRaw.driveLink;
                         if (!coreContact.rowIndex && matchedRaw.rowIndex) coreContact.rowIndex = matchedRaw.rowIndex;

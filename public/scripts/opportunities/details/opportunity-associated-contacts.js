@@ -2,11 +2,12 @@
 /**
  * ============================================================================
  * File: public/scripts/opportunities/details/opportunity-associated-contacts.js
- * Version: v8.0.14 (Opportunity Detail Contact Refinement)
+ * Version: v8.0.15 (Opportunity Detail Linked Contact Enrichment)
  * Date: 2026-05-12
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-12: Opportunity Detail linked contact enrichment: use global RAW business-card pool for linked-contact driveLink enrichment and unify contact typography.
  * - 2026-05-12: Opportunity Detail contact refinement: normalize clickable contact name weight and allow archived RAW business cards to enrich linked contacts without displaying archived rows as candidates.
  * - 2026-05-12: Opportunity Detail contact UI polish: normalize potential-contact name-link typography and box linked-contact management actions consistently.
  * - 2026-05-12: Opportunity Detail linked-contact style regression fix: remove box-model and font-shorthand overrides from scoped utility polish.
@@ -76,6 +77,17 @@ const OpportunityContacts = (() => {
 
             #associated-contacts-list .opp-rail-contact-name-link:hover {
                 opacity: 0.88;
+            }
+
+            #associated-contacts-list .opp-rail-contact-text {
+                font-size: var(--font-size-sm);
+                font-weight: 400;
+            }
+
+            #associated-contacts-list .opp-rail-contact-role {
+                font-size: var(--font-size-xs);
+                color: var(--text-muted);
+                font-weight: 400;
             }
 
             #associated-contacts-list .opp-rail-contact-list.is-managing .opp-rail-contact-action-btn {
