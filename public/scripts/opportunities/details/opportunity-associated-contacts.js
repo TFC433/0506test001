@@ -2,11 +2,12 @@
 /**
  * ============================================================================
  * File: public/scripts/opportunities/details/opportunity-associated-contacts.js
- * Version: v8.0.22 (Business Card Archive Candidate Density)
+ * Version: v8.0.23 (Business Card Archive Product Polish)
  * Date: 2026-05-13
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-13: Polished business card archive candidate list and confirmation preview for compact CRM reconciliation.
  * - 2026-05-13: Refined business card archive candidates into compact operational reconciliation rows.
  * - 2026-05-13: Added lightweight in-modal confirmation preview before executing business card archive hydration.
  * - 2026-05-13: Removed temporary RAW card search diagnostic count logs after archive dropdown verification.
@@ -416,26 +417,35 @@ const OpportunityContacts = (() => {
         const searchInput = document.getElementById('search-business-card-input');
         const resultsContainer = document.getElementById('business-card-results');
         const currentContact = (_linkedContacts || []).find(contact => String(contact.contactId) === String(contactId)) || {};
-        const displayValue = (value) => String(value || '').trim() || '空白';
+        const displayValue = (value) => String(value || '').trim() || '—';
+        const renderFieldRow = (label, value) => `
+            <div style="display: grid; grid-template-columns: 56px 1fr; gap: 10px; padding: 5px 0; border-bottom: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);">
+                <span style="font-size: 0.82rem; color: var(--text-muted);">${label}</span>
+                <span style="font-size: 0.9rem; color: var(--text-primary);">${displayValue(value)}</span>
+            </div>
+        `;
         const renderArchivePreviewCard = (title, item) => `
-            <div style="flex: 1; min-width: 220px; border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; background: var(--primary-bg);">
-                <div style="font-weight: 600; margin-bottom: 8px;">${title}</div>
-                <div style="font-weight: 600; color: var(--text-primary);">${displayValue(item.name)}</div>
-                <div style="color: var(--text-secondary); margin-bottom: 6px;">${displayValue(item.companyName || item.company)}</div>
-                <div style="font-size: 0.9em; color: var(--text-secondary);">電話：${displayValue(item.mobile || item.phone)}</div>
-                <div style="font-size: 0.9em; color: var(--text-secondary);">Email：${displayValue(item.email)}</div>
-                <div style="font-size: 0.9em; color: var(--text-secondary);">職稱：${displayValue(item.position || item.jobTitle)}</div>
+            <div style="flex: 1; min-width: 240px; border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 14px; background: var(--primary-bg);">
+                <div style="font-weight: 700; margin-bottom: 8px; color: var(--text-primary);">${title}</div>
+                ${renderFieldRow('姓名', item.name)}
+                ${renderFieldRow('公司', item.companyName || item.company)}
+                ${renderFieldRow('電話', item.mobile || item.phone)}
+                ${renderFieldRow('Email', item.email)}
+                ${renderFieldRow('職稱', item.position || item.jobTitle)}
             </div>
         `;
         const showArchivePreview = (card) => {
             resultsContainer.innerHTML = `
-                <div style="display: flex; flex-direction: column; gap: 12px;">
-                    <div style="font-weight: 700; font-size: 1.05rem;">確認名片歸檔</div>
-                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                        ${renderArchivePreviewCard('正式聯絡人', currentContact)}
-                        ${renderArchivePreviewCard('名片資料', card)}
+                <div style="display: flex; flex-direction: column; gap: 12px; padding: 2px;">
+                    <div>
+                        <div style="font-weight: 700; font-size: 1.05rem; color: var(--text-primary);">確認名片歸檔</div>
+                        <div style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 3px;">將選取的名片資料補充或覆蓋至目前正式聯絡人。</div>
                     </div>
-                    <div class="alert alert-warning" style="margin: 0;">此操作將補充或覆蓋聯絡人資料。</div>
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                        ${renderArchivePreviewCard('目前正式聯絡人', currentContact)}
+                        ${renderArchivePreviewCard('選取的名片資料', card)}
+                    </div>
+                    <div style="border: 1px solid color-mix(in srgb, var(--warning-color, #f59e0b) 35%, var(--border-color)); background: color-mix(in srgb, var(--warning-color, #f59e0b) 9%, transparent); color: var(--text-secondary); border-radius: 6px; padding: 9px 11px; font-size: 0.9rem;">確認後會更新正式聯絡人資料，並將此名片標記為已歸檔。</div>
                     <div style="display: flex; justify-content: flex-end; gap: 8px;">
                         <button type="button" class="action-btn secondary" id="archive-preview-cancel-btn">取消</button>
                         <button type="button" class="action-btn primary" id="archive-preview-confirm-btn">確認歸檔</button>
@@ -468,12 +478,12 @@ const OpportunityContacts = (() => {
                     resultsContainer.innerHTML = pendingCards.map(card => {
                         const cardJson = JSON.stringify(card).replace(/'/g, "&apos;");
                         return `
-                            <div style="cursor: pointer; padding: 9px 12px; border-bottom: 1px solid var(--border-color); background: var(--primary-bg);" onmouseover="this.style.background='color-mix(in srgb, var(--accent-blue) 8%, var(--primary-bg))'" onmouseout="this.style.background='var(--primary-bg)'" onclick='OpportunityContacts.showArchivePreview(${cardJson})'>
-                                <div style="display: flex; justify-content: space-between; gap: 12px; align-items: baseline;">
-                                    <span style="font-weight: 600; color: var(--text-primary);">${card.name || '-'}</span>
-                                    <span style="font-size: 0.82rem; color: var(--text-muted); white-space: nowrap;">${card.position || card.jobTitle || ''}</span>
+                            <div style="cursor: pointer; padding: 8px 11px; border-bottom: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent); background: var(--primary-bg);" onmouseover="this.style.background='color-mix(in srgb, var(--accent-blue) 7%, var(--primary-bg))'" onmouseout="this.style.background='var(--primary-bg)'" onclick='OpportunityContacts.showArchivePreview(${cardJson})'>
+                                <div style="display: flex; justify-content: space-between; gap: 12px; align-items: center;">
+                                    <span style="font-weight: 650; color: var(--text-primary); font-size: 0.94rem; line-height: 1.25;">${card.name || '-'}</span>
+                                    <span style="font-size: 0.78rem; color: var(--text-muted); white-space: nowrap;">${card.position || card.jobTitle || ''}</span>
                                 </div>
-                                <div style="font-size: 0.86rem; color: var(--text-secondary); margin-top: 2px;">${card.company || '公司未知'}</div>
+                                <div style="font-size: 0.84rem; color: var(--text-secondary); margin-top: 1px; line-height: 1.25;">${card.company || '公司未知'}</div>
                             </div>`;
                     }).join('');
                 } else {
