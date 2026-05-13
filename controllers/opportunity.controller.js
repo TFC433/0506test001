@@ -1,8 +1,9 @@
 // controllers/opportunity.controller.js
 /**
  * OpportunityController
- * * @version 6.2.0 (Phase 9 - Metadata Decoupling)
- * @date 2026-04-15
+ * * @version 6.2.1 (Workflow Ownership Migration Phase 1)
+ * @date 2026-05-13
+ * @changelog 2026-05-13: Workflow ownership migration phase 1: move RAW lifecycle orchestration into WorkflowService and reduce OpportunityService to relationship semantics only.
  * @description 機會案件控制器，擴展支援獨立的 Metadata API Fetch。
  */
 
@@ -144,9 +145,38 @@ class OpportunityController {
     // POST /api/opportunities/:opportunityId/contacts
     addContactToOpportunity = async (req, res) => {
         try {
+            const { opportunityId } = req.params;
+            const payload = req.body || {};
+            const hasRowIndex = payload.rowIndex !== undefined && payload.rowIndex !== null && payload.rowIndex !== '';
+            const hasContactId = Boolean(payload.contactId);
+
+            if (hasRowIndex && !hasContactId) {
+                const resolved = await this.workflowService.resolveAndPromoteContact(payload, req.user);
+                const result = await this.opportunityService.addContactToOpportunity(
+                    opportunityId,
+                    { contactId: resolved.contactId, name: resolved.contactName || payload.name },
+                    req.user
+                );
+                return res.json(result);
+            }
+
+            if (hasRowIndex && hasContactId) {
+                await this.workflowService.linkBusinessCardToContact(
+                    payload.contactId,
+                    payload.rowIndex,
+                    req.user
+                );
+                const result = await this.opportunityService.addContactToOpportunity(
+                    opportunityId,
+                    { contactId: payload.contactId, name: payload.name },
+                    req.user
+                );
+                return res.json(result);
+            }
+
             const result = await this.opportunityService.addContactToOpportunity(
-                req.params.opportunityId, 
-                req.body, 
+                opportunityId,
+                payload,
                 req.user
             );
             res.json(result);

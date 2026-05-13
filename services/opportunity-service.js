@@ -1,12 +1,13 @@
-// ============================================================================
+﻿// ============================================================================
 // File: services/opportunity-service.js
 // ============================================================================
 /**
  * services/opportunity-service.js
- * 機會案件業務邏輯層 (Service Layer)
- * @version 8.12.10 (Opportunity Detail Linked Contact Enrichment)
- * @date 2026-05-12
+ * 璈?獢辣璆剖??摩撅?(Service Layer)
+ * @version 8.12.11 (Workflow Ownership Migration Phase 1)
+ * @date 2026-05-13
  * @description 
+ * - [PATCH] Workflow ownership migration phase 1: move RAW lifecycle orchestration into WorkflowService and reduce OpportunityService to relationship semantics only.
  * - [PATCH] Opportunity Detail linked contact enrichment: use global RAW business-card pool for linked-contact driveLink enrichment and unify contact typography.
  * - [PATCH] Opportunity Detail contact refinement: normalize clickable contact name weight and allow archived RAW business cards to enrich linked contacts without displaying archived rows as candidates.
  * - [PATCH] Opportunity Detail contact interaction polish: move business-card preview to contact names, enrich linked contacts with RAW drive links, and add confirmation before potential-contact linking.
@@ -104,14 +105,14 @@ class OpportunityService {
         try {
             await this.interactionService.createInteraction({
                 opportunityId: opportunityId,
-                eventType: '系統事件',
+                eventType: '蝟餌絞鈭辣',
                 eventTitle: title,
                 contentSummary: summary,
                 recorder: modifier,
                 interactionTime: new Date().toISOString()
             }, { displayName: modifier });
         } catch (logError) {
-            console.warn(`[OpportunityService] 寫入機會日誌失敗 (OppID: ${opportunityId}): ${logError.message}`);
+            console.warn(`[OpportunityService] 撖怠璈??亥?憭望? (OppID: ${opportunityId}): ${logError.message}`);
         }
     }
 
@@ -121,7 +122,7 @@ class OpportunityService {
 
             if (!opportunityData.currentStage) {
                 const systemConfig = await this.systemService.getSystemConfig();
-                const initialStage = (systemConfig['機會階段'] || [])[0];
+                const initialStage = (systemConfig['璈??挾'] || [])[0];
                 if (!initialStage || !initialStage.value) {
                     throw new Error('Cannot create opportunity: missing configured initial opportunity stage.');
                 }
@@ -169,11 +170,11 @@ class OpportunityService {
             // [Phase A Patch] Create Interaction Log for New Opportunity
             if (result && result.success) {
                 const oppName = opportunityData.opportunityName || '未命名機會';
-                const owner = opportunityData.assignee || modifier || '未指定';
+                const owner = opportunityData.assignee || modifier || '未指派';
                 await this._logOpportunityInteraction(
                     result.id,
-                    '建立機會',
-                    `建立機會：「${oppName}」（負責人：${owner}）`,
+                    '建立機會案件',
+                    `建立機會案件「${oppName}」，指派給 ${owner}。`,
                     modifier
                 );
             }
@@ -190,7 +191,7 @@ class OpportunityService {
             console.log(`[OpportunityService] Read source=SQL (OppID: ${opportunityId})`);
             const opportunityInfo = await this.opportunitySqlReader.getOpportunityById(opportunityId);
             if (!opportunityInfo) {
-                throw new Error(`找不到機會ID為 ${opportunityId} 的案件`);
+                throw new Error(`找不到機會案件 ID: ${opportunityId}`);
             }
 
             const eventReader = this.eventLogSqlReader || this.eventLogReader;
@@ -327,20 +328,20 @@ class OpportunityService {
             if (rawReader && typeof rawReader.getContacts === 'function') {
                 const rawContacts = await rawReader.getContacts();
                 const mapRawContact = (raw) => ({
-                    name: raw.name || raw.姓名 || '',
-                    company: raw.company || raw.companyName || raw.organization || raw.公司 || '',
-                    companyName: raw.companyName || raw.company || raw.organization || raw.公司 || '',
-                    jobTitle: raw.jobTitle || raw.position || raw.職位 || '',
-                    position: raw.position || raw.jobTitle || raw.職位 || '',
-                    department: raw.department || raw.部門 || '',
-                    phone: raw.phone || raw.電話 || '',
-                    mobile: raw.mobile || raw.手機 || '',
-                    email: raw.email || raw.電子郵件 || '',
-                    website: raw.website || raw.網址 || '',
-                    address: raw.address || raw.地址 || '',
+                    name: raw.name || raw['姓名'] || '',
+                    company: raw.company || raw.companyName || raw.organization || raw['公司'] || '',
+                    companyName: raw.companyName || raw.company || raw.organization || raw['公司'] || '',
+                    jobTitle: raw.jobTitle || raw.position || raw['職位'] || '',
+                    position: raw.position || raw.jobTitle || raw['職位'] || '',
+                    department: raw.department || raw['部門'] || '',
+                    phone: raw.phone || raw['電話'] || '',
+                    mobile: raw.mobile || raw['手機'] || '',
+                    email: raw.email || raw['電子郵件'] || '',
+                    website: raw.website || raw['網址'] || '',
+                    address: raw.address || raw['地址'] || '',
                     driveLink: raw.driveLink || raw.driveUrl || raw['Drive連結'] || '',
                     rowIndex: raw.rowIndex || raw.rawId || raw['原始ID'] || '',
-                    status: raw.status || raw.狀態 || '',
+                    status: raw.status || raw['狀態'] || '',
                     source: raw.source || 'RAW'
                 });
                 const mappedRawContacts = (rawContacts || [])
@@ -428,14 +429,14 @@ class OpportunityService {
             const originalOpportunity = await this.opportunitySqlReader.getOpportunityById(opportunityId);
             
             if (!originalOpportunity) {
-                throw new Error(`找不到要更新的機會 (ID: ${opportunityId})`);
+                throw new Error(`?曆??啗??湔????(ID: ${opportunityId})`);
             }
             
             const oldStage = originalOpportunity.currentStage;
 
             const systemConfig = await this.systemService.getSystemConfig();
             const getNote = (configKey, value) => (systemConfig[configKey] || []).find(i => i.value === value)?.note || value || 'N/A';
-            const stageMapping = new Map((systemConfig['機會階段'] || []).map(item => [item.value, item.note]));
+            const stageMapping = new Map((systemConfig['璈??挾'] || []).map(item => [item.value, item.note]));
             
             const logs = [];
 
@@ -443,20 +444,20 @@ class OpportunityService {
             if (newStage && oldStage && newStage !== oldStage) {
                 const oldStageName = stageMapping.get(oldStage) || oldStage;
                 const newStageName = stageMapping.get(newStage) || newStage;
-                logs.push(`階段從【${oldStageName}】更新為【${newStageName}】`);
+                logs.push(`階段由 [${oldStageName}] 變更為 [${newStageName}]`);
             }
             
             if (updateData.opportunityValue !== undefined && updateData.opportunityValue !== originalOpportunity.opportunityValue) {
-                logs.push(`機會價值從 [${originalOpportunity.opportunityValue || '未設定'}] 更新為 [${updateData.opportunityValue || '未設定'}]`);
+                logs.push(`機會金額由 [${originalOpportunity.opportunityValue || '未填寫'}] 變更為 [${updateData.opportunityValue || '未填寫'}]`);
             }
 
             const oldAssignee = originalOpportunity.assignee || originalOpportunity.owner;
             if (updateData.assignee !== undefined && updateData.assignee !== oldAssignee) {
-                logs.push(`負責業務從 [${getNote('團隊成員', oldAssignee)}] 變更為 [${getNote('團隊成員', updateData.assignee)}]`);
+                logs.push(`負責人由 [${getNote('指派業務', oldAssignee)}] 變更為 [${getNote('指派業務', updateData.assignee)}]`);
             }
             
             if (updateData.expectedCloseDate !== undefined && updateData.expectedCloseDate !== originalOpportunity.expectedCloseDate) {
-                logs.push(`預計結案日從 [${originalOpportunity.expectedCloseDate || '未設定'}] 更新為 [${updateData.expectedCloseDate || '未設定'}]`);
+                logs.push(`預計結案日由 [${originalOpportunity.expectedCloseDate || '未填寫'}] 變更為 [${updateData.expectedCloseDate || '未填寫'}]`);
             }
 
             const updateResult = await this.opportunitySqlWriter.updateOpportunity(opportunityId, updateData, modifier);
@@ -464,8 +465,8 @@ class OpportunityService {
             if (logs.length > 0) {
                 await this._logOpportunityInteraction(
                     opportunityId,
-                    '機會資料更新',
-                    logs.join('； '),
+                    '璈?鞈??湔',
+                    logs.join('嚗?'),
                     modifier
                 );
             }
@@ -480,63 +481,23 @@ class OpportunityService {
     async addContactToOpportunity(opportunityId, contactData, user) {
         try {
             const modifier = this._resolveModifier(user);
-            let contactToLink;
-            let logTitle = '關聯聯絡人';
-
-            if (contactData.contactId) {
-                contactToLink = { id: contactData.contactId, name: contactData.name };
-            } 
-            else {
-                if (!contactData.company) throw new Error("無法關聯聯絡人：缺少公司名稱。");
-                
-                logTitle = '建立並關聯新聯絡人';
-                const normalizedComp = this._normalizeCompanyName(contactData.company);
-                const allCompanies = await this.companySqlReader.getCompanies();
-                const existingCompany = allCompanies.find(c => this._normalizeCompanyName(c.companyName) === normalizedComp);
-                let targetCompanyId;
-
-                if (existingCompany) {
-                    targetCompanyId = existingCompany.companyId;
-                } else {
-                    targetCompanyId = `COMP_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-                    await this.companyWriter.createCompany({
-                        companyId: targetCompanyId,
-                        companyName: contactData.company,
-                        county: contactData.county || ''
-                    }, modifier);
-                }
-
-                const normalizedContactName = (contactData.name || '').toLowerCase().trim();
-                const allContacts = await this.contactSqlReader.getContacts();
-                const existingContact = allContacts.find(c => 
-                    (c.name || '').toLowerCase().trim() === normalizedContactName && 
-                    c.companyId === targetCompanyId
-                );
-
-                if (existingContact) {
-                    logTitle = '關聯現有聯絡人';
-                    contactToLink = { id: existingContact.contactId, name: existingContact.name };
-                } else {
-                    const targetContactId = `CONT_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-                    await this.contactSqlWriter.createContact({
-                        contactId: targetContactId,
-                        name: contactData.name,
-                        companyId: targetCompanyId,
-                        phone: contactData.phone || contactData.mobile || '',
-                        email: contactData.email || '',
-                        jobTitle: contactData.position || contactData.jobTitle || '',
-                        department: contactData.department || ''
-                    }, modifier);
-                    
-                    contactToLink = { id: targetContactId, name: contactData.name };
-                }
+            if (!contactData.contactId) {
+                throw new Error('無法關聯聯絡人：缺少 contactId。');
             }
+
+            const existingContact = this.contactSqlReader
+                ? await this.contactSqlReader.getContactById(contactData.contactId)
+                : null;
+            const contactToLink = {
+                id: contactData.contactId,
+                name: (existingContact && existingContact.name) || contactData.name || `ID ${contactData.contactId}`
+            };
 
             const linkResult = await this.opportunitySqlWriter.linkContact(opportunityId, contactToLink.id, modifier);
             
             await this._logOpportunityInteraction(
                 opportunityId,
-                logTitle,
+                '關聯聯絡人',
                 `將聯絡人 "${contactToLink.name}" 關聯至此機會。`,
                 modifier
             );
@@ -583,7 +544,7 @@ class OpportunityService {
             const opportunity = await this.opportunitySqlReader.getOpportunityById(opportunityId);
             
             if (!opportunity) {
-                throw new Error(`找不到要刪除的機會 (ID: ${opportunityId})`);
+                throw new Error(`?曆??啗??芷????(ID: ${opportunityId})`);
             }
 
             const deleteResult = await this.opportunitySqlWriter.deleteOpportunity(opportunityId, modifier);
@@ -598,15 +559,15 @@ class OpportunityService {
                     if (company) {
                         await this.interactionService.createInteraction({
                             companyId: company.companyId,
-                            eventType: '系統事件',
+                            eventType: '系統互動紀錄',
                             eventTitle: '刪除機會案件',
-                            contentSummary: `機會案件 "${opportunity.opportunityName}" (ID: ${opportunity.opportunityId}) 已被 ${modifier} 刪除。`,
+                            contentSummary: `機會案件 "${opportunity.opportunityName}" (ID: ${opportunity.opportunityId}) 由 ${modifier} 刪除。`,
                             recorder: modifier,
                             interactionTime: new Date().toISOString()
                         }, user);
                     }
                 } catch (logError) {
-                     console.warn(`[OpportunityService] 寫入公司日誌失敗 (刪除機會時): ${logError.message}`);
+                     console.warn(`[OpportunityService] 公司互動記錄寫入失敗 (刪除機會案件): ${logError.message}`);
                 }
             }
             
@@ -681,7 +642,7 @@ class OpportunityService {
             return Object.entries(countyCounts).map(([county, count]) => ({ county, count }));
 
         } catch (error) {
-            console.error('❌ [OpportunityService] getOpportunitiesByCounty 錯誤:', error);
+            console.error('??[OpportunityService] getOpportunitiesByCounty ?航炊:', error);
             return [];
         }
     }
@@ -694,7 +655,7 @@ class OpportunityService {
             ]);
             
             const safeOpportunities = Array.isArray(opportunities) ? opportunities : [];
-            const stages = systemConfig['機會階段'] || [];
+            const stages = systemConfig['璈??挾'] || [];
             const stageGroups = {};
 
             stages.forEach(stage => {
@@ -712,7 +673,7 @@ class OpportunityService {
             });
             return stageGroups;
         } catch (error) {
-            console.error('❌ [OpportunityService] getOpportunitiesByStage 錯誤:', error);
+            console.error('??[OpportunityService] getOpportunitiesByStage ?航炊:', error);
             return {};
         }
     }
@@ -778,7 +739,7 @@ class OpportunityService {
             return page === 0 ? items : { data: items, total: items.length };
 
         } catch (error) {
-             console.error('❌ [OpportunityService] searchOpportunities 錯誤:', error);
+             console.error('??[OpportunityService] searchOpportunities ?航炊:', error);
              throw error;
         }
     }
