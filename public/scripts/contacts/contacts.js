@@ -2,11 +2,17 @@
 /**
  * ============================================================================
  * File: public/scripts/contacts/contacts.js
- * Version: v8.9.0 (Phase 8.9 CORE Top Info Bar Two-Line Layout Refactor)
- * Date: 2026-04-21
+ * Version: v8.9.6 (CRM RAW Intake Feed Controls Polish)
+ * Date: 2026-05-13
  * Author: Gemini
  *
  * Change Log:
+ * - [UX Polish] Added RAW feed display limit controls and clearer ghost-outline card actions.
+ * - [UX Polish] Restored RAW upgrade action in intake feed and hid legacy RAW list tab entry.
+ * - [UX Polish] Improved RAW intake feed status backgrounds and badge contrast across light/dark themes.
+ * - [UX Polish] Removed redundant RAW overview card preview button and added lightweight intake-state rendering.
+ * - [UX Polish] Tuned RAW overview feed to three-column desktop layout with compact RAW row index labels.
+ * - [UX Polish] Replaced RAW overview body with compact dual-column CRM intake feed.
  * - [UX Polish] Refactored CORE tab top info bar into a clean two-line layout.
  * - [UX Polish] Removed redundant sorting text description from the info bar.
  * - [Feature] Refactored CORE page size selector into pill-style buttons in the top info bar.
@@ -36,6 +42,7 @@ let currentCoreEditContactId = null;
 let contactsOperationMode = false;
 let currentCoreSortOrder = 'desc'; // [Patch] Core sorting state
 let currentCorePageSize = 100; // [Patch] Core dynamic pagination limit
+let rawFeedDisplayLimit = 100;
 
 // ==================== 主要功能函式 ====================
 
@@ -45,6 +52,7 @@ async function loadContacts(query = '') {
 
     // Type Guard: Ensure query is a string (Router may pass a params object)
     const searchQuery = typeof query === 'string' ? query : '';
+    if (currentContactsTab === 'cards') currentContactsTab = 'list';
 
     // Determine active tab state
     const isListActive = currentContactsTab === 'list';
@@ -67,7 +75,6 @@ async function loadContacts(query = '') {
                 </div>
                 <div class="contacts-tabs" style="display: flex; gap: 4px; background: var(--bg-hover, #f1f5f9); padding: 4px; border-radius: 8px;">
                     <button class="tab-btn ${isListActive ? 'active' : ''}" data-action="switch-tab" data-tab="list" style="${listBtnStyle}">名片總覽</button>
-                    <button class="tab-btn ${isCardsActive ? 'active' : ''}" data-action="switch-tab" data-tab="cards" style="${cardsBtnStyle}">聯絡人列表</button>
                     <button class="tab-btn ${isCoreActive ? 'active' : ''}" data-action="switch-tab" data-tab="core" style="${coreBtnStyle}">正式聯絡人</button>
                 </div>
             </div>
@@ -222,12 +229,30 @@ function handleContactListClick(e) {
             );
             break;
 
+        case 'set-raw-feed-limit':
+            rawFeedDisplayLimit = payload.limit === 'all' ? 'all' : parseInt(payload.limit, 10) || 100;
+            filterAndRenderContacts(document.getElementById('contacts-page-search')?.value || '');
+            break;
+
         case 'edit-card':
             try {
                 const contactData = JSON.parse(payload.contact);
                 renderEditCardMode(contactData);
             } catch (err) {
                 console.error('無法解析聯絡人資料進行編輯', err);
+            }
+            break;
+
+        case 'upgrade-card':
+            try {
+                const contactData = JSON.parse(payload.contact);
+                if (typeof NewOppWizard !== 'undefined' && typeof NewOppWizard.startWithContact === 'function') {
+                    NewOppWizard.startWithContact(contactData);
+                } else {
+                    console.error('NewOppWizard.startWithContact is not available');
+                }
+            } catch (err) {
+                console.error('Failed to start RAW contact upgrade flow', err);
             }
             break;
 
@@ -342,6 +367,10 @@ async function filterAndRenderContacts(query = '') {
         }
     }
     
+    const rawVisibleData = currentContactsTab === 'list' && rawFeedDisplayLimit !== 'all'
+        ? filteredData.slice(0, rawFeedDisplayLimit)
+        : filteredData;
+
     if (countDisplay) {
         const label = currentContactsTab === 'core' ? '正式聯絡人' : '潛在客戶';
         const displayCount = currentContactsTab === 'core' ? coreContactsTotal : filteredData.length;
@@ -366,12 +395,28 @@ async function filterAndRenderContacts(query = '') {
                 </div>
             `;
         } else {
-            countDisplay.innerHTML = `共 ${displayCount} 筆${label}`;
+            const limits = [100, 300, 'all'];
+            const limitPills = limits.map(limit => {
+                const isActive = rawFeedDisplayLimit === limit;
+                const labelText = limit === 'all' ? '全部' : `${limit} 張`;
+                const style = isActive
+                    ? 'background: var(--accent-blue, #3b82f6); color: white; border: 1px solid var(--accent-blue, #3b82f6); font-weight: 600;'
+                    : 'background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); font-weight: 500;';
+                return `<button data-action="set-raw-feed-limit" data-limit="${limit}" style="padding: 2px 8px; font-size: 0.85em; border-radius: 4px; cursor: pointer; transition: all 0.2s; margin-left: 4px; ${style}">${labelText}</button>`;
+            }).join('');
+            countDisplay.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 4px; align-items: flex-end;">
+                    <div style="font-size: 0.9em; color: var(--text-secondary); display: flex; align-items: center;">
+                        顯示: ${limitPills}
+                    </div>
+                    <div>顯示 ${rawVisibleData.length} / ${displayCount} 張${label}</div>
+                </div>
+            `;
         }
     }
 
     if (currentContactsTab === 'list') {
-        listContent.innerHTML = renderContactsTable(filteredData);
+        listContent.innerHTML = renderContactsTable(rawVisibleData);
     } else if (currentContactsTab === 'cards') {
         listContent.innerHTML = renderBusinessCardList(filteredData);
     } else if (currentContactsTab === 'core') {
@@ -404,55 +449,327 @@ function renderContactsTable(data) {
         return '<div class="alert alert-info" style="text-align:center; margin-top: 20px;">沒有找到名片資料</div>';
     }
 
+    const safeHtml = (value) => String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    const safeAttr = (value) => safeHtml(value);
+    const getStatusClass = (status, needsReview) => {
+        if (needsReview) return 'review';
+        if (status === '已升級') return 'upgraded';
+        if (status === '已歸檔') return 'archived';
+        if (status === '已建檔') return 'filed';
+        return 'pending';
+    };
+
     let listHTML = `
         <style>
-            .contact-card-name-full {
-                font-weight: 600;
-                font-size: 1.1rem;
-                color: var(--text-main);
-                white-space: normal;
-                word-break: break-all;
+            .crm-raw-feed-grid {
+                display: grid;
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+                gap: 12px;
+            }
+            .crm-raw-feed-card {
+                display: grid;
+                grid-template-columns: 116px minmax(0, 1fr);
+                gap: 12px;
+                align-items: stretch;
+                padding: 10px;
+                border: 1px solid var(--border-color);
+                border-radius: 8px;
+                background: var(--card-bg, #fff);
+                transition: background-color 0.16s ease, border-color 0.16s ease;
+            }
+            .crm-raw-feed-card:hover {
+                background: var(--bg-hover, #f8fafc);
+                border-color: rgba(59, 130, 246, 0.28);
+            }
+            .crm-raw-feed-card.crm-raw-state-review {
+                background: #3f1f24;
+                border-color: #7f2d38;
+            }
+            .crm-raw-feed-card.crm-raw-state-upgraded {
+                background: #172a46;
+                border-color: #2563a8;
+            }
+            .crm-raw-feed-card.crm-raw-state-pending {
+                background: #1f2937;
+                border-color: #475569;
+            }
+            .crm-raw-feed-card.crm-raw-state-filed {
+                background: #163225;
+                border-color: #287447;
+            }
+            .crm-raw-feed-card.crm-raw-state-archived {
+                background: #2e2645;
+                border-color: #6d5ca8;
+            }
+            [data-theme="light"] .crm-raw-feed-card.crm-raw-state-review {
+                background: #fff1f2;
+                border-color: #fca5a5;
+            }
+            [data-theme="light"] .crm-raw-feed-card.crm-raw-state-upgraded {
+                background: #eff6ff;
+                border-color: #93c5fd;
+            }
+            [data-theme="light"] .crm-raw-feed-card.crm-raw-state-pending {
+                background: #f8fafc;
+                border-color: #cbd5e1;
+            }
+            [data-theme="light"] .crm-raw-feed-card.crm-raw-state-filed {
+                background: #ecfdf5;
+                border-color: #86efac;
+            }
+            [data-theme="light"] .crm-raw-feed-card.crm-raw-state-archived {
+                background: #f5f3ff;
+                border-color: #c4b5fd;
+            }
+            .crm-raw-feed-thumb {
+                width: 116px;
+                height: 76px;
+                border: 1px solid var(--border-color);
+                border-radius: 6px;
+                overflow: hidden;
+                background: var(--glass-bg, #f8fafc);
+                color: var(--text-muted);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0;
+                cursor: default;
+            }
+            .crm-raw-feed-thumb img {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
                 display: block;
-                line-height: 1.4;
+            }
+            .crm-raw-feed-thumb-placeholder {
+                cursor: default;
+                font-size: 0.82rem;
+                font-weight: 600;
+            }
+            .crm-raw-feed-body {
+                min-width: 0;
+                display: flex;
+                flex-direction: column;
+                gap: 5px;
+            }
+            .crm-raw-feed-topline {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 8px;
+            }
+            .crm-raw-feed-labels {
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                gap: 6px;
+            }
+            .crm-raw-feed-index {
+                color: var(--text-muted);
+                font-size: 0.72rem;
+                font-weight: 600;
+                white-space: nowrap;
+            }
+            .crm-raw-feed-title {
+                font-weight: 600;
+                color: var(--text-main);
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .crm-raw-feed-company {
+                color: var(--text-secondary);
+                font-size: 0.9rem;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .crm-raw-feed-meta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px 12px;
+                color: var(--text-muted);
+                font-size: 0.82rem;
+                line-height: 1.35;
+            }
+            .crm-raw-feed-actions {
+                display: flex;
+                justify-content: flex-end;
+                gap: 6px;
+                margin-top: auto;
+                white-space: nowrap;
+            }
+            .crm-raw-feed-action {
+                min-height: 28px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                gap: 4px;
+                padding: 0 8px;
+                border: 1px solid var(--border-color);
+                border-radius: 6px;
+                background: rgba(255,255,255,0.03);
+                color: var(--text-secondary);
+                font-size: 0.78rem;
+                font-weight: 600;
+                line-height: 1;
+                cursor: pointer;
+                transition: color 0.16s ease, background-color 0.16s ease, border-color 0.16s ease;
+            }
+            .crm-raw-feed-action:hover {
+                color: var(--text-primary);
+                background: var(--glass-bg, rgba(255,255,255,0.08));
+                border-color: var(--border-color);
+            }
+            .crm-raw-feed-action.upgrade:hover {
+                color: var(--accent-blue);
+                border-color: var(--accent-blue);
+            }
+            .crm-raw-feed-action.delete:hover {
+                color: var(--accent-red);
+                border-color: rgba(248, 113, 113, 0.45);
+            }
+            .crm-raw-status-badge {
+                flex-shrink: 0;
+                padding: 2px 7px;
+                border-radius: 999px;
+                font-size: 0.74rem;
+                font-weight: 600;
+                border: 1px solid var(--border-color);
+                color: var(--text-secondary);
+                background: var(--glass-bg, #f8fafc);
+            }
+            .crm-raw-status-badge.upgraded {
+                color: #bfdbfe;
+                border-color: #2563a8;
+                background: #1e3a5f;
+            }
+            .crm-raw-status-badge.archived {
+                color: #ddd6fe;
+                border-color: #6d5ca8;
+                background: #3b2f5f;
+            }
+            .crm-raw-status-badge.filed {
+                color: #bbf7d0;
+                border-color: #287447;
+                background: #17452c;
+            }
+            .crm-raw-status-badge.pending {
+                color: #cbd5e1;
+                border-color: #475569;
+                background: #263244;
+            }
+            .crm-raw-status-badge.review {
+                color: #fecaca;
+                border-color: #7f2d38;
+                background: #5f242e;
+            }
+            [data-theme="light"] .crm-raw-status-badge.upgraded {
+                color: #1d4ed8;
+                border-color: #93c5fd;
+                background: #dbeafe;
+            }
+            [data-theme="light"] .crm-raw-status-badge.archived {
+                color: #6d28d9;
+                border-color: #c4b5fd;
+                background: #ede9fe;
+            }
+            [data-theme="light"] .crm-raw-status-badge.filed {
+                color: #047857;
+                border-color: #86efac;
+                background: #dcfce7;
+            }
+            [data-theme="light"] .crm-raw-status-badge.pending {
+                color: #475569;
+                border-color: #cbd5e1;
+                background: #f1f5f9;
+            }
+            [data-theme="light"] .crm-raw-status-badge.review {
+                color: #b91c1c;
+                border-color: #fca5a5;
+                background: #ffe4e6;
+            }
+            @media (max-width: 1280px) {
+                .crm-raw-feed-grid {
+                    grid-template-columns: repeat(2, minmax(0, 1fr));
+                }
+            }
+            @media (max-width: 860px) {
+                .crm-raw-feed-grid {
+                    grid-template-columns: 1fr;
+                }
+            }
+            @media (max-width: 560px) {
+                .crm-raw-feed-card {
+                    grid-template-columns: 92px minmax(0, 1fr);
+                }
+                .crm-raw-feed-thumb {
+                    width: 92px;
+                    height: 64px;
+                }
             }
         </style>
-        <div class="contact-card-list">
+        <div class="crm-raw-feed-grid">
     `;
 
     data.forEach(contact => {
-        const isUpgraded = contact.status === '已升級';
-        const isArchived = contact.status === '已歸檔';
-        const isFiled = contact.status === '已建檔';
+        const needsReview = !String(contact.name || '').trim() || !String(contact.company || '').trim();
+        const knownStatuses = ['待處理', '已建檔', '已升級', '已歸檔'];
+        const sourceStatus = knownStatuses.includes(contact.status) ? contact.status : '待處理';
+        const statusText = needsReview ? '待確認' : sourceStatus;
+        const statusClass = getStatusClass(sourceStatus, needsReview);
+        const stateClass = needsReview
+            ? 'crm-raw-state-review'
+            : sourceStatus === '已升級'
+                ? 'crm-raw-state-upgraded'
+                : sourceStatus === '已建檔'
+                    ? 'crm-raw-state-filed'
+                    : sourceStatus === '已歸檔'
+                        ? 'crm-raw-state-archived'
+                        : 'crm-raw-state-pending';
+        const contactJsonString = JSON.stringify(contact).replace(/'/g, "&apos;").replace(/"/g, '&quot;');
+        const thumbUrl = contact.driveLink ? `/api/drive/thumbnail?link=${encodeURIComponent(contact.driveLink)}` : '';
+        const phone = contact.mobile || contact.phone || '';
+        const rowIndexLabel = contact.rowIndex ? `<span class="crm-raw-feed-index">RAW #${safeHtml(contact.rowIndex)}</span>` : '';
+        const upgradeLabel = sourceStatus === '已升級' ? '再次建立機會' : '升級';
 
-        const safeDriveLink = contact.driveLink ? contact.driveLink.replace(/'/g, "\\'") : '';
+        const thumbHtml = contact.driveLink
+            ? `<div class="crm-raw-feed-thumb"><img src="${safeAttr(thumbUrl)}" alt="名片預覽" loading="lazy" onerror="this.style.display='none'; this.parentElement.innerHTML='<span>名片</span>';"></div>`
+            : `<div class="crm-raw-feed-thumb crm-raw-feed-thumb-placeholder">無名片</div>`;
 
-        const driveLinkBtn = contact.driveLink
-            ? `<button class="action-btn small info" title="預覽名片" data-action="view-card" data-link="${safeDriveLink}">💳 名片</button>`
-            : '';
-
-        let statusBadge = '';
-        if (isUpgraded) {
-            statusBadge = `<span class="contact-card-status upgraded">已升級</span>`;
-        } else if (isArchived) {
-            statusBadge = `<span class="contact-card-status archived">已歸檔</span>`;
-        } else if (isFiled) {
-            statusBadge = `<span class="contact-card-status filed">已建檔</span>`;
-        } else { 
-            statusBadge = `<span class="contact-card-status pending">待處理</span>`;
+        let deleteBtn = '';
+        if (contactsOperationMode) {
+            deleteBtn = `<button class="crm-raw-feed-action delete" data-action="delete-raw" data-index="${safeAttr(contact.rowIndex)}" data-name="${safeAttr(contact.name || '')}" title="刪除" aria-label="刪除"><span>⌫</span><span>刪除</span></button>`;
         }
 
         listHTML += `
-            <div class="contact-card">
-                <div class="contact-card-main">
-                    <div class="contact-card-header" style="align-items: flex-start; margin-bottom: 8px;">
-                        <span class="contact-card-name-full">${contact.name || '(無姓名)'}</span>
-                        <div style="margin-left: 10px; flex-shrink: 0;">${statusBadge}</div>
+            <div class="crm-raw-feed-card ${stateClass}">
+                ${thumbHtml}
+                <div class="crm-raw-feed-body">
+                    <div class="crm-raw-feed-topline">
+                        <div class="crm-raw-feed-title">${safeHtml(contact.name || '未命名名片')}</div>
+                        <div class="crm-raw-feed-labels">
+                            ${rowIndexLabel}
+                            <span class="crm-raw-status-badge ${statusClass}">${safeHtml(statusText)}</span>
+                        </div>
                     </div>
-                    <div class="contact-card-company">${contact.company || '(無公司)'}</div>
-                    <div class="contact-card-position">${contact.position || '(無職位)'}</div>
-                </div>
-                <div class="contact-card-actions">
-                    ${driveLinkBtn}
+                    <div class="crm-raw-feed-company">${safeHtml(contact.company || '未填公司')}</div>
+                    <div class="crm-raw-feed-meta">
+                        ${contact.position ? `<span>${safeHtml(contact.position)}</span>` : ''}
+                        ${phone ? `<span>${safeHtml(phone)}</span>` : ''}
+                        ${contact.email ? `<span>${safeHtml(contact.email)}</span>` : ''}
+                    </div>
+                    <div class="crm-raw-feed-actions">
+                        <button class="crm-raw-feed-action edit" data-action="edit-card" data-contact='${contactJsonString}' title="編輯" aria-label="編輯"><span>✎</span><span>編輯</span></button>
+                        <button class="crm-raw-feed-action upgrade" data-action="upgrade-card" data-contact='${contactJsonString}' title="${upgradeLabel}" aria-label="${upgradeLabel}"><span>↗</span><span>${upgradeLabel}</span></button>
+                        ${deleteBtn}
+                    </div>
                 </div>
             </div>
         `;
