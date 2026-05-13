@@ -1,9 +1,10 @@
 /**
  * services/contact-service.js
  * 聯絡人業務邏輯服務層
- * @version 8.16.0
- * @date 2026-04-19
+ * @version 8.16.1
+ * @date 2026-05-13
  * @changelog
+ * - [PATCH] Restored linked contact driveLink runtime enrichment from RAW sourceId rowIndex without storing driveLink in SQL.
  * - [PHASE 8.16] FEATURE: Integrated dynamic limit handling for CORE pagination to support user-selected page sizes.
  * - [PHASE 8.15] FEATURE: Added dynamic global sorting (ASC/DESC) to CORE contacts search, exposed via `searchOfficialContacts`.
  * - [PHASE 8.14] BUGFIX: Moved CORE contact sorting (updatedTime/createdTime DESC) to happen globally BEFORE pagination slice in `searchOfficialContacts`, ensuring correct cross-page ordering.
@@ -329,9 +330,25 @@ class ContactService {
                 
             const companyNameMap = new Map(allCompanies.map(c => [c.companyId, c.companyName]));
 
+            const rawBySourceId = new Map();
+            const rawSourceIds = [...new Set(linkedContacts
+                .map(contact => contact.sourceId)
+                .filter(sourceId => sourceId && sourceId !== 'MANUAL' && /^\d+$/.test(String(sourceId)))
+            )];
+
+            await Promise.all(rawSourceIds.map(async sourceId => {
+                try {
+                    const rawContact = await this.getPotentialContactByRow(sourceId);
+                    if (rawContact) rawBySourceId.set(String(sourceId), rawContact);
+                } catch (error) {
+                    console.warn(`[ContactService] RAW driveLink enrichment skipped for sourceId ${sourceId}: ${error.message}`);
+                }
+            }));
+
             // 3. Format and return
             return linkedContacts.map(contact => {
                 const companyName = companyNameMap.get(contact.companyId) || companyNameMap.get(contact.companyId) || '';
+                const rawContact = rawBySourceId.get(String(contact.sourceId));
 
                 return {
                     contactId: contact.contactId,
@@ -344,7 +361,7 @@ class ContactService {
                     phone: contact.phone,
                     email: contact.email,
                     companyName,
-                    driveLink: '' // [Forensics] RAW Sheet fetch removed completely
+                    driveLink: rawContact ? rawContact.driveLink || '' : ''
                 };
             });
 

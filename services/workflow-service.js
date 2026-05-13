@@ -4,10 +4,11 @@ const { supabase } = require('../config/supabase');
 /**
  * services/workflow-service.js
  * 撌乩?瘚???
- * * @version 5.0.9 (Workflow Ownership Migration Phase 1)
+ * * @version 5.0.10 (Workflow Ownership Migration Phase 1)
  * @date 2026-05-13
  * @description 鞎痊??頝冽芋蝯?銴?璆剖?瘚?嚗?憒???閮?蝯∩犖??????
  * 靘陷瘜典嚗pportunityService, InteractionService, ContactService
+ * @changelog 2026-05-13: Hydrate SQL contact fields from RAW card during business-card archive/retro-link before marking RAW archived.
  * @changelog 2026-05-13: Complete manual opportunity and quick-add SQL contact lifecycle with MANUAL sourceId and relationship linking.
  * @changelog 2026-05-13: Complete verified RAW business-card field mapping for opportunity upgrade CORE contact creation.
  * @changelog 2026-05-13: Normalize RAW business-card upgrade contact name from verified mainContact payload field before CORE contact creation.
@@ -163,10 +164,30 @@ class WorkflowService {
             throw new Error(`Cannot link RAW business card: contact ${contactId} not found.`);
         }
 
-        if (!contact.sourceId || contact.sourceId === 'MANUAL') {
-            await this._updateContactSourceId(contactId, rowIndex, user);
+        const rawContact = await this.contactService.getPotentialContactByRow(rowIndex);
+        if (!rawContact) {
+            throw new Error(`Cannot link RAW business card: row ${rowIndex} not found.`);
         }
 
+        const updateData = {};
+        const setIfPresent = (target, value) => {
+            if (String(value || '').trim()) updateData[target] = value;
+        };
+
+        setIfPresent('name', rawContact.name);
+        setIfPresent('company', rawContact.company);
+        setIfPresent('department', rawContact.department);
+        setIfPresent('jobTitle', rawContact.position);
+        setIfPresent('position', rawContact.position);
+        setIfPresent('mobile', rawContact.mobile);
+        setIfPresent('phone', rawContact.phone);
+        setIfPresent('email', rawContact.email);
+
+        if (Object.keys(updateData).length > 0) {
+            await this.contactService.updateContact(contactId, updateData, this._resolveModifier(user));
+        }
+
+        await this._updateContactSourceId(contactId, rowIndex, user);
         await this._updateRawStatus(rowIndex, '已歸檔');
 
         return {

@@ -2,11 +2,18 @@
 /**
  * ============================================================================
  * File: public/scripts/opportunities/details/opportunity-associated-contacts.js
- * Version: v8.0.15 (Opportunity Detail Linked Contact Enrichment)
- * Date: 2026-05-12
+ * Version: v8.0.22 (Business Card Archive Candidate Density)
+ * Date: 2026-05-13
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-13: Refined business card archive candidates into compact operational reconciliation rows.
+ * - 2026-05-13: Added lightweight in-modal confirmation preview before executing business card archive hydration.
+ * - 2026-05-13: Removed temporary RAW card search diagnostic count logs after archive dropdown verification.
+ * - 2026-05-13: Business card archive modal visibility hotfix: override hidden search-result-list display for rendered RAW card candidates.
+ * - 2026-05-13: Business card archive modal trace hotfix: log authenticated RAW response shape and candidate counts, and support contacts envelope.
+ * - 2026-05-13: Business card archive modal binding hotfix: bind input events and guard RAW candidate rendering.
+ * - 2026-05-13: Business card archive modal search hotfix: tolerate RAW response/status aliases and keep only selectable rowIndex-backed cards.
  * - 2026-05-12: Opportunity Detail linked contact enrichment: use global RAW business-card pool for linked-contact driveLink enrichment and unify contact typography.
  * - 2026-05-12: Opportunity Detail contact refinement: normalize clickable contact name weight and allow archived RAW business cards to enrich linked contacts without displaying archived rows as candidates.
  * - 2026-05-12: Opportunity Detail contact UI polish: normalize potential-contact name-link typography and box linked-contact management actions consistently.
@@ -155,6 +162,30 @@ const OpportunityContacts = (() => {
 
     // 【新增】處理最終的名片連結 API 呼叫
     async function _handleLinkBusinessCard(contactId, businessCard) {
+        if (businessCard && businessCard.__confirmed) {
+            showLoading('甇?甇豢??????...');
+            try {
+                const result = await authedFetch(`/api/contacts/${contactId}/link-card`, {
+                    method: 'POST',
+                    body: JSON.stringify({ businessCardRowIndex: businessCard.rowIndex })
+                });
+
+                if (result.success) {
+                    closeModal('link-business-card-modal');
+                    _isManageMode = false;
+                    if (typeof window.loadOpportunityDetailPage === 'function') {
+                        await window.loadOpportunityDetailPage(_opportunityInfo.opportunityId);
+                    }
+                } else {
+                    throw new Error(result.error || '甇豢?憭望?');
+                }
+            } catch (error) {
+                if (error.message !== 'Unauthorized') showNotification(`甇豢?憭望?: ${error.message}`, 'error');
+            } finally {
+                hideLoading();
+            }
+            return;
+        }
         const confirmMsg = `您確定要將 ${businessCard.name} (${businessCard.company}) 的名片資料，歸檔至這位聯絡人嗎？\n\n現有聯絡人的資料將會被名片上的資訊補充或覆蓋。`;
         showConfirmDialog(confirmMsg, async () => {
             showLoading('正在歸檔與連結名片...');
@@ -374,7 +405,7 @@ const OpportunityContacts = (() => {
                         <label class="form-label">搜尋待處理的名片</label>
                         <input type="text" class="form-input" id="search-business-card-input" placeholder="輸入姓名或公司進行搜尋...">
                     </div>
-                    <div id="business-card-results" class="search-result-list" style="max-height: 350px; overflow-y: auto;">
+                    <div id="business-card-results" class="search-result-list" style="display: block; max-height: 350px; overflow-y: auto;">
                         <div class="loading show"><div class="spinner"></div></div>
                     </div>
                 </div>
@@ -384,6 +415,36 @@ const OpportunityContacts = (() => {
 
         const searchInput = document.getElementById('search-business-card-input');
         const resultsContainer = document.getElementById('business-card-results');
+        const currentContact = (_linkedContacts || []).find(contact => String(contact.contactId) === String(contactId)) || {};
+        const displayValue = (value) => String(value || '').trim() || '空白';
+        const renderArchivePreviewCard = (title, item) => `
+            <div style="flex: 1; min-width: 220px; border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; background: var(--primary-bg);">
+                <div style="font-weight: 600; margin-bottom: 8px;">${title}</div>
+                <div style="font-weight: 600; color: var(--text-primary);">${displayValue(item.name)}</div>
+                <div style="color: var(--text-secondary); margin-bottom: 6px;">${displayValue(item.companyName || item.company)}</div>
+                <div style="font-size: 0.9em; color: var(--text-secondary);">電話：${displayValue(item.mobile || item.phone)}</div>
+                <div style="font-size: 0.9em; color: var(--text-secondary);">Email：${displayValue(item.email)}</div>
+                <div style="font-size: 0.9em; color: var(--text-secondary);">職稱：${displayValue(item.position || item.jobTitle)}</div>
+            </div>
+        `;
+        const showArchivePreview = (card) => {
+            resultsContainer.innerHTML = `
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <div style="font-weight: 700; font-size: 1.05rem;">確認名片歸檔</div>
+                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                        ${renderArchivePreviewCard('正式聯絡人', currentContact)}
+                        ${renderArchivePreviewCard('名片資料', card)}
+                    </div>
+                    <div class="alert alert-warning" style="margin: 0;">此操作將補充或覆蓋聯絡人資料。</div>
+                    <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                        <button type="button" class="action-btn secondary" id="archive-preview-cancel-btn">取消</button>
+                        <button type="button" class="action-btn primary" id="archive-preview-confirm-btn">確認歸檔</button>
+                    </div>
+                </div>
+            `;
+            document.getElementById('archive-preview-cancel-btn').onclick = () => performSearch(searchInput.value || '');
+            document.getElementById('archive-preview-confirm-btn').onclick = () => _handleLinkBusinessCard(contactId, { ...card, __confirmed: true });
+        };
         
         const performSearch = async (query) => {
             resultsContainer.innerHTML = '<div class="loading show"><div class="spinner"></div></div>';
@@ -393,15 +454,26 @@ const OpportunityContacts = (() => {
                 // This is INTENTIONAL here, as we are looking for a RAW Card (image source)
                 // to link to an existing CORE Contact.
                 const result = await authedFetch(`/api/contacts?q=${encodeURIComponent(query)}`);
-                const pendingCards = (result.data || []).filter(c => c.status !== '已升級' && c.status !== '已歸檔');
+                const rawCardsSource = Array.isArray(result) ? result : (result.data || result.contacts);
+                if (!Array.isArray(rawCardsSource)) {
+                    console.warn('[OpportunityContacts] Unexpected RAW card search response:', result);
+                }
+                const rawCards = Array.isArray(rawCardsSource) ? rawCardsSource : [];
+                const pendingCards = rawCards.filter(c => {
+                    const status = String(c.status || c.statusText || '').trim();
+                    return c.rowIndex && !['已升級', '已歸檔', 'Dropped', '已作廢'].includes(status);
+                });
 
                 if (pendingCards.length > 0) {
                     resultsContainer.innerHTML = pendingCards.map(card => {
                         const cardJson = JSON.stringify(card).replace(/'/g, "&apos;");
                         return `
-                            <div class="kanban-card" style="cursor: pointer;" onclick='OpportunityContacts._handleLinkBusinessCard("${contactId}", ${cardJson})'>
-                                <div class="card-title">${card.name}</div>
-                                <div class="card-company">${card.company} - ${card.position || '職位未知'}</div>
+                            <div style="cursor: pointer; padding: 9px 12px; border-bottom: 1px solid var(--border-color); background: var(--primary-bg);" onmouseover="this.style.background='color-mix(in srgb, var(--accent-blue) 8%, var(--primary-bg))'" onmouseout="this.style.background='var(--primary-bg)'" onclick='OpportunityContacts.showArchivePreview(${cardJson})'>
+                                <div style="display: flex; justify-content: space-between; gap: 12px; align-items: baseline;">
+                                    <span style="font-weight: 600; color: var(--text-primary);">${card.name || '-'}</span>
+                                    <span style="font-size: 0.82rem; color: var(--text-muted); white-space: nowrap;">${card.position || card.jobTitle || ''}</span>
+                                </div>
+                                <div style="font-size: 0.86rem; color: var(--text-secondary); margin-top: 2px;">${card.company || '公司未知'}</div>
                             </div>`;
                     }).join('');
                 } else {
@@ -412,7 +484,16 @@ const OpportunityContacts = (() => {
             }
         };
 
-        searchInput.addEventListener('keyup', (e) => handleSearch(() => performSearch(e.target.value)));
+        const queueSearch = (value) => {
+            if (typeof handleSearch === 'function') {
+                handleSearch(() => performSearch(value));
+            } else {
+                performSearch(value);
+            }
+        };
+        searchInput.addEventListener('input', (e) => queueSearch(e.target.value));
+        searchInput.addEventListener('keyup', (e) => queueSearch(e.target.value));
+        OpportunityContacts.showArchivePreview = showArchivePreview;
         performSearch(''); // 初始載入所有待處理名片
     }
 
