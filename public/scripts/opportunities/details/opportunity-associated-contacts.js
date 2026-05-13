@@ -2,11 +2,12 @@
 /**
  * ============================================================================
  * File: public/scripts/opportunities/details/opportunity-associated-contacts.js
- * Version: v8.0.23 (Business Card Archive Product Polish)
+ * Version: v8.0.24 (Business Card Archive Workspace)
  * Date: 2026-05-13
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-13: Reworked business card archive modal into localized two-step operational workspace with scoped classes.
  * - 2026-05-13: Polished business card archive candidate list and confirmation preview for compact CRM reconciliation.
  * - 2026-05-13: Refined business card archive candidates into compact operational reconciliation rows.
  * - 2026-05-13: Added lightweight in-modal confirmation preview before executing business card archive hydration.
@@ -120,6 +121,136 @@ const OpportunityContacts = (() => {
                 color: var(--accent-red);
                 outline-color: color-mix(in srgb, var(--accent-red) 40%, var(--border-color));
                 background: color-mix(in srgb, var(--accent-red) 8%, var(--secondary-bg));
+            }
+
+            #link-business-card-modal .archive-step-search,
+            #link-business-card-modal .archive-step-preview {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            #link-business-card-modal .archive-candidate-list {
+                display: block;
+                max-height: 350px;
+                overflow-y: auto;
+                border: 1px solid var(--border-color);
+                border-radius: 6px;
+                background: var(--primary-bg);
+            }
+
+            #link-business-card-modal .archive-candidate-row {
+                cursor: pointer;
+                padding: 8px 11px;
+                border-bottom: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+                background: var(--primary-bg);
+            }
+
+            #link-business-card-modal .archive-candidate-row:last-child {
+                border-bottom: none;
+            }
+
+            #link-business-card-modal .archive-candidate-row:hover {
+                background: color-mix(in srgb, var(--accent-blue) 7%, var(--primary-bg));
+            }
+
+            #link-business-card-modal .archive-candidate-main {
+                display: flex;
+                justify-content: space-between;
+                gap: 12px;
+                align-items: center;
+            }
+
+            #link-business-card-modal .archive-candidate-name {
+                font-weight: 650;
+                color: var(--text-primary);
+                font-size: 0.94rem;
+                line-height: 1.25;
+            }
+
+            #link-business-card-modal .archive-candidate-position {
+                font-size: 0.78rem;
+                color: var(--text-muted);
+                white-space: nowrap;
+            }
+
+            #link-business-card-modal .archive-candidate-company {
+                font-size: 0.84rem;
+                color: var(--text-secondary);
+                margin-top: 1px;
+                line-height: 1.25;
+            }
+
+            #link-business-card-modal .archive-preview-panel {
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            #link-business-card-modal .archive-preview-title {
+                font-weight: 700;
+                font-size: 1.05rem;
+                color: var(--text-primary);
+            }
+
+            #link-business-card-modal .archive-preview-helper {
+                font-size: 0.9rem;
+                color: var(--text-secondary);
+                margin-top: 3px;
+            }
+
+            #link-business-card-modal .archive-preview-grid {
+                display: flex;
+                gap: 12px;
+                flex-wrap: wrap;
+            }
+
+            #link-business-card-modal .archive-preview-card {
+                flex: 1;
+                min-width: 240px;
+                border: 1px solid var(--border-color);
+                border-radius: 6px;
+                padding: 12px 14px;
+                background: var(--primary-bg);
+            }
+
+            #link-business-card-modal .archive-preview-card-title {
+                font-weight: 700;
+                margin-bottom: 8px;
+                color: var(--text-primary);
+            }
+
+            #link-business-card-modal .archive-preview-row {
+                display: grid;
+                grid-template-columns: 56px 1fr;
+                gap: 10px;
+                padding: 5px 0;
+                border-bottom: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+            }
+
+            #link-business-card-modal .archive-preview-label {
+                font-size: 0.82rem;
+                color: var(--text-muted);
+            }
+
+            #link-business-card-modal .archive-preview-value {
+                font-size: 0.9rem;
+                color: var(--text-primary);
+            }
+
+            #link-business-card-modal .archive-preview-note {
+                border: 1px solid color-mix(in srgb, var(--warning-color, #f59e0b) 35%, var(--border-color));
+                background: color-mix(in srgb, var(--warning-color, #f59e0b) 9%, transparent);
+                color: var(--text-secondary);
+                border-radius: 6px;
+                padding: 9px 11px;
+                font-size: 0.9rem;
+            }
+
+            #link-business-card-modal .archive-preview-actions {
+                display: flex;
+                justify-content: flex-end;
+                gap: 8px;
             }
         `;
         document.head.appendChild(style);
@@ -402,12 +533,16 @@ const OpportunityContacts = (() => {
                         <h2 class="modal-title">🔗 連結名片歸檔</h2>
                         <button class="close-btn" onclick="closeModal('link-business-card-modal')">&times;</button>
                     </div>
-                    <div class="form-group">
-                        <label class="form-label">搜尋待處理的名片</label>
-                        <input type="text" class="form-input" id="search-business-card-input" placeholder="輸入姓名或公司進行搜尋...">
+                    <div id="archive-step-search" class="archive-step-search">
+                        <div class="form-group">
+                            <label class="form-label">搜尋待處理的名片</label>
+                            <input type="text" class="form-input" id="search-business-card-input" placeholder="輸入姓名或公司進行搜尋...">
+                        </div>
+                        <div id="archive-candidate-list" class="archive-candidate-list">
+                            <div class="loading show"><div class="spinner"></div></div>
+                        </div>
                     </div>
-                    <div id="business-card-results" class="search-result-list" style="display: block; max-height: 350px; overflow-y: auto;">
-                        <div class="loading show"><div class="spinner"></div></div>
+                    <div id="archive-step-preview" class="archive-step-preview" style="display: none;">
                     </div>
                 </div>
             </div>
@@ -415,18 +550,20 @@ const OpportunityContacts = (() => {
         document.getElementById('modal-container').insertAdjacentHTML('beforeend', modalHTML);
 
         const searchInput = document.getElementById('search-business-card-input');
-        const resultsContainer = document.getElementById('business-card-results');
+        const searchStep = document.getElementById('archive-step-search');
+        const previewStep = document.getElementById('archive-step-preview');
+        const resultsContainer = document.getElementById('archive-candidate-list');
         const currentContact = (_linkedContacts || []).find(contact => String(contact.contactId) === String(contactId)) || {};
         const displayValue = (value) => String(value || '').trim() || '—';
         const renderFieldRow = (label, value) => `
-            <div style="display: grid; grid-template-columns: 56px 1fr; gap: 10px; padding: 5px 0; border-bottom: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);">
-                <span style="font-size: 0.82rem; color: var(--text-muted);">${label}</span>
-                <span style="font-size: 0.9rem; color: var(--text-primary);">${displayValue(value)}</span>
+            <div class="archive-preview-row">
+                <span class="archive-preview-label">${label}</span>
+                <span class="archive-preview-value">${displayValue(value)}</span>
             </div>
         `;
         const renderArchivePreviewCard = (title, item) => `
-            <div style="flex: 1; min-width: 240px; border: 1px solid var(--border-color); border-radius: 6px; padding: 12px 14px; background: var(--primary-bg);">
-                <div style="font-weight: 700; margin-bottom: 8px; color: var(--text-primary);">${title}</div>
+            <div class="archive-preview-card">
+                <div class="archive-preview-card-title">${title}</div>
                 ${renderFieldRow('姓名', item.name)}
                 ${renderFieldRow('公司', item.companyName || item.company)}
                 ${renderFieldRow('電話', item.mobile || item.phone)}
@@ -435,24 +572,29 @@ const OpportunityContacts = (() => {
             </div>
         `;
         const showArchivePreview = (card) => {
-            resultsContainer.innerHTML = `
-                <div style="display: flex; flex-direction: column; gap: 12px; padding: 2px;">
+            searchStep.style.display = 'none';
+            previewStep.style.display = 'flex';
+            previewStep.innerHTML = `
+                <div class="archive-preview-panel">
                     <div>
-                        <div style="font-weight: 700; font-size: 1.05rem; color: var(--text-primary);">確認名片歸檔</div>
-                        <div style="font-size: 0.9rem; color: var(--text-secondary); margin-top: 3px;">將選取的名片資料補充或覆蓋至目前正式聯絡人。</div>
+                        <div class="archive-preview-title">確認名片歸檔</div>
+                        <div class="archive-preview-helper">將選取的名片資料補充或覆蓋至目前正式聯絡人。</div>
                     </div>
-                    <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                    <div class="archive-preview-grid">
                         ${renderArchivePreviewCard('目前正式聯絡人', currentContact)}
                         ${renderArchivePreviewCard('選取的名片資料', card)}
                     </div>
-                    <div style="border: 1px solid color-mix(in srgb, var(--warning-color, #f59e0b) 35%, var(--border-color)); background: color-mix(in srgb, var(--warning-color, #f59e0b) 9%, transparent); color: var(--text-secondary); border-radius: 6px; padding: 9px 11px; font-size: 0.9rem;">確認後會更新正式聯絡人資料，並將此名片標記為已歸檔。</div>
-                    <div style="display: flex; justify-content: flex-end; gap: 8px;">
+                    <div class="archive-preview-note">確認後會更新正式聯絡人資料，並將此名片標記為已歸檔。</div>
+                    <div class="archive-preview-actions">
                         <button type="button" class="action-btn secondary" id="archive-preview-cancel-btn">取消</button>
                         <button type="button" class="action-btn primary" id="archive-preview-confirm-btn">確認歸檔</button>
                     </div>
                 </div>
             `;
-            document.getElementById('archive-preview-cancel-btn').onclick = () => performSearch(searchInput.value || '');
+            document.getElementById('archive-preview-cancel-btn').onclick = () => {
+                previewStep.style.display = 'none';
+                searchStep.style.display = 'flex';
+            };
             document.getElementById('archive-preview-confirm-btn').onclick = () => _handleLinkBusinessCard(contactId, { ...card, __confirmed: true });
         };
         
@@ -478,12 +620,12 @@ const OpportunityContacts = (() => {
                     resultsContainer.innerHTML = pendingCards.map(card => {
                         const cardJson = JSON.stringify(card).replace(/'/g, "&apos;");
                         return `
-                            <div style="cursor: pointer; padding: 8px 11px; border-bottom: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent); background: var(--primary-bg);" onmouseover="this.style.background='color-mix(in srgb, var(--accent-blue) 7%, var(--primary-bg))'" onmouseout="this.style.background='var(--primary-bg)'" onclick='OpportunityContacts.showArchivePreview(${cardJson})'>
-                                <div style="display: flex; justify-content: space-between; gap: 12px; align-items: center;">
-                                    <span style="font-weight: 650; color: var(--text-primary); font-size: 0.94rem; line-height: 1.25;">${card.name || '-'}</span>
-                                    <span style="font-size: 0.78rem; color: var(--text-muted); white-space: nowrap;">${card.position || card.jobTitle || ''}</span>
+                            <div class="archive-candidate-row" onclick='OpportunityContacts.showArchivePreview(${cardJson})'>
+                                <div class="archive-candidate-main">
+                                    <span class="archive-candidate-name">${card.name || '-'}</span>
+                                    <span class="archive-candidate-position">${card.position || card.jobTitle || ''}</span>
                                 </div>
-                                <div style="font-size: 0.84rem; color: var(--text-secondary); margin-top: 1px; line-height: 1.25;">${card.company || '公司未知'}</div>
+                                <div class="archive-candidate-company">${card.company || '公司未知'}</div>
                             </div>`;
                     }).join('');
                 } else {
