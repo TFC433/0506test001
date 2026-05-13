@@ -2,11 +2,12 @@
 /**
  * ============================================================================
  * File: public/scripts/contacts/contacts.js
- * Version: v8.9.6 (CRM RAW Intake Feed Controls Polish)
+ * Version: v8.9.7 (CRM RAW Intake Feed Thumbnail Preview)
  * Date: 2026-05-13
  * Author: Gemini
  *
  * Change Log:
+ * - [UX Polish] Restored business card preview from RAW intake feed thumbnails without reintroducing the text button.
  * - [UX Polish] Added RAW feed display limit controls and clearer ghost-outline card actions.
  * - [UX Polish] Restored RAW upgrade action in intake feed and hid legacy RAW list tab entry.
  * - [UX Polish] Improved RAW intake feed status backgrounds and badge contrast across light/dark themes.
@@ -539,6 +540,14 @@ function renderContactsTable(data) {
                 justify-content: center;
                 padding: 0;
                 cursor: default;
+                transition: border-color 0.16s ease, opacity 0.16s ease;
+            }
+            .crm-raw-feed-thumb[data-action="view-card"] {
+                cursor: pointer;
+            }
+            .crm-raw-feed-thumb[data-action="view-card"]:hover {
+                border-color: var(--accent-blue);
+                opacity: 0.9;
             }
             .crm-raw-feed-thumb img {
                 width: 100%;
@@ -734,13 +743,14 @@ function renderContactsTable(data) {
                         ? 'crm-raw-state-archived'
                         : 'crm-raw-state-pending';
         const contactJsonString = JSON.stringify(contact).replace(/'/g, "&apos;").replace(/"/g, '&quot;');
+        const safeDriveLink = contact.driveLink ? contact.driveLink.replace(/'/g, "\\'") : '';
         const thumbUrl = contact.driveLink ? `/api/drive/thumbnail?link=${encodeURIComponent(contact.driveLink)}` : '';
         const phone = contact.mobile || contact.phone || '';
         const rowIndexLabel = contact.rowIndex ? `<span class="crm-raw-feed-index">RAW #${safeHtml(contact.rowIndex)}</span>` : '';
         const upgradeLabel = sourceStatus === '已升級' ? '再次建立機會' : '升級';
 
         const thumbHtml = contact.driveLink
-            ? `<div class="crm-raw-feed-thumb"><img src="${safeAttr(thumbUrl)}" alt="名片預覽" loading="lazy" onerror="this.style.display='none'; this.parentElement.innerHTML='<span>名片</span>';"></div>`
+            ? `<button class="crm-raw-feed-thumb" data-action="view-card" data-link="${safeAttr(safeDriveLink)}" title="查看名片" aria-label="查看名片"><img src="${safeAttr(thumbUrl)}" alt="名片預覽" loading="lazy" onerror="this.style.display='none'; this.parentElement.innerHTML='<span>名片</span>';"></button>`
             : `<div class="crm-raw-feed-thumb crm-raw-feed-thumb-placeholder">無名片</div>`;
 
         let deleteBtn = '';
