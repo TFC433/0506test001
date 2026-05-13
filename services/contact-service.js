@@ -1,9 +1,10 @@
 /**
  * services/contact-service.js
  * 聯絡人業務邏輯服務層
- * @version 8.16.1
+ * @version 8.16.2
  * @date 2026-05-13
  * @changelog
+ * - [PATCH] Added lazy CORE contact reverse opportunity lookup service for Contact Workspace plumbing.
  * - [PATCH] Restored linked contact driveLink runtime enrichment from RAW sourceId rowIndex without storing driveLink in SQL.
  * - [PHASE 8.16] FEATURE: Integrated dynamic limit handling for CORE pagination to support user-selected page sizes.
  * - [PHASE 8.15] FEATURE: Added dynamic global sorting (ASC/DESC) to CORE contacts search, exposed via `searchOfficialContacts`.
@@ -369,6 +370,14 @@ class ContactService {
             console.error('[ContactService] getLinkedContacts Error:', error);
             return [];
         }
+    }
+
+    async getContactOpportunities(contactId) {
+        if (!this.contactSqlReader) {
+            throw new Error('[ContactService] CRITICAL: ContactSqlReader not configured. Reverse opportunity lookup disallowed.');
+        }
+
+        return await this.contactSqlReader.getOpportunitiesByContactId(contactId);
     }
 
     // ============================================================

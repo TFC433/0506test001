@@ -2,12 +2,13 @@
 /**
  * data/contact-sql-writer.js
  * [Phase 7] SQL Writer for Official Contacts
- * @version 8.0.0 (Phase 8: World Model Annotation)
- * @date 2026-02-10
+ * @version 8.0.1 (CORE Contact Notes Plumbing)
+ * @date 2026-05-13
  * @description 
  * - Handles Create/Update/Delete for 'contacts' table.
  * - STRICT SCHEMA: No invention of columns.
- * - Locked Schema: contact_id, source_id, name, company_id, department, job_title, mobile, phone, email, created/updated_time/by.
+ * - Locked Schema: contact_id, source_id, name, company_id, department, job_title, mobile, phone, email, notes, created/updated_time/by.
+ * - [2026-05-13] Added SQL-only contacts.notes create/update mapping.
  * * WORLD MODEL (PERSISTENCE LAYER):
  * 1. Scope:
  * - This writer is EXCLUSIVE to the CORE Contact entity (SQL).
@@ -49,6 +50,7 @@ class ContactSqlWriter {
             mobile: data.mobile || '',
             phone: data.phone || data.tel || '',
             email: data.email || '',
+            notes: data.notes || null,
             created_by: user,
             updated_by: user,
             created_time: now,
@@ -104,6 +106,7 @@ class ContactSqlWriter {
         else if (data.tel !== undefined) payload.phone = data.tel;
         
         if (data.email !== undefined) payload.email = data.email;
+        if (data.notes !== undefined) payload.notes = data.notes;
 
         // Execute Update
         const { error } = await supabase

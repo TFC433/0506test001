@@ -1,8 +1,10 @@
 /**
  * routes/contact.routes.js
  * 聯絡人/潛在客戶模組路由
- * * @version 6.2.0 (Phase 8.2 RAW Physical Delete)
- * @date 2026-03-16
+ * * @version 6.2.1 (CORE Contact Workspace Plumbing)
+ * @date 2026-05-13
+ * @changelog
+ * - Added lazy reverse opportunity lookup route for CORE contacts.
  */
 const express = require('express');
 const router = express.Router();
@@ -46,6 +48,13 @@ router.get('/', async (req, res, next) => {
 router.get('/list', async (req, res, next) => {
     try {
         await getController(req).searchContactList(req, res);
+    } catch (e) { next(e); }
+});
+
+// GET /api/contacts/:contactId/opportunities (CORE contact reverse opportunity lookup)
+router.get('/:contactId/opportunities', async (req, res, next) => {
+    try {
+        await getController(req).getContactOpportunities(req, res);
     } catch (e) { next(e); }
 });
 

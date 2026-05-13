@@ -1,10 +1,11 @@
 /**
  * controllers/contact.controller.js
  * 聯絡人模組控制器
- * * @version 8.3.1
- * * @date 2026-05-08
+ * * @version 8.3.2
+ * * @date 2026-05-13
  * * @description 負責處理聯絡人相關的 HTTP 請求，驗證參數，並呼叫對應的 Service。
  * * [Fix] RAW contact search query wiring fix: GET /api/contacts now passes req.query.q to ContactService.searchContacts.
+ * * [Feature] Added lazy CORE contact reverse opportunity lookup endpoint handler.
  * * [Feature] Handled `limit` parameter for searchContactList to enable dynamic CORE pagination sizing.
  * * [Feature] Handled `sort` and `order` parameters for searchContactList to enable dynamic CORE sorting.
  * * [Feature] Added deleteRawContact for physical Google Sheet row deletion.
@@ -22,7 +23,7 @@
  * 2. CORE ZONE (Official Contacts)
  * - Source: SQL (Primary) via ContactService -> ContactSqlReader/Writer.
  * - Identity: contactId (Stable, UUID/C-prefixed).
- * - Routes: GET /list (searchContactList), PUT /:contactId, DELETE /:contactId.
+ * - Routes: GET /list (searchContactList), GET /:contactId/opportunities, PUT /:contactId, DELETE /:contactId.
  * - Purpose: Clean, curated CRM entities linked to Companies/Opportunities.
  * - Writes: SQL ONLY (Strict Authority). Safe Delete logic active.
  *
@@ -90,6 +91,20 @@ class ContactController {
             res.json(result);
         } catch (error) {
             handleApiError(res, error, 'Search Contact List');
+        }
+    };
+
+    /**
+     * [ZONE: CORE / OFFICIAL]
+     * GET /api/contacts/:contactId/opportunities
+     */
+    getContactOpportunities = async (req, res) => {
+        try {
+            const contactId = req.params.contactId;
+            const data = await this.contactService.getContactOpportunities(contactId);
+            res.json({ success: true, data });
+        } catch (error) {
+            handleApiError(res, error, 'Get Contact Opportunities');
         }
     };
 

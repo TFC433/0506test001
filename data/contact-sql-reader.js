@@ -6,9 +6,10 @@
  * - Table: contacts
  * - Schema: Strict adherence to provided JSON schema
  * - Constraints: No rowIndex, No guessing, No update/delete
- * - Version: 1.6.1 (Phase 8.2 Safe Delete Validation)
- * - Date: 2026-03-13
+ * - Version: 1.7.0 (CORE Contact Workspace Plumbing)
+ * - Date: 2026-05-13
  * - Changelog: 
+ * - Added notes DTO mapping and lazy reverse opportunity lookup by contactId.
  * - Added checkContactHasLinks to support conditional delete validation.
  * - Removed Supabase relational join in getContactsByOpportunityId to fix schema cache crash.
  * - Implemented strict 2-step application-level join logic.
@@ -243,6 +244,52 @@ class ContactSqlReader {
     }
 
     /**
+     * Get opportunities linked to a specific contact.
+     * Performs a STRICT 2-Step Application Level Join through opportunity_contact_links.
+     * @param {string} contactId
+     * @returns {Promise<Array<Object>>} Lightweight Opportunity DTOs
+     */
+    async getOpportunitiesByContactId(contactId) {
+        if (!contactId) throw new Error('ContactSqlReader: contactId is required');
+
+        try {
+            const { data: linkData, error: linkError } = await supabase
+                .from('opportunity_contact_links')
+                .select('opportunity_id')
+                .eq('contact_id', contactId)
+                .eq('status', 'active');
+
+            if (linkError) {
+                throw new Error(`[ContactSqlReader] DB Error (Links): ${linkError.message}`);
+            }
+
+            if (!linkData || linkData.length === 0) {
+                return [];
+            }
+
+            const opportunityIds = [...new Set(linkData.map(link => link.opportunity_id).filter(Boolean))];
+            if (opportunityIds.length === 0) {
+                return [];
+            }
+
+            const { data: opportunitiesData, error: opportunitiesError } = await supabase
+                .from('opportunities')
+                .select('opportunity_id, opportunity_name, customer_company, current_status, current_stage, opportunity_value, updated_time, created_time')
+                .in('opportunity_id', opportunityIds);
+
+            if (opportunitiesError) {
+                throw new Error(`[ContactSqlReader] DB Error (Opportunities): ${opportunitiesError.message}`);
+            }
+
+            return (opportunitiesData || []).map(row => this._mapOpportunityRowToLightDto(row));
+
+        } catch (error) {
+            console.error('[ContactSqlReader] getOpportunitiesByContactId Error:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Get all contacts
      * @returns {Promise<Array<Object>>} Array of Contact DTOs
      */
@@ -283,6 +330,7 @@ class ContactSqlReader {
             companyId: row.company_id,
             department: row.department,
             jobTitle: row.job_title,
+            notes: row.notes,
 
             // Contact Info
             mobile: row.mobile,
@@ -294,6 +342,26 @@ class ContactSqlReader {
             updatedTime: row.updated_time,
             createdBy: row.created_by,
             updatedBy: row.updated_by
+        };
+    }
+
+    _mapOpportunityRowToLightDto(row) {
+        if (!row) return null;
+
+        return {
+            opportunityId: row.opportunity_id,
+            opportunityName: row.opportunity_name,
+            name: row.opportunity_name,
+            customerCompany: row.customer_company,
+            status: row.current_status,
+            phase: row.current_stage,
+            currentStatus: row.current_status,
+            currentStage: row.current_stage,
+            value: row.opportunity_value,
+            opportunityValue: row.opportunity_value,
+            updatedTime: row.updated_time,
+            createTime: row.created_time,
+            createdTime: row.created_time
         };
     }
 }
