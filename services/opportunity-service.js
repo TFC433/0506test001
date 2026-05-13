@@ -4,9 +4,10 @@
 /**
  * services/opportunity-service.js
  * 璈?獢辣璆剖??摩撅?(Service Layer)
- * @version 8.12.11 (Workflow Ownership Migration Phase 1)
+ * @version 8.12.12 (Workflow Ownership Migration Phase 1)
  * @date 2026-05-13
  * @description 
+ * - [PATCH] Removed createOpportunity contact scaffolding so WorkflowService remains sole RAW-to-CORE promotion owner.
  * - [PATCH] Workflow ownership migration phase 1: move RAW lifecycle orchestration into WorkflowService and reduce OpportunityService to relationship semantics only.
  * - [PATCH] Opportunity Detail linked contact enrichment: use global RAW business-card pool for linked-contact driveLink enrichment and unify contact typography.
  * - [PATCH] Opportunity Detail contact refinement: normalize clickable contact name weight and allow archived RAW business cards to enrich linked contacts without displaying archived rows as candidates.
@@ -146,23 +147,6 @@ class OpportunityService {
                     }, modifier);
                 }
 
-                const safeMainContact = (opportunityData.mainContact || '').trim();
-                if (safeMainContact) {
-                    const normalizedContact = safeMainContact.toLowerCase();
-                    const allContacts = await this.contactSqlReader.getContacts();
-                    const existingContact = allContacts.find(c => 
-                        (c.name || '').toLowerCase().trim() === normalizedContact && 
-                        c.companyId === targetCompanyId
-                    );
-
-                    if (!existingContact) {
-                        await this.contactSqlWriter.createContact({
-                            name: safeMainContact,
-                            companyId: targetCompanyId,
-                            phone: opportunityData.contactPhone || ''
-                        }, modifier);
-                    }
-                }
             }
 
             const result = await this.opportunitySqlWriter.createOpportunity(opportunityData, modifier);

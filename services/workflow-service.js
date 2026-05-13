@@ -4,10 +4,14 @@ const { supabase } = require('../config/supabase');
 /**
  * services/workflow-service.js
  * 撌乩?瘚???
- * * @version 5.0.4 (Workflow Ownership Migration Phase 1)
+ * * @version 5.0.8 (Workflow Ownership Migration Phase 1)
  * @date 2026-05-13
  * @description 鞎痊??頝冽芋蝯?銴?璆剖?瘚?嚗?憒???閮?蝯∩犖??????
  * 靘陷瘜典嚗pportunityService, InteractionService, ContactService
+ * @changelog 2026-05-13: Complete verified RAW business-card field mapping for opportunity upgrade CORE contact creation.
+ * @changelog 2026-05-13: Normalize RAW business-card upgrade contact name from verified mainContact payload field before CORE contact creation.
+ * @changelog 2026-05-13: Hotfix RAW business-card opportunity relationship creation to use existing addContactToOpportunity service API.
+ * @changelog 2026-05-13: Restored RAW business-card opportunity contact relationship creation after formal contact promotion.
  * @changelog 2026-05-13: Workflow ownership migration phase 1: move RAW lifecycle orchestration into WorkflowService and reduce OpportunityService to relationship semantics only.
  */
 
@@ -271,7 +275,23 @@ class WorkflowService {
     async upgradeContactAndCreateOpp(rawContactData, user) {
         try {
             // 1. 撱箇?甇???舐窗鈭?
-            const contactResult = await this.contactService.createContact(rawContactData, user);
+            const rawContact = rawContactData.rowIndex
+                ? await this.contactService.getPotentialContactByRow(rawContactData.rowIndex)
+                : null;
+            const hasValue = (value) => String(value || '').trim() !== '';
+            const contactPayload = {
+                ...rawContactData,
+                sourceId: hasValue(rawContactData.sourceId) ? rawContactData.sourceId : String(rawContactData.rowIndex || ''),
+                name: hasValue(rawContactData.name) ? rawContactData.name : (rawContactData.mainContact || (rawContact && rawContact.name)),
+                company: hasValue(rawContactData.company) ? rawContactData.company : ((rawContact && rawContact.company) || rawContactData.customerCompany),
+                department: hasValue(rawContactData.department) ? rawContactData.department : ((rawContact && rawContact.department) || ''),
+                jobTitle: hasValue(rawContactData.jobTitle) ? rawContactData.jobTitle : ((rawContact && rawContact.position) || rawContactData.position),
+                position: hasValue(rawContactData.position) ? rawContactData.position : ((rawContact && rawContact.position) || rawContactData.jobTitle),
+                mobile: hasValue(rawContactData.mobile) ? rawContactData.mobile : ((rawContact && rawContact.mobile) || ''),
+                phone: hasValue(rawContactData.phone) ? rawContactData.phone : ((rawContact && rawContact.phone) || rawContactData.contactPhone),
+                email: hasValue(rawContactData.email) ? rawContactData.email : ((rawContact && rawContact.email) || '')
+            };
+            const contactResult = await this.contactService.createContact(contactPayload, user);
             
             // 2. 憒???嚗遣蝡?憪???
             if (contactResult.success && contactResult.id) {
@@ -287,7 +307,7 @@ class WorkflowService {
                 const oppResult = await this.opportunityService.createOpportunity(oppPayload, user);
 
                 // 3. 撱箇?? (憒? OpportunityService ??靘迨 API)
-                // await this.opportunityService.linkContact(oppResult.id, contactResult.id);
+                await this.opportunityService.addContactToOpportunity(oppResult.id, { contactId: contactResult.id }, user);
                 
                 return { 
                     success: true, 
