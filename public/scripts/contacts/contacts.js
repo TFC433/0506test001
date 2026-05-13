@@ -2,11 +2,13 @@
 /**
  * ============================================================================
  * File: public/scripts/contacts/contacts.js
- * Version: v8.9.8 (CORE Contact Context Rail v1)
+ * Version: v8.9.10 (CORE Contact Context Rail Hierarchy Polish)
  * Date: 2026-05-13
  * Author: Gemini
  *
  * Change Log:
+ * - [UX Polish] Refined CORE contact context rail hierarchy with relationship-first opportunity section.
+ * - [Bugfix] Made CORE contact rail row opening use explicit delegated data-action handling.
  * - [Feature] Added read-only CORE contact context rail with lazy related opportunity lookup.
  * - [UX Polish] Restored business card preview from RAW intake feed thumbnails without reintroducing the text button.
  * - [UX Polish] Added RAW feed display limit controls and clearer ghost-outline card actions.
@@ -299,6 +301,15 @@ function handleContactListClick(e) {
 
         case 'save-core-edit':
             handleSaveCoreEdit();
+            break;
+
+        case 'open-core-contact-rail':
+            try {
+                const contact = JSON.parse(payload.contact);
+                openCoreContactRail(contact);
+            } catch (err) {
+                console.error('Failed to open CORE contact rail', err);
+            }
             break;
 
         case 'close-core-contact-rail':
@@ -891,7 +902,7 @@ function renderCoreContactsTable(data) {
     let listHTML = `
         <style>
             .core-contact-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 0; gap: 0; align-items: start; }
-            .core-contact-workspace.core-contact-rail-open { grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; }
+            .core-contact-workspace.core-contact-rail-open { grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; }
             .core-contact-table-zone { min-width: 0; overflow-x: auto; }
             .core-contact-row { cursor: pointer; }
             .core-list-table { width: 100%; border-collapse: collapse; min-width: 900px; }
@@ -899,21 +910,25 @@ function renderCoreContactsTable(data) {
             .core-list-table th { background-color: var(--glass-bg); color: var(--text-secondary); font-weight: 600; }
             .core-list-table tr:hover { background-color: var(--bg-hover, #f8fafc); }
             .core-name-cell { font-weight: 600; color: var(--text-main); white-space: normal; word-break: break-all; }
-            .core-contact-rail { display: none; border: 1px solid var(--border-color); border-radius: 8px; background: var(--card-bg, #fff); padding: 14px; position: sticky; top: 12px; max-height: calc(100vh - 120px); overflow-y: auto; }
+            .core-contact-rail { display: none; border: 1px solid var(--border-color); border-radius: 8px; background: var(--card-bg, #fff); padding: 16px; position: sticky; top: 12px; max-height: calc(100vh - 120px); overflow-y: auto; }
             .core-contact-workspace.core-contact-rail-open .core-contact-rail { display: block; }
-            .core-contact-rail-header { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-bottom: 12px; }
-            .core-contact-rail-title { font-weight: 700; color: var(--text-main); font-size: 1rem; line-height: 1.35; }
-            .core-contact-rail-subtitle { color: var(--text-secondary); font-size: 0.85rem; margin-top: 3px; }
+            .core-contact-rail-header { display: flex; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--border-color); padding-bottom: 14px; margin-bottom: 14px; }
+            .core-contact-rail-title { font-weight: 700; color: var(--text-main); font-size: 1.12rem; line-height: 1.35; }
+            .core-contact-rail-company { color: var(--text-main); font-size: 0.9rem; font-weight: 600; margin-top: 5px; }
+            .core-contact-rail-subtitle { color: var(--text-secondary); font-size: 0.84rem; margin-top: 3px; }
             .core-contact-rail-close { border: 1px solid var(--border-color); background: transparent; color: var(--text-muted); border-radius: 6px; width: 28px; height: 28px; cursor: pointer; }
-            .core-contact-rail-section { border-top: 1px solid var(--border-color); padding-top: 10px; margin-top: 10px; }
+            .core-contact-rail-section { border-top: 1px solid var(--border-color); padding-top: 12px; margin-top: 12px; }
             .core-contact-rail-section:first-of-type { border-top: none; padding-top: 0; margin-top: 0; }
             .core-contact-rail-heading { font-size: 0.78rem; font-weight: 700; color: var(--text-muted); margin-bottom: 7px; letter-spacing: 0.02em; }
-            .core-contact-rail-row { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 8px; font-size: 0.86rem; margin-bottom: 6px; }
+            .core-contact-rail-row { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 10px; font-size: 0.86rem; margin-bottom: 7px; }
             .core-contact-rail-label { color: var(--text-muted); }
             .core-contact-rail-value { color: var(--text-main); word-break: break-word; }
-            .core-contact-opp-chip { display: block; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px; margin-bottom: 7px; background: var(--glass-bg, #f8fafc); color: var(--text-main); text-decoration: none; }
-            .core-contact-opp-name { font-weight: 600; font-size: 0.88rem; }
-            .core-contact-opp-meta { color: var(--text-muted); font-size: 0.78rem; margin-top: 3px; }
+            .core-contact-rail-support { color: var(--text-muted); font-size: 0.82rem; }
+            .core-contact-opps-section { background: var(--glass-bg, #f8fafc); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; }
+            .core-contact-opp-chip { display: block; border: 1px solid var(--border-color); border-radius: 7px; padding: 9px 10px; margin-bottom: 8px; background: var(--card-bg, #fff); color: var(--text-main); text-decoration: none; transition: border-color 0.16s ease, background-color 0.16s ease; }
+            .core-contact-opp-chip:hover { border-color: var(--accent-blue); background: var(--bg-hover, #f8fafc); }
+            .core-contact-opp-name { font-weight: 650; font-size: 0.9rem; line-height: 1.35; }
+            .core-contact-opp-meta { color: var(--text-muted); font-size: 0.78rem; margin-top: 4px; }
             .core-contact-empty-state { color: var(--text-muted); font-size: 0.86rem; }
             @media (max-width: 1100px) {
                 .core-contact-workspace.core-contact-rail-open { grid-template-columns: 1fr; }
@@ -965,7 +980,7 @@ function renderCoreContactsTable(data) {
         }
 
         listHTML += `
-            <tr class="core-contact-row" data-core-contact-id="${contact.contactId}">
+            <tr class="core-contact-row" data-action="open-core-contact-rail" data-contact='${contactJsonString}' data-core-contact-id="${contact.contactId}">
                 <td style="text-align: center; color: var(--text-muted); font-weight: 500;">${indexOffset + index + 1}</td>
                 <td class="core-name-cell">${contact.name || '-'}</td>
                 <td>${contact.companyName || '-'}</td>
@@ -1021,9 +1036,10 @@ function renderCoreContactRail(contact) {
     const sourceId = contact.sourceId || '';
     const sourceState = sourceId === 'MANUAL' || !sourceId ? '尚未歸檔' : '已連結名片';
     const titleParts = [contact.jobTitle || contact.position, contact.department].filter(Boolean).join(' / ');
+    const companyName = contact.companyName || contact.company || '未填公司';
     const cardPreview = contact.driveLink
         ? `<button class="action-btn small info" data-action="view-card" data-link="${safe(contact.driveLink)}">名片預覽</button>`
-        : '<div class="core-contact-empty-state">尚無名片預覽</div>';
+        : '<div class="core-contact-rail-support">尚無名片預覽</div>';
 
     const row = (label, value) => `
         <div class="core-contact-rail-row">
@@ -1036,11 +1052,16 @@ function renderCoreContactRail(contact) {
         <div class="core-contact-rail-header">
             <div>
                 <div class="core-contact-rail-title">${safe(contact.name || '未命名聯絡人')}</div>
+                <div class="core-contact-rail-company">${safe(companyName)}</div>
                 <div class="core-contact-rail-subtitle">${safe(titleParts || '未填職稱')}</div>
-                <div class="core-contact-rail-subtitle">${safe(contact.companyName || contact.company || '未填公司')}</div>
             </div>
             <button class="core-contact-rail-close" data-action="close-core-contact-rail" title="關閉">×</button>
         </div>
+
+        <section class="core-contact-rail-section core-contact-opps-section">
+            <div class="core-contact-rail-heading">關聯機會</div>
+            <div id="core-contact-opportunities" class="core-contact-empty-state">載入關聯機會...</div>
+        </section>
 
         <section class="core-contact-rail-section">
             <div class="core-contact-rail-heading">聯絡方式</div>
@@ -1058,12 +1079,7 @@ function renderCoreContactRail(contact) {
 
         <section class="core-contact-rail-section">
             <div class="core-contact-rail-heading">備註</div>
-            <div class="core-contact-rail-value">${contact.notes ? safe(contact.notes).replace(/\n/g, '<br>') : '<span class="core-contact-empty-state">尚無備註</span>'}</div>
-        </section>
-
-        <section class="core-contact-rail-section">
-            <div class="core-contact-rail-heading">關聯機會</div>
-            <div id="core-contact-opportunities" class="core-contact-empty-state">載入關聯機會...</div>
+            <div class="core-contact-rail-value">${contact.notes ? safe(contact.notes).replace(/\n/g, '<br>') : '<span class="core-contact-rail-support">尚無備註</span>'}</div>
         </section>
     `;
 }

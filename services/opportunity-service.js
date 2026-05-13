@@ -4,9 +4,11 @@
 /**
  * services/opportunity-service.js
  * 璈?獢辣璆剖??摩撅?(Service Layer)
- * @version 8.12.12 (Workflow Ownership Migration Phase 1)
+ * @version 8.12.15 (Opportunity Interaction Literal Cleanup)
  * @date 2026-05-13
  * @description 
+ * - [HOTFIX] Replaced remaining mojibake opportunity interaction title/delimiter literals with valid UTF-8 Chinese.
+ * - [HOTFIX] Standardized system-generated opportunity interaction type to `系統事件`.
  * - [PATCH] Removed createOpportunity contact scaffolding so WorkflowService remains sole RAW-to-CORE promotion owner.
  * - [PATCH] Workflow ownership migration phase 1: move RAW lifecycle orchestration into WorkflowService and reduce OpportunityService to relationship semantics only.
  * - [PATCH] Opportunity Detail linked contact enrichment: use global RAW business-card pool for linked-contact driveLink enrichment and unify contact typography.
@@ -106,7 +108,7 @@ class OpportunityService {
         try {
             await this.interactionService.createInteraction({
                 opportunityId: opportunityId,
-                eventType: '蝟餌絞鈭辣',
+                eventType: '系統事件',
                 eventTitle: title,
                 contentSummary: summary,
                 recorder: modifier,
@@ -449,8 +451,8 @@ class OpportunityService {
             if (logs.length > 0) {
                 await this._logOpportunityInteraction(
                     opportunityId,
-                    '璈?鞈??湔',
-                    logs.join('嚗?'),
+                    '更新機會案件',
+                    logs.join('；'),
                     modifier
                 );
             }
