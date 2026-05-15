@@ -1,9 +1,10 @@
 /**
  * services/contact-service.js
  * 聯絡人業務邏輯服務層
- * @version 8.16.2
+ * @version 8.17.0
  * @date 2026-05-13
  * @changelog
+ * - [PATCH] Moved CORE contact list search/sort/pagination onto Supabase SQL with exact count and stable contact_id tie-breaker.
  * - [PATCH] Added lazy CORE contact reverse opportunity lookup service for Contact Workspace plumbing.
  * - [PATCH] Restored linked contact driveLink runtime enrichment from RAW sourceId rowIndex without storing driveLink in SQL.
  * - [PHASE 8.16] FEATURE: Integrated dynamic limit handling for CORE pagination to support user-selected page sizes.
@@ -115,6 +116,24 @@ class ContactService {
         };
     }
 
+    async _getCompanyNameMap() {
+        const allCompanies = await this.companyReader.getCompanyList();
+        return new Map(allCompanies.map(c => [c.companyId, c.companyName]));
+    }
+
+    _resolveMatchingCompanyIds(companyNameMap, query) {
+        const searchTerm = this._normalizeKey(query);
+        if (!searchTerm) return [];
+
+        const matchingCompanyIds = [];
+        companyNameMap.forEach((companyName, companyId) => {
+            if (this._normalizeKey(companyName).includes(searchTerm)) {
+                matchingCompanyIds.push(companyId);
+            }
+        });
+        return matchingCompanyIds;
+    }
+
     // ============================================================
     // READ OPERATIONS (HYBRID: SQL PRIMARY -> SHEET FALLBACK)
     // ============================================================
@@ -149,8 +168,7 @@ class ContactService {
         }
 
         // 3) Join companies
-        const allCompanies = await this.companyReader.getCompanyList();
-        const companyNameMap = new Map(allCompanies.map(c => [c.companyId, c.companyName]));
+        const companyNameMap = await this._getCompanyNameMap();
 
         return allContacts.map(contact => this._mapOfficialContact(contact, companyNameMap));
     }
@@ -248,6 +266,46 @@ class ContactService {
 
     async searchOfficialContacts(query, page = 1, sort = 'updatedTime', order = 'desc', limit = null) {
         try {
+            const pageSize = limit ? parseInt(limit, 10) : ((this.config && this.config.PAGINATION) ? this.config.PAGINATION.CONTACTS_PER_PAGE : 20);
+            const safePageSize = Number.isInteger(pageSize) && pageSize > 0 ? pageSize : 20;
+            const parsedPage = parseInt(page, 10);
+            const safePage = Number.isInteger(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+
+            if (this.contactSqlReader) {
+                try {
+                    const companyNameMap = await this._getCompanyNameMap();
+                    const matchingCompanyIds = this._resolveMatchingCompanyIds(companyNameMap, query);
+                    const result = await this.contactSqlReader.getContacts({
+                        query,
+                        companyIds: matchingCompanyIds,
+                        page: safePage,
+                        limit: safePageSize,
+                        sort,
+                        order,
+                        withCount: true
+                    });
+
+                    const contacts = (result.data || [])
+                        .map(c => this._mapSqlContact(c))
+                        .map(contact => this._mapOfficialContact(contact, companyNameMap));
+                    const totalItems = result.total || 0;
+                    const startIndex = (safePage - 1) * safePageSize;
+
+                    return {
+                        data: contacts,
+                        pagination: {
+                            current: safePage,
+                            total: Math.ceil(totalItems / safePageSize),
+                            totalItems,
+                            hasNext: (startIndex + safePageSize) < totalItems,
+                            hasPrev: safePage > 1
+                        }
+                    };
+                } catch (error) {
+                    console.warn('[ContactService] SQL contact list read failed. Falling back to legacy in-memory path:', error.message);
+                }
+            }
+
             let contacts = await this._fetchOfficialContactsWithCompanies();
 
             if (query) {
@@ -266,18 +324,17 @@ class ContactService {
                 return isDesc ? timeB - timeA : timeA - timeB;
             });
 
-            const pageSize = limit ? parseInt(limit, 10) : ((this.config && this.config.PAGINATION) ? this.config.PAGINATION.CONTACTS_PER_PAGE : 20);
-            const startIndex = (page - 1) * pageSize;
-            const paginated = contacts.slice(startIndex, startIndex + pageSize);
+            const startIndex = (safePage - 1) * safePageSize;
+            const paginated = contacts.slice(startIndex, startIndex + safePageSize);
 
             return {
                 data: paginated,
                 pagination: {
-                    current: page,
-                    total: Math.ceil(contacts.length / pageSize),
+                    current: safePage,
+                    total: Math.ceil(contacts.length / safePageSize),
                     totalItems: contacts.length,
-                    hasNext: (startIndex + pageSize) < contacts.length,
-                    hasPrev: page > 1
+                    hasNext: (startIndex + safePageSize) < contacts.length,
+                    hasPrev: safePage > 1
                 }
             };
         } catch (error) {

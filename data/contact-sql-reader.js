@@ -6,9 +6,11 @@
  * - Table: contacts
  * - Schema: Strict adherence to provided JSON schema
  * - Constraints: No rowIndex, No guessing, No update/delete
- * - Version: 1.7.0 (CORE Contact Workspace Plumbing)
+ * - Version: 1.8.1 (CORE Contact SQL Search/Sort Hotfix)
  * - Date: 2026-05-13
  * - Changelog: 
+ * - Hotfixed CORE list SQL search to include direct contact fields and safer company_id OR filters; added created_time ordering fallback for updated_time ties/null groups.
+ * - Added SQL-native search, ordering, stable tie-breaker, range pagination, and exact count support for CORE contact list reads.
  * - Added notes DTO mapping and lazy reverse opportunity lookup by contactId.
  * - Added checkContactHasLinks to support conditional delete validation.
  * - Removed Supabase relational join in getContactsByOpportunityId to fix schema cache crash.
@@ -289,22 +291,134 @@ class ContactSqlReader {
         }
     }
 
+    _getContactSortColumn(sortField = 'updatedTime') {
+        const sortMap = {
+            contactId: 'contact_id',
+            name: 'name',
+            companyId: 'company_id',
+            position: 'job_title',
+            jobTitle: 'job_title',
+            mobile: 'mobile',
+            phone: 'phone',
+            email: 'email',
+            createdTime: 'created_time',
+            createTime: 'created_time',
+            updatedTime: 'updated_time',
+            lastUpdateTime: 'updated_time'
+        };
+        return sortMap[sortField] || 'updated_time';
+    }
+
+    _sanitizePostgrestSearchTerm(value) {
+        return String(value || '')
+            .trim()
+            .replace(/[(),]/g, ' ')
+            .replace(/\s+/g, ' ');
+    }
+
+    _sanitizePostgrestListValue(value) {
+        return String(value || '').replace(/[(),]/g, '');
+    }
+
+    _buildContactSearchFilter(searchTerm, companyIds = []) {
+        const normalizedTerm = this._sanitizePostgrestSearchTerm(searchTerm);
+        const filters = [];
+
+        if (normalizedTerm) {
+            const pattern = `*${normalizedTerm}*`;
+            filters.push(`name.ilike.${pattern}`);
+            filters.push(`email.ilike.${pattern}`);
+            filters.push(`phone.ilike.${pattern}`);
+            filters.push(`mobile.ilike.${pattern}`);
+        }
+
+        const normalizedCompanyIds = [...new Set((companyIds || []).filter(Boolean))];
+        if (normalizedCompanyIds.length > 0) {
+            const idList = normalizedCompanyIds
+                .map(id => this._sanitizePostgrestListValue(id))
+                .filter(Boolean)
+                .join(',');
+            if (idList) {
+                filters.push(`company_id.in.(${idList})`);
+            }
+        }
+
+        return filters.join(',');
+    }
+
     /**
-     * Get all contacts
-     * @returns {Promise<Array<Object>>} Array of Contact DTOs
+     * Get contacts.
+     * No-arg calls preserve the legacy full-array contract. Option calls can
+     * push search/order/range/count into Supabase for list endpoints.
+     * @param {Object} [options]
+     * @returns {Promise<Array<Object>|{data: Array<Object>, total: number}>}
      */
-    async getContacts() {
+    async getContacts(options = {}) {
         try {
-            const { data, error } = await supabase
-                .from(this.tableName)
-                .select('*');
+            const {
+                query = '',
+                companyIds = [],
+                sort = 'updatedTime',
+                order = 'desc',
+                page = null,
+                limit = null,
+                range = null,
+                withCount = false
+            } = options || {};
+
+            const shouldReturnCount = Boolean(withCount);
+            const sortColumn = this._getContactSortColumn(sort);
+            const isAscending = String(order || '').toLowerCase() === 'asc';
+            let dbQuery = supabase.from(this.tableName);
+            dbQuery = shouldReturnCount
+                ? dbQuery.select('*', { count: 'exact' })
+                : dbQuery.select('*');
+
+            const searchFilter = this._buildContactSearchFilter(query, companyIds);
+            if (searchFilter) {
+                dbQuery = dbQuery.or(searchFilter);
+            }
+
+            dbQuery = dbQuery.order(sortColumn, {
+                ascending: isAscending,
+                nullsFirst: sortColumn === 'updated_time' && isAscending
+            });
+            if (sortColumn === 'updated_time') {
+                dbQuery = dbQuery.order('created_time', {
+                    ascending: isAscending,
+                    nullsFirst: isAscending
+                });
+            }
+            if (sortColumn !== 'contact_id') {
+                dbQuery = dbQuery.order('contact_id', { ascending: true });
+            }
+
+            if (range && Number.isInteger(range.from) && Number.isInteger(range.to)) {
+                dbQuery = dbQuery.range(range.from, range.to);
+            } else {
+                const pageNumber = parseInt(page, 10);
+                const pageSize = parseInt(limit, 10);
+                if (Number.isInteger(pageNumber) && pageNumber > 0 && Number.isInteger(pageSize) && pageSize > 0) {
+                    const from = (pageNumber - 1) * pageSize;
+                    dbQuery = dbQuery.range(from, from + pageSize - 1);
+                }
+            }
+
+            const { data, error, count } = await dbQuery;
 
             if (error) {
                 throw new Error(`[ContactSqlReader] DB Error: ${error.message}`);
             }
 
-            // Map all rows strictly
-            return data.map(row => this._mapRowToDto(row));
+            const mapped = (data || []).map(row => this._mapRowToDto(row));
+            if (shouldReturnCount) {
+                return {
+                    data: mapped,
+                    total: count || 0
+                };
+            }
+
+            return mapped;
 
         } catch (error) {
             console.error('[ContactSqlReader] getContacts Error:', error);

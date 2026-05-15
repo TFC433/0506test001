@@ -1,8 +1,10 @@
 // public/scripts/import-bundle.js
 /**
- * @version 1.0.1
- * @date 2026-04-22
+ * @version 1.0.3
+ * @date 2026-05-13
  * @changelog
+ * - [1.0.3] Updated contacts.js cache-busting query for CORE Formal Contact split workspace refinement.
+ * - [1.0.2] Hotfix: Added cache-busting query to contacts.js so CORE Formal Contact date-display fixes load reliably.
  * - [1.0.1] Bug Fix: Added newly split internal-ops render modules to the load chain to resolve "Render function missing" runtime errors.
  */
 // 職責：僅作為腳本引用的集中管理處，不含任何業務邏輯
@@ -26,7 +28,7 @@ const scripts = [
     "scripts/map-manager.js",
     "scripts/kanban-board.js",
     "scripts/contacts/contact-potential-manager.js",
-    "scripts/contacts/contacts.js",
+    "scripts/contacts/contacts.js?v=8.9.13",
     "scripts/opportunities/opportunities.js",
     "scripts/sales/sales-analysis-helper.js",
     "scripts/sales/sales-analysis-components.js",

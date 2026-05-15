@@ -2,11 +2,13 @@
 /**
  * ============================================================================
  * File: public/scripts/contacts/contacts.js
- * Version: v8.9.10 (CORE Contact Context Rail Hierarchy Polish)
+ * Version: v8.9.13 (CORE Contact Split Workspace Refinement)
  * Date: 2026-05-13
  * Author: Gemini
  *
  * Change Log:
+ * - [UX Polish] Refined CORE Formal Contacts split workspace density, table hierarchy, and relationship rail separation.
+ * - [Bugfix] Confirmed CORE table last-update display uses SQL `updatedTime` before legacy `lastUpdateTime`/`createdTime`; paired with import-bundle cache bust.
  * - [UX Polish] Refined CORE contact context rail hierarchy with relationship-first opportunity section.
  * - [Bugfix] Made CORE contact rail row opening use explicit delegated data-action handling.
  * - [Feature] Added read-only CORE contact context rail with lazy related opportunity lookup.
@@ -902,15 +904,22 @@ function renderCoreContactsTable(data) {
     let listHTML = `
         <style>
             .core-contact-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 0; gap: 0; align-items: start; }
-            .core-contact-workspace.core-contact-rail-open { grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; }
-            .core-contact-table-zone { min-width: 0; overflow-x: auto; }
-            .core-contact-row { cursor: pointer; }
-            .core-list-table { width: 100%; border-collapse: collapse; min-width: 900px; }
-            .core-list-table th, .core-list-table td { padding: 12px; border-bottom: 1px solid var(--border-color); text-align: left; vertical-align: middle; }
-            .core-list-table th { background-color: var(--glass-bg); color: var(--text-secondary); font-weight: 600; }
-            .core-list-table tr:hover { background-color: var(--bg-hover, #f8fafc); }
-            .core-name-cell { font-weight: 600; color: var(--text-main); white-space: normal; word-break: break-all; }
-            .core-contact-rail { display: none; border: 1px solid var(--border-color); border-radius: 8px; background: var(--card-bg, #fff); padding: 16px; position: sticky; top: 12px; max-height: calc(100vh - 120px); overflow-y: auto; }
+            .core-contact-workspace.core-contact-rail-open { grid-template-columns: minmax(560px, 1fr) 380px; gap: 24px; }
+            .core-contact-table-zone { min-width: 0; overflow-x: auto; border: 1px solid rgba(148, 163, 184, 0.24); border-radius: 8px; background: var(--card-bg, #fff); }
+            .core-contact-row { cursor: pointer; border-left: 3px solid transparent; transition: background-color 0.16s ease, border-color 0.16s ease; }
+            .core-contact-row:hover { background-color: rgba(59, 130, 246, 0.045); }
+            .core-contact-row.is-open { background-color: rgba(59, 130, 246, 0.075); border-left-color: var(--accent-blue, #3b82f6); }
+            .core-list-table { width: 100%; border-collapse: collapse; min-width: 880px; font-size: 0.92rem; }
+            .core-list-table th, .core-list-table td { padding: 10px 12px; border-bottom: 1px solid rgba(148, 163, 184, 0.18); text-align: left; vertical-align: middle; }
+            .core-list-table th { background-color: rgba(248, 250, 252, 0.82); color: var(--text-secondary); font-size: 0.78rem; font-weight: 700; letter-spacing: 0.01em; white-space: nowrap; }
+            .core-list-table tbody tr:last-child td { border-bottom: none; }
+            .core-name-cell { font-weight: 650; color: var(--text-main); white-space: normal; word-break: break-all; }
+            .core-company-cell { color: var(--text-main); font-weight: 560; }
+            .core-secondary-cell { color: var(--text-secondary); font-size: 0.88rem; }
+            .core-tertiary-cell { color: var(--text-muted); font-size: 0.84rem; white-space: nowrap; }
+            .core-action-cell { text-align: right; white-space: nowrap; opacity: 0.88; }
+            .core-action-cell .action-btn.small { padding: 3px 8px; font-size: 0.78rem; }
+            .core-contact-rail { display: none; border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 8px; background: var(--card-bg, #fff); padding: 18px; position: sticky; top: 12px; max-height: calc(100vh - 120px); overflow-y: auto; box-shadow: -1px 0 0 rgba(148, 163, 184, 0.12); }
             .core-contact-workspace.core-contact-rail-open .core-contact-rail { display: block; }
             .core-contact-rail-header { display: flex; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--border-color); padding-bottom: 14px; margin-bottom: 14px; }
             .core-contact-rail-title { font-weight: 700; color: var(--text-main); font-size: 1.12rem; line-height: 1.35; }
@@ -932,7 +941,7 @@ function renderCoreContactsTable(data) {
             .core-contact-empty-state { color: var(--text-muted); font-size: 0.86rem; }
             @media (max-width: 1100px) {
                 .core-contact-workspace.core-contact-rail-open { grid-template-columns: 1fr; }
-                .core-contact-rail { position: static; max-height: none; }
+                .core-contact-rail { position: static; max-height: none; box-shadow: none; }
             }
         </style>
         <div id="core-contact-workspace" class="core-contact-workspace">
@@ -963,7 +972,7 @@ function renderCoreContactsTable(data) {
 
     data.forEach((contact, index) => {
         let updateTimeStr = '-';
-        const rawTime = contact.lastUpdateTime || contact.createdTime;
+        const rawTime = contact.updatedTime || contact.lastUpdateTime || contact.createdTime;
         if (rawTime) {
             const d = new Date(rawTime);
             if (!isNaN(d.getTime())) {
@@ -983,12 +992,12 @@ function renderCoreContactsTable(data) {
             <tr class="core-contact-row" data-action="open-core-contact-rail" data-contact='${contactJsonString}' data-core-contact-id="${contact.contactId}">
                 <td style="text-align: center; color: var(--text-muted); font-weight: 500;">${indexOffset + index + 1}</td>
                 <td class="core-name-cell">${contact.name || '-'}</td>
-                <td>${contact.companyName || '-'}</td>
-                <td>${contact.position || '-'}</td>
-                <td>${contact.mobile || '-'}</td>
-                <td>${contact.email || '-'}</td>
-                <td style="color: var(--text-muted); font-size: 0.9em;">${updateTimeStr}</td>
-                <td style="text-align: right; white-space: nowrap;">
+                <td class="core-company-cell">${contact.companyName || '-'}</td>
+                <td class="core-secondary-cell">${contact.position || '-'}</td>
+                <td class="core-secondary-cell">${contact.mobile || '-'}</td>
+                <td class="core-secondary-cell">${contact.email || '-'}</td>
+                <td class="core-tertiary-cell">${updateTimeStr}</td>
+                <td class="core-action-cell">
                     <button class="action-btn small primary" data-action="edit-core" data-contact='${contactJsonString}'>✏️ 編輯</button>
                     ${deleteBtn}
                 </td>
@@ -1014,6 +1023,9 @@ function openCoreContactRail(contact) {
     if (!workspace || !rail || !contact) return;
 
     workspace.classList.add('core-contact-rail-open');
+    workspace.querySelectorAll('.core-contact-row.is-open').forEach(row => row.classList.remove('is-open'));
+    const activeRow = workspace.querySelector(`[data-core-contact-id="${contact.contactId}"]`);
+    if (activeRow) activeRow.classList.add('is-open');
     rail.innerHTML = renderCoreContactRail(contact);
     loadCoreContactOpportunities(contact.contactId);
 }
@@ -1021,7 +1033,10 @@ function openCoreContactRail(contact) {
 function closeCoreContactRail() {
     const workspace = document.getElementById('core-contact-workspace');
     const rail = document.getElementById('core-contact-rail');
-    if (workspace) workspace.classList.remove('core-contact-rail-open');
+    if (workspace) {
+        workspace.classList.remove('core-contact-rail-open');
+        workspace.querySelectorAll('.core-contact-row.is-open').forEach(row => row.classList.remove('is-open'));
+    }
     if (rail) rail.innerHTML = '';
 }
 
