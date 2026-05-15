@@ -1,9 +1,11 @@
 /**
  * services/contact-service.js
  * 聯絡人業務邏輯服務層
- * @version 8.17.2
+ * @version 8.17.4
  * @date 2026-05-15
  * @changelog
+ * - [PATCH] Expanded sync-from-source RAW lineage normalization for numeric and BC-prefixed sourceId values.
+ * - [PATCH] Added preview/confirmed one-way CORE contact sync from linked RAW business card source.
  * - [PATCH] Extended RAW contact search to include position, department, phone, mobile, email, and notes.
  * - [PATCH] Enabled direct RAW notes editing through the configured W column while preserving existing RAW update flow.
  * - [PATCH] Moved CORE contact list search/sort/pagination onto Supabase SQL with exact count and stable contact_id tie-breaker.
@@ -101,6 +103,15 @@ class ContactService {
 
     _normalizeKey(str = '') {
         return String(str).toLowerCase().trim();
+    }
+
+    _resolveRawSourceRowIndex(sourceId) {
+        const value = String(sourceId || '').trim();
+        if (!value || value === 'MANUAL') return null;
+        if (/^\d+$/.test(value)) return value;
+
+        const businessCardMatch = value.match(/^(?:BC|BUSINESS[-_ ]?CARD)[-_ ]?(\d+)$/i);
+        return businessCardMatch ? businessCardMatch[1] : null;
     }
 
     _mapSqlContact(contact) {
@@ -476,6 +487,59 @@ class ContactService {
         }
 
         return { success: true };
+    }
+
+    async syncContactFromSource(contactId, options = {}, user = 'System') {
+        const coreContact = await this.getContactById(contactId);
+        if (!coreContact) throw new Error(`Contact not found: ${contactId}`);
+
+        const sourceId = coreContact.sourceId;
+        const rawRowIndex = this._resolveRawSourceRowIndex(sourceId);
+        if (!rawRowIndex) {
+            throw new Error('Contact does not have a linked RAW business card source.');
+        }
+
+        const rawContact = await this.getPotentialContactByRow(rawRowIndex);
+        if (!rawContact) throw new Error(`RAW business card source not found: ${sourceId}`);
+
+        const fields = [
+            { key: 'name', label: '姓名', core: coreContact.name, raw: rawContact.name },
+            { key: 'department', label: '部門', core: coreContact.department, raw: rawContact.department },
+            { key: 'position', label: '職稱', core: coreContact.position || coreContact.jobTitle, raw: rawContact.position || rawContact.jobTitle },
+            { key: 'mobile', label: '手機', core: coreContact.mobile, raw: rawContact.mobile },
+            { key: 'phone', label: '電話', core: coreContact.phone, raw: rawContact.phone },
+            { key: 'email', label: 'Email', core: coreContact.email, raw: rawContact.email }
+        ];
+
+        const updateData = {};
+        fields.forEach(field => {
+            if (String(field.raw || '').trim()) {
+                updateData[field.key] = field.raw;
+                if (field.key === 'position') updateData.jobTitle = field.raw;
+            }
+        });
+
+        if (options.previewOnly) {
+            return {
+                success: true,
+                preview: true,
+                contact: coreContact,
+                rawContact,
+                fields
+            };
+        }
+
+        if (Object.keys(updateData).length > 0) {
+            await this.updateContact(contactId, updateData, user);
+        }
+
+        const updatedContact = await this.getContactById(contactId);
+        return {
+            success: true,
+            contact: updatedContact,
+            rawContact,
+            fields
+        };
     }
 
     async deleteContact(contactId, user) {

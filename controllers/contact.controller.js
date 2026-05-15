@@ -1,10 +1,11 @@
 /**
  * controllers/contact.controller.js
  * 聯絡人模組控制器
- * * @version 8.3.2
- * * @date 2026-05-13
+ * * @version 8.3.3
+ * * @date 2026-05-15
  * * @description 負責處理聯絡人相關的 HTTP 請求，驗證參數，並呼叫對應的 Service。
  * * [Fix] RAW contact search query wiring fix: GET /api/contacts now passes req.query.q to ContactService.searchContacts.
+ * * [Feature] Added preview/confirmed CORE contact sync from linked RAW business card source.
  * * [Feature] Added lazy CORE contact reverse opportunity lookup endpoint handler.
  * * [Feature] Handled `limit` parameter for searchContactList to enable dynamic CORE pagination sizing.
  * * [Feature] Handled `sort` and `order` parameters for searchContactList to enable dynamic CORE sorting.
@@ -152,6 +153,22 @@ class ContactController {
             res.json(result);
         } catch (error) {
             handleApiError(res, error, 'Update Contact');
+        }
+    };
+
+    syncContactFromSource = async (req, res) => {
+        try {
+            const contactId = req.params.contactId;
+            const user = req.user ? req.user.name : 'System';
+
+            const result = await this.contactService.syncContactFromSource(
+                contactId,
+                { previewOnly: req.body && req.body.previewOnly },
+                user
+            );
+            res.json(result);
+        } catch (error) {
+            handleApiError(res, error, 'Sync Contact From Source');
         }
     };
 

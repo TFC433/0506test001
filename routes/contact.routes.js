@@ -1,9 +1,10 @@
 /**
  * routes/contact.routes.js
  * 聯絡人/潛在客戶模組路由
- * * @version 6.2.1 (CORE Contact Workspace Plumbing)
- * @date 2026-05-13
+ * * @version 6.2.2 (CORE Contact Workspace Plumbing)
+ * @date 2026-05-15
  * @changelog
+ * - Added CORE contact sync-from-source route for preview/confirmed business-card refresh.
  * - Added lazy reverse opportunity lookup route for CORE contacts.
  */
 const express = require('express');
@@ -55,6 +56,13 @@ router.get('/list', async (req, res, next) => {
 router.get('/:contactId/opportunities', async (req, res, next) => {
     try {
         await getController(req).getContactOpportunities(req, res);
+    } catch (e) { next(e); }
+});
+
+// POST /api/contacts/:contactId/sync-from-source (CORE one-way refresh from linked RAW source)
+router.post('/:contactId/sync-from-source', async (req, res, next) => {
+    try {
+        await getController(req).syncContactFromSource(req, res);
     } catch (e) { next(e); }
 });
 
