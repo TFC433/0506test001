@@ -2,11 +2,12 @@
 /**
  * ============================================================================
  * File: public/scripts/opportunities/details/opportunity-associated-contacts.js
- * Version: v8.0.24 (Business Card Archive Workspace)
+ * Version: v8.0.25 (Business Card Archive Workspace)
  * Date: 2026-05-13
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-13: Preserve contactId variants for detail linking, show department/title contact meta, and sort main/same-company/external associated contacts.
  * - 2026-05-13: Reworked business card archive modal into localized two-step operational workspace with scoped classes.
  * - 2026-05-13: Polished business card archive candidate list and confirmation preview for compact CRM reconciliation.
  * - 2026-05-13: Refined business card archive candidates into compact operational reconciliation rows.
@@ -63,6 +64,11 @@ const OpportunityContacts = (() => {
     let _opportunityInfo = null;
     let _linkedContacts = [];
     let _isManageMode = false;
+
+    function _normalizeContactId(contact) {
+        const id = contact?.contactId ?? contact?.id ?? contact?.contact_id;
+        return id === undefined || id === null || String(id).trim() === '' ? null : id;
+    }
 
     function _ensureScopedStyles() {
         if (document.getElementById('opp-associated-contacts-styles')) return;
@@ -350,8 +356,8 @@ const OpportunityContacts = (() => {
         showConfirmDialog(confirmMsg, async () => {
             showLoading('正在關聯聯絡人...');
             try {
+                const contactId = _normalizeContactId(contact);
                 const contactPayload = {
-                    contactId: contact.contactId,
                     name: contact.name,
                     company: contact.company || contact.companyName,
                     companyName: contact.companyName || contact.company,
@@ -364,6 +370,7 @@ const OpportunityContacts = (() => {
                     source: contact.source,
                     driveLink: contact.driveLink
                 };
+                if (contactId) contactPayload.contactId = contactId;
 
                 const result = await authedFetch(`/api/opportunities/${opportunityId}/contacts`, {
                     method: 'POST',
@@ -402,12 +409,34 @@ const OpportunityContacts = (() => {
             return str.toLowerCase().replace(/股份有限公司|有限公司|公司|\(.*?\)|（.*?）/g, '').replace(/\s+/g, '').trim();
         };
         const oppCompanyNorm = _normalize(_opportunityInfo.customerCompany);
+        const sortedContacts = _linkedContacts
+            .map((contact, index) => {
+                const isMainContact = (contact.name === _opportunityInfo.mainContact);
+                const contactCompanyNorm = _normalize(contact.companyName);
+                const isExternal = contact.companyName && contactCompanyNorm && (contactCompanyNorm !== oppCompanyNorm);
+                return {
+                    contact,
+                    index,
+                    priority: isMainContact ? 0 : (isExternal ? 2 : 1)
+                };
+            })
+            .sort((a, b) => {
+                if (a.priority !== b.priority) return a.priority - b.priority;
+                const nameCompare = String(a.contact.name || '').localeCompare(String(b.contact.name || ''), 'zh-Hant');
+                return nameCompare || a.index - b.index;
+            })
+            .map(item => item.contact);
 
         let railHTML = `<div class="opp-rail-contact-list${_isManageMode ? ' is-managing' : ''}">`;
-        _linkedContacts.forEach(contact => {
+        sortedContacts.forEach(contact => {
             const isMainContact = (contact.name === _opportunityInfo.mainContact);
             const isManual = !contact.sourceId || contact.sourceId === 'MANUAL';
-            const roleText = contact.position || contact.department || '';
+            const department = String(contact.department || '').trim();
+            const title = String(contact.jobTitle || contact.position || '').trim();
+            const roleParts = [];
+            if (department) roleParts.push(department);
+            if (title && title !== department) roleParts.push(title);
+            const roleText = roleParts.join('\uFF5C');
             const safeContactId = String(contact.contactId || '').replace(/'/g, "\\'");
             const safeContactName = String(contact.name || '').replace(/'/g, "\\'");
             const safeOpportunityId = String(_opportunityInfo.opportunityId || '').replace(/'/g, "\\'");

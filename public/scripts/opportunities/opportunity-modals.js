@@ -1,8 +1,9 @@
 /**
  * public/scripts/opportunities/opportunity-modals.js
- * @version v5.0.12
- * @date 2026-05-11
+ * @version v5.0.13
+ * @date 2026-05-13
  * @changelog
+ * - Preserve existing CORE contactId through wizard and detail link payloads to prevent duplicate manual SQL contact creation.
  * - Opportunity workflow initialization normalization: remove hardcoded default stage fallback and initialize stage history from config-driven current stage.
  * - Relationship lifecycle stabilization restores explicit Opportunity Detail reloads after link mutations
  * - Unified CORE + RAW contact search fixes existing contact endpoint wiring
@@ -21,6 +22,11 @@ let companySearchTimeout;
 let linkOppSearchTimeout;
 let isLinkingContact = false;
 
+function normalizeContactId(contact) {
+    const id = contact?.contactId ?? contact?.id ?? contact?.contact_id;
+    return id === undefined || id === null || String(id).trim() === '' ? null : id;
+}
+
 // ==================== Wizard 核心邏輯 (新增機會專用) ====================
 const NewOppWizard = {
     state: {
@@ -30,6 +36,7 @@ const NewOppWizard = {
             companyName: '',
             mainContact: '',
             contactPhone: '',
+            contactId: null,
             county: '',
             sourceId: null, // 用於名片轉入 (Contact rowIndex)
             lastGeneratedName: ''
@@ -124,7 +131,7 @@ const NewOppWizard = {
         this.state = {
             step: 1,
             path: null,
-            data: { companyName: '', mainContact: '', contactPhone: '', county: '', sourceId: null, lastGeneratedName: '' }
+            data: { companyName: '', mainContact: '', contactPhone: '', contactId: null, county: '', sourceId: null, lastGeneratedName: '' }
         };
         
         const form = document.getElementById('new-opportunity-wizard-form');
@@ -247,6 +254,7 @@ const NewOppWizard = {
         this.state.data.companyName = card.company;
         this.state.data.mainContact = card.name;
         this.state.data.contactPhone = card.mobile || card.phone;
+        this.state.data.contactId = null;
         this.state.data.sourceId = card.rowIndex;
         
         if(card.address && typeof detectCountyFromAddress === 'function') {
@@ -324,7 +332,10 @@ const NewOppWizard = {
             
             let opts = '<option value="">請選擇聯絡人...</option>';
             contacts.forEach(c => {
-                const val = JSON.stringify({name: c.name, phone: c.mobile || c.phone}).replace(/"/g, "&quot;");
+                const contactValue = { name: c.name, phone: c.mobile || c.phone };
+                const contactId = normalizeContactId(c);
+                if (contactId) contactValue.contactId = contactId;
+                const val = JSON.stringify(contactValue).replace(/"/g, "&quot;");
                 opts += `<option value="${val}">${c.name}</option>`;
             });
             opts += '<option value="NEW_CONTACT">➕ 新增聯絡人</option>';
@@ -343,15 +354,18 @@ const NewOppWizard = {
             newContactArea.style.display = 'block';
             this.state.data.mainContact = ''; 
             this.state.data.contactPhone = '';
+            this.state.data.contactId = null;
             setTimeout(() => document.getElementById('wiz-new-contact-name').focus(), 100);
         } else if(val) {
             newContactArea.style.display = 'none';
             const c = JSON.parse(val);
             this.state.data.mainContact = c.name;
             this.state.data.contactPhone = c.phone;
+            this.state.data.contactId = normalizeContactId(c);
         } else {
             newContactArea.style.display = 'none';
             this.state.data.mainContact = '';
+            this.state.data.contactId = null;
         }
     },
 
@@ -380,6 +394,7 @@ const NewOppWizard = {
                 this.state.data.companyName = comp;
                 this.state.data.mainContact = name;
                 this.state.data.contactPhone = phone;
+                this.state.data.contactId = null;
                 this.state.data.county = county;
                 
             } else if (this.state.path === 'old') {
@@ -391,6 +406,7 @@ const NewOppWizard = {
                     if(!name) { showNotification('請輸入新聯絡人姓名', 'error'); return; }
                     this.state.data.mainContact = name;
                     this.state.data.contactPhone = phone;
+                    this.state.data.contactId = null;
                 } else if (!select.value) {
                     if (!this.state.data.companyName) {
                         showNotification('請先選擇公司', 'warning'); return;
@@ -663,6 +679,7 @@ async function handleLinkContact(contactData, type) {
     if (isLinkingContact) return;
     isLinkingContact = true;
     showLoading('正在關聯...');
+    const contactId = normalizeContactId(contactData);
     const payload = {
         name: contactData.name,
         position: contactData.position,
@@ -672,11 +689,11 @@ async function handleLinkContact(contactData, type) {
         rowIndex: contactData.rowIndex, 
         company: contactData.companyName || contactData.company,
         companyName: contactData.companyName || contactData.company,
-        contactId: contactData.contactId,
         sourceId: contactData.sourceId,
         source: contactData.source,
         driveLink: contactData.driveLink
     };
+    if (contactId) payload.contactId = contactId;
 
     try {
         if (!window.currentDetailOpportunityId) throw new Error('無法識別當前機會 ID');
@@ -796,6 +813,7 @@ document.addEventListener('submit', async function(e) {
             // sourceId from wizard is usually Contact rowIndex for "upgrade".
             rowIndex: stateData.sourceId 
         };
+        if (stateData.contactId) payload.contactId = stateData.contactId;
 
         showLoading('正在建立機會案件...');
         try {
