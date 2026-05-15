@@ -1,8 +1,8 @@
 /**
  * data/contact-writer.js
  * 聯絡人資料寫入器
- * @version 7.2.0 (Phase 8.3 Exhibition Auto-Tag Support)
- * @date 2026-03-21
+ * @version 7.2.1 (Phase 8.3 Exhibition Auto-Tag Support)
+ * @date 2026-05-15
  * @description 
  * [SQL-Ready Refactor]
  * 1. 嚴格禁止呼叫 values.get (No Read)。
@@ -10,6 +10,7 @@
  * 3. 使用 batchUpdate 實現精確的欄位更新。
  * 4. [Feature] 支援 deletePotentialContactRow 實現物理列刪除。
  * * Changelog:
+ * - [V7.2.1] Added RAW department write support and activated configured RAW notes writes.
  * - [V7.2.0] Safely appended pushUpdate checks for repurposed EXHIBITION_NAME and IS_EXHIBITION 
  * within writePotentialContactRow. Core column logic strictly unmodified.
  */
@@ -96,6 +97,7 @@ class ContactWriter extends BaseWriter {
         pushUpdate(F.NAME, data.name);
         pushUpdate(F.COMPANY, data.company);
         pushUpdate(F.POSITION, data.position);
+        pushUpdate(F.DEPARTMENT, data.department);
         pushUpdate(F.MOBILE, data.mobile);
         pushUpdate(F.EMAIL, data.email);
         

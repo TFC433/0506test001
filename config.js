@@ -1,13 +1,14 @@
 /**
  * config.js
  * 系統核心設定檔
- * @version 5.2.0 (Phase 8.4 Internal Ops Support)
- * @date 2026-04-20
+ * @version 5.2.1 (Phase 8.4 Internal Ops Support)
+ * @date 2026-05-15
  * @description 定義全域環境變數、Sheet ID 路由表、資料源切換開關與系統常數。
  * 本次重構新增 IDS 與 DATA_SOURCES 物件以支援多資料源架構。
  * * Changelog:
  * - [V5.2.0] Added INTERNAL_OPS tracking fields and Google Sheet definitions.
  * - [V5.1.0] Repurposed CONTACT_FIELDS index 17 to EXHIBITION_NAME and index 18 to IS_EXHIBITION.
+ * - [V5.2.1] Repurposed CONTACT_FIELDS index 22 from USER_TAG to NOTES for RAW contact remarks.
  * This enables the Fallback Auto-Tag feature safely within the A-Z column constraint.
  */
 
@@ -166,7 +167,7 @@ module.exports = {
     // 原始名片資料欄位對應
     // [V5.1.0] Repurposed indexes 17 and 18 safely within 0-25 boundary limits
     CONTACT_FIELDS: {
-        TIME: 0, NAME: 1, COMPANY: 2, POSITION: 3, DEPARTMENT: 4, PHONE: 5, MOBILE: 6, FAX: 7, EMAIL: 8, WEBSITE: 9, ADDRESS: 10, CONFIDENCE: 11, PROCESSING_TIME: 12, DRIVE_LINK: 13, SMART_FILENAME: 14, LOCAL_PATH: 15, RAW_TEXT: 16, EXHIBITION_NAME: 17, IS_EXHIBITION: 18, DATA_SOURCE: 19, LINE_USER_ID: 20, USER_NICKNAME: 21, USER_TAG: 22, ORIGINAL_ID: 23, STATUS: 24
+        TIME: 0, NAME: 1, COMPANY: 2, POSITION: 3, DEPARTMENT: 4, PHONE: 5, MOBILE: 6, FAX: 7, EMAIL: 8, WEBSITE: 9, ADDRESS: 10, CONFIDENCE: 11, PROCESSING_TIME: 12, DRIVE_LINK: 13, SMART_FILENAME: 14, LOCAL_PATH: 15, RAW_TEXT: 16, EXHIBITION_NAME: 17, IS_EXHIBITION: 18, DATA_SOURCE: 19, LINE_USER_ID: 20, USER_NICKNAME: 21, NOTES: 22, ORIGINAL_ID: 23, STATUS: 24
     },
     
     // 互動紀錄工作表欄位

@@ -2,11 +2,13 @@
 /**
  * ============================================================================
  * File: public/scripts/contacts/contacts.js
- * Version: v8.9.13 (CORE Contact Split Workspace Refinement)
- * Date: 2026-05-13
+ * Version: v8.9.15 (CORE Contact Split Workspace Refinement)
+ * Date: 2026-05-15
  * Author: Gemini
  *
  * Change Log:
+ * - [Patch] Extended RAW intake local search to include position, department, phone, mobile, email, and notes.
+ * - [Feature] Enabled RAW contact department and notes editing against existing Sheet columns E and W.
  * - [UX Polish] Refined CORE Formal Contacts split workspace density, table hierarchy, and relationship rail separation.
  * - [Bugfix] Confirmed CORE table last-update display uses SQL `updatedTime` before legacy `lastUpdateTime`/`createdTime`; paired with import-bundle cache bust.
  * - [UX Polish] Refined CORE contact context rail hierarchy with relationship-first opportunity section.
@@ -387,10 +389,17 @@ async function filterAndRenderContacts(query = '') {
         // [In-Memory] RAW Data slice
         filteredData = [...allContactsData];
         if (searchTerm) {
-            filteredData = filteredData.filter(c =>
-                (c.name && c.name.toLowerCase().includes(searchTerm)) ||
-                (c.company && c.company.toLowerCase().includes(searchTerm))
-            );
+            filteredData = filteredData.filter(c => [
+                c.name,
+                c.company,
+                c.position,
+                c.jobTitle,
+                c.department,
+                c.phone,
+                c.mobile,
+                c.email,
+                c.notes
+            ].some(value => String(value || '').toLowerCase().includes(searchTerm)));
         }
     }
     
@@ -633,6 +642,13 @@ function renderContactsTable(data) {
                 font-size: 0.82rem;
                 line-height: 1.35;
             }
+            .crm-raw-feed-note {
+                color: var(--text-muted);
+                font-size: 0.8rem;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
             .crm-raw-feed-actions {
                 display: flex;
                 justify-content: flex-end;
@@ -772,6 +788,13 @@ function renderContactsTable(data) {
         const safeDriveLink = contact.driveLink ? contact.driveLink.replace(/'/g, "\\'") : '';
         const thumbUrl = contact.driveLink ? `/api/drive/thumbnail?link=${encodeURIComponent(contact.driveLink)}` : '';
         const phone = contact.mobile || contact.phone || '';
+        const department = String(contact.department || '').trim();
+        const title = String(contact.jobTitle || contact.position || '').trim();
+        const roleParts = [];
+        if (department) roleParts.push(department);
+        if (title && title !== department) roleParts.push(title);
+        const roleText = roleParts.join('｜');
+        const notesText = String(contact.notes || '').trim();
         const rowIndexLabel = contact.rowIndex ? `<span class="crm-raw-feed-index">RAW #${safeHtml(contact.rowIndex)}</span>` : '';
         const upgradeLabel = sourceStatus === '已升級' ? '再次建立機會' : '升級';
 
@@ -797,10 +820,11 @@ function renderContactsTable(data) {
                     </div>
                     <div class="crm-raw-feed-company">${safeHtml(contact.company || '未填公司')}</div>
                     <div class="crm-raw-feed-meta">
-                        ${contact.position ? `<span>${safeHtml(contact.position)}</span>` : ''}
+                        ${roleText ? `<span>${safeHtml(roleText)}</span>` : ''}
                         ${phone ? `<span>${safeHtml(phone)}</span>` : ''}
                         ${contact.email ? `<span>${safeHtml(contact.email)}</span>` : ''}
                     </div>
+                    ${notesText ? `<div class="crm-raw-feed-note">${safeHtml(notesText)}</div>` : ''}
                     <div class="crm-raw-feed-actions">
                         <button class="crm-raw-feed-action edit" data-action="edit-card" data-contact='${contactJsonString}' title="編輯" aria-label="編輯"><span>✎</span><span>編輯</span></button>
                         <button class="crm-raw-feed-action upgrade" data-action="upgrade-card" data-contact='${contactJsonString}' title="${upgradeLabel}" aria-label="${upgradeLabel}"><span>↗</span><span>${upgradeLabel}</span></button>
@@ -1164,8 +1188,10 @@ function renderEditCardMode(contact) {
     const safeName = (contact.name || '').replace(/"/g, '&quot;');
     const safeCompany = (contact.company || '').replace(/"/g, '&quot;');
     const safePosition = (contact.position || '').replace(/"/g, '&quot;');
+    const safeDepartment = (contact.department || '').replace(/"/g, '&quot;');
     const safeMobile = (contact.mobile || '').replace(/"/g, '&quot;');
     const safeEmail = (contact.email || '').replace(/"/g, '&quot;');
+    const safeNotes = (contact.notes || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
     listContent.innerHTML = `
         <div class="edit-card-container" style="display: flex; gap: 2rem; align-items: flex-start; flex-wrap: wrap;">
@@ -1196,6 +1222,11 @@ function renderEditCardMode(contact) {
                 </div>
 
                 <div class="form-group" style="margin-bottom: 1rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-secondary);">部門 (Department)</label>
+                    <input type="text" id="raw-edit-department" class="form-input" value="${safeDepartment}" style="width: 100%;">
+                </div>
+
+                <div class="form-group" style="margin-bottom: 1rem;">
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-secondary);">手機 (Mobile)</label>
                     <input type="tel" id="raw-edit-mobile" class="form-input" value="${safeMobile}" style="width: 100%;">
                 </div>
@@ -1203,6 +1234,11 @@ function renderEditCardMode(contact) {
                 <div class="form-group" style="margin-bottom: 2rem;">
                     <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-secondary);">信箱 (Email)</label>
                     <input type="email" id="raw-edit-email" class="form-input" value="${safeEmail}" style="width: 100%;">
+                </div>
+
+                <div class="form-group" style="margin-bottom: 2rem;">
+                    <label style="display: block; margin-bottom: 0.5rem; font-weight: 500; color: var(--text-secondary);">備註 (Notes)</label>
+                    <textarea id="raw-edit-notes" class="form-input" rows="3" style="width: 100%;">${safeNotes}</textarea>
                 </div>
 
                 <div style="display: flex; gap: 10px; justify-content: flex-end;">
@@ -1297,8 +1333,10 @@ async function handleSaveCardEdit() {
         name: document.getElementById('raw-edit-name')?.value.trim() || '',
         company: document.getElementById('raw-edit-company')?.value.trim() || '',
         position: document.getElementById('raw-edit-position')?.value.trim() || '',
+        department: document.getElementById('raw-edit-department')?.value.trim() || '',
         mobile: document.getElementById('raw-edit-mobile')?.value.trim() || '',
-        email: document.getElementById('raw-edit-email')?.value.trim() || ''
+        email: document.getElementById('raw-edit-email')?.value.trim() || '',
+        notes: document.getElementById('raw-edit-notes')?.value.trim() || ''
     };
 
     try {

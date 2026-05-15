@@ -1,7 +1,9 @@
 // File: public/scripts/leads-view.js
-// Version: 16.10.1
+// Version: 16.10.3
 // Date: 2026-05-15
 // Change Log:
+// - 2026-05-15: Extended RAW lead search to include department, phone, mobile, email, and notes.
+// - 2026-05-15: Enabled RAW lead department and notes editing against existing Sheet columns E and W.
 // - 2026-05-15: Unified lead card role display to department plus jobTitle/position without changing RAW edit schema.
 // Changelog: 
 //   - V16.10.0 Delete Feature: Added handleDeleteSubmit and delete button visibility toggling based on card ownership.
@@ -534,7 +536,17 @@ function renderLeads() {
 
         // Search text evaluation
         if (searchTerm) {
-            const text = `${lead.name} ${lead.company} ${lead.position}`.toLowerCase();
+            const text = [
+                lead.name,
+                lead.company,
+                lead.position,
+                lead.jobTitle,
+                lead.department,
+                lead.phone,
+                lead.mobile,
+                lead.email,
+                lead.notes
+            ].map(value => String(value || '')).join(' ').toLowerCase();
             if (!text.includes(searchTerm)) return false;
         }
 
@@ -718,10 +730,11 @@ function openEdit(lead) {
     document.getElementById('edit-rowIndex').value = lead.rowIndex;
     document.getElementById('edit-name').value = lead.name || '';
     document.getElementById('edit-position').value = lead.position || '';
+    document.getElementById('edit-department').value = lead.department || '';
     document.getElementById('edit-company').value = lead.company || '';
     document.getElementById('edit-mobile').value = lead.mobile || '';
     document.getElementById('edit-email').value = lead.email || '';
-    document.getElementById('edit-notes').value = ''; 
+    document.getElementById('edit-notes').value = lead.notes || ''; 
 
     // [Fallback Auto-Tag] Conditional rendering of the Exhibition control UI
     const oldDynamicGroup = document.getElementById('dynamic-exhibition-group');
@@ -776,14 +789,13 @@ async function handleEditSubmit(e) {
     const data = {
         name: document.getElementById('edit-name').value,
         position: document.getElementById('edit-position').value,
+        department: document.getElementById('edit-department').value,
         company: document.getElementById('edit-company').value,
         mobile: document.getElementById('edit-mobile').value,
         email: document.getElementById('edit-email').value,
+        notes: document.getElementById('edit-notes').value,
         modifier: currentUser.displayName 
     };
-    
-    const notes = document.getElementById('edit-notes').value.trim();
-    if (notes) data.notes = notes;
 
     // [Fallback Auto-Tag] Safely extraction to explicitly prevent exhibition string loss
     const exToggle = document.getElementById('edit-is-exhibition');

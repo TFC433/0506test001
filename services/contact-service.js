@@ -1,9 +1,11 @@
 /**
  * services/contact-service.js
  * 聯絡人業務邏輯服務層
- * @version 8.17.0
- * @date 2026-05-13
+ * @version 8.17.2
+ * @date 2026-05-15
  * @changelog
+ * - [PATCH] Extended RAW contact search to include position, department, phone, mobile, email, and notes.
+ * - [PATCH] Enabled direct RAW notes editing through the configured W column while preserving existing RAW update flow.
  * - [PATCH] Moved CORE contact list search/sort/pagination onto Supabase SQL with exact count and stable contact_id tie-breaker.
  * - [PATCH] Added lazy CORE contact reverse opportunity lookup service for Contact Workspace plumbing.
  * - [PATCH] Restored linked contact driveLink runtime enrichment from RAW sourceId rowIndex without storing driveLink in SQL.
@@ -252,10 +254,17 @@ class ContactService {
             let contacts = await this.getPotentialContacts(9999);
             if (query) {
                 const searchTerm = query.toLowerCase();
-                contacts = contacts.filter(c =>
-                    (c.name && c.name.toLowerCase().includes(searchTerm)) ||
-                    (c.company && c.company.toLowerCase().includes(searchTerm))
-                );
+                contacts = contacts.filter(c => [
+                    c.name,
+                    c.company,
+                    c.position,
+                    c.jobTitle,
+                    c.department,
+                    c.phone,
+                    c.mobile,
+                    c.email,
+                    c.notes
+                ].some(value => String(value || '').toLowerCase().includes(searchTerm)));
             }
             return { data: contacts };
         } catch (error) {
@@ -530,12 +539,6 @@ class ContactService {
 
             if (mergedData.is_exhibition === false) {
                 mergedData.exhibition_name = '';
-            }
-
-            if (updateData.notes) {
-                const oldNotes = target.notes || '';
-                const newNoteEntry = `[${modifier} ${new Date().toLocaleDateString()}] ${updateData.notes}`;
-                mergedData.notes = oldNotes ? `${oldNotes}\n${newNoteEntry}` : newNoteEntry;
             }
 
             await this.contactWriter.writePotentialContactRow(rowIndex, mergedData);
