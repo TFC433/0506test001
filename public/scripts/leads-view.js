@@ -1,6 +1,8 @@
 // File: public/scripts/leads-view.js
-// Version: 16.10.0
-// Date: 2026-03-22
+// Version: 16.10.1
+// Date: 2026-05-15
+// Change Log:
+// - 2026-05-15: Unified lead card role display to department plus jobTitle/position without changing RAW edit schema.
 // Changelog: 
 //   - V16.10.0 Delete Feature: Added handleDeleteSubmit and delete button visibility toggling based on card ownership.
 //   - V16.9.0 Exhibition UI Cleanup: Surgically removed the legacy exhibition badge (pill) to eliminate visual clutter and ghosting. The visual system now strictly relies on the Corner Triangle (mode) and Bottom Info Bar (information) without redundancy.
@@ -559,6 +561,15 @@ function renderLeads() {
     grid.innerHTML = filtered.map(lead => createCardHTML(lead)).join('');
 }
 
+function getContactRoleText(contact) {
+    const department = String(contact?.department || '').trim();
+    const title = String(contact?.jobTitle || contact?.position || '').trim();
+    const parts = [];
+    if (department) parts.push(department);
+    if (title && title !== department) parts.push(title);
+    return parts.join('｜');
+}
+
 function createCardHTML(lead) {
     const isMine = (lead.lineUserId === currentUser.userId);
     
@@ -572,6 +583,7 @@ function createCardHTML(lead) {
 
     const safe = (str) => (str || '').replace(/"/g, '&quot;');
     const safeHtml = (str) => (str || '').replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const roleText = getContactRoleText(lead);
     const leadJson = JSON.stringify(lead).replace(/'/g, "&apos;").replace(/"/g, "&quot;");
 
     const isLocalDev = (currentUser.userId === 'TEST_LOCAL_USER');
@@ -638,7 +650,7 @@ function createCardHTML(lead) {
                     <div class="info-name ${!hasName ? 'text-missing' : ''}">${hasName ? safeHtml(lead.name) : '未命名'}</div>
                     <div class="company-row">
                         ${lead.company ? `<span class="company-pill">${safeHtml(lead.company)}</span>` : ''}
-                        ${lead.position ? `<span class="position-text">${safeHtml(lead.position)}</span>` : ''}
+                        ${roleText ? `<span class="position-text">${safeHtml(roleText)}</span>` : ''}
                     </div>
                 </div>
                 

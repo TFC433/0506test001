@@ -1,8 +1,9 @@
 /**
  * public/scripts/opportunities/opportunity-modals.js
- * @version v5.0.13
- * @date 2026-05-13
+ * @version v5.0.14
+ * @date 2026-05-15
  * @changelog
+ * - Unify contact role display in opportunity link contact search results.
  * - Preserve existing CORE contactId through wizard and detail link payloads to prevent duplicate manual SQL contact creation.
  * - Opportunity workflow initialization normalization: remove hardcoded default stage fallback and initialize stage history from config-driven current stage.
  * - Relationship lifecycle stabilization restores explicit Opportunity Detail reloads after link mutations
@@ -25,6 +26,15 @@ let isLinkingContact = false;
 function normalizeContactId(contact) {
     const id = contact?.contactId ?? contact?.id ?? contact?.contact_id;
     return id === undefined || id === null || String(id).trim() === '' ? null : id;
+}
+
+function getContactRoleText(contact) {
+    const department = String(contact?.department || '').trim();
+    const title = String(contact?.jobTitle || contact?.position || '').trim();
+    const parts = [];
+    if (department) parts.push(department);
+    if (title && title !== department) parts.push(title);
+    return parts.join('｜');
 }
 
 // ==================== Wizard 核心邏輯 (新增機會專用) ====================
@@ -659,11 +669,12 @@ async function searchAndRenderContacts(type, query) {
         if (result.data && result.data.length > 0) {
             resultsContainer.innerHTML = result.data.map(contact => {
                 const companyDisplay = contact.companyName || contact.company || '公司未知';
+                const roleText = getContactRoleText(contact);
                 const safeJson = JSON.stringify(contact).replace(/'/g, "&apos;").replace(/"/g, '&quot;');
                 return `
                     <div class="kanban-card" style="cursor: pointer; margin-bottom:8px;" onclick='handleLinkContact(${safeJson}, "${type}")'>
                         <div class="card-title">${contact.name}</div>
-                        <div class="card-company">${companyDisplay} - ${contact.position || '職位未知'}</div>
+                        <div class="card-company">${roleText ? `${companyDisplay} · ${roleText}` : companyDisplay}</div>
                     </div>
                 `;
             }).join('');

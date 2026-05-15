@@ -2,11 +2,12 @@
 /**
  * ============================================================================
  * File: public/scripts/contacts/contact-potential-manager.js
- * Version: v8.0.7 (Opportunity Detail Linked Contact Enrichment)
- * Date: 2026-05-12
+ * Version: v8.0.8 (Opportunity Detail Linked Contact Enrichment)
+ * Date: 2026-05-15
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-15: Removed duplicate local contact-link success toasts and unified department/title role display.
  * - 2026-05-12: Opportunity Detail linked contact enrichment: use global RAW business-card pool for linked-contact driveLink enrichment and unify contact typography.
  * - 2026-05-12: Opportunity Detail contact refinement: normalize clickable contact name weight and allow archived RAW business cards to enrich linked contacts without displaying archived rows as candidates.
  * - 2026-05-12: Opportunity Detail contact UI polish: normalize potential-contact name-link typography and box linked-contact management actions consistently.
@@ -55,6 +56,15 @@
 // 職責：共用的潛在聯絡人管理模組，處理顯示、建檔與關聯邏輯
 
 const PotentialContactsManager = (() => {
+    function getContactRoleText(contact) {
+        const department = String(contact?.department || '').trim();
+        const title = String(contact?.jobTitle || contact?.position || '').trim();
+        const parts = [];
+        if (department) parts.push(department);
+        if (title && title !== department) parts.push(title);
+        return parts.join('｜');
+    }
+
     function _ensureScopedStyles() {
         if (document.getElementById('opp-potential-contacts-styles')) return;
 
@@ -142,7 +152,7 @@ const PotentialContactsManager = (() => {
             const safeOpportunityId = String(opportunityId || '').replace(/"/g, '&quot;');
             visiblePotentialContacts.forEach(contact => {
                 const contactJsonString = JSON.stringify(contact).replace(/'/g, "&apos;");
-                const roleText = contact.position ? `｜${contact.position}` : '';
+                const roleText = getContactRoleText(contact);
                 const safeDriveLink = contact.driveLink ? contact.driveLink.replace(/'/g, "\\'") : '';
                 const contactNameHTML = contact.driveLink
                     ? `<a href="#" class="opp-rail-contact-name-link" onclick="event.preventDefault(); showBusinessCardPreview('${safeDriveLink}')">${contact.name || '-'}</a>`
@@ -151,7 +161,7 @@ const PotentialContactsManager = (() => {
 
                 railHTML += `
                     <div class="opp-rail-chip">
-                        <span class="opp-rail-chip-main">${contactNameHTML}<span class="opp-rail-chip-meta">${roleText}</span></span>
+                        <span class="opp-rail-chip-main">${contactNameHTML}${roleText ? `<span class="opp-rail-chip-meta">｜${roleText}</span>` : ''}</span>
                         <div class="opp-rail-actions">
                             ${actionButton}
                         </div>
@@ -178,6 +188,7 @@ const PotentialContactsManager = (() => {
         
         potentialContacts.forEach(contact => {
             const contactJsonString = JSON.stringify(contact).replace(/'/g, "&apos;");
+            const roleText = getContactRoleText(contact);
             
             // [STATUS INFERENCE] Determines if RAW contact exists in CORE based on comparisonKey.
             const isAlreadyHandled = comparisonSet.has(contact[comparisonKey]);
@@ -213,7 +224,7 @@ const PotentialContactsManager = (() => {
                 <tr>
                     <td data-label="姓名"><strong>${contact.name || '-'}</strong></td>
                     <td data-label="公司">${contact.company || '-'}</td>
-                    <td data-label="職位">${contact.position || '-'}</td>
+                    <td data-label="職位">${roleText || '-'}</td>
                     <td data-label="聯絡方式">${contact.mobile ? `<div>📱 ${contact.mobile}</div>` : ''}${contact.phone ? `<div>📞 ${contact.phone}</div>` : ''}</td>
                     <td data-label="狀態">${statusBadge}</td>
                     <td data-label="操作">
@@ -290,7 +301,6 @@ const PotentialContactsManager = (() => {
 
             if (!result.success) throw new Error(result.error || '後端處理失敗');
             
-            showNotification('聯絡人關聯成功！', 'success');
             await loadOpportunityDetailPage(opportunityId); // 重新載入機會詳細頁面
         } catch (error) {
             if (error.message !== 'Unauthorized') showNotification(`關聯失敗: ${error.message}`, 'error');
@@ -342,7 +352,6 @@ const PotentialContactsManager = (() => {
 
                 if (!result.success) throw new Error(result.error || '關聯建立失敗');
 
-                showNotification('聯絡人關聯成功！', 'success');
                 await loadOpportunityDetailPage(opportunityId);
             } catch (error) {
                 if (error.message !== 'Unauthorized') showNotification(`關聯失敗: ${error.message}`, 'error');

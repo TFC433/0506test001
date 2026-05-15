@@ -2,11 +2,12 @@
 /**
  * ============================================================================
  * File: public/scripts/opportunities/details/opportunity-associated-contacts.js
- * Version: v8.0.25 (Business Card Archive Workspace)
- * Date: 2026-05-13
+ * Version: v8.0.26 (Business Card Archive Workspace)
+ * Date: 2026-05-15
  * Author: Gemini (Assisted)
  *
  * Change Log:
+ * - 2026-05-15: Unified contact role display across detail link, associated chip, and business-card archive candidates.
  * - 2026-05-13: Preserve contactId variants for detail linking, show department/title contact meta, and sort main/same-company/external associated contacts.
  * - 2026-05-13: Reworked business card archive modal into localized two-step operational workspace with scoped classes.
  * - 2026-05-13: Polished business card archive candidate list and confirmation preview for compact CRM reconciliation.
@@ -68,6 +69,15 @@ const OpportunityContacts = (() => {
     function _normalizeContactId(contact) {
         const id = contact?.contactId ?? contact?.id ?? contact?.contact_id;
         return id === undefined || id === null || String(id).trim() === '' ? null : id;
+    }
+
+    function getContactRoleText(contact) {
+        const department = String(contact?.department || '').trim();
+        const title = String(contact?.jobTitle || contact?.position || '').trim();
+        const parts = [];
+        if (department) parts.push(department);
+        if (title && title !== department) parts.push(title);
+        return parts.join('｜');
     }
 
     function _ensureScopedStyles() {
@@ -431,12 +441,7 @@ const OpportunityContacts = (() => {
         sortedContacts.forEach(contact => {
             const isMainContact = (contact.name === _opportunityInfo.mainContact);
             const isManual = !contact.sourceId || contact.sourceId === 'MANUAL';
-            const department = String(contact.department || '').trim();
-            const title = String(contact.jobTitle || contact.position || '').trim();
-            const roleParts = [];
-            if (department) roleParts.push(department);
-            if (title && title !== department) roleParts.push(title);
-            const roleText = roleParts.join('\uFF5C');
+            const roleText = getContactRoleText(contact);
             const safeContactId = String(contact.contactId || '').replace(/'/g, "\\'");
             const safeContactName = String(contact.name || '').replace(/'/g, "\\'");
             const safeOpportunityId = String(_opportunityInfo.opportunityId || '').replace(/'/g, "\\'");
@@ -531,11 +536,12 @@ const OpportunityContacts = (() => {
                 if (contacts.length > 0) {
                     resultsContainer.innerHTML = contacts.map(contact => {
                         const contactJson = JSON.stringify(contact).replace(/'/g, "&apos;");
+                        const roleText = getContactRoleText(contact);
                         // 排除已升級或歸檔的檢查視需求而定，此處僅列出所有搜尋結果
                         return `
                             <div class="kanban-card" style="cursor: pointer;" onclick='OpportunityContacts._handleLinkExistingContact("${opportunityId}", ${contactJson})'>
                                 <div class="card-title">${contact.name}</div>
-                                <div class="card-company">${contact.company || '無公司'} - ${contact.position || '職位未知'}</div>
+                                <div class="card-company">${roleText ? `${contact.company || '無公司'} · ${roleText}` : (contact.company || '無公司')}</div>
                             </div>`;
                     }).join('');
                 } else {
@@ -597,7 +603,7 @@ const OpportunityContacts = (() => {
                 ${renderFieldRow('公司', item.companyName || item.company)}
                 ${renderFieldRow('電話', item.mobile || item.phone)}
                 ${renderFieldRow('Email', item.email)}
-                ${renderFieldRow('職稱', item.position || item.jobTitle)}
+                ${renderFieldRow('職稱', getContactRoleText(item))}
             </div>
         `;
         const showArchivePreview = (card) => {
@@ -648,11 +654,12 @@ const OpportunityContacts = (() => {
                 if (pendingCards.length > 0) {
                     resultsContainer.innerHTML = pendingCards.map(card => {
                         const cardJson = JSON.stringify(card).replace(/'/g, "&apos;");
+                        const roleText = getContactRoleText(card);
                         return `
                             <div class="archive-candidate-row" onclick='OpportunityContacts.showArchivePreview(${cardJson})'>
                                 <div class="archive-candidate-main">
                                     <span class="archive-candidate-name">${card.name || '-'}</span>
-                                    <span class="archive-candidate-position">${card.position || card.jobTitle || ''}</span>
+                                    <span class="archive-candidate-position">${roleText}</span>
                                 </div>
                                 <div class="archive-candidate-company">${card.company || '公司未知'}</div>
                             </div>`;
