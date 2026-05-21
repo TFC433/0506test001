@@ -3,8 +3,9 @@
 // ============================================================================
 // public/scripts/opportunity-details/opportunity-details-components.js
 // 職責：整合機會詳細頁面組件，處理編輯邏輯與資料存取
-// * @version 1.1.17 (Opportunity Lineage Workflow Phase 2-C correction)
-// * @date 2026-05-20
+// * @version 1.1.18 (Opportunity Detail Edit Mode UI Phase 1-A)
+// * @date 2026-05-21
+// * @changelog 2026-05-21: Opportunity Detail Edit Mode UI Phase 1-A: Introduce operational workspace zone grouping and spacing hierarchy.
 // * @changelog 2026-05-21: Opportunity Lineage Workflow Phase 2-C correction places parent-side commercial lineage labels before parent names.
 // * @changelog 2026-05-20: Opportunity Lineage UX Phase 2-B — rename related opportunities to commercial context and render directional lineage labels.
 // * @changelog 2026-05-20: Converge inline businessType selector to Chinese-only Phase 1 lifecycle set.
@@ -68,9 +69,15 @@ function _injectStylesForOppInfoCard() {
             margin-bottom: var(--spacing-4);
             border-bottom: 1px solid var(--border-color);
         }
-        .edit-form-columns { display: flex; gap: var(--spacing-8); align-items: flex-start; }
-        .form-col { flex: 1; display: flex; flex-direction: column; gap: var(--spacing-5); min-width: 0; }
+        .edit-form-columns { display: flex; gap: var(--spacing-6); align-items: flex-start; }
+        .form-col { flex: 1; display: flex; flex-direction: column; gap: var(--spacing-3); min-width: 0; }
         @media (max-width: 900px) { .edit-form-columns { flex-direction: column; gap: var(--spacing-6); } }
+        .op-edit-zone { display: flex; flex-direction: column; gap: var(--spacing-3); }
+        .op-edit-zone + .op-edit-zone {
+            margin-top: var(--spacing-5);
+            padding-top: var(--spacing-4);
+            border-top: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+        }
         .form-group { display: flex; flex-direction: column; gap: 6px; }
         .form-label { font-size: var(--font-size-sm); color: var(--text-muted); font-weight: 500; }
         .form-input, .form-select, .form-textarea {
@@ -412,115 +419,129 @@ const OpportunityInfoCard = (() => {
 
             <div class="edit-form-columns">
                 <div class="form-col">
-                    <div class="form-group">
-                        <label class="form-label">機會名稱</label>
-                        <input type="text" id="edit-opportunity-name" class="form-input" value="${opp.opportunityName || ''}">
+                    <div class="op-edit-zone">
+                        <div class="form-group">
+                            <label class="form-label">機會名稱</label>
+                            <input type="text" id="edit-opportunity-name" class="form-input" value="${opp.opportunityName || ''}">
+                        </div>
                     </div>
                     
-                    <div class="form-group">
-                        <label class="form-label">銷售模式</label>
-                        ${_renderCustomPillsGroup(salesModelOptions, salesModel, 'sales-model', 'OpportunityInfoCardEvents.handleSalesModelPillClick')}
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">終端客戶 (客戶公司)</label>
-                        <select id="edit-customer-company" class="form-select" onchange="OpportunityInfoCardEvents.handleCustomerChange(this.value)">
-                            <option value="">載入中...</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">終端窗口 (聯絡人)</label>
-                        <select id="edit-main-contact" class="form-select">
-                            <option value="">載入中...</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">主要通路/下單方 (公司選擇)</label>
-                        <select id="edit-channel-details" class="form-select" onchange="OpportunityInfoCardEvents.handleChannelChange(this.value)">
-                            <option value="">載入中...</option>
-                        </select>
-                        <input type="hidden" id="edit-sales-channel" value="${initSalesChannel}">
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">通路窗口 (聯絡人)</label>
-                        <select id="edit-channel-contact" class="form-select">
-                            <option value="">-- 請先選擇通路公司 --</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">機會價值</label>
-                        <div style="display:flex; gap:8px; align-items:center;">
-                            <input type="text" id="edit-opportunity-value" class="form-input" 
-                                   value="${formattedValue}" ${isManualValue ? '' : 'disabled'} style="flex:1;">
+                    <div class="op-edit-zone">
+                        <div class="form-group">
+                            <label class="form-label">銷售模式</label>
+                            ${_renderCustomPillsGroup(salesModelOptions, salesModel, 'sales-model', 'OpportunityInfoCardEvents.handleSalesModelPillClick')}
                         </div>
-                        <label class="manual-override-label">
-                            <input type="checkbox" id="value-manual-override-checkbox" 
-                                   onchange="OpportunityInfoCardEvents.handleManualOverride(this)"
-                                   ${isManualValue ? 'checked' : ''}>
-                            手動覆蓋自動計算
-                        </label>
+
+                        <div class="form-group">
+                            <label class="form-label">終端客戶 (客戶公司)</label>
+                            <select id="edit-customer-company" class="form-select" onchange="OpportunityInfoCardEvents.handleCustomerChange(this.value)">
+                                <option value="">載入中...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">終端窗口 (聯絡人)</label>
+                            <select id="edit-main-contact" class="form-select">
+                                <option value="">載入中...</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">主要通路/下單方 (公司選擇)</label>
+                            <select id="edit-channel-details" class="form-select" onchange="OpportunityInfoCardEvents.handleChannelChange(this.value)">
+                                <option value="">載入中...</option>
+                            </select>
+                            <input type="hidden" id="edit-sales-channel" value="${initSalesChannel}">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">通路窗口 (聯絡人)</label>
+                            <select id="edit-channel-contact" class="form-select">
+                                <option value="">-- 請先選擇通路公司 --</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <div class="form-group">
-                        <label class="form-label">負責業務</label>
-                        ${_renderPillsGroup('團隊成員', opp.assignee, 'assignee')}
-                    </div>
+                    <div class="op-edit-zone">
+                        <div class="form-group">
+                            <label class="form-label">機會價值</label>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <input type="text" id="edit-opportunity-value" class="form-input"
+                                       value="${formattedValue}" ${isManualValue ? '' : 'disabled'} style="flex:1;">
+                            </div>
+                            <label class="manual-override-label">
+                                <input type="checkbox" id="value-manual-override-checkbox"
+                                       onchange="OpportunityInfoCardEvents.handleManualOverride(this)"
+                                       ${isManualValue ? 'checked' : ''}>
+                                手動覆蓋自動計算
+                            </label>
+                        </div>
 
-                    <div class="form-group">
-                        <label class="form-label">機會種類</label>
-                        ${_renderPillsGroup('機會種類', opp.opportunityType, 'opportunity-type')}
-                    </div>
+                        <div class="form-group">
+                            <label class="form-label">負責業務</label>
+                            ${_renderPillsGroup('團隊成員', opp.assignee, 'assignee')}
+                        </div>
 
-                    <div class="form-group">
-                        <label class="form-label">商務類型</label>
-                        <select id="edit-business-type" class="form-select">
-                            <option value="NEW" ${businessType === 'NEW' ? 'selected' : ''}>新案</option>
-                            <option value="RENEWAL" ${businessType === 'RENEWAL' ? 'selected' : ''}>續約</option>
-                            <option value="FOLLOWUP" ${businessType === 'FOLLOWUP' ? 'selected' : ''}>延伸</option>
-                        </select>
-                    </div>
+                        <div class="form-group">
+                            <label class="form-label">機會種類</label>
+                            ${_renderPillsGroup('機會種類', opp.opportunityType, 'opportunity-type')}
+                        </div>
 
-                    <div class="form-group">
-                        <label class="form-label">設備規模</label>
-                        ${_renderPillsGroup('設備規模', opp.deviceScale, 'device-scale')}
+                        <div class="form-group">
+                            <label class="form-label">商務類型</label>
+                            <select id="edit-business-type" class="form-select">
+                                <option value="NEW" ${businessType === 'NEW' ? 'selected' : ''}>新案</option>
+                                <option value="RENEWAL" ${businessType === 'RENEWAL' ? 'selected' : ''}>續約</option>
+                                <option value="FOLLOWUP" ${businessType === 'FOLLOWUP' ? 'selected' : ''}>延伸</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">設備規模</label>
+                            ${_renderPillsGroup('設備規模', opp.deviceScale, 'device-scale')}
+                        </div>
                     </div>
                 </div>
 
                 <div class="form-col">
-                    <div class="form-group">
-                        <label class="form-label">下單機率</label>
-                        ${_renderPillsGroup('下單機率', opp.orderProbability, 'order-probability')}
+                    <div class="op-edit-zone">
+                        <div class="form-group">
+                            <label class="form-label">下單機率</label>
+                            ${_renderPillsGroup('下單機率', opp.orderProbability, 'order-probability')}
+                        </div>
                     </div>
                     
-                    <div class="form-group">
-                        <label class="form-label">建立機會日期</label>
-                        <input type="date" id="edit-created-time" class="form-input" 
-                               value="${createdDate}">
+                    <div class="op-edit-zone">
+                        <div class="form-group">
+                            <label class="form-label">建立機會日期</label>
+                            <input type="date" id="edit-created-time" class="form-input"
+                                   value="${createdDate}">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">預計結案日</label>
+                            <input type="date" id="edit-expected-close-date" class="form-input"
+                                   value="${expectedDate}">
+                        </div>
                     </div>
 
-                    <div class="form-group">
-                        <label class="form-label">預計結案日</label>
-                        <input type="date" id="edit-expected-close-date" class="form-input" 
-                               value="${expectedDate}">
+                    <div class="op-edit-zone">
+                        <div class="form-group">
+                            <label class="form-label">目前階段</label>
+                            ${_renderPillsGroup('機會階段', opp.currentStage, 'current-stage')}
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">機會來源</label>
+                            ${_renderPillsGroup('機會來源', opp.opportunitySource, 'opportunity-source')}
+                        </div>
                     </div>
 
-                    <div class="form-group">
-                        <label class="form-label">目前階段</label>
-                        ${_renderPillsGroup('機會階段', opp.currentStage, 'current-stage')}
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">機會來源</label>
-                        ${_renderPillsGroup('機會來源', opp.opportunitySource, 'opportunity-source')}
-                    </div>
-
-                    <div class="form-group">
-                        <label class="form-label">可能下單規格 (複選)</label>
-                        ${_renderSpecsGroup(opp)}
+                    <div class="op-edit-zone">
+                        <div class="form-group">
+                            <label class="form-label">可能下單規格 (複選)</label>
+                            ${_renderSpecsGroup(opp)}
+                        </div>
                     </div>
                 </div>
             </div>
