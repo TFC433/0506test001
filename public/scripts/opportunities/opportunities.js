@@ -365,23 +365,27 @@ function renderOpportunitiesTable(opportunities) {
             .opp-list-table th { padding: 12px 16px; text-align: left; background: var(--primary-bg); color: var(--text-secondary); font-weight: 600; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); white-space: nowrap; }
             .opp-list-table td { padding: 12px 16px; border-bottom: 1px solid var(--border-color); vertical-align: middle; font-size: 0.95rem; color: var(--text-primary); }
             .opp-list-table tr:not(.locked):hover { background-color: var(--glass-bg); }
+            .opp-list-table tr.opp-lineage-child { background-color: color-mix(in srgb, var(--accent-blue) 3%, transparent); }
             
             .opp-list-table tr.locked { background-color: var(--bg-locked); color: var(--text-locked); }
             .opp-list-table tr.locked td { color: var(--text-locked); }
 
             .opp-type-chip { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 0.8rem; color: white; white-space: nowrap; font-weight: 500; }
-            .opp-lineage-chip { display: inline-flex; align-items: center; margin-right: 6px; padding: 1px 5px; border-radius: 4px; font-size: 0.72rem; line-height: 1.35; font-weight: 600; white-space: nowrap; vertical-align: 1px; border: 1px solid var(--border-color); }
+            .opp-lineage-chip { display: inline-flex; align-items: center; margin-right: 4px; padding: 1px 5px; border-radius: 4px; font-size: 0.72rem; line-height: 1.35; font-weight: 600; white-space: nowrap; vertical-align: 1px; border: 1px solid var(--border-color); }
             .opp-lineage-chip.renewal { color: var(--accent-blue); background: color-mix(in srgb, var(--accent-blue) 10%, transparent); border-color: color-mix(in srgb, var(--accent-blue) 25%, var(--border-color)); }
             .opp-lineage-chip.followup { color: var(--accent-green); background: color-mix(in srgb, var(--accent-green) 10%, transparent); border-color: color-mix(in srgb, var(--accent-green) 25%, var(--border-color)); }
-            .opp-sales-chip { display: inline-block; padding: 3px 12px; border-radius: 12px; font-size: 0.8rem; color: white; white-space: nowrap; font-weight: 500; }
+            .opp-sales-chip { display: inline-block; padding: 2px 8px; border-radius: 5px; font-size: 0.78rem; line-height: 1.35; color: var(--text-secondary); background: color-mix(in srgb, var(--sales-color, var(--border-color)) 12%, var(--card-bg)); border: 1px solid color-mix(in srgb, var(--sales-color, var(--border-color)) 22%, var(--border-color)); white-space: nowrap; font-weight: 600; }
+            .opp-sales-channel { white-space: nowrap; color: var(--text-secondary); }
+            .opp-sales-channel .opp-sales-chip + .opp-channel-chip { margin-left: 6px; }
             .opp-channel-chip { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; border: 1px solid var(--border-color); background-color: var(--glass-bg); color: var(--text-secondary); white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
-            .opp-status-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; background: var(--glass-bg); color: var(--text-primary); border: 1px solid var(--border-color); }
+            .opp-status-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; background: var(--glass-bg); color: var(--text-primary); border: 1px solid var(--border-color); white-space: nowrap; }
             
             .opp-list-table th.sortable { cursor: pointer; transition: color 0.2s; }
             .opp-list-table th.sortable:hover { color: var(--accent-blue); }
             .opp-sort-icon { margin-left: 4px; font-size: 0.8em; opacity: 0.5; }
 
-            .col-idx { width: 60px; text-align: center !important; color: var(--text-muted); font-weight: 600; }
+            .col-idx { width: 60px; text-align: center !important; color: var(--text-muted); font-weight: 500; font-size: 0.84rem !important; }
+            .col-activity { color: var(--text-muted) !important; font-size: 0.84rem !important; white-space: nowrap; }
             .col-actions { width: 80px; text-align: center !important; }
             .btn-mini-delete { background: none; border: none; color: var(--text-muted); cursor: pointer; padding: 6px; border-radius: 4px; transition: background-color 0.2s, color 0.2s; }
             .btn-mini-delete:hover { color: var(--accent-red); background: color-mix(in srgb, var(--accent-red) 12%, var(--secondary-bg)); }
@@ -405,8 +409,7 @@ function renderOpportunitiesTable(opportunities) {
                     <th>機會種類</th>
                     ${renderSortHeader('opportunityName', '機會名稱')}
                     ${renderSortHeader('customerCompany', '客戶公司')}
-                    <th>銷售模式</th>
-                    <th>主要通路</th>
+                    <th>銷售模式 / 主要通路</th>
                     <th>階段</th>
                     <th class="col-actions">操作</th>
                 </tr></thead><tbody>`;
@@ -454,8 +457,12 @@ function renderOpportunityRows(opportunities) {
         const stageName = stageNotes.get(opp.currentStage) || opp.currentStage || '-';
         const typeColor = typeColors.get(opp.opportunityType) || 'var(--text-muted)';
         const modelColor = modelColors.get(opp.salesModel) || 'var(--text-muted)';
+        const salesMode = opp.salesModel || '-';
         
         const channelText = opp.salesChannel || '-';
+        const channelBadge = salesMode === '直接販售' || channelText === '-'
+            ? ''
+            : `<span class="opp-channel-chip" title="${channelText}">${channelText}</span>`;
         const lastActivityDate = opp.effectiveLastActivity ? new Date(opp.effectiveLastActivity).toLocaleDateString('zh-TW') : '-';
 
         const oppParams = JSON.stringify({ opportunityId: opp.opportunityId }).replace(/"/g, '&quot;');
@@ -476,9 +483,9 @@ function renderOpportunityRows(opportunities) {
         const absoluteIdx = (currentOppPage - 1) * OPP_PAGE_LIMIT + index + 1;
 
         html += `
-            <tr>
+            <tr class="${isLineageChild ? 'opp-lineage-child' : ''}">
                 <td class="col-idx">${absoluteIdx}</td>
-                <td style="white-space:nowrap;">${lastActivityDate}</td>
+                <td class="col-activity">${lastActivityDate}</td>
                 <td style="${isLineageChild ? 'padding-left:28px;' : ''}"><span class="opp-type-chip" style="background:${typeColor}">${opp.opportunityType || '未分類'}</span></td>
                 <td style="min-width:180px;${isLineageChild ? ' padding-left:28px;' : ''}">
                     <a href="#" class="text-link" 
@@ -492,8 +499,7 @@ function renderOpportunityRows(opportunities) {
                 <td style="min-width:150px;">
                     <span style="color:var(--text-secondary);">${opp.customerCompany || '-'}</span>
                 </td>
-                <td><span class="opp-sales-chip" style="background:${modelColor}">${opp.salesModel || '-'}</span></td>
-                <td><span class="opp-channel-chip" title="${channelText}">${channelText}</span></td>
+                <td class="opp-sales-channel"><span class="opp-sales-chip" style="--sales-color:${modelColor}">${salesMode}</span>${channelBadge}</td>
                 <td><span class="opp-status-badge">${stageName}</span></td>
                 <td class="col-actions">
                     <button class="btn-mini-delete" title="刪除案件" 
