@@ -234,6 +234,10 @@ const NewOppWizard = {
             const assigneeSelect = document.getElementById('wiz-assignee');
             if (assigneeSelect) assigneeSelect.value = parent.assignee;
         }
+        if (workflow.businessType === 'RENEWAL') {
+            const stageSelect = document.getElementById('wiz-stage');
+            if (stageSelect) stageSelect.value = '受注';
+        }
 
         this.renderStep();
         this._applyBusinessTypeGovernance();
@@ -303,6 +307,7 @@ const NewOppWizard = {
         }
 
         const lineage = this.state.data.lineageDefaults;
+        const isRenewal = lineage?.businessType === 'RENEWAL';
         if (businessTypeSelect) {
             businessTypeSelect.value = lineage?.businessType || DEFAULT_BUSINESS_TYPE;
             businessTypeSelect.disabled = true;
@@ -313,10 +318,19 @@ const NewOppWizard = {
             context.textContent = lineage ? `商務脈絡：${lineage.label}，建立後會自動關聯目前機會。` : '';
         }
 
+        const sourceGroup = document.getElementById('wiz-opp-source')?.closest('.form-group');
         const dateGroup = document.getElementById('wiz-close-date')?.closest('.form-group');
         const valueGroup = document.getElementById('wiz-value')?.closest('.form-group');
-        if (dateGroup) dateGroup.style.display = lineage ? '' : 'none';
-        if (valueGroup) valueGroup.style.display = lineage ? '' : 'none';
+        if (sourceGroup) sourceGroup.style.display = isRenewal ? 'none' : '';
+        if (dateGroup) dateGroup.style.display = lineage && !isRenewal ? '' : 'none';
+        if (valueGroup) valueGroup.style.display = lineage && !isRenewal ? '' : 'none';
+
+        const assigneeGroup = document.getElementById('wiz-assignee')?.closest('.form-group');
+        const stageGroup = document.getElementById('wiz-stage')?.closest('.form-group');
+        const notesGroup = document.getElementById('wiz-notes')?.closest('.form-group');
+        if (assigneeGroup) assigneeGroup.style.display = isRenewal ? 'none' : '';
+        if (stageGroup) stageGroup.style.display = isRenewal ? 'none' : '';
+        if (notesGroup) notesGroup.style.display = isRenewal ? 'none' : '';
     },
 
     // 重置狀態
@@ -704,9 +718,21 @@ const NewOppWizard = {
 
         if (this.state.data.lineageDefaults) {
             const currentName = nameInput.value.trim();
-            if (!currentName) {
-                nameInput.value = this.state.data.lastGeneratedName || '';
+            const typeText = typeSelect.options[typeSelect.selectedIndex]?.text || typeSelect.value || '';
+            const company = this.state.data.companyName;
+            if (!company || !typeText) {
+                if (!currentName) {
+                    nameInput.value = this.state.data.lastGeneratedName || '';
+                }
+                return;
             }
+            const abbreviation = typeText.split(/[\s(（]+/)[0].trim();
+            const suffix = this.state.data.lineageDefaults.businessType === 'RENEWAL'
+                ? (this.state.data.lastGeneratedName || '').match(/（[^）]*續約）$/)?.[0] || `（${new Date().getFullYear() + 1}續約）`
+                : ' - 延伸';
+            const expectedName = `${abbreviation} - ${company}${suffix}`;
+            nameInput.value = expectedName;
+            this.state.data.lastGeneratedName = expectedName;
             return;
         }
 
