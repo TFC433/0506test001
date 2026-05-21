@@ -184,7 +184,7 @@ const NewOppWizard = {
             ? `${originalTitle}（${new Date().getFullYear() + 1}續約）`
             : `${originalTitle} - 延伸`;
 
-        this.state.path = 'new';
+        this.state.path = 'old';
         this.state.step = 2;
         this.state.data.companyName = parent.customerCompany || '';
         this.state.data.mainContact = parent.mainContact || '';
