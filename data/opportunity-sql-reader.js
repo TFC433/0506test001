@@ -317,7 +317,22 @@ class OpportunitySqlReader {
                 const { data: viewData, count: viewCount, error: viewError } = await dbQuery;
 
                 if (!viewError) {
-                    let results = (viewData || []).map(row => this._mapRowToDto(row));
+                    let mergedViewData = viewData || [];
+                    if (mergedViewData.length > 0 && (mergedViewData[0].business_type === undefined || mergedViewData[0].relation_type === undefined)) {
+                        const opportunityIds = mergedViewData.map(row => row.opportunity_id).filter(Boolean);
+                        if (opportunityIds.length > 0) {
+                            const lifecycleRes = await supabase
+                                .from(this.tableName)
+                                .select('opportunity_id, business_type, relation_type')
+                                .in('opportunity_id', opportunityIds);
+                            if (!lifecycleRes.error && lifecycleRes.data) {
+                                const lifecycleMap = new Map(lifecycleRes.data.map(row => [row.opportunity_id, row]));
+                                mergedViewData = mergedViewData.map(row => ({ ...row, ...(lifecycleMap.get(row.opportunity_id) || {}) }));
+                            }
+                        }
+                    }
+
+                    let results = mergedViewData.map(row => this._mapRowToDto(row));
                     
                     if (requiresJsPostFilter) {
                         const val = filters.potentialSpecification;
