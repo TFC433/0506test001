@@ -3,8 +3,12 @@
 // ============================================================================
 // public/scripts/opportunity-details/opportunity-details-components.js
 // 職責：整合機會詳細頁面組件，處理編輯邏輯與資料存取
-// * @version 1.1.13 (Value Hierarchy Pass A)
-// * @date 2026-05-11
+// * @version 1.1.17 (Opportunity Lineage Workflow Phase 2-C correction)
+// * @date 2026-05-20
+// * @changelog 2026-05-21: Opportunity Lineage Workflow Phase 2-C correction places parent-side commercial lineage labels before parent names.
+// * @changelog 2026-05-20: Opportunity Lineage UX Phase 2-B — rename related opportunities to commercial context and render directional lineage labels.
+// * @changelog 2026-05-20: Converge inline businessType selector to Chinese-only Phase 1 lifecycle set.
+// * @changelog 2026-05-20: Add businessType selector to Opportunity Detail inline edit mode.
 // * @changelog 2026-05-11: Opportunity Detail Value Hierarchy Pass A.
 // * @changelog 2026-05-11: Operational scan hierarchy refinement for right-rail empty states.
 // * @changelog 2026-05-11: Empty state productization refinement for quieter metadata-like fallbacks.
@@ -395,6 +399,7 @@ const OpportunityInfoCard = (() => {
         const expectedDate = opp.expectedCloseDate ? opp.expectedCloseDate.split('T')[0] : '';
 
         const initSalesChannel = opp.salesChannel || opp.channelDetails || '';
+        const businessType = ['NEW', 'RENEWAL', 'FOLLOWUP'].includes(opp.businessType) ? opp.businessType : 'FOLLOWUP';
 
         return `
             <div class="info-card-header">
@@ -468,6 +473,15 @@ const OpportunityInfoCard = (() => {
                     <div class="form-group">
                         <label class="form-label">機會種類</label>
                         ${_renderPillsGroup('機會種類', opp.opportunityType, 'opportunity-type')}
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">商務類型</label>
+                        <select id="edit-business-type" class="form-select">
+                            <option value="NEW" ${businessType === 'NEW' ? 'selected' : ''}>新案</option>
+                            <option value="RENEWAL" ${businessType === 'RENEWAL' ? 'selected' : ''}>續約</option>
+                            <option value="FOLLOWUP" ${businessType === 'FOLLOWUP' ? 'selected' : ''}>延伸</option>
+                        </select>
                     </div>
 
                     <div class="form-group">
@@ -640,50 +654,51 @@ const OpportunityAssociatedOpps = (() => {
     function render(details) {
         const container = document.getElementById('associated-opportunities-list');
         const addButton = document.getElementById('add-associated-opportunity-btn');
-        if (!container || !addButton) return;
+        if (!container) return;
         const { opportunityInfo, parentOpportunity, childOpportunities } = details;
         let html = '';
-        addButton.style.display = 'flex'; 
-        addButton.onclick = () => showLinkOpportunityModal(opportunityInfo.opportunityId, opportunityInfo.rowIndex);
-        const header = addButton.closest('.widget-header');
-        let manageBtn = document.getElementById('manage-associated-opportunity-btn');
-        if (header && !manageBtn) {
-            manageBtn = document.createElement('button');
-            manageBtn.type = 'button';
-            manageBtn.id = 'manage-associated-opportunity-btn';
-            manageBtn.className = 'opp-rail-manage-link';
-            addButton.before(manageBtn);
+        _isManageMode = false;
+        if (addButton) {
+            addButton.style.display = 'none';
+            addButton.onclick = null;
         }
-        if (manageBtn) {
-            manageBtn.textContent = _isManageMode ? '完成' : '管理';
-            manageBtn.onclick = () => {
-                _isManageMode = !_isManageMode;
-                render(details);
-            };
-        }
+        const manageBtn = document.getElementById('manage-associated-opportunity-btn');
+        if (manageBtn) manageBtn.remove();
         const safeId = value => String(value || '').replace(/'/g, "\\'");
         const childItems = childOpportunities || [];
+        const parentRelationLabelMap = {
+            RENEWAL_OF: '續約自',
+            FOLLOWUP_OF: '延伸自',
+            EXPANSION_OF: '延伸自',
+            UPGRADE_OF: '延伸自',
+            REPLACEMENT_OF: '延伸自'
+        };
+        const childRelationLabelMap = {
+            RENEWAL_OF: '續約案',
+            FOLLOWUP_OF: '延伸案',
+            EXPANSION_OF: '延伸案',
+            UPGRADE_OF: '延伸案',
+            REPLACEMENT_OF: '延伸案'
+        };
 
         if (parentOpportunity) {
+            const parentLabel = parentRelationLabelMap[opportunityInfo.relationType] || '';
             html += `
                 <div class="opp-rail-chip">
+                    ${parentLabel ? `<span class="opp-rail-chip-meta">${parentLabel}</span>` : ''}
                     <a href="#" class="text-link opp-rail-chip-main" onclick="event.preventDefault(); CRM_APP.navigateTo('opportunity-details', { opportunityId: '${safeId(parentOpportunity.opportunityId)}' })">${parentOpportunity.opportunityName}</a>
-                    ${_isManageMode ? `<button class="action-btn small danger" onclick="OpportunityAssociatedOpps._handleRemoveParentLink('${safeId(opportunityInfo.opportunityId)}', ${opportunityInfo.rowIndex})" title="移除母機會關聯">移除</button>` : ''}
                 </div>`;
-            addButton.textContent = '編輯母機會';
-        } else {
-            addButton.textContent = '+ 新增母機會';
         }
-
         childItems.forEach(child => {
+            const childLabel = childRelationLabelMap[child.relationType] || '';
             html += `
                 <a href="#" class="opp-rail-chip text-link" onclick="event.preventDefault(); CRM_APP.navigateTo('opportunity-details', { opportunityId: '${safeId(child.opportunityId)}' })">
                     <span class="opp-rail-chip-main">${child.opportunityName}</span>
-                    <span class="opp-rail-chip-meta">子機會</span>
+                    ${childLabel ? `<span class="opp-rail-chip-meta">${childLabel}</span>` : ''}
                 </a>`;
         });
 
-        container.innerHTML = `<div class="opp-rail-chip-wall">${html || '<div class="opp-rail-empty">無關聯機會</div>'}</div>`;
+        container.innerHTML = `<div class="opp-rail-chip-wall">${html || '<div class="opp-rail-empty">尚無商務脈絡</div>'}</div>`;
     }
     return {
         render,

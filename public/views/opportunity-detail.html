@@ -1,8 +1,9 @@
 <!--
  * File Path: public/views/opportunity-detail.html
- * Version: 1.8.16
- * Date: 2026-05-12
+ * Version: 1.8.17
+ * Date: 2026-05-20
  * Changelog:
+ * - (v1.8.17) Opportunity Lineage UX Phase 2-B — rename related opportunities to commercial context and render directional lineage labels.
  * - (v1.8.16) Opportunity Detail pipeline typography refinement: slightly reduce workflow label density for improved narrow-desktop fit.
  * - (v1.8.15) Opportunity Detail right-rail refinement: slightly reduce adaptive rail minimum width for improved narrow-desktop balance.
  * - (v1.8.14) Opportunity Detail width balance pass: tune narrow-desktop pipeline density and rebalance middle card proportions to 2-3-3-2.
@@ -488,8 +489,8 @@
 
         <div class="dashboard-widget">
             <div class="widget-header">
-                <h2 class="widget-title">關聯機會</h2>
-                <button class="action-btn primary" id="add-associated-opportunity-btn">+ 關聯機會</button>
+                <h2 class="widget-title">商務脈絡</h2>
+                <button class="action-btn primary" id="add-associated-opportunity-btn" style="display: none;" aria-hidden="true" type="button">+ 關聯機會</button>
             </div>
             <div id="associated-opportunities-list" class="widget-content">
                 </div>

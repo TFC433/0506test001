@@ -4,9 +4,10 @@
 /**
  * Project: TFC CRM
  * File: public/scripts/opportunities/opportunity-details-events.js
- * Version: 8.1.6
- * Date: 2026-05-12
+ * Version: 8.1.7
+ * Date: 2026-05-20
  * Changelog:
+ * - [PATCH] Save businessType from Opportunity Detail inline edit mode.
  * - [FIX] Opportunity Detail post-save refresh fix: reload normalized detail page after successful edit save instead of brittle optimistic partial re-render.
  * - [STABILITY] Edit/view layout stability correction: clear display override when returning to view mode after structural decoupling.
  * - [FIX] _getCompanyContacts now correctly resolves companyId from companyList before fetching company details, fixing ID-based routing.
@@ -381,6 +382,7 @@ const OpportunityInfoCardEvents = (() => {
         const finalAssignee = pick(getValueMaybe('edit-assignee'), ['assignee', 'owner'], '');
         const finalOppSource = pick(getValueMaybe('edit-opportunity-source'), ['opportunitySource', 'source'], '');
         const finalOppType = pick(getValueMaybe('edit-opportunity-type'), ['opportunityType'], '');
+        const finalBusinessType = getValueMaybe('edit-business-type') || _currentOppForEditing.businessType || 'NEW';
         const finalStage = pick(getValueMaybe('edit-current-stage'), ['currentStage'], '');
         const finalProb = pick(getValueMaybe('edit-order-probability'), ['orderProbability', 'winProbability'], '');
         
@@ -414,6 +416,7 @@ const OpportunityInfoCardEvents = (() => {
             assignee: finalAssignee,
             opportunitySource: finalOppSource,
             opportunityType: finalOppType,
+            businessType: finalBusinessType,
             currentStage: finalStage,
             orderProbability: finalProb,
             

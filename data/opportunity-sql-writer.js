@@ -1,8 +1,8 @@
 // data/opportunity-sql-writer.js
 /**
  * OpportunitySqlWriter
- * * @version 1.1.5 (Opportunity Workflow Initialization Normalization Phase 2)
- * @date 2026-05-11
+ * * @version 1.1.6 (Opportunity Lifecycle Semantic Integration Phase 1)
+ * @date 2026-05-20
  * @description 負責將機會案件寫入 Supabase 'opportunities' 資料表。
  * - [PATCH] opportunity_contact_links real-schema alignment.
  * - [PATCH] explicit link_id generation.
@@ -13,6 +13,7 @@
  * - [PATCH] Added missing mapping for drive_link in updateOpportunity.
  * - [PATCH] Opportunity workflow initialization normalization phase 2: centralize create-time stage initialization authority and remove remaining hardcoded workflow fallback.
  * - [PATCH] Opportunity workflow initialization normalization: remove hardcoded default stage fallback and initialize stage history from config-driven current stage.
+ * - [PATCH] Persist business_type/relation_type lifecycle semantics without changing workflow ownership.
  * - [FEAT] Added linkContact and unlinkContact methods for SQL-based linking.
  */
 
@@ -58,6 +59,8 @@ class OpportunitySqlWriter {
             
             // Classification
             opportunity_type: data.opportunityType,
+            business_type: data.businessType || 'NEW',
+            relation_type: data.relationType || null,
             source: data.opportunitySource,
             
             // Status
@@ -129,6 +132,8 @@ class OpportunitySqlWriter {
         if (updateData.assignee !== undefined) dbPayload.owner = updateData.assignee;
         
         if (updateData.opportunityType !== undefined) dbPayload.opportunity_type = updateData.opportunityType;
+        if (updateData.businessType !== undefined) dbPayload.business_type = updateData.businessType;
+        if (updateData.relationType !== undefined) dbPayload.relation_type = updateData.relationType;
         if (updateData.opportunitySource !== undefined) dbPayload.source = updateData.opportunitySource;
         
         if (updateData.currentStage !== undefined) dbPayload.current_stage = updateData.currentStage;

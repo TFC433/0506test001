@@ -4,9 +4,11 @@
  * - Type: SQL Reader (Read-Only)
  * - Target: PostgreSQL (Supabase)
  * - Table: opportunities
- * - Version: 2.4.0 (Phase 5-A - Base Dataset SQL Pushdown for Sales Analysis)
- * - Date: 2026-04-21
+ * - Version: 2.4.2 (Opportunity Lifecycle Semantic Phase 1 Runtime Fix)
+ * - Date: 2026-05-20
  * - Changelog: 
+ * - [PHASE 1 FIX] Merge lifecycle fields from opportunities table when summary view omits them.
+ * - [PHASE 1] Added business_type/relation_type DTO mapping for lifecycle semantics.
  * - [PHASE 5-A] Added getSalesAnalysisBaseDeals() to push stage filtering to DB, reducing JS memory footprint.
  * - [PHASE 10] Added getAllOpportunityCompanyNames() for lightweight cross-module counting without FKs.
  * - [PHASE 9-D] Fixed post-pagination JS filtering. Migrated probability to native SQL.
@@ -127,7 +129,18 @@ class OpportunitySqlReader {
         try {
             const viewRes = await supabase.from(this.viewName).select('*').eq('opportunity_id', opportunityId).single();
             if (!viewRes.error && viewRes.data) {
-                return this._mapRowToDto(viewRes.data);
+                const viewRow = viewRes.data;
+                if (viewRow.business_type === undefined || viewRow.relation_type === undefined) {
+                    const lifecycleRes = await supabase
+                        .from(this.tableName)
+                        .select('business_type, relation_type')
+                        .eq('opportunity_id', opportunityId)
+                        .single();
+                    if (!lifecycleRes.error && lifecycleRes.data) {
+                        return this._mapRowToDto({ ...viewRow, ...lifecycleRes.data });
+                    }
+                }
+                return this._mapRowToDto(viewRow);
             }
 
             const { data, error } = await supabase
@@ -506,6 +519,8 @@ class OpportunitySqlReader {
             parentOpportunityId: row.parent_opportunity_id,
             opportunityName: row.opportunity_name,
             opportunityType: row.opportunity_type,
+            businessType: row.business_type || 'NEW',
+            relationType: row.relation_type || null,
             opportunitySource: row.source, 
             assignee: row.owner, 
             customerCompany: row.customer_company,

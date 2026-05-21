@@ -1,7 +1,11 @@
 // public/scripts/opportunities/details/opportunity-info-view.js
-// Version: 8.10
-// Date: 2026-05-12
+// Version: 8.14
+// Date: 2026-05-20
 // Changelog:
+// [2026-05-21] Opportunity Lineage Workflow Phase 2-C correction: keep header lifecycle badge node-only.
+// [2026-05-20] Opportunity Lineage Workflow Phase 2-C: add governed renewal/follow-up header actions.
+// [2026-05-20] Opportunity lifecycle semantic UI convergence: Chinese-only badges and restrained semantic colors.
+// [2026-05-20] Opportunity lifecycle semantic integration: add compact businessType/relationType header badges.
 // [2026-05-12] Opportunity Detail width balance pass: tune narrow-desktop pipeline density and rebalance middle card proportions to 2-3-3-2.
 // [2026-05-12] Opportunity Detail responsive width compatibility: add intermediate desktop rules to reduce right-rail pressure and protect workspace/pipeline layout.
 // [2026-05-12] Opportunity Detail header action alignment: match opportunity-name edit button to restrained stepper utility action style.
@@ -101,6 +105,81 @@ const OpportunityInfoView = (() => {
                 line-height: 1.18;
                 margin: 0;
                 word-break: break-word;
+            }
+
+            .lifecycle-badge-row {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                align-items: center;
+                justify-content: flex-end;
+                margin-left: auto;
+            }
+
+            .lifecycle-badge {
+                display: inline-flex;
+                align-items: center;
+                min-height: 22px;
+                padding: 2px 8px;
+                border: 1px solid color-mix(in srgb, var(--border-color) 80%, var(--text-muted));
+                border-radius: var(--rounded-sm);
+                background: color-mix(in srgb, var(--secondary-bg) 90%, var(--border-color));
+                color: var(--text-secondary);
+                font-size: 0.72rem;
+                font-weight: 600;
+                line-height: 1.25;
+                letter-spacing: 0;
+                box-shadow: none;
+            }
+
+            .lifecycle-badge.business-type-new {
+                border-color: color-mix(in srgb, #3b82f6 24%, var(--border-color));
+                background: color-mix(in srgb, #3b82f6 8%, var(--secondary-bg));
+                color: color-mix(in srgb, #1d4ed8 58%, var(--text-secondary));
+            }
+
+            .lifecycle-badge.business-type-renewal {
+                border-color: color-mix(in srgb, #16a34a 24%, var(--border-color));
+                background: color-mix(in srgb, #16a34a 8%, var(--secondary-bg));
+                color: color-mix(in srgb, #15803d 58%, var(--text-secondary));
+            }
+
+            .lifecycle-badge.business-type-followup {
+                border-color: color-mix(in srgb, #8b5cf6 20%, var(--border-color));
+                background: color-mix(in srgb, #8b5cf6 7%, var(--secondary-bg));
+                color: color-mix(in srgb, #6d28d9 52%, var(--text-secondary));
+            }
+
+            .opp-header-actions {
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+                gap: 6px;
+                margin-left: auto;
+                flex-wrap: wrap;
+            }
+
+            .lineage-action-btn {
+                min-height: 30px;
+                padding: 5px 10px;
+                font-size: 0.78rem;
+                font-weight: 650;
+                color: var(--text-secondary);
+                background: color-mix(in srgb, var(--secondary-bg) 92%, var(--border-color));
+                border: 1px solid color-mix(in srgb, var(--border-color) 78%, var(--text-muted));
+                border-radius: var(--rounded-sm);
+                box-shadow: none;
+                cursor: pointer;
+                transform: none;
+                letter-spacing: 0;
+            }
+
+            .lineage-action-btn:hover {
+                color: var(--text-primary);
+                background: color-mix(in srgb, var(--border-color) 24%, transparent);
+                border-color: color-mix(in srgb, var(--border-color) 70%, var(--text-muted));
+                box-shadow: none;
+                transform: none;
             }
 
             .opp-operational-grid {
@@ -333,6 +412,9 @@ const OpportunityInfoView = (() => {
 
             @media (max-width: 900px) {
                 .opp-name-strip { flex-direction: column; }
+                .opp-header-actions,
+                .lifecycle-badge-row { justify-content: flex-start; margin-left: 0; }
+                .opp-header-actions { width: 100%; }
                 .header-card-action-btn { width: 100%; align-items: center; justify-content: center; background: var(--primary-bg); }
                 .opp-operational-grid,
                 .op-card-business .field-list,
@@ -380,6 +462,22 @@ const OpportunityInfoView = (() => {
         const salesModel = getFirst(opp, ['salesModel'], '直接販售') || '直接販售';
         const isDirect = salesModel === '直接販售';
         
+        const businessTypeLabels = {
+            NEW: '新案',
+            RENEWAL: '續約',
+            FOLLOWUP: '延伸',
+            EXPANSION: '延伸',
+            UPGRADE: '延伸',
+            REPLACEMENT: '延伸'
+        };
+        const businessTypeClasses = {
+            NEW: 'business-type-new',
+            RENEWAL: 'business-type-renewal',
+            FOLLOWUP: 'business-type-followup',
+            EXPANSION: 'business-type-followup',
+            UPGRADE: 'business-type-followup',
+            REPLACEMENT: 'business-type-followup'
+        };
         const customerCompany = getFirst(opp, ['customerCompany'], '');
         const channelDetails = getFirst(opp, ['channelDetails'], '');
         const salesChannel = getFirst(opp, ['salesChannel'], '');
@@ -454,6 +552,12 @@ const OpportunityInfoView = (() => {
         // Compatibility mappings (new DTO vs legacy UI)
         const displayAssignee = getFirst(opp, ['assignee', 'owner'], '-') || '-';
         const displaySource = getFirst(opp, ['opportunitySource', 'source'], '-') || '-';
+        const businessType = getFirst(opp, ['businessType', 'business_type'], 'NEW');
+        const businessTypeLabel = businessTypeLabels[businessType] || businessTypeLabels.FOLLOWUP;
+        const businessTypeClass = businessTypeClasses[businessType] || businessTypeClasses.FOLLOWUP;
+        const lifecycleBadges = [
+            businessType ? `<span class="lifecycle-badge ${businessTypeClass}">${businessTypeLabel}</span>` : ''
+        ].filter(Boolean).join('');
 
         return `
             <div class="opp-view-container">
@@ -464,6 +568,11 @@ const OpportunityInfoView = (() => {
                         <h1 class="name-title">${opp.opportunityName || '未命名機會'}</h1>
                     </div>
 
+                    <div class="opp-header-actions">
+                        ${lifecycleBadges ? `<div class="lifecycle-badge-row">${lifecycleBadges}</div>` : ''}
+                        <button type="button" class="lineage-action-btn" onclick="window.showLineageOpportunityWizard && window.showLineageOpportunityWizard('RENEWAL')" title="建立續約機會">建立續約</button>
+                        <button type="button" class="lineage-action-btn" onclick="window.showLineageOpportunityWizard && window.showLineageOpportunityWizard('FOLLOWUP')" title="建立延伸案">建立延伸案</button>
+
                     <div class="header-card-action-btn" onclick="OpportunityInfoCardEvents.toggleEditMode(true)" title="編輯機會資訊">
                         <div class="edit-btn-content">
                             <span>編輯</span>
@@ -472,6 +581,7 @@ const OpportunityInfoView = (() => {
                                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                             </svg>
                         </div>
+                    </div>
                     </div>
                 </div>
 

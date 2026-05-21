@@ -1,8 +1,14 @@
 /**
  * public/scripts/opportunities/opportunity-modals.js
- * @version v5.0.14
- * @date 2026-05-15
+ * @version v5.0.20
+ * @date 2026-05-20
  * @changelog
+ * - Opportunity Lineage Workflow Phase 2-C correction: keep businessType system-controlled in lineage create and inherit only account context.
+ * - Opportunity Lineage Workflow Phase 2-C: reuse create wizard with governed renewal/follow-up lineage defaults.
+ * - Converge business_type UI labels/options to Chinese-only Phase 1 lifecycle set.
+ * - Runtime fix: anchor edit business_type injection to the actual edit form after modal open.
+ * - Runtime fix: ensure business_type selectors exist before create/edit payload wiring.
+ * - Add user-owned businessType payload support while preserving system-owned relationType.
  * - Unify contact role display in opportunity link contact search results.
  * - Preserve existing CORE contactId through wizard and detail link payloads to prevent duplicate manual SQL contact creation.
  * - Opportunity workflow initialization normalization: remove hardcoded default stage fallback and initialize stage history from config-driven current stage.
@@ -22,6 +28,50 @@ let allSearchedContacts = [];
 let companySearchTimeout;
 let linkOppSearchTimeout;
 let isLinkingContact = false;
+const DEFAULT_BUSINESS_TYPE = 'NEW';
+const LINEAGE_WORKFLOWS = {
+    RENEWAL: { businessType: 'RENEWAL', relationType: 'RENEWAL_OF', label: '續約' },
+    FOLLOWUP: { businessType: 'FOLLOWUP', relationType: 'FOLLOWUP_OF', label: '延伸案' }
+};
+const BUSINESS_TYPE_OPTIONS_HTML = `
+    <option value="NEW">新案</option>
+    <option value="RENEWAL">續約</option>
+    <option value="FOLLOWUP">延伸</option>
+`;
+
+function ensureBusinessTypeSelectors() {
+    const wizardSource = document.getElementById('wiz-opp-source');
+    if (!document.getElementById('wiz-business-type') && wizardSource) {
+        wizardSource.closest('.form-group')?.insertAdjacentHTML('beforebegin', `
+            <div class="form-group">
+                <label class="form-label">商務類型</label>
+                <div class="select-wrapper">
+                    <select class="form-select" id="wiz-business-type">${BUSINESS_TYPE_OPTIONS_HTML}</select>
+                </div>
+            </div>
+        `);
+    }
+
+    const editForm = document.getElementById('edit-opportunity-form');
+    if (!document.getElementById('edit-business-type') && editForm) {
+        const typeRow = document.getElementById('edit-opportunity-type')?.closest('.form-row');
+        const fieldHtml = `
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">商務類型</label>
+                    <div class="select-wrapper">
+                        <select class="form-select" id="edit-business-type">${BUSINESS_TYPE_OPTIONS_HTML}</select>
+                    </div>
+                </div>
+            </div>
+        `;
+        if (typeRow) {
+            typeRow.insertAdjacentHTML('afterend', fieldHtml);
+        } else {
+            editForm.insertAdjacentHTML('afterbegin', fieldHtml);
+        }
+    }
+}
 
 function normalizeContactId(contact) {
     const id = contact?.contactId ?? contact?.id ?? contact?.contact_id;
@@ -49,7 +99,8 @@ const NewOppWizard = {
             contactId: null,
             county: '',
             sourceId: null, // 用於名片轉入 (Contact rowIndex)
-            lastGeneratedName: ''
+            lastGeneratedName: '',
+            lineageDefaults: null
         }
     },
 
@@ -57,6 +108,10 @@ const NewOppWizard = {
     show: function() {
         this.reset();
         showModal('new-opportunity-modal');
+        ensureBusinessTypeSelectors();
+        const ensuredBusinessTypeSelect = document.getElementById('wiz-business-type');
+        if (ensuredBusinessTypeSelect) ensuredBusinessTypeSelect.value = DEFAULT_BUSINESS_TYPE;
+        this._applyBusinessTypeGovernance();
         
         // 調整 UI (隱藏欄位、加星號、置中)
         this._adjustUI();
@@ -82,6 +137,76 @@ const NewOppWizard = {
         }
         
         this.renderStep();
+    },
+
+    showFromOpportunity: function(workflowType, parentOpportunity) {
+        const workflow = LINEAGE_WORKFLOWS[workflowType];
+        const parent = parentOpportunity || window.currentOpportunityData;
+        if (!workflow || !parent || !parent.opportunityId) {
+            showNotification('無法建立商務脈絡：找不到來源機會', 'error');
+            return;
+        }
+
+        this.show();
+
+        const originalTitle = parent.opportunityName || '';
+        const suggestedName = workflowType === 'RENEWAL'
+            ? `${originalTitle}（${new Date().getFullYear() + 1}續約）`
+            : `${originalTitle} - 延伸`;
+
+        this.state.path = 'new';
+        this.state.step = 2;
+        this.state.data.companyName = parent.customerCompany || '';
+        this.state.data.mainContact = parent.mainContact || '';
+        this.state.data.contactPhone = parent.contactPhone || parent.mainContactPhone || '';
+        this.state.data.contactId = parent.contactId || null;
+        this.state.data.county = parent.county || '';
+        this.state.data.sourceId = null;
+        this.state.data.lastGeneratedName = suggestedName;
+        this.state.data.lineageDefaults = {
+            businessType: workflow.businessType,
+            relationType: workflow.relationType,
+            parentOpportunityId: parent.opportunityId,
+            label: workflow.label,
+            companyId: parent.companyId || null,
+            salesModel: parent.salesModel || '',
+            salesChannel: parent.salesChannel || '',
+            channelDetails: parent.channelDetails || parent.salesChannel || '',
+            currency: parent.currency || ''
+        };
+
+        const manualCompany = document.getElementById('wiz-manual-company');
+        const manualContact = document.getElementById('wiz-manual-contact');
+        const manualPhone = document.getElementById('wiz-manual-phone');
+        const manualCounty = document.getElementById('wiz-manual-county');
+        const nameInput = document.getElementById('wiz-opp-name');
+        const businessTypeSelect = document.getElementById('wiz-business-type');
+        if (manualCompany) manualCompany.value = this.state.data.companyName;
+        if (manualContact) manualContact.value = this.state.data.mainContact;
+        if (manualPhone) manualPhone.value = this.state.data.contactPhone;
+        if (manualCounty) manualCounty.value = this.state.data.county;
+        if (nameInput) nameInput.value = suggestedName;
+        if (businessTypeSelect) businessTypeSelect.value = workflow.businessType;
+        document.getElementById('wiz-entry-options')?.style && (document.getElementById('wiz-entry-options').style.display = 'none');
+        document.querySelectorAll('.wiz-path-section').forEach(el => el.style.display = 'none');
+        const newPathSection = document.getElementById('wiz-path-new');
+        if (newPathSection) newPathSection.style.display = 'block';
+
+        if (parent.opportunityType) {
+            const typeSelect = document.getElementById('wiz-opp-type');
+            if (typeSelect) typeSelect.value = parent.opportunityType;
+        }
+        if (parent.opportunitySource) {
+            const sourceSelect = document.getElementById('wiz-opp-source');
+            if (sourceSelect) sourceSelect.value = parent.opportunitySource;
+        }
+        if (parent.assignee) {
+            const assigneeSelect = document.getElementById('wiz-assignee');
+            if (assigneeSelect) assigneeSelect.value = parent.assignee;
+        }
+
+        this.renderStep();
+        this._applyBusinessTypeGovernance();
     },
 
     // 【新增】從聯絡人列表直接啟動 Wizard 並帶入資料
@@ -136,16 +261,47 @@ const NewOppWizard = {
         }
     },
 
+    _applyBusinessTypeGovernance: function() {
+        const businessTypeSelect = document.getElementById('wiz-business-type');
+        const businessTypeGroup = businessTypeSelect?.closest('.form-group');
+        let context = document.getElementById('wiz-lineage-context');
+        if (!context && businessTypeGroup) {
+            businessTypeGroup.insertAdjacentHTML('afterend', `
+                <div class="alert alert-info" id="wiz-lineage-context" style="display:none; margin-bottom: 12px;"></div>
+            `);
+            context = document.getElementById('wiz-lineage-context');
+        }
+
+        const lineage = this.state.data.lineageDefaults;
+        if (businessTypeSelect) {
+            businessTypeSelect.value = lineage?.businessType || DEFAULT_BUSINESS_TYPE;
+            businessTypeSelect.disabled = true;
+        }
+        if (businessTypeGroup) businessTypeGroup.style.display = 'none';
+        if (context) {
+            context.style.display = lineage ? 'block' : 'none';
+            context.textContent = lineage ? `商務脈絡：${lineage.label}，建立後會自動關聯目前機會。` : '';
+        }
+
+        const dateGroup = document.getElementById('wiz-close-date')?.closest('.form-group');
+        const valueGroup = document.getElementById('wiz-value')?.closest('.form-group');
+        if (dateGroup) dateGroup.style.display = lineage ? '' : 'none';
+        if (valueGroup) valueGroup.style.display = lineage ? '' : 'none';
+    },
+
     // 重置狀態
     reset: function() {
         this.state = {
             step: 1,
             path: null,
-            data: { companyName: '', mainContact: '', contactPhone: '', contactId: null, county: '', sourceId: null, lastGeneratedName: '' }
+            data: { companyName: '', mainContact: '', contactPhone: '', contactId: null, county: '', sourceId: null, lastGeneratedName: '', lineageDefaults: null }
         };
         
         const form = document.getElementById('new-opportunity-wizard-form');
         if (form) form.reset();
+        const businessTypeSelect = document.getElementById('wiz-business-type');
+        if (businessTypeSelect) businessTypeSelect.value = DEFAULT_BUSINESS_TYPE;
+        this._applyBusinessTypeGovernance();
         
         const cardSearch = document.getElementById('wiz-card-search');
         if (cardSearch) cardSearch.value = '';
@@ -508,12 +664,21 @@ const NewOppWizard = {
                 previewEl.textContent = `${name} (${this.state.data.mainContact})`;
             }
         }
+        this._applyBusinessTypeGovernance();
     },
 
     autoGenerateName: function() {
         const typeSelect = document.getElementById('wiz-opp-type');
         const nameInput = document.getElementById('wiz-opp-name');
         if (!typeSelect || !nameInput) return;
+
+        if (this.state.data.lineageDefaults) {
+            const currentName = nameInput.value.trim();
+            if (!currentName) {
+                nameInput.value = this.state.data.lastGeneratedName || '';
+            }
+            return;
+        }
 
         const typeText = typeSelect.options[typeSelect.selectedIndex]?.text || typeSelect.value || '';
         const company = this.state.data.companyName;
@@ -541,6 +706,10 @@ window.showNewOpportunityModal = function() {
     NewOppWizard.show();
 };
 
+window.showLineageOpportunityWizard = function(workflowType) {
+    NewOppWizard.showFromOpportunity(workflowType, window.currentOpportunityData);
+};
+
 // 2. 編輯機會 Modal
 async function editOpportunity(opportunityId) {
     if (!opportunityId) { showNotification('無效的機會ID', 'error'); return; }
@@ -551,6 +720,7 @@ async function editOpportunity(opportunityId) {
         const opportunity = result.data.opportunityInfo;
 
         showModal('edit-opportunity-modal');
+        ensureBusinessTypeSelectors();
         // [Modified] Use opportunityId (hidden input or dataset) instead of rowIndex
         const form = document.getElementById('edit-opportunity-form');
         form.dataset.currentOppId = opportunity.opportunityId;
@@ -565,6 +735,8 @@ async function editOpportunity(opportunityId) {
         document.getElementById('edit-expected-close-date').value = opportunity.expectedCloseDate;
         document.getElementById('edit-opportunity-value').value = opportunity.opportunityValue;
         document.getElementById('edit-opportunity-notes').value = opportunity.notes;
+        const businessTypeSelect = document.getElementById('edit-business-type');
+        if (businessTypeSelect) businessTypeSelect.value = opportunity.businessType || DEFAULT_BUSINESS_TYPE;
         
         if(window.CRM_APP.systemConfig) {
             populateSelect('edit-opportunity-type', window.CRM_APP.systemConfig['機會種類'], opportunity.opportunityType);
@@ -806,6 +978,7 @@ document.addEventListener('submit', async function(e) {
     if(e.target.id === 'new-opportunity-wizard-form') {
         e.preventDefault();
         const stateData = NewOppWizard.state.data;
+        const lineageDefaults = stateData.lineageDefaults;
         
         const payload = {
             customerCompany: stateData.companyName,
@@ -815,6 +988,7 @@ document.addEventListener('submit', async function(e) {
             
             opportunityName: document.getElementById('wiz-opp-name').value,
             opportunityType: document.getElementById('wiz-opp-type').value,
+            businessType: lineageDefaults?.businessType || DEFAULT_BUSINESS_TYPE,
             opportunitySource: document.getElementById('wiz-opp-source').value,
             
             assignee: document.getElementById('wiz-assignee').value,
@@ -825,6 +999,21 @@ document.addEventListener('submit', async function(e) {
             rowIndex: stateData.sourceId 
         };
         if (stateData.contactId) payload.contactId = stateData.contactId;
+        if (lineageDefaults) {
+            payload.relationType = lineageDefaults.relationType;
+            payload.parentOpportunityId = lineageDefaults.parentOpportunityId;
+            if (lineageDefaults.companyId) payload.companyId = lineageDefaults.companyId;
+            if (lineageDefaults.salesModel) payload.salesModel = lineageDefaults.salesModel;
+            if (lineageDefaults.salesChannel) payload.salesChannel = lineageDefaults.salesChannel;
+            if (lineageDefaults.channelDetails) payload.channelDetails = lineageDefaults.channelDetails;
+            if (lineageDefaults.currency) payload.currency = lineageDefaults.currency;
+            delete payload.rowIndex;
+        }
+
+        const expectedCloseDate = document.getElementById('wiz-close-date')?.value;
+        const opportunityValue = document.getElementById('wiz-value')?.value;
+        if (expectedCloseDate) payload.expectedCloseDate = expectedCloseDate;
+        if (opportunityValue) payload.opportunityValue = opportunityValue;
 
         showLoading('正在建立機會案件...');
         try {
@@ -877,6 +1066,7 @@ document.addEventListener('submit', async function(e) {
             const updateOpportunityData = {
                 opportunityName: document.getElementById('edit-opportunity-name').value,
                 opportunityType: document.getElementById('edit-opportunity-type').value,
+                businessType: document.getElementById('edit-business-type')?.value || DEFAULT_BUSINESS_TYPE,
                 opportunitySource: document.getElementById('edit-opportunity-source').value,
                 currentStage: document.getElementById('edit-current-stage').value,
                 assignee: document.getElementById('edit-assignee').value,

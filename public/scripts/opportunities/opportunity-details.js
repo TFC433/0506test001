@@ -4,9 +4,10 @@
 /**
  * Project: TFC CRM
  * File: public/scripts/opportunities/opportunity-details.js
- * Version: 8.1.2 (Phase 8.6A - Perf Patch)
- * Date: 2026-03-11
+ * Version: 8.1.3 (Opportunity Lifecycle Semantic Integration Phase 1)
+ * Date: 2026-05-20
  * Changelog:
+ * - [PATCH] Preserve businessType/relationType during detail normalization for lifecycle metadata.
  * - [FIX] Explicitly map SQL 'productDetails' to UI 'potentialSpecification' to fix edit mode data loss.
  * - [FIX] Sync 'salesChannel' and 'channelDetails' to prevent writer conflicts.
  * - [PERF] Removed redundant CRM_APP.updateAllDropdowns() to eliminate duplicate companyList fetches.
@@ -41,6 +42,8 @@ function normalizeOppForUi(opp) {
 
     // Identity & Core
     normalized.opportunityId = o.opportunityId; // Ensure ID exists
+    normalized.businessType = pick(['businessType', 'business_type'], 'NEW');
+    normalized.relationType = pick(['relationType', 'relation_type'], null);
 
     // owner <-> assignee
     normalized.owner = pick(['owner', 'assignee'], normalized.owner);
