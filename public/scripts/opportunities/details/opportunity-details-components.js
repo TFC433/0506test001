@@ -3,8 +3,12 @@
 // ============================================================================
 // public/scripts/opportunity-details/opportunity-details-components.js
 // 職責：整合機會詳細頁面組件，處理編輯邏輯與資料存取
-// * @version 1.1.19 (Opportunity Detail Edit Mode UI Phase 1-A Hotfix)
+// * @version 1.1.23 (Opportunity Detail Edit Mode UI Phase 1-E)
 // * @date 2026-05-21
+// * @changelog 2026-05-21: Opportunity Detail Edit Mode UI Phase 1-E: compact non-title edit controls while preserving opportunity name prominence.
+// * @changelog 2026-05-21: Opportunity Detail Edit Mode UI Phase 1-D: compress selector density and reduce operational visual noise.
+// * @changelog 2026-05-21: Opportunity Detail Edit Mode UI Phase 1-C: tighten operational density and spacing rhythm.
+// * @changelog 2026-05-21: Opportunity Detail Edit Mode UI Phase 1-B: Make operational edit zones visibly perceptible with restrained surface framing.
 // * @changelog 2026-05-21: Opportunity Detail Edit Mode UI Phase 1-A Hotfix: Refresh injected styles when existing style tag is present.
 // * @changelog 2026-05-21: Opportunity Detail Edit Mode UI Phase 1-A: Introduce operational workspace zone grouping and spacing hierarchy.
 // * @changelog 2026-05-21: Opportunity Lineage Workflow Phase 2-C correction places parent-side commercial lineage labels before parent names.
@@ -67,24 +71,39 @@ function _injectStylesForOppInfoCard() {
             margin-bottom: var(--spacing-4);
             border-bottom: 1px solid var(--border-color);
         }
-        .edit-form-columns { display: flex; gap: var(--spacing-6); align-items: flex-start; }
-        .form-col { flex: 1; display: flex; flex-direction: column; gap: var(--spacing-3); min-width: 0; }
+        .edit-form-columns { display: flex; gap: var(--spacing-4); align-items: flex-start; }
+        .form-col { flex: 1; display: flex; flex-direction: column; gap: var(--spacing-2); min-width: 0; }
         @media (max-width: 900px) { .edit-form-columns { flex-direction: column; gap: var(--spacing-6); } }
-        .op-edit-zone { display: flex; flex-direction: column; gap: var(--spacing-3); }
-        .op-edit-zone + .op-edit-zone {
-            margin-top: var(--spacing-5);
-            padding-top: var(--spacing-4);
-            border-top: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
-        }
-        .form-group { display: flex; flex-direction: column; gap: 6px; }
-        .form-label { font-size: var(--font-size-sm); color: var(--text-muted); font-weight: 500; }
-        .form-input, .form-select, .form-textarea {
-            padding: 8px 12px;
+        .op-edit-zone {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-2);
+            background: var(--primary-bg);
             border: 1px solid var(--border-color);
-            border-radius: var(--rounded-md);
+            border-radius: var(--rounded-sm);
+            padding: var(--spacing-3);
+        }
+        .op-edit-zone + .op-edit-zone {
+            margin-top: var(--spacing-3);
+        }
+        .form-group { display: flex; flex-direction: column; gap: 4px; }
+        .form-label { font-size: 0.82rem; color: var(--text-muted); font-weight: 500; line-height: 1.25; }
+        .form-input, .form-select, .form-textarea {
+            padding: 5px 8px;
+            border: 1px solid var(--border-color);
+            border-radius: var(--rounded-sm);
             background: var(--primary-bg);
             color: var(--text-primary);
+            font-size: 0.92rem;
+            line-height: 1.3;
+            min-height: 32px;
+        }
+        #edit-opportunity-name {
+            padding: 7px 10px;
+            border-radius: var(--rounded-md);
             font-size: var(--font-size-base);
+            line-height: normal;
+            min-height: initial;
         }
         .form-input:read-only, .form-select:disabled, .form-input:disabled { 
             background-color: var(--secondary-bg); 
@@ -93,21 +112,21 @@ function _injectStylesForOppInfoCard() {
             color: var(--text-muted); 
             border-color: var(--border-color);
         }
-        .pills-container { display: flex; flex-wrap: wrap; gap: 8px; }
+        .pills-container { display: flex; flex-wrap: wrap; gap: 4px 5px; }
         .info-option-pill {
-            padding: 6px 14px; border-radius: var(--rounded-full); font-size: 0.85rem; border: 1px solid var(--border-color);
-            cursor: pointer; background: var(--primary-bg); color: var(--text-muted); transition: all 0.2s;
-            display: inline-flex; align-items: center; gap: 6px; user-select: none;
+            padding: 3px 8px; border-radius: 4px; font-size: 0.78rem; line-height: 1.25; border: 1px solid color-mix(in srgb, var(--border-color) 78%, transparent);
+            cursor: pointer; background: var(--secondary-bg); color: var(--text-secondary); transition: border-color 0.2s, color 0.2s, background-color 0.2s;
+            display: inline-flex; align-items: center; gap: 4px; user-select: none; min-height: 24px;
         }
         .info-option-pill:hover { border-color: var(--accent-blue); color: var(--accent-blue); }
         .info-option-pill.selected {
-            background: color-mix(in srgb, var(--accent-blue) 15%, transparent); color: var(--accent-blue);
-            border-color: var(--accent-blue); font-weight: 600; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            background: color-mix(in srgb, var(--accent-blue) 10%, var(--secondary-bg)); color: var(--accent-blue);
+            border-color: color-mix(in srgb, var(--accent-blue) 70%, var(--border-color)); font-weight: 600;
         }
-        .pill-quantity { display: inline-block; padding: 0px 6px; font-size: 0.75rem; font-weight: 700; background-color: var(--accent-blue); color: white; border-radius: var(--rounded-md); }
-        .spec-category-group { margin-bottom: 8px; }
-        .spec-category-title { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; font-weight: 600; }
-        .spec-pills-wrapper { display: flex; flex-wrap: wrap; gap: 8px; }
+        .pill-quantity { display: inline-block; padding: 0px 5px; font-size: 0.7rem; font-weight: 700; background-color: var(--accent-blue); color: white; border-radius: var(--rounded-sm); }
+        .spec-category-group { margin-bottom: 6px; }
+        .spec-category-title { font-size: 0.72rem; color: var(--text-muted); margin-bottom: 3px; font-weight: 600; }
+        .spec-pills-wrapper { display: flex; flex-wrap: wrap; gap: 4px 5px; }
         .manual-override-label { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-secondary); cursor: pointer; margin-top: 4px; }
         .notes-section { margin-top: var(--spacing-6); padding-top: var(--spacing-4); border-top: 1px solid var(--border-color); }
         #opportunity-detail-container .opp-rail-chip-wall,
