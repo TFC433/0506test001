@@ -4,10 +4,11 @@ const { supabase } = require('../config/supabase');
 /**
  * services/workflow-service.js
  * 撌乩?瘚???
- * * @version 5.0.10 (Workflow Ownership Migration Phase 1)
- * @date 2026-05-13
+ * * @version 5.0.11 (Audit User Normalization Patch)
+ * @date 2026-05-21
  * @description 鞎痊??頝冽芋蝯?銴?璆剖?瘚?嚗?憒???閮?蝯∩犖??????
  * 靘陷瘜典嚗pportunityService, InteractionService, ContactService
+ * @changelog 2026-05-21: WorkflowService Patch: normalize audit user in fileContact promotion flow.
  * @changelog 2026-05-13: Hydrate SQL contact fields from RAW card during business-card archive/retro-link before marking RAW archived.
  * @changelog 2026-05-13: Complete manual opportunity and quick-add SQL contact lifecycle with MANUAL sourceId and relationship linking.
  * @changelog 2026-05-13: Complete verified RAW business-card field mapping for opportunity upgrade CORE contact creation.
@@ -134,6 +135,7 @@ class WorkflowService {
         if (!rawContact) {
             throw new Error(`Cannot file RAW contact: row ${rowIndex} not found.`);
         }
+        const modifier = this._resolveModifier(user);
 
         const contactResult = await this.contactService.createContact({
             sourceId: String(rowIndex),
@@ -146,7 +148,7 @@ class WorkflowService {
             mobile: rawContact.mobile || '',
             phone: rawContact.phone || '',
             email: rawContact.email || ''
-        }, user);
+        }, modifier);
 
         await this._updateRawStatus(rowIndex, '已建檔');
 
