@@ -1,8 +1,9 @@
 /**
  * public/scripts/opportunities/opportunity-modals.js
- * @version v5.0.20
+ * @version v5.0.21
  * @date 2026-05-20
  * @changelog
+ * - Opportunity Lineage Workflow Phase 2-C contact reuse: resolve official contactId and prevent name-only duplicate CORE contact creation.
  * - Opportunity Lineage Workflow Phase 2-C correction: keep businessType system-controlled in lineage create and inherit only account context.
  * - Opportunity Lineage Workflow Phase 2-C: reuse create wizard with governed renewal/follow-up lineage defaults.
  * - Converge business_type UI labels/options to Chinese-only Phase 1 lifecycle set.
@@ -78,6 +79,31 @@ function normalizeContactId(contact) {
     return id === undefined || id === null || String(id).trim() === '' ? null : id;
 }
 
+function resolveLineageContactId(parent) {
+    const directId = parent?.contactId || parent?.mainContactId;
+    if (directId && String(directId).trim()) return String(directId).trim();
+
+    const mainContactName = String(parent?.mainContact || '').trim().toLowerCase();
+    if (!mainContactName) return null;
+
+    const sources = [
+        parent?.linkedContacts,
+        window.currentOpportunityDetails?.linkedContacts,
+        window.currentOpportunityData?.linkedContacts
+    ].filter(Array.isArray);
+
+    for (const contacts of sources) {
+        const match = contacts.find(contact => {
+            const name = String(contact?.name || contact?.mainContact || contact?.contactName || '').trim().toLowerCase();
+            return name && name === mainContactName;
+        });
+        const contactId = normalizeContactId(match);
+        if (contactId) return contactId;
+    }
+
+    return null;
+}
+
 function getContactRoleText(contact) {
     const department = String(contact?.department || '').trim();
     const title = String(contact?.jobTitle || contact?.position || '').trim();
@@ -150,6 +176,10 @@ const NewOppWizard = {
         this.show();
 
         const originalTitle = parent.opportunityName || '';
+        const resolvedContactId = resolveLineageContactId(parent);
+        if (!resolvedContactId) {
+            console.warn('[LineageWorkflow] Existing contactId not resolved; skipping automatic contact reuse.');
+        }
         const suggestedName = workflowType === 'RENEWAL'
             ? `${originalTitle}（${new Date().getFullYear() + 1}續約）`
             : `${originalTitle} - 延伸`;
@@ -159,7 +189,7 @@ const NewOppWizard = {
         this.state.data.companyName = parent.customerCompany || '';
         this.state.data.mainContact = parent.mainContact || '';
         this.state.data.contactPhone = parent.contactPhone || parent.mainContactPhone || '';
-        this.state.data.contactId = parent.contactId || null;
+        this.state.data.contactId = resolvedContactId || null;
         this.state.data.county = parent.county || '';
         this.state.data.sourceId = null;
         this.state.data.lastGeneratedName = suggestedName;
@@ -706,8 +736,24 @@ window.showNewOpportunityModal = function() {
     NewOppWizard.show();
 };
 
-window.showLineageOpportunityWizard = function(workflowType) {
-    NewOppWizard.showFromOpportunity(workflowType, window.currentOpportunityData);
+window.showLineageOpportunityWizard = async function(workflowType) {
+    let parent = window.currentOpportunityData;
+    const parentId = parent?.opportunityId || window.currentDetailOpportunityId;
+    if (parentId && !Array.isArray(parent?.linkedContacts)) {
+        try {
+            const result = await authedFetch(`/api/opportunities/${encodeURIComponent(parentId)}/details`);
+            if (result?.success && result.data) {
+                parent = {
+                    ...(parent || {}),
+                    ...(result.data.opportunityInfo || {}),
+                    linkedContacts: result.data.linkedContacts || []
+                };
+            }
+        } catch (error) {
+            console.warn('[LineageWorkflow] Unable to refresh linked contacts before lineage create.', error);
+        }
+    }
+    NewOppWizard.showFromOpportunity(workflowType, parent);
 };
 
 // 2. 編輯機會 Modal
@@ -1002,6 +1048,10 @@ document.addEventListener('submit', async function(e) {
         if (lineageDefaults) {
             payload.relationType = lineageDefaults.relationType;
             payload.parentOpportunityId = lineageDefaults.parentOpportunityId;
+            if (!stateData.contactId) {
+                delete payload.mainContact;
+                delete payload.contactPhone;
+            }
             if (lineageDefaults.companyId) payload.companyId = lineageDefaults.companyId;
             if (lineageDefaults.salesModel) payload.salesModel = lineageDefaults.salesModel;
             if (lineageDefaults.salesChannel) payload.salesChannel = lineageDefaults.salesChannel;
