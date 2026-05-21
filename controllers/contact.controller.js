@@ -1,9 +1,10 @@
 /**
  * controllers/contact.controller.js
  * 聯絡人模組控制器
- * * @version 8.3.3
- * * @date 2026-05-15
+ * * @version 8.3.4
+ * * @date 2026-05-21
  * * @description 負責處理聯絡人相關的 HTTP 請求，驗證參數，並呼叫對應的 Service。
+ * * [Patch] ContactController Patch: prefer req.user.displayName for contact audit fields.
  * * [Fix] RAW contact search query wiring fix: GET /api/contacts now passes req.query.q to ContactService.searchContacts.
  * * [Feature] Added preview/confirmed CORE contact sync from linked RAW business card source.
  * * [Feature] Added lazy CORE contact reverse opportunity lookup endpoint handler.
@@ -47,6 +48,10 @@ class ContactController {
         this.contactService = contactService;
         this.workflowService = workflowService;
         this.contactWriter = contactWriter;
+    }
+
+    _getAuditUser(req) {
+        return req?.user?.displayName || req?.user?.name || req?.user?.username || 'System';
     }
 
     /**
@@ -116,7 +121,7 @@ class ContactController {
     upgradeContact = async (req, res) => {
         try {
             const rowIndex = parseInt(req.params.rowIndex);
-            const user = req.user ? req.user.name : 'System';
+            const user = this._getAuditUser(req);
 
             if (!this.workflowService) {
                 console.error('Critical Error: WorkflowService not initialized in ContactController');
@@ -143,7 +148,7 @@ class ContactController {
     updateContact = async (req, res) => {
         try {
             const contactId = req.params.contactId;
-            const user = req.user ? req.user.name : 'System';
+            const user = this._getAuditUser(req);
 
             const result = await this.contactService.updateContact(
                 contactId, 
@@ -159,7 +164,7 @@ class ContactController {
     syncContactFromSource = async (req, res) => {
         try {
             const contactId = req.params.contactId;
-            const user = req.user ? req.user.name : 'System';
+            const user = this._getAuditUser(req);
 
             const result = await this.contactService.syncContactFromSource(
                 contactId,
@@ -179,7 +184,7 @@ class ContactController {
     deleteContact = async (req, res) => {
         try {
             const contactId = req.params.contactId;
-            const user = req.user ? req.user.name : 'System';
+            const user = this._getAuditUser(req);
 
             const result = await this.contactService.deleteContact(contactId, user);
             res.json(result);
@@ -195,7 +200,7 @@ class ContactController {
     updateRawContact = async (req, res) => {
         try {
             const rowIndex = parseInt(req.params.rowIndex);
-            const user = req.body.modifier || (req.user ? req.user.name : 'System');
+            const user = req.body.modifier || this._getAuditUser(req);
 
             const result = await this.contactService.updatePotentialContact(
                 rowIndex,
@@ -220,7 +225,7 @@ class ContactController {
     deleteRawContact = async (req, res) => {
         try {
             const rowIndex = parseInt(req.params.rowIndex);
-            const user = req.user ? req.user.name : 'System';
+            const user = this._getAuditUser(req);
 
             const result = await this.contactService.deletePotentialContact(rowIndex, user);
             res.json(result);
@@ -237,7 +242,7 @@ class ContactController {
         try {
             const { contactId } = req.params;
             const { businessCardRowIndex } = req.body;
-            const user = req.user ? req.user.name : 'System';
+            const user = this._getAuditUser(req);
 
             if (!businessCardRowIndex) {
                 return res.status(400).json({ success: false, error: '缺少 businessCardRowIndex 參數' });
@@ -261,7 +266,7 @@ class ContactController {
     fileContact = async (req, res) => {
         try {
             const rowIndex = parseInt(req.params.rowIndex);
-            const user = req.user ? req.user.name : 'System';
+            const user = this._getAuditUser(req);
 
             const result = await this.workflowService.fileContact(
                 rowIndex, 
