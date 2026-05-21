@@ -6,9 +6,10 @@
  * - Table: contacts
  * - Schema: Strict adherence to provided JSON schema
  * - Constraints: No rowIndex, No guessing, No update/delete
- * - Version: 1.8.1 (CORE Contact SQL Search/Sort Hotfix)
- * - Date: 2026-05-13
+ * - Version: 1.8.2 (CORE Contact Company Grouped View Ordering)
+ * - Date: 2026-05-21
  * - Changelog: 
+ * - Switched CORE contact list reads to contacts_company_grouped_view with stable company-centric ordering.
  * - Hotfixed CORE list SQL search to include direct contact fields and safer company_id OR filters; added created_time ordering fallback for updated_time ties/null groups.
  * - Added SQL-native search, ordering, stable tie-breaker, range pagination, and exact count support for CORE contact list reads.
  * - Added notes DTO mapping and lazy reverse opportunity lookup by contactId.
@@ -25,6 +26,7 @@ class ContactSqlReader {
 
     constructor() {
         this.tableName = 'contacts';
+        this.companyGroupedViewName = 'contacts_company_grouped_view';
     }
 
     /**
@@ -367,9 +369,7 @@ class ContactSqlReader {
             } = options || {};
 
             const shouldReturnCount = Boolean(withCount);
-            const sortColumn = this._getContactSortColumn(sort);
-            const isAscending = String(order || '').toLowerCase() === 'asc';
-            let dbQuery = supabase.from(this.tableName);
+            let dbQuery = supabase.from(this.companyGroupedViewName);
             dbQuery = shouldReturnCount
                 ? dbQuery.select('*', { count: 'exact' })
                 : dbQuery.select('*');
@@ -379,19 +379,12 @@ class ContactSqlReader {
                 dbQuery = dbQuery.or(searchFilter);
             }
 
-            dbQuery = dbQuery.order(sortColumn, {
-                ascending: isAscending,
-                nullsFirst: sortColumn === 'updated_time' && isAscending
-            });
-            if (sortColumn === 'updated_time') {
-                dbQuery = dbQuery.order('created_time', {
-                    ascending: isAscending,
-                    nullsFirst: isAscending
-                });
-            }
-            if (sortColumn !== 'contact_id') {
-                dbQuery = dbQuery.order('contact_id', { ascending: true });
-            }
+            dbQuery = dbQuery
+                .order('company_latest_update', { ascending: false, nullsFirst: false })
+                .order('company_group_name', { ascending: true })
+                .order('updated_time', { ascending: false, nullsFirst: false })
+                .order('created_time', { ascending: false, nullsFirst: false })
+                .order('contact_id', { ascending: true });
 
             if (range && Number.isInteger(range.from) && Number.isInteger(range.to)) {
                 dbQuery = dbQuery.range(range.from, range.to);
