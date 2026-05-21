@@ -370,6 +370,9 @@ function renderOpportunitiesTable(opportunities) {
             .opp-list-table tr.locked td { color: var(--text-locked); }
 
             .opp-type-chip { display: inline-block; padding: 3px 10px; border-radius: 4px; font-size: 0.8rem; color: white; white-space: nowrap; font-weight: 500; }
+            .opp-lineage-chip { display: inline-flex; align-items: center; margin-right: 6px; padding: 1px 5px; border-radius: 4px; font-size: 0.72rem; line-height: 1.35; font-weight: 600; white-space: nowrap; vertical-align: 1px; border: 1px solid var(--border-color); }
+            .opp-lineage-chip.renewal { color: var(--accent-blue); background: color-mix(in srgb, var(--accent-blue) 10%, transparent); border-color: color-mix(in srgb, var(--accent-blue) 25%, var(--border-color)); }
+            .opp-lineage-chip.followup { color: var(--accent-green); background: color-mix(in srgb, var(--accent-green) 10%, transparent); border-color: color-mix(in srgb, var(--accent-green) 25%, var(--border-color)); }
             .opp-sales-chip { display: inline-block; padding: 3px 12px; border-radius: 12px; font-size: 0.8rem; color: white; white-space: nowrap; font-weight: 500; }
             .opp-channel-chip { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; border: 1px solid var(--border-color); background-color: var(--glass-bg); color: var(--text-secondary); white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
             .opp-status-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; background: var(--glass-bg); color: var(--text-primary); border: 1px solid var(--border-color); }
@@ -430,6 +433,16 @@ function renderOpportunityRows(opportunities) {
 
         const oppParams = JSON.stringify({ opportunityId: opp.opportunityId }).replace(/"/g, '&quot;');
         const safeOppName = (opp.opportunityName || '').replace(/"/g, '&quot;');
+        const businessType = String(
+            opp.businessType ||
+            opp.business_type ||
+            'NEW'
+        ).toUpperCase();
+        const lineageChip = businessType === 'RENEWAL'
+            ? '<span class="opp-lineage-chip renewal">續約</span>'
+            : businessType === 'FOLLOWUP'
+                ? '<span class="opp-lineage-chip followup">延伸</span>'
+                : '';
 
         // Calculate absolute row index spanning across pages
         const absoluteIdx = (currentOppPage - 1) * OPP_PAGE_LIMIT + index + 1;
@@ -444,6 +457,7 @@ function renderOpportunityRows(opportunities) {
                        data-action="navigate" 
                        data-page="opportunity-details" 
                        data-params="${oppParams}">
+                        ${lineageChip}
                         <strong>${opp.opportunityName || '(未命名)'}</strong>
                     </a>
                 </td>
