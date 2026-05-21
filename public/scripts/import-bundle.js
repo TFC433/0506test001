@@ -1,8 +1,9 @@
 // public/scripts/import-bundle.js
 /**
- * @version 1.0.3
- * @date 2026-05-13
+ * @version 1.0.4
+ * @date 2026-05-21
  * @changelog
+ * - [1.0.4] Add cache-busting version for opportunity-details-components.js Phase 1-A runtime update.
  * - [1.0.3] Updated contacts.js cache-busting query for CORE Formal Contact split workspace refinement.
  * - [1.0.2] Hotfix: Added cache-busting query to contacts.js so CORE Formal Contact date-display fixes load reliably.
  * - [1.0.1] Bug Fix: Added newly split internal-ops render modules to the load chain to resolve "Render function missing" runtime errors.
@@ -38,7 +39,7 @@ const scripts = [
     "scripts/opportunities/details/opportunity-associated-contacts.js",
     "scripts/opportunities/details/opportunity-event-reports.js",
     "scripts/opportunities/details/opportunity-info-view.js",
-    "scripts/opportunities/details/opportunity-details-components.js",
+    "scripts/opportunities/details/opportunity-details-components.js?v=1.1.18",
     "scripts/opportunities/opportunity-details-events.js",
     "scripts/opportunities/opportunity-details.js",
     "scripts/opportunities/opportunity-modals.js",

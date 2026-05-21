@@ -3,8 +3,9 @@
 // ============================================================================
 // public/scripts/opportunity-details/opportunity-details-components.js
 // 職責：整合機會詳細頁面組件，處理編輯邏輯與資料存取
-// * @version 1.1.18 (Opportunity Detail Edit Mode UI Phase 1-A)
+// * @version 1.1.19 (Opportunity Detail Edit Mode UI Phase 1-A Hotfix)
 // * @date 2026-05-21
+// * @changelog 2026-05-21: Opportunity Detail Edit Mode UI Phase 1-A Hotfix: Refresh injected styles when existing style tag is present.
 // * @changelog 2026-05-21: Opportunity Detail Edit Mode UI Phase 1-A: Introduce operational workspace zone grouping and spacing hierarchy.
 // * @changelog 2026-05-21: Opportunity Lineage Workflow Phase 2-C correction places parent-side commercial lineage labels before parent names.
 // * @changelog 2026-05-20: Opportunity Lineage UX Phase 2-B — rename related opportunities to commercial context and render directional lineage labels.
@@ -35,11 +36,8 @@
 
 function _injectStylesForOppInfoCard() {
     const styleId = 'opportunity-info-card-container-styles';
-    if (document.getElementById(styleId)) return;
-
-    const style = document.createElement('style');
-    style.id = styleId;
-    style.innerHTML = `
+    let style = document.getElementById(styleId);
+    const css = `
         /* 容器基礎樣式 */
         .opportunity-info-card {
             background-color: transparent;
@@ -231,7 +229,12 @@ function _injectStylesForOppInfoCard() {
             text-align: center;
         }
     `;
-    document.head.appendChild(style);
+    if (!style) {
+        style = document.createElement('style');
+        style.id = styleId;
+        document.head.appendChild(style);
+    }
+    style.textContent = css;
 }
 
 const OpportunityInfoCard = (() => {
