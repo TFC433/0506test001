@@ -305,7 +305,7 @@ async function fetchAndRenderOpportunitiesTable(isAppend = false) {
         } else {
             const tbody = listContent.querySelector('.opp-list-table tbody');
             if (tbody) {
-                tbody.insertAdjacentHTML('beforeend', renderOpportunityRows(tableData));
+                tbody.insertAdjacentHTML('beforeend', renderOpportunityRows(groupOpportunityRows(tableData)));
             }
             const oldBtnContainer = document.getElementById('opp-load-more-container');
             if (oldBtnContainer) oldBtnContainer.remove();
@@ -411,9 +411,36 @@ function renderOpportunitiesTable(opportunities) {
                     <th class="col-actions">操作</th>
                 </tr></thead><tbody>`;
 
-    html += renderOpportunityRows(opportunities);
+    html += renderOpportunityRows(groupOpportunityRows(opportunities));
     
     return html + '</tbody></table></div>';
+}
+
+function groupOpportunityRows(opportunities) {
+    const groups = new Map();
+
+    (opportunities || []).forEach((opp, index) => {
+        const opportunityId = opp.opportunityId || opp.opportunity_id;
+        const parentOpportunityId = opp.parentOpportunityId || opp.parent_opportunity_id;
+        const groupKey = parentOpportunityId || opportunityId || `row-${index}`;
+        const latestActivity = Number(opp.effectiveLastActivity || new Date(opp.lastUpdateTime || opp.updated_time || opp.createdTime || opp.created_time || 0).getTime() || 0);
+
+        if (!groups.has(groupKey)) {
+            groups.set(groupKey, { index, latestActivity, rows: [] });
+        }
+
+        const group = groups.get(groupKey);
+        group.latestActivity = Math.max(group.latestActivity, latestActivity);
+        group.rows.push(opp);
+    });
+
+    return Array.from(groups.values())
+        .sort((a, b) => b.latestActivity - a.latestActivity || a.index - b.index)
+        .flatMap(group => group.rows.sort((a, b) => {
+            const aIsChild = Boolean(a.parentOpportunityId || a.parent_opportunity_id);
+            const bIsChild = Boolean(b.parentOpportunityId || b.parent_opportunity_id);
+            return Number(aIsChild) - Number(bIsChild);
+        }));
 }
 
 function renderOpportunityRows(opportunities) {
@@ -433,6 +460,7 @@ function renderOpportunityRows(opportunities) {
 
         const oppParams = JSON.stringify({ opportunityId: opp.opportunityId }).replace(/"/g, '&quot;');
         const safeOppName = (opp.opportunityName || '').replace(/"/g, '&quot;');
+        const isLineageChild = Boolean(opp.parentOpportunityId || opp.parent_opportunity_id);
         const businessType = String(
             opp.businessType ||
             opp.business_type ||
@@ -451,8 +479,8 @@ function renderOpportunityRows(opportunities) {
             <tr>
                 <td class="col-idx">${absoluteIdx}</td>
                 <td style="white-space:nowrap;">${lastActivityDate}</td>
-                <td><span class="opp-type-chip" style="background:${typeColor}">${opp.opportunityType || '未分類'}</span></td>
-                <td style="min-width:180px;">
+                <td style="${isLineageChild ? 'padding-left:28px;' : ''}"><span class="opp-type-chip" style="background:${typeColor}">${opp.opportunityType || '未分類'}</span></td>
+                <td style="min-width:180px;${isLineageChild ? ' padding-left:28px;' : ''}">
                     <a href="#" class="text-link" 
                        data-action="navigate" 
                        data-page="opportunity-details" 
