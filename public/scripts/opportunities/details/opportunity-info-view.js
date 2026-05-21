@@ -1,7 +1,8 @@
 // public/scripts/opportunities/details/opportunity-info-view.js
-// Version: 8.14
-// Date: 2026-05-20
+// Version: 8.15
+// Date: 2026-05-21
 // Changelog:
+// [2026-05-21] Opportunity Detail Display Mode Patch 1: refine Business Context operational presentation and remove legacy main-window block.
 // [2026-05-21] Opportunity Lineage Workflow Phase 2-C correction: keep header lifecycle badge node-only.
 // [2026-05-20] Opportunity Lineage Workflow Phase 2-C: add governed renewal/follow-up header actions.
 // [2026-05-20] Opportunity lifecycle semantic UI convergence: Chinese-only badges and restrained semantic colors.
@@ -243,6 +244,55 @@ const OpportunityInfoView = (() => {
                 font-weight: 550;
             }
 
+            .business-customer-value {
+                font-size: 0.94rem;
+                font-weight: 520 !important;
+                line-height: 1.35;
+                word-break: normal;
+                overflow-wrap: anywhere;
+            }
+
+            .business-context-stack {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 5px 6px;
+            }
+
+            .op-meta-badge,
+            .op-meta-chip {
+                display: inline-flex;
+                align-items: center;
+                width: fit-content;
+                border-radius: var(--rounded-sm);
+                font-size: 0.78rem;
+                line-height: 1.25;
+                font-weight: 600;
+                white-space: normal;
+            }
+
+            .op-meta-badge {
+                padding: 3px 8px;
+                color: var(--text-secondary);
+                background: var(--primary-bg);
+                border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
+            }
+
+            .op-meta-chip {
+                padding: 3px 8px;
+                color: var(--text-secondary);
+                background: color-mix(in srgb, var(--secondary-bg) 85%, var(--border-color));
+                border: 1px solid var(--border-color);
+            }
+
+            .business-contact-line {
+                display: flex;
+                flex-wrap: wrap;
+                align-items: center;
+                gap: 5px;
+                font-weight: 550;
+            }
+
             .field-value.val-money {
                 font-family: 'Roboto Mono', monospace;
                 font-size: 1rem;
@@ -326,16 +376,16 @@ const OpportunityInfoView = (() => {
                 font-weight: 500;
             }
 
-            /* 職稱 Badge (淡藍膠囊) */
+            /* 職稱 Badge */
             .job-title-badge {
                 display: inline-block;
-                background-color: #eff6ff; 
-                color: #1e40af; 
-                font-size: 0.75rem;
-                padding: 2px 8px;
+                background-color: var(--primary-bg);
+                color: var(--text-muted);
+                font-size: 0.72rem;
+                padding: 2px 6px;
                 border-radius: var(--rounded-sm);
                 font-weight: 600;
-                border: 1px solid #dbeafe;
+                border: 1px solid var(--border-color);
                 margin-left: 4px;
             }
 
@@ -488,8 +538,6 @@ const OpportunityInfoView = (() => {
 
         const mainContact = getFirst(opp, ['mainContact'], '');
         const channelContact = getFirst(opp, ['channelContact'], '');
-        const targetContactName = isDirect ? mainContact : channelContact;
-
         // 【修改】直接從 opp 物件中獲取職稱，無需前端複雜查找
         const targetTitle = getFirst(opp, ['mainContactJobTitle'], '');
         const titleHtml = targetTitle ? `<span class="job-title-badge">${targetTitle}</span>` : '';
@@ -611,28 +659,26 @@ const OpportunityInfoView = (() => {
                         <div class="field-list">
                             <div class="field-row">
                                 <span class="unified-label">終端客戶</span>
-                                <span class="field-value">${customerCompany || '-'}</span>
+                                <span class="field-value business-customer-value">${customerCompany || '-'}</span>
                             </div>
                             <div class="field-row">
                                 <span class="unified-label">銷售模式 / 通路</span>
-                                <span class="field-value">${isDirect ? salesModel : `${salesModel} / ${targetName}`}</span>
+                                <div class="field-value business-context-stack">
+                                    <span class="op-meta-badge">${salesModel}</span>
+                                    ${!isDirect && targetName ? `<span class="op-meta-chip">${targetName}</span>` : ''}
+                                </div>
                             </div>
                             <div class="field-row">
                                 <span class="unified-label">主要聯絡人</span>
-                                <span class="field-value">${mainContact || '-'}</span>
+                                <div class="field-value business-contact-line">
+                                    <span>${mainContact || '-'}</span>
+                                    ${titleHtml}
+                                </div>
                             </div>
-                            <div class="field-row">
+                            ${!isDirect ? `
+                                <div class="field-row">
                                 <span class="unified-label">通路聯絡人</span>
                                 <span class="field-value">${channelContact || '-'}</span>
-                            </div>
-                            ${targetContactName ? `
-                                <div class="field-row">
-                                    <span class="unified-label">主要窗口</span>
-                                    <div class="split-contact-row">
-                                    <span class="contact-prefix">窗口：</span>
-                                    <span>${targetContactName}</span>
-                                    ${titleHtml}
-                                    </div>
                                 </div>
                             ` : ''}
                         </div>
