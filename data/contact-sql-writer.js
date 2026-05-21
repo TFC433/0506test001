@@ -2,13 +2,12 @@
 /**
  * data/contact-sql-writer.js
  * [Phase 7] SQL Writer for Official Contacts
- * @version 8.0.2 (ContactSqlWriter Patch 1)
- * @date 2026-05-21
+ * @version 8.0.1 (CORE Contact Notes Plumbing)
+ * @date 2026-05-13
  * @description 
  * - Handles Create/Update/Delete for 'contacts' table.
  * - STRICT SCHEMA: No invention of columns.
  * - Locked Schema: contact_id, source_id, name, company_id, department, job_title, mobile, phone, email, notes, created/updated_time/by.
- * - [2026-05-21] ContactSqlWriter Patch 1: prevent legacy company name strings from being written into contacts.company_id.
  * - [2026-05-13] Added SQL-only contacts.notes create/update mapping.
  * * WORLD MODEL (PERSISTENCE LAYER):
  * 1. Scope:
@@ -25,17 +24,6 @@ const { supabase } = require('../config/supabase');
 class ContactSqlWriter {
     constructor() {
         this.tableName = 'contacts';
-    }
-
-    _isValidUuid(value) {
-        return typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-    }
-
-    _normalizeCompanyId(companyId, context) {
-        if (!companyId) return null;
-        if (this._isValidUuid(companyId)) return companyId;
-        console.warn(`[ContactSqlWriter] Ignoring invalid companyId for ${context}; company_id requires UUID.`);
-        return null;
     }
 
     /**
@@ -56,7 +44,7 @@ class ContactSqlWriter {
             contact_id: contactId,
             source_id: data.sourceId || 'MANUAL', // Ref to RAW contact if applicable
             name: data.name,
-            company_id: this._normalizeCompanyId(data.companyId, 'createContact'),
+            company_id: data.companyId || data.company || null,
             department: data.department || '',
             job_title: data.jobTitle || data.position || '',
             mobile: data.mobile || '',
@@ -102,10 +90,8 @@ class ContactSqlWriter {
         if (data.name !== undefined) payload.name = data.name;
         
         // Company ID
-        if (data.companyId !== undefined) {
-            const companyId = this._normalizeCompanyId(data.companyId, 'updateContact');
-            if (companyId) payload.company_id = companyId;
-        }
+        if (data.companyId !== undefined) payload.company_id = data.companyId;
+        else if (data.company !== undefined) payload.company_id = data.company;
         
         if (data.department !== undefined) payload.department = data.department;
         
