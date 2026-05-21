@@ -1,9 +1,10 @@
 /**
  * services/company-service.js
  * 公司業務邏輯層
- * @version 8.6.0 (Phase A - Interaction Logging Patch)
- * @date 2026-04-16
+ * @version 8.6.1 (Company Details Contact Compatibility Patch)
+ * @date 2026-05-21
  * @changelog 
+ * - Company details compatibility: include legacy company-name keyed contacts in company details response.
  * - [PATCH] Added system interaction logging for Create Company (Phase A).
  * - [PATCH PHASE 11] Added graceful DB-First bypass for full interactions/eventLogs tables using _hasNativeActivity.
  * - [PATCH PHASE 10] Added lightweight opportunity counting. Removed frontend dependency on page=0.
@@ -118,6 +119,18 @@ class CompanyService {
             .replace(/股份有限公司|有限公司|公司/g, '')
             .replace(/\(.*\)/g, '')
             .trim();
+    }
+
+    _mergeCompanyContacts(...contactLists) {
+        const map = new Map();
+        contactLists.flat().filter(Boolean).forEach(contact => {
+            map.set(contact.contactId || contact.contact_id || `${contact.name}-${contact.companyId}`, contact);
+        });
+        return Array.from(map.values()).sort((a, b) => {
+            const timeB = new Date(b.updatedTime || b.updated_time || b.createdTime || b.created_time || 0).getTime();
+            const timeA = new Date(a.updatedTime || a.updated_time || a.createdTime || a.created_time || 0).getTime();
+            return timeB - timeA;
+        });
     }
 
     async _logCompanyInteraction(companyId, title, summary, modifier) {
@@ -316,8 +329,9 @@ class CompanyService {
                 try {
                     const baseNormalized = companyName.replace(/股份有限公司|有限公司|公司/g, '').replace(/\(.*\)/g, '').trim();
 
-                    const [sqlContacts, sqlOppsRaw, sqlInteractionsComp, sqlEventLogs, allPotentialContacts] = await Promise.all([
+                    const [sqlContacts, legacyNameContacts, sqlOppsRaw, sqlInteractionsComp, sqlEventLogs, allPotentialContacts] = await Promise.all([
                         this.contactSqlReader.getContactsByCompanyId(companyId),
+                        companyName ? this.contactSqlReader.getContactsByCompanyId(companyName) : Promise.resolve([]),
                         this.opportunitySqlReader.getOpportunitiesByCompanyName(baseNormalized),
                         this.interactionSqlReader.getInteractionsByCompanyId(companyId),
                         this.eventLogSqlReader.getEventLogs(), 
@@ -342,7 +356,7 @@ class CompanyService {
                         e.companyId === companyId
                     ).sort((a, b) => new Date(b.createdTime || 0) - new Date(a.createdTime || 0));
 
-                    contacts = sqlContacts;
+                    contacts = this._mergeCompanyContacts(sqlContacts, legacyNameContacts);
                     
                     potentialContacts = allPotentialContacts.filter(pc => 
                         this._normalizeCompanyName(pc.company) === normalizedTarget
@@ -364,7 +378,7 @@ class CompanyService {
                     this.contactService.getPotentialContacts(3000) // [PHASE 9.3] Semantic Fix
                 ]);
 
-                contacts = allContacts.filter(c => c.companyId === companyId);
+                contacts = this._mergeCompanyContacts(allContacts.filter(c => c.companyId === companyId || c.companyId === companyName));
                 
                 opportunities = allOpportunities.filter(o => 
                     this._normalizeCompanyName(o.customerCompany) === normalizedTarget
