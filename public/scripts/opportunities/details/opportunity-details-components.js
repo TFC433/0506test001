@@ -3,8 +3,9 @@
 // ============================================================================
 // public/scripts/opportunity-details/opportunity-details-components.js
 // 職責：整合機會詳細頁面組件，處理編輯邏輯與資料存取
-// * @version 1.1.23 (Opportunity Detail Edit Mode UI Phase 1-E)
+// * @version 1.1.24 (Opportunity Detail Edit Mode Functional Patch A)
 // * @date 2026-05-21
+// * @changelog 2026-05-21: Opportunity Detail Edit Mode Functional Patch A: Mirror channel contact from main contact in Direct Sales flow.
 // * @changelog 2026-05-21: Opportunity Detail Edit Mode UI Phase 1-E: compact non-title edit controls while preserving opportunity name prominence.
 // * @changelog 2026-05-21: Opportunity Detail Edit Mode UI Phase 1-D: compress selector density and reduce operational visual noise.
 // * @changelog 2026-05-21: Opportunity Detail Edit Mode UI Phase 1-C: tighten operational density and spacing rhythm.
@@ -601,6 +602,7 @@ const OpportunityInfoCard = (() => {
         const channelSelect = document.getElementById('edit-channel-details');
         const channelContactSelect = document.getElementById('edit-channel-contact');
         const customerSelect = document.getElementById('edit-customer-company');
+        const mainContactSelect = document.getElementById('edit-main-contact');
         
         if (!channelSelect || !customerSelect) return;
 
@@ -620,7 +622,8 @@ const OpportunityInfoCard = (() => {
             channelSelect.disabled = true; 
 
             if (channelContactSelect) {
-                channelContactSelect.innerHTML = '<option value="">-- 不適用 --</option>';
+                channelContactSelect.innerHTML = mainContactSelect?.innerHTML || '<option value="">-- 請選擇 --</option>';
+                channelContactSelect.value = mainContactSelect?.value || '';
                 channelContactSelect.disabled = true;
             }
 

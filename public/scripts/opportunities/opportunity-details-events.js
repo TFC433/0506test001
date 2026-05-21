@@ -4,9 +4,10 @@
 /**
  * Project: TFC CRM
  * File: public/scripts/opportunities/opportunity-details-events.js
- * Version: 8.1.7
- * Date: 2026-05-20
+ * Version: 8.1.8
+ * Date: 2026-05-21
  * Changelog:
+ * - [PATCH] Opportunity Detail Edit Mode Functional Patch A: Mirror channel contact from main contact in Direct Sales flow.
  * - [PATCH] Save businessType from Opportunity Detail inline edit mode.
  * - [FIX] Opportunity Detail post-save refresh fix: reload normalized detail page after successful edit save instead of brittle optimistic partial re-render.
  * - [STABILITY] Edit/view layout stability correction: clear display override when returning to view mode after structural decoupling.
@@ -172,6 +173,23 @@ const OpportunityInfoCardEvents = (() => {
         return html;
     }
 
+    function _syncDirectSalesChannelContact() {
+        const mainContactSelect = document.getElementById('edit-main-contact');
+        const channelContactSelect = document.getElementById('edit-channel-contact');
+        if (!mainContactSelect || !channelContactSelect) return;
+
+        channelContactSelect.innerHTML = mainContactSelect.innerHTML;
+        channelContactSelect.value = mainContactSelect.value || '';
+        channelContactSelect.disabled = true;
+    }
+
+    function handleMainContactChange() {
+        const salesModelInput = document.getElementById('edit-sales-model');
+        if (salesModelInput && salesModelInput.value === '直接販售') {
+            _syncDirectSalesChannelContact();
+        }
+    }
+
     async function handleCustomerChange(customerName, defaultContact = null) {
         const contactSelect = document.getElementById('edit-main-contact');
         if (!contactSelect) return;
@@ -183,6 +201,7 @@ const OpportunityInfoCardEvents = (() => {
 
         contactSelect.innerHTML = _generateContactOptions(contacts, defaultContact);
         contactSelect.disabled = false;
+        contactSelect.onchange = handleMainContactChange;
 
         const salesModelInput = document.getElementById('edit-sales-model');
         const channelSelect = document.getElementById('edit-channel-details');
@@ -193,8 +212,7 @@ const OpportunityInfoCardEvents = (() => {
 
             const channelContactSelect = document.getElementById('edit-channel-contact');
             if (channelContactSelect) {
-                channelContactSelect.innerHTML = '<option value="">-- 不適用 --</option>';
-                channelContactSelect.disabled = true;
+                _syncDirectSalesChannelContact();
             }
         }
     }
@@ -358,7 +376,7 @@ const OpportunityInfoCardEvents = (() => {
 
         if (finalSalesModel === '直接販售') {
             channelDetails = finalCustomerCompany;
-            channelContact = '';
+            channelContact = getValueMaybe('edit-main-contact');
         }
 
         // For each field: if DOM missing -> keep existing value
@@ -373,7 +391,7 @@ const OpportunityInfoCardEvents = (() => {
 
         const finalChannelDetails = pick(channelDetails, ['channelDetails', 'salesChannel'], '');
         const finalMainContact = pick(getValueMaybe('edit-main-contact'), ['mainContact'], '');
-        const finalChannelContact = pick(channelContact, ['channelContact'], '');
+        const finalChannelContact = finalSalesModel === '直接販售' ? finalMainContact : pick(channelContact, ['channelContact'], '');
 
         const finalExpectedCloseDate = pick(getValueMaybe('edit-expected-close-date'), ['expectedCloseDate'], '');
         const finalCreatedTime = pick(getValueMaybe('edit-created-time'), ['createdTime'], '');
@@ -486,6 +504,7 @@ const OpportunityInfoCardEvents = (() => {
         save,
         handleSingleSelectClick,
         handleSalesModelPillClick,
+        handleMainContactChange,
         handleCustomerChange,
         handleChannelChange,
         handleManualOverride
