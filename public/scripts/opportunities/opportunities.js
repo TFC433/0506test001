@@ -305,7 +305,7 @@ async function fetchAndRenderOpportunitiesTable(isAppend = false) {
         } else {
             const tbody = listContent.querySelector('.opp-list-table tbody');
             if (tbody) {
-                tbody.insertAdjacentHTML('beforeend', renderOpportunityRows(groupOpportunityRows(tableData)));
+                tbody.insertAdjacentHTML('beforeend', renderOpportunityRows(tableData));
             }
             const oldBtnContainer = document.getElementById('opp-load-more-container');
             if (oldBtnContainer) oldBtnContainer.remove();
@@ -414,7 +414,7 @@ function renderOpportunitiesTable(opportunities) {
                     <th class="col-actions">操作</th>
                 </tr></thead><tbody>`;
 
-    html += renderOpportunityRows(groupOpportunityRows(opportunities));
+    html += renderOpportunityRows(opportunities);
     
     return html + '</tbody></table></div>';
 }

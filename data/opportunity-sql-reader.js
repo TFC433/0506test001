@@ -21,6 +21,7 @@ class OpportunitySqlReader {
     constructor() {
         this.tableName = 'opportunities';
         this.viewName = 'v_opportunities_summary'; 
+        this.lineageGroupedViewName = 'opportunities_lineage_grouped_view';
     }
 
     /**
@@ -249,7 +250,7 @@ class OpportunitySqlReader {
     async searchOpportunitiesTable({ q, filters = {}, sortField, sortDirection, limit, offset }) {
         try {
             try {
-                let dbQuery = supabase.from(this.viewName).select('*', { count: 'exact' });
+                let dbQuery = supabase.from(this.lineageGroupedViewName).select('*', { count: 'exact' });
                 
                 if (filters.type && filters.type !== 'all') dbQuery = dbQuery.eq('opportunity_type', filters.type);
                 if (filters.source && filters.source !== 'all') dbQuery = dbQuery.eq('source', filters.source);
@@ -285,28 +286,13 @@ class OpportunitySqlReader {
                     }
                 }
 
-                const sortMap = {
-                    effectiveLastActivity: 'effective_last_activity',
-                    opportunityName: 'opportunity_name',
-                    customerCompany: 'customer_company',
-                    opportunityValue: 'opportunity_value',
-                    createdTime: 'created_time',
-                    lastUpdateTime: 'updated_time',
-                    opportunityType: 'opportunity_type',
-                    opportunitySource: 'source',
-                    assignee: 'owner',
-                    mainContact: 'main_contact',
-                    salesModel: 'sales_model',
-                    salesChannel: 'sales_channel',
-                    currentStage: 'current_stage',
-                    currentStatus: 'current_status',
-                    expectedCloseDate: 'expected_close_date',
-                    deviceScale: 'equipment_scale'
-                };
-
-                const dbColumn = sortMap[sortField] || 'effective_last_activity';
-                
-                dbQuery = dbQuery.order(dbColumn, { ascending: sortDirection === 'asc', nullsFirst: false });
+                dbQuery = dbQuery
+                    .order('lineage_group_latest_activity', { ascending: false, nullsFirst: false })
+                    .order('lineage_root_id', { ascending: true })
+                    .order('lineage_row_order', { ascending: true })
+                    .order('row_activity_time', { ascending: false, nullsFirst: false })
+                    .order('created_time', { ascending: false, nullsFirst: false })
+                    .order('opportunity_id', { ascending: true });
 
                 const requiresJsPostFilter = filters.potentialSpecification && filters.potentialSpecification !== 'all';
 
@@ -366,7 +352,7 @@ class OpportunitySqlReader {
                 }
             }
 
-            console.warn('[OpportunitySqlReader] View v_opportunities_summary not found. Falling back to JS aggregation.');
+            console.warn('[OpportunitySqlReader] View opportunities_lineage_grouped_view not found. Falling back to JS aggregation.');
 
             const isNativeSort = sortField && sortField !== 'effectiveLastActivity';
             
