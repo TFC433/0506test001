@@ -134,29 +134,29 @@ const OpportunityEvents = (() => {
             .event-report-index-main {
                 align-items: center;
                 display: flex;
-                gap: 6px;
+                gap: 5px;
                 min-width: 0;
             }
 
             .event-report-index-time,
             .event-report-index-meta,
             .event-report-index-empty {
-                color: var(--text-secondary);
-                font-size: 0.78rem;
+                color: var(--text-muted);
+                font-size: 0.75rem;
                 line-height: 1.3;
             }
 
             .event-report-index-title {
-                background: color-mix(in srgb, var(--accent-blue) 10%, var(--secondary-bg));
-                border: 1px solid color-mix(in srgb, var(--accent-blue) 22%, var(--border-color));
-                border-radius: 999px;
-                color: var(--text-primary);
-                font-size: 0.9rem;
-                font-weight: 600;
-                line-height: 1.35;
+                background: var(--primary-bg);
+                border: 1px solid var(--border-color);
+                border-radius: var(--rounded-sm);
+                color: var(--text-secondary);
+                font-size: 0.78rem;
+                font-weight: 500;
+                line-height: 1.25;
                 max-width: 100%;
                 overflow: hidden;
-                padding: 3px 8px;
+                padding: 2px 6px;
                 text-overflow: ellipsis;
                 white-space: nowrap;
                 word-break: break-word;
