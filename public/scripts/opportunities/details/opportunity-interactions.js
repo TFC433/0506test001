@@ -736,7 +736,7 @@ const OpportunityInteractions = (() => {
                 padding-right: 0;
             }
 
-            .interaction-history-section .sub-tabs {
+            .interaction-layout > .activity-hub-header {
                 align-items: center;
                 border-bottom: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
                 display: flex;
@@ -745,7 +745,7 @@ const OpportunityInteractions = (() => {
                 margin-bottom: 12px;
                 padding-bottom: 8px;
             }
-            .interaction-history-section .sub-tab-link {
+            .interaction-layout > .activity-hub-header .sub-tab-link {
                 background: transparent;
                 border: 0;
                 color: var(--text-muted);
@@ -755,11 +755,11 @@ const OpportunityInteractions = (() => {
                 letter-spacing: 0.02em;
                 padding: 0;
             }
-            .interaction-history-section .sub-tab-link.active {
+            .interaction-layout > .activity-hub-header .sub-tab-link.active {
                 color: var(--text-muted);
                 font-weight: 600;
             }
-            .interaction-history-section .sub-tab-link[data-tab="activity"] {
+            .interaction-layout > .activity-hub-header .sub-tab-link[data-tab="activity"] {
                 display: none;
             }
             .activity-hub-header-actions {

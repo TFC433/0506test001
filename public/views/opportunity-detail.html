@@ -94,7 +94,7 @@
             border-bottom-color: var(--border-color); /* 給 hover 一個底線 */
         }
         
-        .interaction-history-section .activity-hub-header {
+        .interaction-layout > .activity-hub-header {
             align-items: center;
             border-bottom: 1px solid var(--border-color);
             display: flex;
@@ -103,7 +103,7 @@
             margin-bottom: var(--spacing-4);
             padding-bottom: var(--spacing-3);
         }
-        .interaction-history-section .activity-hub-header .sub-tab-link {
+        .interaction-layout > .activity-hub-header .sub-tab-link {
             background: transparent;
             border: 0;
             color: var(--text-secondary);
@@ -113,8 +113,8 @@
             margin: 0;
             padding: 0;
         }
-        .interaction-history-section .activity-hub-header .sub-tab-link.active,
-        .interaction-history-section .activity-hub-header .sub-tab-link:hover {
+        .interaction-layout > .activity-hub-header .sub-tab-link.active,
+        .interaction-layout > .activity-hub-header .sub-tab-link:hover {
             background: transparent;
             border: 0;
             border-radius: 0;
@@ -528,17 +528,15 @@
             </div>
         <div id="tab-content-interactions" class="tab-content active">
             <div class="interaction-layout">
-                
-                <div class="interaction-history-section">
-        
-                    <div class="sub-tabs activity-hub-header">
-                        <button class="sub-tab-link active" data-tab="discussion">動態牆</button>
-                        <div class="activity-hub-header-actions">
-                            <button type="button" class="lineage-action-btn" onclick="OpportunityInteractions.showCreateForm()">新增互動</button>
-                            <button type="button" class="lineage-action-btn" onclick="showEventLogFormModal({ opportunityId: window.currentDetailOpportunityId, companyId: window.currentOpportunityData?.companyId })">新增事件報告</button>
-                        </div>
+                <div class="sub-tabs activity-hub-header">
+                    <button class="sub-tab-link active" data-tab="discussion">動態牆</button>
+                    <div class="activity-hub-header-actions">
+                        <button type="button" class="lineage-action-btn" onclick="OpportunityInteractions.showCreateForm()">新增互動</button>
+                        <button type="button" class="lineage-action-btn" onclick="showEventLogFormModal({ opportunityId: window.currentDetailOpportunityId, companyId: window.currentOpportunityData?.companyId })">新增事件報告</button>
                     </div>
-                
+                </div>
+
+                <div class="interaction-history-section">
                     <div id="discussion-pane" class="sub-tab-content active">
                         <div id="discussion-timeline" class="interaction-timeline">
                             </div>
