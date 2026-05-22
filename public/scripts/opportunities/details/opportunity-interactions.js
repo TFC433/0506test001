@@ -820,11 +820,15 @@ const OpportunityInteractions = (() => {
 
             .crm-stream-item.micro {
                 border-bottom: 1px solid color-mix(in srgb, var(--border-color) 45%, transparent);
+                max-width: min(52%, 560px);
                 padding: 5px 0 6px;
+                width: 100%;
             }
             .crm-stream-item.micro.editing {
                 border-bottom: 0;
+                max-width: min(52%, 560px);
                 padding: 4px 0 7px;
+                width: 100%;
             }
             .interaction-inline-edit-frame {
                 background: rgba(59, 130, 246, 0.07);
@@ -1012,9 +1016,9 @@ const OpportunityInteractions = (() => {
                 border-radius: var(--rounded-sm);
                 box-sizing: border-box;
                 box-shadow: none;
-                max-width: min(720px, 100%);
+                max-width: min(68%, 760px);
                 padding: 8px 10px;
-                width: fit-content;
+                width: 100%;
             }
             .stream-card-header {
                 align-items: center;
@@ -1131,6 +1135,11 @@ const OpportunityInteractions = (() => {
                 }
                 .crm-stream-item::before {
                     left: -18px;
+                }
+                .crm-stream-item.micro,
+                .crm-stream-item.micro.editing,
+                .stream-card {
+                    max-width: 100%;
                 }
                 .interaction-form-section {
                     margin-top: 24px;
