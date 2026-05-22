@@ -711,8 +711,15 @@ const OpportunityInteractions = (() => {
         style.innerHTML = `
             /* --- Narrative Stream Workspace --- */
             .interaction-layout {
-                display: block;
+                display: grid;
+                grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
                 width: 100%;
+            }
+            .interaction-layout > .activity-hub-header {
+                grid-column: 1 / -1;
+            }
+            .interaction-history-section {
+                grid-column: 1 / 2;
             }
 
             .interaction-timeline,
