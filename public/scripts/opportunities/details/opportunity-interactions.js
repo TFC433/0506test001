@@ -256,11 +256,11 @@ const OpportunityInteractions = (() => {
             return `
                 <div class="crm-stream-item micro">
                     <div class="stream-row-main">
-                        <span class="stream-type">${typeStr}</span>
+                        <span class="stream-type stream-type-badge">${typeStr}</span>
                         <span class="stream-summary">${summaryHtml}</span>
+                        <span class="stream-row-time">${escapeHtml(timeStr)}</span>
                     </div>
                     <div class="stream-meta">
-                        <span>${escapeHtml(timeStr)}</span>
                         <span>${recorder}</span>
                         <span class="stream-actions">${buttonsHtml}</span>
                     </div>
@@ -539,12 +539,27 @@ const OpportunityInteractions = (() => {
                 font-size: 0.84rem;
                 font-weight: 600;
             }
+            .stream-type-badge {
+                background: color-mix(in srgb, var(--secondary-bg) 84%, var(--border-color));
+                border: 1px solid color-mix(in srgb, var(--border-color) 75%, transparent);
+                border-radius: 3px;
+                color: var(--text-secondary);
+                font-size: 0.72rem;
+                line-height: 1;
+                padding: 2px 5px;
+            }
             .stream-summary {
                 color: var(--text-secondary);
                 font-size: 0.84rem;
                 line-height: 1.42;
                 min-width: 0;
                 overflow-wrap: anywhere;
+            }
+            .stream-row-time {
+                color: var(--text-muted);
+                flex: 0 0 auto;
+                font-size: 0.73rem;
+                margin-left: auto;
             }
             .stream-meta {
                 align-items: center;
