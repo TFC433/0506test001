@@ -66,6 +66,53 @@ const OpportunityInteractions = (() => {
         if (modal) modal.hidden = true;
     }
 
+    function createInteractionFormHTML(mode = 'create') {
+        const formMode = mode === 'edit' ? 'edit' : 'create';
+        return `
+                    <h3 style="margin-bottom: 1.5rem;">新增/編輯互動</h3>
+                    <form id="new-interaction-form" data-interaction-form-mode="${formMode}">
+                        <input type="hidden" id="interaction-opportunity-id">
+                        <input type="hidden" id="interaction-edit-rowIndex">
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label">互動類型</label>
+                                <div class="select-wrapper">
+                                    <select class="form-select" id="interaction-event-type" required></select>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">互動時間</label>
+                                <input type="datetime-local" class="form-input" id="interaction-time" required>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">內容摘要 *</label>
+                            <textarea class="form-textarea" id="interaction-summary" placeholder="記錄互動重點..." required></textarea>
+                        </div>
+                         <div class="form-group">
+                            <label class="form-label">下次行動</label>
+                            <input type="text" class="form-input" id="interaction-next-action" placeholder="準備報價單並於下週三前寄出..."></input>
+                        </div>
+                        <button type="submit" class="submit-btn" id="interaction-submit-btn">💾 新增紀錄</button>
+                    </form>
+        `;
+    }
+
+    function renderInteractionForm(mode = 'create') {
+        const content = _container ? _container.querySelector('#interaction-form-modal .interaction-form-modal__content') : null;
+        if (!content) return null;
+
+        let formRoot = content.querySelector('[data-interaction-form-root]');
+        if (!formRoot) {
+            formRoot = document.createElement('div');
+            formRoot.setAttribute('data-interaction-form-root', '');
+            content.appendChild(formRoot);
+        }
+
+        formRoot.innerHTML = createInteractionFormHTML(mode);
+        return formRoot.querySelector('#new-interaction-form');
+    }
+
     function _resetFormForCreate(form) {
         form.reset();
         form.querySelector('#interaction-edit-rowIndex').value = '';
@@ -87,6 +134,7 @@ const OpportunityInteractions = (() => {
         if (!_container) return;
         const form = _container.querySelector('#new-interaction-form');
         if (!form) return;
+        form.dataset.interactionFormMode = 'create';
         _resetFormForCreate(form);
         _openInteractionFormModal();
     }
@@ -678,6 +726,7 @@ const OpportunityInteractions = (() => {
 
         const form = _container.querySelector('#new-interaction-form');
         if (!form) return;
+        form.dataset.interactionFormMode = 'edit';
 
         // #interaction-edit-rowIndex carries interactionId since Phase 8; legacy name kept for minimal diff.
         form.querySelector('#interaction-edit-rowIndex').value = item.interactionId;
@@ -762,7 +811,7 @@ const OpportunityInteractions = (() => {
             return;
         }
 
-        const form = _container.querySelector('#new-interaction-form');
+        const form = renderInteractionForm('create');
         if (!form) {
             console.error('[Interactions] 初始化失敗：在指定的容器中找不到 #new-interaction-form。');
             return;
