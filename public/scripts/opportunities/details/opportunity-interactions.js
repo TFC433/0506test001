@@ -186,12 +186,7 @@ const OpportunityInteractions = (() => {
     }
 
     function _getRenderWeight(interaction) {
-        const value = `${interaction.eventType || ''} ${interaction.eventTitle || ''}`.toLowerCase();
-        const microKeywords = ['phone', 'line', 'email', 'follow', 'call', '電話', '信件', '郵件', '追蹤'];
-        const operationalKeywords = ['meeting', 'visit', 'test', 'event report', '事件報告', '會議', '拜訪', '測試'];
-        if (operationalKeywords.some(keyword => value.includes(keyword))) return 'operational';
-        if (microKeywords.some(keyword => value.includes(keyword))) return 'micro';
-        return 'operational';
+        return interaction && interaction.eventType === '事件報告' ? 'operational' : 'micro';
     }
 
     function _getDateDividerLabel(rawTime) {
@@ -749,7 +744,7 @@ const OpportunityInteractions = (() => {
                 display: flex;
                 gap: 4px;
                 justify-content: space-between;
-                margin-bottom: 12px;
+                margin-bottom: 2px;
                 padding-bottom: 8px;
             }
             .interaction-layout > .activity-hub-header .sub-tab-link {
@@ -787,7 +782,7 @@ const OpportunityInteractions = (() => {
                 display: flex;
                 flex-direction: column;
                 gap: 7px;
-                padding: 6px 0 6px 14px;
+                padding: 1px 0 6px 14px;
                 position: relative;
                 width: 100%;
             }
@@ -801,7 +796,7 @@ const OpportunityInteractions = (() => {
                 font-size: 0.72rem;
                 font-weight: 600;
                 letter-spacing: 0.04em;
-                margin: 6px 0 2px;
+                margin: 1px 0 2px;
             }
 
             .crm-stream-item {
@@ -826,14 +821,14 @@ const OpportunityInteractions = (() => {
             }
 
             .crm-stream-item.micro {
-                border-bottom: 1px solid color-mix(in srgb, var(--border-color) 45%, transparent);
-                max-width: min(52%, 560px);
+                border-bottom: 1px solid color-mix(in srgb, var(--border-color) 30%, transparent);
+                max-width: min(86%, 920px);
                 padding: 5px 0 6px;
                 width: 100%;
             }
             .crm-stream-item.micro.editing {
                 border-bottom: 0;
-                max-width: min(52%, 560px);
+                max-width: min(86%, 920px);
                 padding: 4px 0 7px;
                 width: 100%;
             }
@@ -933,8 +928,8 @@ const OpportunityInteractions = (() => {
                 font-weight: 600;
             }
             .stream-type-badge {
-                background: color-mix(in srgb, var(--secondary-bg) 84%, var(--border-color));
-                border: 1px solid color-mix(in srgb, var(--border-color) 75%, transparent);
+                background: color-mix(in srgb, var(--secondary-bg) 92%, transparent);
+                border: 1px solid color-mix(in srgb, var(--border-color) 45%, transparent);
                 border-radius: 3px;
                 color: var(--text-secondary);
                 font-size: 0.72rem;
@@ -1022,7 +1017,7 @@ const OpportunityInteractions = (() => {
                 border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
                 border-radius: var(--rounded-sm);
                 box-sizing: border-box;
-                box-shadow: none;
+                box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
                 max-width: min(68%, 760px);
                 padding: 8px 10px;
                 width: 100%;
