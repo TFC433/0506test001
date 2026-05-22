@@ -104,6 +104,31 @@ const OpportunityInteractions = (() => {
             .replace(/'/g, '&#039;');
     }
 
+    function _getRenderWeight(interaction) {
+        const value = `${interaction.eventType || ''} ${interaction.eventTitle || ''}`.toLowerCase();
+        const microKeywords = ['phone', 'line', 'email', 'follow', 'call', '電話', '信件', '郵件', '追蹤'];
+        const operationalKeywords = ['meeting', 'visit', 'test', 'event report', '事件報告', '會議', '拜訪', '測試'];
+        if (operationalKeywords.some(keyword => value.includes(keyword))) return 'operational';
+        if (microKeywords.some(keyword => value.includes(keyword))) return 'micro';
+        return 'operational';
+    }
+
+    function _getDateDividerLabel(rawTime) {
+        if (!rawTime) return '';
+        const date = new Date(rawTime);
+        if (Number.isNaN(date.getTime())) return '';
+
+        const today = new Date();
+        const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const startOfItem = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+        const diffDays = Math.floor((startOfToday - startOfItem) / 86400000);
+
+        if (diffDays === 0) return 'TODAY';
+        if (diffDays === 1) return 'YESTERDAY';
+        if (diffDays > 1 && diffDays < 7) return 'THIS WEEK';
+        return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
+    }
+
     /**
      * 【鑑識修補】動態取得 Left/Right 排版屬性
      * Source: window.CRM_APP.systemConfig['時間軸佈局']
@@ -179,22 +204,35 @@ const OpportunityInteractions = (() => {
             }
         }
 
-        // Configuration driven layout from '時間軸佈局'
-        const alignClass = getTimelineSide(interaction.eventType);
+        const renderWeight = _getRenderWeight(interaction);
 
-        // Corrected Information Hierarchy
+        if (renderWeight === 'micro') {
+            return `
+                <div class="crm-stream-item micro">
+                    <div class="stream-row-main">
+                        <span class="stream-type">${typeStr}</span>
+                        <span class="stream-summary">${summaryHtml}</span>
+                    </div>
+                    <div class="stream-meta">
+                        <span>${escapeHtml(timeStr)}</span>
+                        <span>${recorder}</span>
+                        <span class="stream-actions">${buttonsHtml}</span>
+                    </div>
+                </div>
+            `;
+        }
+
         return `
-            <div class="crm-timeline-item ${alignClass}">
-                <div class="crm-timeline-marker"></div>
-                <div class="crm-timeline-card">
-                    <div class="card-header">
+            <div class="crm-stream-item operational">
+                <div class="stream-card">
+                    <div class="stream-card-header">
                         <strong>${typeStr}</strong>
                         <span class="feed-time">${escapeHtml(timeStr)}</span>
                     </div>
-                    <div class="card-body">
+                    <div class="stream-card-body">
                         ${summaryHtml}
                     </div>
-                    <div class="card-footer">
+                    <div class="stream-card-footer">
                         <div class="footer-meta">紀錄: ${recorder}</div>
                         <div class="footer-actions">
                             ${buttonsHtml}
@@ -228,7 +266,15 @@ const OpportunityInteractions = (() => {
         }
 
         // [Polish] Removed limit and expand/collapse. Render entire list in scrollable workspace.
-        let listHtml = allInteractions.map(renderSingleInteractionItem).join('');
+        let lastDivider = '';
+        let listHtml = allInteractions.map(interaction => {
+            const divider = _getDateDividerLabel(interaction.interactionTime || interaction.createdTime);
+            const dividerHtml = divider && divider !== lastDivider
+                ? `<div class="stream-date-divider">${divider}</div>`
+                : '';
+            if (divider) lastDivider = divider;
+            return dividerHtml + renderSingleInteractionItem(interaction);
+        }).join('');
 
         // Structural visual fix: Bind the center line dynamically to the true rendered content
         historyList.innerHTML = `
@@ -339,7 +385,7 @@ const OpportunityInteractions = (() => {
             #discussion-pane, #activity-pane {
                 height: 500px;
                 overflow-y: auto;
-                padding-right: 12px;
+                padding-right: 8px;
                 scrollbar-width: thin;
                 scrollbar-color: var(--border-color) transparent;
             }
@@ -513,6 +559,123 @@ const OpportunityInteractions = (() => {
             .crm-timeline-card .footer-actions {
                 display: flex;
                 gap: 8px;
+            }
+
+            /* --- Narrative Stream V1 --- */
+            .crm-timeline-content {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                padding: 8px 0;
+            }
+
+            .crm-timeline-content::before,
+            .crm-timeline-marker,
+            .crm-timeline-card::before,
+            .crm-timeline-card::after {
+                content: none !important;
+                display: none !important;
+            }
+
+            .crm-timeline-item,
+            .crm-timeline-item.left,
+            .crm-timeline-item.right {
+                display: block;
+                margin-bottom: 8px;
+                width: 100%;
+            }
+
+            .crm-timeline-card {
+                width: 100%;
+            }
+
+            .stream-date-divider {
+                color: var(--text-muted);
+                font-size: 0.72rem;
+                font-weight: 600;
+                letter-spacing: 0.04em;
+                margin: 6px 0 2px;
+            }
+
+            .crm-stream-item.micro {
+                border-bottom: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+                padding: 7px 2px;
+            }
+
+            .stream-row-main {
+                align-items: baseline;
+                display: flex;
+                gap: 8px;
+                min-width: 0;
+            }
+
+            .stream-type {
+                color: var(--text-primary);
+                flex: 0 0 auto;
+                font-size: 0.86rem;
+                font-weight: 600;
+            }
+
+            .stream-summary {
+                color: var(--text-secondary);
+                font-size: 0.86rem;
+                line-height: 1.45;
+                min-width: 0;
+                overflow-wrap: anywhere;
+            }
+
+            .stream-meta {
+                align-items: center;
+                color: var(--text-muted);
+                display: flex;
+                flex-wrap: wrap;
+                font-size: 0.74rem;
+                gap: 8px;
+                margin-top: 3px;
+            }
+
+            .stream-actions {
+                margin-left: auto;
+            }
+
+            .stream-card {
+                background: var(--primary-bg);
+                border: 1px solid var(--border-color);
+                border-radius: var(--rounded-sm);
+                box-shadow: none;
+                padding: 10px 12px;
+            }
+
+            .stream-card-header {
+                align-items: center;
+                color: var(--text-primary);
+                display: flex;
+                gap: 8px;
+                margin-bottom: 6px;
+                font-size: 0.92rem;
+            }
+
+            .stream-card-header .feed-time {
+                color: var(--text-muted);
+                font-size: 0.74rem;
+                font-weight: 400;
+            }
+
+            .stream-card-body {
+                color: var(--text-secondary);
+                font-size: 0.86rem;
+                line-height: 1.5;
+                overflow-wrap: anywhere;
+            }
+
+            .stream-card-footer {
+                align-items: center;
+                border-top: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+                display: flex;
+                font-size: 0.76rem;
+                justify-content: space-between;
+                margin-top: 8px;
+                padding-top: 7px;
             }
 
             .interaction-form-modal[hidden] {
