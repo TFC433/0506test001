@@ -33,6 +33,7 @@ const OpportunityInteractions = (() => {
     let _context = {}; // { opportunityId, companyId }
     let _container = null;
     let _editingInteractionId = null;
+    let _isCreatingInline = false;
 
     // ✅ [Fix] 系統自動產生類型：必須與鎖定證據一致
     // Evidence: const isLockedRecord = ['系統事件', '事件報告'].includes(item.eventType);
@@ -133,11 +134,14 @@ const OpportunityInteractions = (() => {
 
     function showCreateForm() {
         if (!_container) return;
-        const form = _container.querySelector('#new-interaction-form');
-        if (!form) return;
-        form.dataset.interactionFormMode = 'create';
-        _resetFormForCreate(form);
-        _openInteractionFormModal();
+        if (_isCreatingInline) {
+            _focusInlineCreateRow();
+            return;
+        }
+        _isCreatingInline = true;
+        _editingInteractionId = null;
+        _updateTimelineView();
+        _focusInlineCreateRow();
     }
 
     /**
@@ -237,6 +241,43 @@ const OpportunityInteractions = (() => {
                         <span class="inline-edit-actions">
                             <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineEdit('${interactionId}')">Save</button>
                             <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineEdit()">Cancel</button>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function _renderInlineMicroCreateForm() {
+        const timeValue = _formatInteractionTimeInput(new Date().toISOString());
+        return `
+            <div class="crm-stream-item micro editing" data-inline-create-row>
+                <div class="interaction-inline-edit-frame">
+                    <div class="inline-edit-row">
+                        <label class="inline-edit-field inline-edit-type-field">
+                            <span>互動種類</span>
+                            <select class="inline-edit-input inline-edit-type" data-inline-field="eventType" required>
+                                ${_createInteractionTypeOptionsHTML('')}
+                            </select>
+                        </label>
+                        <label class="inline-edit-field inline-edit-time-field">
+                            <span>互動時間</span>
+                            <input type="datetime-local" class="inline-edit-input inline-edit-time" data-inline-field="interactionTime" value="${escapeHtml(timeValue)}" required>
+                        </label>
+                    </div>
+                    <label class="inline-edit-field">
+                        <span>內容摘要</span>
+                        <textarea class="inline-edit-input inline-edit-summary" data-inline-field="contentSummary" required></textarea>
+                    </label>
+                    <label class="inline-edit-field">
+                        <span>下一步</span>
+                        <textarea class="inline-edit-input inline-edit-next-action" data-inline-field="nextAction"></textarea>
+                    </label>
+                    <div class="inline-edit-meta">
+                        <span>${escapeHtml(getCurrentUser())}</span>
+                        <span class="inline-edit-actions">
+                            <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineCreate()">Cancel</button>
+                            <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineCreate()">Create</button>
                         </span>
                     </div>
                 </div>
@@ -385,10 +426,16 @@ const OpportunityInteractions = (() => {
         }
 
         const allInteractions = Array.isArray(interactions) ? interactions : [];
+        const createRowHtml = containerSelector.includes('discussion') && _isCreatingInline
+            ? _renderInlineMicroCreateForm()
+            : '';
         if (allInteractions.length === 0) {
             historyList.innerHTML = `
-                <div class="alert alert-info">
-                    ${containerSelector.includes('discussion') ? '尚無動態' : '尚無系統活動'}
+                <div class="crm-timeline-content">
+                    ${createRowHtml}
+                    <div class="alert alert-info">
+                        ${containerSelector.includes('discussion') ? '尚無動態' : '尚無系統活動'}
+                    </div>
                 </div>
             `;
             return;
@@ -408,6 +455,7 @@ const OpportunityInteractions = (() => {
         // Structural visual fix: Bind the center line dynamically to the true rendered content
         historyList.innerHTML = `
             <div class="crm-timeline-content">
+                ${createRowHtml}
                 ${listHtml}
             </div>
         `;
@@ -528,6 +576,76 @@ const OpportunityInteractions = (() => {
         });
     }
 
+    function _focusInlineCreateRow() {
+        if (!_container) return;
+        const row = _container.querySelector('[data-inline-create-row]');
+        if (!row) return;
+        row.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const summary = row.querySelector('[data-inline-field="contentSummary"]');
+        if (summary) summary.focus();
+        _autosizeInlineEditTextareas();
+    }
+
+    function cancelInlineCreate() {
+        _isCreatingInline = false;
+        _updateTimelineView();
+    }
+
+    async function saveInlineCreate() {
+        if (!_container) return;
+
+        const frame = _container.querySelector('[data-inline-create-row]');
+        if (!frame) return;
+
+        const interactionTimeInput = frame.querySelector('[data-inline-field="interactionTime"]').value;
+        const interactionData = {
+            interactionTime: interactionTimeInput
+                ? new Date(interactionTimeInput).toISOString()
+                : new Date().toISOString(),
+            eventType: frame.querySelector('[data-inline-field="eventType"]').value,
+            contentSummary: frame.querySelector('[data-inline-field="contentSummary"]').value,
+            nextAction: frame.querySelector('[data-inline-field="nextAction"]').value,
+            recorder: getCurrentUser(),
+            modifier: getCurrentUser()
+        };
+
+        if (!interactionData.eventType || !interactionData.contentSummary) return;
+        if (_context.opportunityId) interactionData.opportunityId = _context.opportunityId;
+        if (_context.companyId) interactionData.companyId = _context.companyId;
+
+        showLoading('Saving interaction...');
+        try {
+            const result = await authedFetch('/api/interactions', { method: 'POST', body: JSON.stringify(interactionData) });
+            if (result && result.success === false) {
+                throw new Error(result.details || 'Save failed');
+            }
+
+            const createdInteraction = result && (result.data || result.interaction || result);
+            const createdId = typeof createdInteraction === 'string'
+                ? createdInteraction
+                : createdInteraction && (createdInteraction.interactionId || createdInteraction.id);
+            if (createdId) {
+                _interactions.unshift({
+                    ...interactionData,
+                    ...(typeof createdInteraction === 'object' ? createdInteraction : {}),
+                    interactionId: createdId,
+                    recorder: interactionData.recorder
+                });
+            }
+
+            if (window.dashboardManager && typeof window.dashboardManager.markStale === 'function') {
+                window.dashboardManager.markStale();
+            }
+
+            _isCreatingInline = false;
+            _updateTimelineView();
+        } catch (error) {
+            if (error.message !== 'Unauthorized') showNotification(`Save failed: ${error.message}`, 'error');
+        } finally {
+            hideLoading();
+        }
+    }
+
     async function saveInlineEdit(interactionId) {
         if (!_container) return;
 
@@ -619,9 +737,11 @@ const OpportunityInteractions = (() => {
             }
 
             .interaction-history-section .sub-tabs {
+                align-items: center;
                 border-bottom: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
                 display: flex;
                 gap: 4px;
+                justify-content: space-between;
                 margin-bottom: 12px;
                 padding-bottom: 8px;
             }
@@ -641,6 +761,17 @@ const OpportunityInteractions = (() => {
             }
             .interaction-history-section .sub-tab-link[data-tab="activity"] {
                 display: none;
+            }
+            .activity-hub-header-actions {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                justify-content: flex-end;
+                margin-left: auto;
+            }
+            .activity-hub-header-actions .action-btn {
+                font-size: 0.78rem;
+                padding: 6px 10px;
             }
 
             .crm-timeline-content {
@@ -1160,6 +1291,8 @@ const OpportunityInteractions = (() => {
         startInlineEdit,
         saveInlineEdit,
         cancelInlineEdit,
+        saveInlineCreate,
+        cancelInlineCreate,
         confirmDelete
     };
 })();

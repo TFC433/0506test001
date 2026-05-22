@@ -94,6 +94,41 @@
             border-bottom-color: var(--border-color); /* 給 hover 一個底線 */
         }
         
+        .interaction-history-section .activity-hub-header {
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            gap: var(--spacing-3);
+            justify-content: space-between;
+            margin-bottom: var(--spacing-4);
+            padding-bottom: var(--spacing-3);
+        }
+        .interaction-history-section .activity-hub-header .sub-tab-link {
+            background: transparent;
+            border: 0;
+            color: var(--text-secondary);
+            cursor: default;
+            font-size: var(--font-size-sm);
+            font-weight: 700;
+            margin: 0;
+            padding: 0;
+        }
+        .interaction-history-section .activity-hub-header .sub-tab-link.active,
+        .interaction-history-section .activity-hub-header .sub-tab-link:hover {
+            background: transparent;
+            border: 0;
+            border-radius: 0;
+            color: var(--text-secondary);
+        }
+        .activity-hub-header-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--spacing-2);
+            justify-content: flex-end;
+        }
+        .activity-hub-header-actions .action-btn {
+            padding: var(--spacing-2) var(--spacing-3);
+        }
         .sub-tab-content {
             display: none;
         }
@@ -496,9 +531,12 @@
                 
                 <div class="interaction-history-section">
         
-                    <div class="sub-tabs">
+                    <div class="sub-tabs activity-hub-header">
                         <button class="sub-tab-link active" data-tab="discussion">動態牆</button>
-                        <button class="sub-tab-link" data-tab="activity">系統活動紀錄</button>
+                        <div class="activity-hub-header-actions">
+                            <button type="button" class="action-btn primary" onclick="OpportunityInteractions.showCreateForm()">新增互動</button>
+                            <button type="button" class="action-btn primary" onclick="showEventLogFormModal({ opportunityId: window.currentDetailOpportunityId, companyId: window.currentOpportunityData?.companyId })">新增事件報告</button>
+                        </div>
                     </div>
                 
                     <div id="discussion-pane" class="sub-tab-content active">
@@ -553,15 +591,6 @@
         </div>
         <div id="opp-event-reports-index" class="dashboard-widget">
             </div>
-        <div class="dashboard-widget">
-            <div class="widget-header">
-                <h2 class="widget-title">快速操作</h2>
-            </div>
-            <div class="widget-content opp-quick-actions">
-                <button type="button" class="action-btn primary" onclick="OpportunityInteractions.showCreateForm()">新增互動</button>
-                <button type="button" class="action-btn primary" onclick="showEventLogFormModal({ opportunityId: window.currentDetailOpportunityId, companyId: window.currentOpportunityData?.companyId })">新增事件報告</button>
-            </div>
-        </div>
             </div>
                 </div>
             </div>
