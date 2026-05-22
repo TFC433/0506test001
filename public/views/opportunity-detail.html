@@ -1,8 +1,9 @@
 <!--
  * File Path: public/views/opportunity-detail.html
- * Version: 1.8.18
+ * Version: 1.8.19
  * Date: 2026-05-22
  * Changelog:
+ * - (v1.8.19) Opportunity Activity Hub Phase 2-A: modalize interaction form while preserving runtime form lifecycle.
  * - (v1.8.18) Opportunity Activity Hub Phase 1-A: move event report list into right rail as compact index.
  * - (v1.8.17) Opportunity Lineage UX Phase 2-B — rename related opportunities to commercial context and render directional lineage labels.
  * - (v1.8.16) Opportunity Detail pipeline typography refinement: slightly reduce workflow label density for improved narrow-desktop fit.
@@ -535,8 +536,12 @@
                     </div>
                 
                 </div>
+            </div>
 
-                <div class="interaction-form-section">
+            <div id="interaction-form-modal" class="interaction-form-modal" hidden>
+                    <div class="interaction-form-modal__shell">
+                        <div class="interaction-form-modal__content interaction-form-section">
+                            <button type="button" class="modal-close-btn" id="interaction-form-modal-close" aria-label="Close">&times;</button>
                     <h3 style="margin-bottom: 1.5rem;">新增/編輯互動</h3>
                     <form id="new-interaction-form">
                         <input type="hidden" id="interaction-opportunity-id">
@@ -563,8 +568,9 @@
                         </div>
                         <button type="submit" class="submit-btn" id="interaction-submit-btn">💾 新增紀錄</button>
                     </form>
+                        </div>
+                    </div>
                 </div>
-            </div>
         </div>
 
         </div>

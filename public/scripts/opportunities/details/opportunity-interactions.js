@@ -1,8 +1,8 @@
 /*
  * Project: TFC CRM
  * File: public/scripts/opportunities/details/opportunity-interactions.js
- * Version: v8.0.23 (Opportunity Operational Surface Alignment)
- * Date: 2026-05-07
+ * Version: v8.0.24 (Opportunity Operational Surface Alignment)
+ * Date: 2026-05-22
  * Changelog: 
  * - Phase 8 Interaction UI: operation-key rowIndex -> interactionId for edit/delete
  * - Phase 8.10.2 Fix: Relaxed strict result.success check to prevent unreachable markStale on 204/raw responses
@@ -22,6 +22,7 @@
  * - Phase 8.10.17 Patch: Precision fix to remove stale SPA CSS injections and guarantee only one consistent timeline center line exists.
  * - Phase 8.10.18 Polish: Stabilized box-sizing, content overflow wrapping, and added strict SPA bleed protection for timeline line ownership.
  * - Phase 8.10.19 UI: Tokenized timeline surfaces and reduced operational card radius/shadow for dark/light consistency.
+ * - Phase 8.10.20 Patch: Modalized interaction form while preserving runtime form lifecycle.
  */
 // public/scripts/opportunities/details/opportunity-interactions.js
 // 職責：專門管理「互動與新增」頁籤的所有 UI 與功能
@@ -49,6 +50,45 @@ const OpportunityInteractions = (() => {
         tab.classList.add('active');
         const contentPane = _container.querySelector(`#${tabName}-pane`);
         if (contentPane) contentPane.classList.add('active');
+    }
+
+    function _getInteractionFormModal() {
+        return _container ? _container.querySelector('#interaction-form-modal') : null;
+    }
+
+    function _openInteractionFormModal() {
+        const modal = _getInteractionFormModal();
+        if (modal) modal.hidden = false;
+    }
+
+    function _closeInteractionFormModal() {
+        const modal = _getInteractionFormModal();
+        if (modal) modal.hidden = true;
+    }
+
+    function _resetFormForCreate(form) {
+        form.reset();
+        form.querySelector('#interaction-edit-rowIndex').value = '';
+        form.querySelector('#interaction-submit-btn').textContent = '💾 新增紀錄';
+
+        const eventTypeSelect = form.querySelector('#interaction-event-type');
+        const summaryTextarea = form.querySelector('#interaction-summary');
+        const nextActionInput = form.querySelector('#interaction-next-action');
+        if (eventTypeSelect) eventTypeSelect.disabled = false;
+        if (summaryTextarea) summaryTextarea.readOnly = false;
+        if (nextActionInput) nextActionInput.readOnly = false;
+
+        const now = new Date();
+        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+        form.querySelector('#interaction-time').value = now.toISOString().slice(0, 16);
+    }
+
+    function showCreateForm() {
+        if (!_container) return;
+        const form = _container.querySelector('#new-interaction-form');
+        if (!form) return;
+        _resetFormForCreate(form);
+        _openInteractionFormModal();
     }
 
     /**
@@ -273,6 +313,8 @@ const OpportunityInteractions = (() => {
             if (window.dashboardManager && typeof window.dashboardManager.markStale === 'function') {
                 window.dashboardManager.markStale();
             }
+
+            _closeInteractionFormModal();
             
             // 成功後 authedFetch 可能刷新/通知（維持既有行為）
         } catch (error) {
@@ -473,6 +515,41 @@ const OpportunityInteractions = (() => {
                 gap: 8px;
             }
 
+            .interaction-form-modal[hidden] {
+                display: none !important;
+            }
+
+            .interaction-form-modal {
+                align-items: center;
+                background: rgba(0, 0, 0, 0.45);
+                bottom: 0;
+                display: flex;
+                justify-content: center;
+                left: 0;
+                padding: 24px;
+                position: fixed;
+                right: 0;
+                top: 0;
+                z-index: 1200;
+            }
+
+            .interaction-form-modal__shell {
+                max-height: min(760px, calc(100vh - 48px));
+                max-width: 640px;
+                overflow: auto;
+                width: 100%;
+            }
+
+            .interaction-form-modal__content {
+                position: relative;
+            }
+
+            #interaction-form-modal-close {
+                position: absolute;
+                right: 14px;
+                top: 12px;
+            }
+
             /* --- Right Panel Structure & Typography --- */
             .interaction-form-section {
                 background-color: var(--secondary-bg);
@@ -605,7 +682,7 @@ const OpportunityInteractions = (() => {
             submitBtn.textContent = '💾 儲存變更';
         }
 
-        form.scrollIntoView({ behavior: 'smooth' });
+        _openInteractionFormModal();
     }
 
     /**
@@ -675,16 +752,16 @@ const OpportunityInteractions = (() => {
         }
 
         // 重置表單
-        form.reset();
-        form.querySelector('#interaction-edit-rowIndex').value = '';
-        form.querySelector('#interaction-submit-btn').textContent = '💾 新增紀錄';
-
-        const now = new Date();
-        now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-        form.querySelector('#interaction-time').value = now.toISOString().slice(0, 16);
+        _resetFormForCreate(form);
 
         form.removeEventListener('submit', _handleSubmit);
         form.addEventListener('submit', _handleSubmit);
+
+        const closeBtn = _container.querySelector('#interaction-form-modal-close');
+        if (closeBtn) {
+            closeBtn.removeEventListener('click', _closeInteractionFormModal);
+            closeBtn.addEventListener('click', _closeInteractionFormModal);
+        }
 
         const tabContainer = _container.querySelector('.sub-tabs');
         if (tabContainer) {
@@ -698,6 +775,7 @@ const OpportunityInteractions = (() => {
 
     return {
         init,
+        showCreateForm,
         showForEditing,
         confirmDelete
     };
