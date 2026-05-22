@@ -32,6 +32,7 @@ const OpportunityInteractions = (() => {
     let _interactions = [];
     let _context = {}; // { opportunityId, companyId }
     let _container = null;
+    let _editingInteractionId = null;
 
     // ✅ [Fix] 系統自動產生類型：必須與鎖定證據一致
     // Evidence: const isLockedRecord = ['系統事件', '事件報告'].includes(item.eventType);
@@ -152,6 +153,34 @@ const OpportunityInteractions = (() => {
             .replace(/'/g, '&#039;');
     }
 
+    function _formatInteractionTimeInput(rawTime) {
+        let value = rawTime || new Date().toISOString();
+        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(value)) {
+            value += 'Z';
+        }
+
+        const date = new Date(value);
+        date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+        return date.toISOString().slice(0, 16);
+    }
+
+    function _createInteractionTypeOptionsHTML(selectedValue) {
+        if (!window.CRM_APP || !window.CRM_APP.systemConfig || !window.CRM_APP.systemConfig['互動類型']) {
+            return `<option value="${escapeHtml(selectedValue || '')}" selected>${escapeHtml(selectedValue || '')}</option>`;
+        }
+
+        return window.CRM_APP.systemConfig['互動類型']
+            .filter(type => {
+                const note = type.note || type.value;
+                return !SYSTEM_GENERATED_TYPES.includes(note) && !SYSTEM_GENERATED_TYPES.includes(type.value);
+            })
+            .map(type => {
+                const selected = type.value === selectedValue ? ' selected' : '';
+                return `<option value="${escapeHtml(type.value)}"${selected}>${escapeHtml(type.note || type.value)}</option>`;
+            })
+            .join('');
+    }
+
     function _getRenderWeight(interaction) {
         const value = `${interaction.eventType || ''} ${interaction.eventTitle || ''}`.toLowerCase();
         const microKeywords = ['phone', 'line', 'email', 'follow', 'call', '電話', '信件', '郵件', '追蹤'];
@@ -175,6 +204,44 @@ const OpportunityInteractions = (() => {
         if (diffDays === 1) return 'YESTERDAY';
         if (diffDays > 1 && diffDays < 7) return 'THIS WEEK';
         return `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`;
+    }
+
+    function _renderInlineMicroEditForm(interaction, recorder) {
+        const interactionId = escapeHtml(interaction.interactionId);
+        const timeValue = _formatInteractionTimeInput(interaction.interactionTime || interaction.createdTime);
+        return `
+            <div class="crm-stream-item micro editing" data-inline-edit-id="${interactionId}">
+                <div class="interaction-inline-edit-frame">
+                    <div class="inline-edit-row">
+                        <label class="inline-edit-field inline-edit-type-field">
+                            <span>互動種類</span>
+                            <select class="inline-edit-input inline-edit-type" data-inline-field="eventType" required>
+                                ${_createInteractionTypeOptionsHTML(interaction.eventType)}
+                            </select>
+                        </label>
+                        <label class="inline-edit-field inline-edit-time-field">
+                            <span>互動時間</span>
+                            <input type="datetime-local" class="inline-edit-input inline-edit-time" data-inline-field="interactionTime" value="${escapeHtml(timeValue)}" required>
+                        </label>
+                    </div>
+                    <label class="inline-edit-field">
+                        <span>內容摘要</span>
+                        <textarea class="inline-edit-input inline-edit-summary" data-inline-field="contentSummary" required>${escapeHtml(interaction.contentSummary || '')}</textarea>
+                    </label>
+                    <label class="inline-edit-field">
+                        <span>下一步</span>
+                        <textarea class="inline-edit-input inline-edit-next-action" data-inline-field="nextAction">${escapeHtml(interaction.nextAction || '')}</textarea>
+                    </label>
+                    <div class="inline-edit-meta">
+                        <span>${recorder}</span>
+                        <span class="inline-edit-actions">
+                            <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineEdit('${interactionId}')">Save</button>
+                            <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineEdit()">Cancel</button>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        `;
     }
 
     /**
@@ -214,10 +281,13 @@ const OpportunityInteractions = (() => {
             : rawTime;
 
         const typeStr = escapeHtml(interaction.eventTitle || interaction.eventType || '未分類');
-        const recorder = escapeHtml(interaction.recorder || '系統');
+        const recorder = escapeHtml(interaction.recorder || interaction.author || interaction.modifier || '系統');
 
         const rawSummary = interaction.contentSummary || '(無內容)';
         let summaryHtml = escapeHtml(rawSummary).replace(/\n/g, '<br>');
+        const nextActionHtml = interaction.nextAction
+            ? `<span class="stream-next-action">下一步：${escapeHtml(interaction.nextAction)}</span>`
+            : '';
 
         // [Phase 8 Patch] Restore legacy clickable event report links inside contentSummary
         const linkRegex = /\[(.*?)\]\(event_log_id=([a-zA-Z0-9_-]+)\)/g;
@@ -232,10 +302,15 @@ const OpportunityInteractions = (() => {
         // 鎖定邏輯（必須與 showForEditing 證據一致）
         const isLocked = ['系統事件', '事件報告'].includes(interaction.eventType);
 
+        const renderWeight = _getRenderWeight(interaction);
+
         let buttonsHtml = '';
         if (rowId) {
+            const editAction = !isLocked && renderWeight === 'micro'
+                ? `OpportunityInteractions.startInlineEdit('${rowId}')`
+                : `OpportunityInteractions.showForEditing('${rowId}')`;
             buttonsHtml += `
-                <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.showForEditing('${rowId}')" title="${isLocked ? 'View' : 'Edit'}">
+                <button type="button" class="stream-action-btn" onclick="${editAction}" title="${isLocked ? 'View' : 'Edit'}">
                     ${isLocked ? 'View' : '&#9998;'}
                 </button>
             `;
@@ -250,19 +325,27 @@ const OpportunityInteractions = (() => {
                 `;
             }
         }
-        const renderWeight = _getRenderWeight(interaction);
 
         if (renderWeight === 'micro') {
+            if (_editingInteractionId === rowId && !isLocked) {
+                return _renderInlineMicroEditForm(interaction, recorder);
+            }
+
             return `
                 <div class="crm-stream-item micro">
                     <div class="stream-row-main">
-                        <span class="stream-type stream-type-badge">${typeStr}</span>
-                        <span class="stream-summary">${summaryHtml}</span>
+                        <div class="stream-main-copy">
+                            <span class="stream-type stream-type-badge">${typeStr}</span>
+                            <span class="stream-summary">${summaryHtml}</span>
+                        </div>
                         <span class="stream-row-time">${escapeHtml(timeStr)}</span>
                     </div>
-                    <div class="stream-meta">
-                        <span>${recorder}</span>
-                        <span class="stream-actions">${buttonsHtml}</span>
+                    <div class="stream-meta-footer">
+                        ${nextActionHtml}
+                        <span class="stream-recorder-action">
+                            <span class="stream-recorder">${recorder}</span>
+                            <span class="stream-actions">${buttonsHtml}</span>
+                        </span>
                     </div>
                 </div>
             `;
@@ -416,6 +499,87 @@ const OpportunityInteractions = (() => {
         }
     }
 
+    function startInlineEdit(interactionId) {
+        if (!_container) return;
+
+        const item = _interactions.find(i => i.interactionId === interactionId);
+        if (!item || SYSTEM_GENERATED_TYPES.includes(item.eventType) || _getRenderWeight(item) !== 'micro') {
+            showForEditing(interactionId);
+            return;
+        }
+
+        _editingInteractionId = interactionId;
+        _updateTimelineView();
+        _autosizeInlineEditTextareas();
+    }
+
+    function cancelInlineEdit() {
+        _editingInteractionId = null;
+        _updateTimelineView();
+    }
+
+    function _autosizeInlineEditTextareas() {
+        if (!_container) return;
+        _container.querySelectorAll('.inline-edit-summary, .inline-edit-next-action').forEach(textarea => {
+            textarea.style.height = 'auto';
+            textarea.style.height = `${textarea.scrollHeight}px`;
+            textarea.removeEventListener('input', _autosizeInlineEditTextareas);
+            textarea.addEventListener('input', _autosizeInlineEditTextareas);
+        });
+    }
+
+    async function saveInlineEdit(interactionId) {
+        if (!_container) return;
+
+        const frame = Array.from(_container.querySelectorAll('[data-inline-edit-id]'))
+            .find(element => element.getAttribute('data-inline-edit-id') === interactionId);
+        if (!frame) return;
+
+        const interactionTimeInput = frame.querySelector('[data-inline-field="interactionTime"]').value;
+        const interactionData = {
+            interactionTime: interactionTimeInput
+                ? new Date(interactionTimeInput).toISOString()
+                : new Date().toISOString(),
+            eventType: frame.querySelector('[data-inline-field="eventType"]').value,
+            contentSummary: frame.querySelector('[data-inline-field="contentSummary"]').value,
+            nextAction: frame.querySelector('[data-inline-field="nextAction"]').value
+        };
+
+        if (!interactionData.eventType || !interactionData.contentSummary) return;
+        if (_context.opportunityId) interactionData.opportunityId = _context.opportunityId;
+        if (_context.companyId) interactionData.companyId = _context.companyId;
+
+        showLoading('Saving interaction...');
+        try {
+            const result = await authedFetch(`/api/interactions/${interactionId}`, { method: 'PUT', body: JSON.stringify(interactionData) });
+            if (result && result.success === false) {
+                throw new Error(result.details || 'Save failed');
+            }
+
+            const updatedInteraction = result && (result.data || result.interaction || result);
+            const existing = _interactions.find(i => i.interactionId === interactionId);
+            if (existing) {
+                const preservedRecorder = existing.recorder;
+                const preservedAuthor = existing.author;
+                const preservedModifier = existing.modifier;
+                Object.assign(existing, interactionData, updatedInteraction && updatedInteraction.interactionId ? updatedInteraction : {});
+                if (!existing.recorder && preservedRecorder) existing.recorder = preservedRecorder;
+                if (!existing.author && preservedAuthor) existing.author = preservedAuthor;
+                if (!existing.modifier && preservedModifier) existing.modifier = preservedModifier;
+            }
+
+            if (window.dashboardManager && typeof window.dashboardManager.markStale === 'function') {
+                window.dashboardManager.markStale();
+            }
+
+            _editingInteractionId = null;
+            _updateTimelineView();
+        } catch (error) {
+            if (error.message !== 'Unauthorized') showNotification(`Save failed: ${error.message}`, 'error');
+        } finally {
+            hideLoading();
+        }
+    }
     // 動態注入樣式（保留既有行為並補齊精確的時間軸幾何與 CSS）
     function _injectStyles() {
         const styleId = 'interactions-dynamic-styles';
@@ -527,7 +691,94 @@ const OpportunityInteractions = (() => {
                 border-bottom: 1px solid color-mix(in srgb, var(--border-color) 45%, transparent);
                 padding: 5px 0 6px;
             }
+            .crm-stream-item.micro.editing {
+                border-bottom: 0;
+                padding: 4px 0 7px;
+            }
+            .interaction-inline-edit-frame {
+                background: rgba(59, 130, 246, 0.07);
+                border: 1px solid var(--text-primary);
+                border-radius: var(--rounded-sm);
+                box-sizing: border-box;
+                padding: 8px 10px;
+                width: 100%;
+            }
+            .inline-edit-row {
+                align-items: flex-end;
+                display: flex;
+                gap: 8px;
+                margin-bottom: 6px;
+            }
+            .inline-edit-field {
+                color: var(--text-muted);
+                display: block;
+                font-size: 0.7rem;
+                line-height: 1.25;
+                margin-top: 6px;
+            }
+            .inline-edit-field > span {
+                display: block;
+                margin-bottom: 3px;
+            }
+            .inline-edit-type-field {
+                flex: 0 0 132px;
+            }
+            .inline-edit-time-field {
+                flex: 0 0 190px;
+                margin-left: auto;
+            }
+            .inline-edit-input {
+                background: var(--primary-bg);
+                border: 1px solid var(--border-color);
+                border-radius: 3px;
+                color: var(--text-primary);
+                font-size: 0.82rem;
+                padding: 5px 7px;
+            }
+            .inline-edit-type {
+                width: 100%;
+            }
+            .inline-edit-time {
+                width: 100%;
+            }
+            .inline-edit-summary {
+                box-sizing: border-box;
+                display: block;
+                line-height: 1.42;
+                min-height: 58px;
+                overflow: hidden;
+                resize: none;
+                width: 100%;
+            }
+            .inline-edit-next-action {
+                box-sizing: border-box;
+                display: block;
+                line-height: 1.42;
+                min-height: 34px;
+                overflow: hidden;
+                resize: none;
+                width: 100%;
+            }
+            .inline-edit-meta {
+                align-items: center;
+                color: var(--text-muted);
+                display: flex;
+                font-size: 0.73rem;
+                gap: 8px;
+                margin-top: 6px;
+            }
+            .inline-edit-actions {
+                display: inline-flex;
+                gap: 6px;
+                margin-left: auto;
+            }
             .stream-row-main {
+                align-items: flex-start;
+                display: flex;
+                gap: 8px;
+                min-width: 0;
+            }
+            .stream-main-copy {
                 align-items: baseline;
                 display: flex;
                 gap: 8px;
@@ -561,6 +812,34 @@ const OpportunityInteractions = (() => {
                 font-size: 0.73rem;
                 margin-left: auto;
             }
+            .stream-meta-footer {
+                align-items: flex-end;
+                color: var(--text-muted);
+                display: flex;
+                flex-direction: column;
+                font-size: 0.73rem;
+                gap: 2px;
+                margin-left: auto;
+                margin-top: 2px;
+                max-width: 240px;
+                text-align: right;
+            }
+            .stream-recorder {
+                color: var(--text-muted);
+            }
+            .stream-recorder-action {
+                align-items: center;
+                display: inline-flex;
+                gap: 6px;
+                justify-content: flex-end;
+            }
+            .stream-next-action {
+                color: var(--text-muted);
+                font-size: 0.73rem;
+                line-height: 1.35;
+                margin: 0;
+                overflow-wrap: anywhere;
+            }
             .stream-meta {
                 align-items: center;
                 color: var(--text-muted);
@@ -575,6 +854,9 @@ const OpportunityInteractions = (() => {
                 display: inline-flex;
                 gap: 4px;
                 margin-left: auto;
+            }
+            .stream-meta-footer .stream-actions {
+                margin-left: 0;
             }
 
             .stream-action-btn {
@@ -875,6 +1157,9 @@ const OpportunityInteractions = (() => {
         init,
         showCreateForm,
         showForEditing,
+        startInlineEdit,
+        saveInlineEdit,
+        cancelInlineEdit,
         confirmDelete
     };
 })();
