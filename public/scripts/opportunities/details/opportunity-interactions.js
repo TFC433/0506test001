@@ -382,6 +382,22 @@ const OpportunityInteractions = (() => {
         style.id = styleId;
         style.innerHTML = `
             /* --- Narrative Stream Workspace --- */
+            .interaction-layout {
+                display: block;
+                width: 100%;
+            }
+
+            .interaction-timeline,
+            #discussion-timeline,
+            #activity-log-timeline {
+                box-sizing: border-box;
+                height: auto !important;
+                max-height: none !important;
+                max-width: 100% !important;
+                overflow: visible !important;
+                width: 100% !important;
+            }
+
             #discussion-pane, #activity-pane {
                 height: auto;
                 overflow: visible;
@@ -493,7 +509,7 @@ const OpportunityInteractions = (() => {
             }
 
             .stream-card {
-                background: var(--secondary-bg);
+                background: var(--primary-bg);
                 border: 1px solid var(--border-color);
                 border-radius: var(--rounded-sm);
                 box-sizing: border-box;
