@@ -705,11 +705,10 @@ const OpportunityInteractions = (() => {
         style.id = styleId;
         style.innerHTML = `
             /* --- Narrative Stream Workspace --- */
-            .interaction-layout {
-                column-gap: var(--spacing-8, 2rem);
+            #tab-content-interactions .interaction-layout {
                 display: grid;
+                gap: 0 var(--spacing-8);
                 grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-                row-gap: 0;
                 width: 100%;
             }
             .interaction-layout > .activity-hub-header {
