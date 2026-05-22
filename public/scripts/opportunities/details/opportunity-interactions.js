@@ -381,212 +381,50 @@ const OpportunityInteractions = (() => {
         const style = document.createElement('style');
         style.id = styleId;
         style.innerHTML = `
-            /* --- Fixed Height Workspace (Scrollable Panes) --- */
+            /* --- Narrative Stream Workspace --- */
             #discussion-pane, #activity-pane {
-                height: 500px;
-                overflow-y: auto;
-                padding-right: 8px;
-                scrollbar-width: thin;
-                scrollbar-color: var(--border-color) transparent;
-            }
-            #discussion-pane::-webkit-scrollbar, #activity-pane::-webkit-scrollbar {
-                width: 6px;
-            }
-            #discussion-pane::-webkit-scrollbar-thumb, #activity-pane::-webkit-scrollbar-thumb {
-                background-color: var(--border-color);
-                border-radius: 4px;
+                height: auto;
+                overflow: visible;
+                padding-right: 0;
             }
 
-            /* --- Timeline Exact Geometry Implementation --- */
-            .crm-timeline-content {
-                position: relative;
-                padding: 20px 0;
-                width: 100%;
-                box-sizing: border-box;
-            }
-
-            /* --- STRICT SPA BLEED PROTECTION: Double Line Prevention --- */
-            #discussion-timeline::before,
-            #activity-log-timeline::before,
-            .interaction-timeline::before {
-                content: none !important;
-                display: none !important;
-                width: 0 !important;
-                background: transparent !important;
-            }
-            .crm-timeline-content,
-            .interaction-timeline,
-            #discussion-timeline,
-            #activity-log-timeline {
-                border-left: none !important;
-                border-right: none !important;
-                background-image: none !important;
-            }
-            
-            /* The Anchor: Vertical Center Line (SINGLE OWNER) */
-            .crm-timeline-content::before {
-                content: '';
-                position: absolute;
-                top: 0;
-                bottom: 0;
-                left: 50%;
-                width: 2px;
-                background: var(--border-color);
-                transform: translateX(-50%);
-                z-index: 1;
-            }
-
-            /* The Item Layout Shell */
-            .crm-timeline-item {
-                position: relative;
-                width: 100%;
-                margin-bottom: 24px;
+            .interaction-history-section .sub-tabs {
+                border-bottom: 1px solid var(--border-color);
                 display: flex;
-                box-sizing: border-box;
+                gap: 4px;
+                margin-bottom: 10px;
+                padding-bottom: 6px;
             }
-            .crm-timeline-item.left {
-                justify-content: flex-start;
+            .interaction-history-section .sub-tab-link {
+                background: transparent;
+                border: 0;
+                color: var(--text-muted);
+                cursor: pointer;
+                font-size: 0.82rem;
+                font-weight: 500;
+                padding: 4px 6px;
             }
-            .crm-timeline-item.right {
-                justify-content: flex-end;
-            }
-
-            /* The Anchor Point: Exactly centered Marker */
-            .crm-timeline-marker {
-                box-sizing: border-box;
-                position: absolute;
-                left: 50%;
-                top: 20px;
-                transform: translateX(-50%);
-                width: 16px;
-                height: 16px;
-                border-radius: 50%;
-                background: var(--accent-blue);
-                border: 3px solid var(--secondary-bg);
-                box-shadow: 0 0 0 2px var(--border-color);
-                z-index: 2;
-            }
-
-            /* The Card: Geometrically spaced from center */
-            .crm-timeline-card {
-                box-sizing: border-box;
-                position: relative;
-                width: calc(50% - 32px); /* Leaves exactly 32px gap from center line */
-                background: var(--secondary-bg);
-                border: 1px solid var(--border-color);
-                border-radius: var(--rounded-sm);
-                padding: 16px 20px;
-                box-shadow: none;
-                z-index: 2;
-            }
-
-            /* The Connectors: Visual attachment arrows pointing to the marker */
-            .crm-timeline-card::before {
-                content: '';
-                position: absolute;
-                top: 21px;
-                width: 0;
-                height: 0;
-                border-style: solid;
-            }
-            .crm-timeline-card::after {
-                content: '';
-                position: absolute;
-                top: 22px;
-                width: 0;
-                height: 0;
-                border-style: solid;
-            }
-
-            /* Left Card Arrow */
-            .crm-timeline-item.left .crm-timeline-card::before {
-                right: -9px;
-                border-width: 7px 0 7px 9px;
-                border-color: transparent transparent transparent var(--border-color);
-            }
-            .crm-timeline-item.left .crm-timeline-card::after {
-                right: -7px;
-                border-width: 6px 0 6px 8px;
-                border-color: transparent transparent transparent var(--secondary-bg);
-            }
-
-            /* Right Card Arrow */
-            .crm-timeline-item.right .crm-timeline-card::before {
-                left: -9px;
-                border-width: 7px 9px 7px 0;
-                border-color: transparent var(--border-color) transparent transparent;
-            }
-            .crm-timeline-item.right .crm-timeline-card::after {
-                left: -7px;
-                border-width: 6px 8px 6px 0;
-                border-color: transparent var(--secondary-bg) transparent transparent;
-            }
-
-            /* --- Readability & Typography (Timeline) --- */
-            .crm-timeline-card .card-header {
-                font-size: 1rem;
-                font-weight: 600;
+            .interaction-history-section .sub-tab-link.active {
                 color: var(--text-primary);
-                margin-bottom: 8px;
-                display: flex;
-                align-items: center;
-                gap: 8px;
+                font-weight: 600;
             }
-            .crm-timeline-card .feed-time {
-                font-size: 0.75rem;
-                color: var(--text-muted);
-                font-weight: 400;
-            }
-            .crm-timeline-card .card-body {
-                font-size: 0.9rem;
-                line-height: 1.6;
-                color: var(--text-secondary);
-                margin-bottom: 12px;
-                word-break: break-word;
-                overflow-wrap: anywhere; /* Safety: strict overflow containment */
-            }
-            .crm-timeline-card .card-footer {
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                border-top: 1px dashed var(--border-color);
-                padding-top: 10px;
-                font-size: 0.8rem;
-            }
-            .crm-timeline-card .footer-meta {
-                color: var(--text-muted);
-            }
-            .crm-timeline-card .footer-actions {
-                display: flex;
-                gap: 8px;
+            .interaction-history-section .sub-tab-link[data-tab="activity"] {
+                display: none;
             }
 
-            /* --- Narrative Stream V1 --- */
             .crm-timeline-content {
+                border-left: 1px solid color-mix(in srgb, var(--border-color) 45%, transparent);
+                box-sizing: border-box;
                 display: flex;
                 flex-direction: column;
-                gap: 8px;
-                padding: 8px 0;
-            }
-
-            .crm-timeline-content::before,
-            .crm-timeline-marker,
-            .crm-timeline-card::before,
-            .crm-timeline-card::after {
-                content: none !important;
-                display: none !important;
-            }
-
-            .crm-timeline-item,
-            .crm-timeline-item.left,
-            .crm-timeline-item.right {
-                display: block;
-                margin-bottom: 8px;
+                gap: 7px;
+                padding: 6px 0 6px 14px;
+                position: relative;
                 width: 100%;
             }
-
-            .crm-timeline-card {
-                width: 100%;
+            .crm-timeline-content::before {
+                content: none;
+                display: none;
             }
 
             .stream-date-divider {
@@ -597,87 +435,101 @@ const OpportunityInteractions = (() => {
                 margin: 6px 0 2px;
             }
 
-            .crm-stream-item.micro {
-                border-bottom: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
-                padding: 7px 2px;
+            .crm-stream-item {
+                box-sizing: border-box;
+                position: relative;
+                width: 100%;
+            }
+            .crm-stream-item::before {
+                background: var(--secondary-bg);
+                border: 1px solid var(--border-color);
+                border-radius: 50%;
+                content: '';
+                height: 6px;
+                left: -18px;
+                position: absolute;
+                top: 10px;
+                width: 6px;
+                z-index: 1;
+            }
+            .crm-stream-item.operational::before {
+                background: var(--text-muted);
             }
 
+            .crm-stream-item.micro {
+                border-bottom: 1px solid color-mix(in srgb, var(--border-color) 45%, transparent);
+                padding: 5px 0 6px;
+            }
             .stream-row-main {
                 align-items: baseline;
                 display: flex;
                 gap: 8px;
                 min-width: 0;
             }
-
             .stream-type {
                 color: var(--text-primary);
                 flex: 0 0 auto;
-                font-size: 0.86rem;
+                font-size: 0.84rem;
                 font-weight: 600;
             }
-
             .stream-summary {
                 color: var(--text-secondary);
-                font-size: 0.86rem;
-                line-height: 1.45;
+                font-size: 0.84rem;
+                line-height: 1.42;
                 min-width: 0;
                 overflow-wrap: anywhere;
             }
-
             .stream-meta {
                 align-items: center;
                 color: var(--text-muted);
                 display: flex;
                 flex-wrap: wrap;
-                font-size: 0.74rem;
+                font-size: 0.73rem;
                 gap: 8px;
-                margin-top: 3px;
+                margin-top: 2px;
             }
-
             .stream-actions {
                 margin-left: auto;
             }
 
             .stream-card {
-                background: var(--primary-bg);
+                background: var(--secondary-bg);
                 border: 1px solid var(--border-color);
                 border-radius: var(--rounded-sm);
+                box-sizing: border-box;
                 box-shadow: none;
-                padding: 10px 12px;
+                max-width: 100%;
+                padding: 9px 11px;
+                width: 100%;
             }
-
             .stream-card-header {
                 align-items: center;
                 color: var(--text-primary);
                 display: flex;
+                font-size: 0.9rem;
                 gap: 8px;
-                margin-bottom: 6px;
-                font-size: 0.92rem;
+                margin-bottom: 5px;
             }
-
             .stream-card-header .feed-time {
                 color: var(--text-muted);
-                font-size: 0.74rem;
+                font-size: 0.73rem;
                 font-weight: 400;
             }
-
             .stream-card-body {
                 color: var(--text-secondary);
-                font-size: 0.86rem;
-                line-height: 1.5;
+                font-size: 0.84rem;
+                line-height: 1.48;
                 overflow-wrap: anywhere;
             }
-
             .stream-card-footer {
                 align-items: center;
                 border-top: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
                 display: flex;
-                font-size: 0.76rem;
+                font-size: 0.75rem;
                 justify-content: space-between;
-                margin-top: 8px;
-                padding-top: 7px;
+                margin-top: 7px;
+                padding-top: 6px;
             }
-
             .interaction-form-modal[hidden] {
                 display: none !important;
             }
@@ -755,35 +607,16 @@ const OpportunityInteractions = (() => {
 
             /* Mobile Responsive Fallback */
             @media (max-width: 768px) {
-                .crm-timeline-content::before {
-                    left: 20px;
-                }
-                .crm-timeline-item.left, .crm-timeline-item.right {
-                    justify-content: flex-end;
-                }
-                .crm-timeline-card {
-                    width: calc(100% - 52px); /* Accommodate offset line */
-                }
-                .crm-timeline-marker {
-                    left: 20px !important;
-                }
-                .crm-timeline-item.left .crm-timeline-card::before,
-                .crm-timeline-item.right .crm-timeline-card::before {
-                    left: -9px;
-                    right: auto;
-                    border-width: 7px 9px 7px 0;
-                    border-color: transparent var(--border-color) transparent transparent;
-                }
-                .crm-timeline-item.left .crm-timeline-card::after,
-                .crm-timeline-item.right .crm-timeline-card::after {
-                    left: -7px;
-                    right: auto;
-                    border-width: 6px 8px 6px 0;
-                    border-color: transparent var(--secondary-bg) transparent transparent;
-                }
                 #discussion-pane, #activity-pane {
                     height: auto;
-                    max-height: 500px;
+                    max-height: none;
+                    overflow: visible;
+                }
+                .crm-timeline-content {
+                    padding-left: 14px;
+                }
+                .crm-stream-item::before {
+                    left: -18px;
                 }
                 .interaction-form-section {
                     margin-top: 24px;
