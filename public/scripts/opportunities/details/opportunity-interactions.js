@@ -187,23 +187,21 @@ const OpportunityInteractions = (() => {
         let buttonsHtml = '';
         if (rowId) {
             buttonsHtml += `
-                <button type="button" class="action-btn small secondary" onclick="OpportunityInteractions.showForEditing('${rowId}')">
-                    ${isLocked ? '檢視' : '編輯'}
+                <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.showForEditing('${rowId}')" title="${isLocked ? 'View' : 'Edit'}">
+                    ${isLocked ? 'View' : '&#9998;'}
                 </button>
             `;
 
-            // Strategy A: 僅當非鎖定且 rowIndex 可被安全轉為數字才渲染刪除
+            // Strategy A: only render delete for editable rows with a numeric rowIndex.
             const rowIndexNum = Number(rowIndex);
             if (!isLocked && Number.isFinite(rowIndexNum)) {
                 buttonsHtml += `
-                    &nbsp;
-                    <button type="button" class="action-btn small secondary" onclick="OpportunityInteractions.confirmDelete('${rowId}', ${rowIndexNum})">
-                        刪除
+                    <button type="button" class="stream-action-btn danger" onclick="OpportunityInteractions.confirmDelete('${rowId}', ${rowIndexNum})" title="Delete">
+                        Delete
                     </button>
                 `;
             }
         }
-
         const renderWeight = _getRenderWeight(interaction);
 
         if (renderWeight === 'micro') {
@@ -397,6 +395,10 @@ const OpportunityInteractions = (() => {
                 overflow: visible !important;
                 width: 100% !important;
             }
+            .interaction-timeline::before {
+                content: none !important;
+                display: none !important;
+            }
 
             #discussion-pane, #activity-pane {
                 height: auto;
@@ -405,23 +407,24 @@ const OpportunityInteractions = (() => {
             }
 
             .interaction-history-section .sub-tabs {
-                border-bottom: 1px solid var(--border-color);
+                border-bottom: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
                 display: flex;
                 gap: 4px;
-                margin-bottom: 10px;
-                padding-bottom: 6px;
+                margin-bottom: 12px;
+                padding-bottom: 8px;
             }
             .interaction-history-section .sub-tab-link {
                 background: transparent;
                 border: 0;
                 color: var(--text-muted);
-                cursor: pointer;
+                cursor: default;
                 font-size: 0.82rem;
-                font-weight: 500;
-                padding: 4px 6px;
+                font-weight: 600;
+                letter-spacing: 0.02em;
+                padding: 0;
             }
             .interaction-history-section .sub-tab-link.active {
-                color: var(--text-primary);
+                color: var(--text-muted);
                 font-weight: 600;
             }
             .interaction-history-section .sub-tab-link[data-tab="activity"] {
@@ -505,18 +508,37 @@ const OpportunityInteractions = (() => {
                 margin-top: 2px;
             }
             .stream-actions {
+                align-items: center;
+                display: inline-flex;
+                gap: 4px;
                 margin-left: auto;
+            }
+
+            .stream-action-btn {
+                background: transparent;
+                border: 0;
+                color: var(--text-muted);
+                cursor: pointer;
+                font-size: 0.73rem;
+                line-height: 1;
+                padding: 1px 2px;
+            }
+            .stream-action-btn:hover {
+                color: var(--text-primary);
+            }
+            .stream-action-btn.danger {
+                color: var(--text-muted);
             }
 
             .stream-card {
                 background: var(--primary-bg);
-                border: 1px solid var(--border-color);
+                border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
                 border-radius: var(--rounded-sm);
                 box-sizing: border-box;
                 box-shadow: none;
-                max-width: 100%;
-                padding: 9px 11px;
-                width: 100%;
+                max-width: min(720px, 100%);
+                padding: 8px 10px;
+                width: fit-content;
             }
             .stream-card-header {
                 align-items: center;
@@ -524,7 +546,7 @@ const OpportunityInteractions = (() => {
                 display: flex;
                 font-size: 0.9rem;
                 gap: 8px;
-                margin-bottom: 5px;
+                margin-bottom: 4px;
             }
             .stream-card-header .feed-time {
                 color: var(--text-muted);
@@ -543,8 +565,8 @@ const OpportunityInteractions = (() => {
                 display: flex;
                 font-size: 0.75rem;
                 justify-content: space-between;
-                margin-top: 7px;
-                padding-top: 6px;
+                margin-top: 6px;
+                padding-top: 5px;
             }
             .interaction-form-modal[hidden] {
                 display: none !important;
