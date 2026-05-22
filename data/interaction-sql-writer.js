@@ -78,6 +78,7 @@ class InteractionSqlWriter {
             // Remove immutable fields for update
             delete dbData.created_time; 
             delete dbData.interaction_id; // PK should not be in update body if used in eq()
+            delete dbData.recorder; // Recorder is immutable creator metadata.
 
             const { error } = await supabase
                 .from('interactions')
