@@ -142,7 +142,7 @@ const PotentialContactsManager = (() => {
         const comparisonSet = new Set(comparisonList.map(item => item[comparisonKey]));
 
         if (context === 'opportunity') {
-            const visiblePotentialContacts = potentialContacts.filter(contact => !comparisonSet.has(contact[comparisonKey]));
+            const visiblePotentialContacts = potentialContacts;
             if (visiblePotentialContacts.length === 0) {
                 container.innerHTML = '<div class="opp-rail-empty">尚無同公司潛在聯絡人</div>';
                 return;

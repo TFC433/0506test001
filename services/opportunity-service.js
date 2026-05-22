@@ -344,10 +344,7 @@ class OpportunityService {
                     })
                     : [];
 
-                const rawPotentialContacts = rawSameCompanyContacts.filter(contact => {
-                    const status = (contact.status || '').toString().trim();
-                    return !['已升級', '已歸檔', 'Dropped'].includes(status);
-                });
+                const rawPotentialContacts = rawSameCompanyContacts;
 
                 linkedContacts.forEach(linkedContact => {
                     const matchedRaw = findGlobalRawMatchForLinkedContact(linkedContact, mappedRawContacts);
