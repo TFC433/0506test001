@@ -1012,9 +1012,9 @@ const OpportunityInteractions = (() => {
                 border-radius: var(--rounded-sm);
                 box-sizing: border-box;
                 box-shadow: none;
-                max-width: 100%;
+                max-width: min(720px, 100%);
                 padding: 8px 10px;
-                width: 100%;
+                width: fit-content;
             }
             .stream-card-header {
                 align-items: center;
