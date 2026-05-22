@@ -706,8 +706,10 @@ const OpportunityInteractions = (() => {
         style.innerHTML = `
             /* --- Narrative Stream Workspace --- */
             .interaction-layout {
+                column-gap: var(--spacing-8, 2rem);
                 display: grid;
                 grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+                row-gap: 0;
                 width: 100%;
             }
             .interaction-layout > .activity-hub-header {
