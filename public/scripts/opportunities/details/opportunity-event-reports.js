@@ -1,5 +1,8 @@
 // File: public/scripts/opportunities/details/opportunity-event-reports.js
 // views/scripts/opportunity-details/event-reports.js
+// Version: V6.1
+// Date: 2026-05-22
+// Changelog: Opportunity Activity Hub Phase 1-A: move event report list into right rail as compact index.
 // 職責：專門管理「事件報告」頁籤的 UI 與功能，包含總覽模式與列表模式
 // (V6 - 最終修復版：補回公開方法並整合全域樣式)
 
@@ -104,6 +107,64 @@ const OpportunityEvents = (() => {
                 background-color: color-mix(in srgb, var(--accent-green) 10%, var(--secondary-bg));
                 color: var(--accent-green);
             }
+
+            .event-report-index-list {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+            }
+
+            .event-report-index-item {
+                width: 100%;
+                border: 0;
+                border-bottom: 1px solid var(--border-color);
+                background: transparent;
+                color: var(--text-primary);
+                cursor: pointer;
+                display: grid;
+                gap: 3px;
+                padding: 8px 0;
+                text-align: left;
+            }
+
+            .event-report-index-item:hover {
+                color: var(--accent-blue);
+            }
+
+            .event-report-index-main {
+                align-items: center;
+                display: flex;
+                gap: 6px;
+                min-width: 0;
+            }
+
+            .event-report-index-time,
+            .event-report-index-meta,
+            .event-report-index-empty {
+                color: var(--text-secondary);
+                font-size: 0.78rem;
+                line-height: 1.3;
+            }
+
+            .event-report-index-title {
+                background: color-mix(in srgb, var(--accent-blue) 10%, var(--secondary-bg));
+                border: 1px solid color-mix(in srgb, var(--accent-blue) 22%, var(--border-color));
+                border-radius: 999px;
+                color: var(--text-primary);
+                font-size: 0.9rem;
+                font-weight: 600;
+                line-height: 1.35;
+                max-width: 100%;
+                overflow: hidden;
+                padding: 3px 8px;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                word-break: break-word;
+            }
+
+            .event-report-index-main .event-report-index-meta {
+                flex: 0 0 auto;
+            }
         `;
         document.head.appendChild(style);
     }
@@ -111,7 +172,68 @@ const OpportunityEvents = (() => {
     /**
      * 渲染初始視圖（列表模式）
      */
+    function _getLogTime(log) {
+        const value = log.createdTime || log.created_time || 0;
+        const time = new Date(value).getTime();
+        return Number.isNaN(time) ? 0 : time;
+    }
+
+    function _getLogTitle(log) {
+        return log.eventName || log.eventTitle || log.eventSummary || log.summary || '(Untitled event)';
+    }
+
+    function _escapeHtml(value) {
+        return String(value || '').replace(/[&<>"']/g, char => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        })[char]);
+    }
+
+    function _renderRailIndex(container) {
+        const sortedLogs = (_eventLogs || []).slice().sort((a, b) => _getLogTime(b) - _getLogTime(a));
+        const listHtml = sortedLogs.length === 0
+            ? '<div class="event-report-index-empty">No event reports yet.</div>'
+            : `
+                <div class="event-report-index-list">
+                    ${sortedLogs.map(log => {
+                        const eventId = _escapeHtml(log.eventId || '');
+                        const title = _escapeHtml(_getLogTitle(log));
+                        const actor = _escapeHtml(log.creator || log.modifier || log.lastModifier || '');
+                        return `
+                            <button type="button" class="event-report-index-item" onclick="showEventLogReport('${eventId}')">
+                                <span class="event-report-index-time">${_escapeHtml(formatDateTime(log.createdTime || log.created_time))}</span>
+                                <span class="event-report-index-main">
+                                    <span class="event-report-index-title">${title}</span>
+                                    ${actor ? `<span class="event-report-index-meta">${actor}</span>` : ''}
+                                </span>
+                            </button>
+                        `;
+                    }).join('')}
+                </div>
+            `;
+
+        container.innerHTML = `
+            <div class="widget-header">
+                <h2 class="widget-title">事件報告列表</h2>
+            </div>
+            <div class="widget-content">
+                ${listHtml}
+            </div>
+        `;
+    }
+
     function _render() {
+        const legacyContainer = document.getElementById('tab-content-events');
+        if (legacyContainer) legacyContainer.innerHTML = '';
+
+        const railContainer = document.getElementById('opp-event-reports-index');
+        if (!railContainer) return;
+
+        _renderRailIndex(railContainer);
+        return;
         const container = _context.opportunityId 
             ? document.getElementById('tab-content-events') 
             : document.getElementById('tab-content-company-events');
