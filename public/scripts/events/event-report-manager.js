@@ -262,7 +262,10 @@ function renderEventLogReportHTML(event, contextContacts = [], options = {}) {
         }
     }
 
-    const headerHTML = isInlineVariant ? '' : `
+    const headerHTML = isInlineVariant ? `
+        <div class="inline-report-meta">
+            <span class="inline-event-type-badge" style="--event-type-color: ${headerColor};">${eventTypeLabel}</span>
+        </div>` : `
         <div class="report-header" style="--header-color: ${headerColor};">
              <h2 class="report-title">
                 ${event.eventName || '未命名事件'} 

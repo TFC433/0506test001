@@ -729,12 +729,14 @@ const OpportunityInteractions = (() => {
         const isExpanded = _expandedReports.has(interactionId) && !inlineContainer.hidden;
         if (isExpanded) {
             inlineContainer.hidden = true;
+            cardItem.classList.remove('has-inline-report-expanded');
             _expandedReports.delete(interactionId);
             if (toggleButton) toggleButton.textContent = '展開';
             return;
         }
 
         inlineContainer.hidden = false;
+        cardItem.classList.add('has-inline-report-expanded');
         inlineContainer.innerHTML = '<div class="inline-event-report__status">載入報告中...</div>';
         _expandedReports.add(interactionId);
         if (toggleButton) toggleButton.textContent = '收合';
@@ -1117,13 +1119,16 @@ const OpportunityInteractions = (() => {
                 margin-top: 6px;
                 padding-top: 5px;
             }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .stream-card {
+                max-width: min(100%, 760px);
+            }
             #tab-content-interactions .crm-stream-item.operational .inline-event-report {
                 border-top: 1px solid color-mix(in srgb, var(--border-color) 45%, transparent);
                 box-sizing: border-box;
-                margin-top: 8px;
+                margin: 8px -10px 0;
                 max-width: 100%;
                 overflow-x: hidden;
-                padding-top: 8px;
+                padding: 8px 10px 0;
             }
             #tab-content-interactions .crm-stream-item.operational .inline-event-report[hidden] {
                 display: none !important;
@@ -1148,6 +1153,21 @@ const OpportunityInteractions = (() => {
                 margin: 0;
                 max-width: 100%;
                 padding: 0;
+            }
+            #tab-content-interactions .crm-stream-item.operational .inline-event-report .inline-report-meta {
+                align-items: center;
+                display: flex;
+                margin: 0 0 7px;
+            }
+            #tab-content-interactions .crm-stream-item.operational .inline-event-report .inline-event-type-badge {
+                background: color-mix(in srgb, var(--event-type-color) 12%, transparent);
+                border: 1px solid color-mix(in srgb, var(--event-type-color) 38%, transparent);
+                border-radius: 3px;
+                color: var(--event-type-color);
+                font-size: 0.72rem;
+                font-weight: 600;
+                line-height: 1;
+                padding: 3px 6px;
             }
             #tab-content-interactions .crm-stream-item.operational .inline-event-report .report-header {
                 margin-bottom: 8px;
@@ -1178,11 +1198,13 @@ const OpportunityInteractions = (() => {
                 line-height: 1.35;
                 margin: 0 0 6px;
             }
-            #tab-content-interactions .crm-stream-item.operational .inline-event-report .info-item {
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .info-item {
                 background: transparent;
                 border: 0;
                 border-radius: 0;
                 box-shadow: none;
+                display: block;
+                grid-template-columns: none;
                 margin: 0 0 6px;
                 padding: 0;
             }
@@ -1194,16 +1216,16 @@ const OpportunityInteractions = (() => {
                 margin: 0 0 2px;
             }
             #tab-content-interactions .crm-stream-item.operational .inline-event-report .info-value-box {
-                background: transparent;
-                border: 0;
-                border-radius: 0;
+                background: color-mix(in srgb, var(--secondary-bg) 55%, transparent);
+                border: 1px solid color-mix(in srgb, var(--border-color) 34%, transparent);
+                border-radius: 3px;
                 box-shadow: none;
                 color: var(--text-secondary);
                 font-size: 0.82rem;
                 line-height: 1.46;
                 min-height: 0;
                 overflow-wrap: anywhere;
-                padding: 0;
+                padding: 5px 7px;
             }
             .interaction-form-modal[hidden] {
                 display: none !important;
