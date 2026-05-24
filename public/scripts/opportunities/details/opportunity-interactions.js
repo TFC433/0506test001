@@ -416,8 +416,8 @@ const OpportunityInteractions = (() => {
                             ${buttonsHtml}
                         </div>
                     </div>
-                    <div class="inline-event-report" hidden></div>
                 </div>
+                <div class="inline-event-report" hidden></div>
             </div>
         `;
     }
@@ -718,11 +718,11 @@ const OpportunityInteractions = (() => {
         const streamCard = cardItem.querySelector('.stream-card');
         if (!streamCard) return;
 
-        let inlineContainer = streamCard.querySelector('.inline-event-report');
+        let inlineContainer = cardItem.querySelector('.inline-event-report');
         if (!inlineContainer) {
             inlineContainer = document.createElement('div');
             inlineContainer.className = 'inline-event-report';
-            streamCard.appendChild(inlineContainer);
+            cardItem.appendChild(inlineContainer);
         }
 
         const toggleButton = streamCard.querySelector('[data-inline-report-toggle]');
@@ -1119,16 +1119,13 @@ const OpportunityInteractions = (() => {
                 margin-top: 6px;
                 padding-top: 5px;
             }
-            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .stream-card {
-                max-width: min(100%, 760px);
-            }
             #tab-content-interactions .crm-stream-item.operational .inline-event-report {
                 border-top: 1px solid color-mix(in srgb, var(--border-color) 45%, transparent);
                 box-sizing: border-box;
-                margin: 8px -10px 0;
+                margin: 8px 0 0;
                 max-width: 100%;
                 overflow-x: hidden;
-                padding: 8px 10px 0;
+                padding: 8px 0 0;
             }
             #tab-content-interactions .crm-stream-item.operational .inline-event-report[hidden] {
                 display: none !important;
