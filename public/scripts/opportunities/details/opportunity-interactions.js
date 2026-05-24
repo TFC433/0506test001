@@ -776,14 +776,14 @@ const OpportunityInteractions = (() => {
             #tab-content-interactions .interaction-layout {
                 display: grid;
                 gap: 0 var(--spacing-8);
-                grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+                grid-template-columns: 1fr;
                 width: 100%;
             }
             .interaction-layout > .activity-hub-header {
                 grid-column: 1 / -1;
             }
             .interaction-history-section {
-                grid-column: 1 / 2;
+                grid-column: 1 / -1;
             }
 
             .interaction-timeline,
