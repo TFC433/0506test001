@@ -402,22 +402,24 @@ const OpportunityInteractions = (() => {
 
         return `
             <div class="crm-stream-item operational" data-interaction-id="${escapeHtml(rowId || '')}">
-                <div class="stream-card">
-                    <div class="stream-card-header">
-                        <strong>${typeStr}</strong>
-                        <span class="feed-time">${escapeHtml(timeStr)}</span>
-                    </div>
-                    <div class="stream-card-body">
-                        ${summaryHtml}
-                    </div>
-                    <div class="stream-card-footer">
-                        <div class="footer-meta">紀錄: ${recorder}</div>
-                        <div class="footer-actions">
-                            ${buttonsHtml}
+                <div class="expanded-event-shell">
+                    <div class="stream-card">
+                        <div class="stream-card-header">
+                            <strong>${typeStr}</strong>
+                            <span class="feed-time">${escapeHtml(timeStr)}</span>
+                        </div>
+                        <div class="stream-card-body">
+                            ${summaryHtml}
+                        </div>
+                        <div class="stream-card-footer">
+                            <div class="footer-meta">紀錄: ${recorder}</div>
+                            <div class="footer-actions">
+                                ${buttonsHtml}
+                            </div>
                         </div>
                     </div>
+                    <div class="inline-event-report" hidden></div>
                 </div>
-                <div class="inline-event-report" hidden></div>
             </div>
         `;
     }
@@ -1081,13 +1083,20 @@ const OpportunityInteractions = (() => {
                 color: var(--text-muted);
             }
 
-            .stream-card {
+            #tab-content-interactions .crm-stream-item.operational .expanded-event-shell {
                 background: var(--primary-bg);
                 border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
                 border-radius: var(--rounded-sm);
                 box-sizing: border-box;
                 box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
                 max-width: min(68%, 760px);
+                width: 100%;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .expanded-event-shell {
+                max-width: 100%;
+            }
+            .stream-card {
+                box-sizing: border-box;
                 padding: 8px 10px;
                 width: 100%;
             }
@@ -1120,12 +1129,13 @@ const OpportunityInteractions = (() => {
                 padding-top: 5px;
             }
             #tab-content-interactions .crm-stream-item.operational .inline-event-report {
+                background: color-mix(in srgb, var(--secondary-bg) 28%, transparent);
                 border-top: 1px solid color-mix(in srgb, var(--border-color) 45%, transparent);
                 box-sizing: border-box;
-                margin: 8px 0 0;
+                margin: 0;
                 max-width: 100%;
                 overflow-x: hidden;
-                padding: 8px 0 0;
+                padding: 8px 10px 10px;
             }
             #tab-content-interactions .crm-stream-item.operational .inline-event-report[hidden] {
                 display: none !important;
@@ -1140,7 +1150,7 @@ const OpportunityInteractions = (() => {
                 border: 0;
                 box-shadow: none;
                 margin: 0;
-                max-width: 100%;
+                max-width: min(100%, 920px);
                 overflow-x: hidden;
                 padding: 0;
                 width: 100%;
@@ -1152,19 +1162,40 @@ const OpportunityInteractions = (() => {
                 padding: 0;
             }
             #tab-content-interactions .crm-stream-item.operational .inline-event-report .inline-report-meta {
-                align-items: center;
-                display: flex;
+                display: block;
                 margin: 0 0 7px;
             }
+            #tab-content-interactions .crm-stream-item.operational .inline-event-report .participants-wrapper {
+                display: inline;
+                max-width: max-content;
+                width: auto;
+            }
             #tab-content-interactions .crm-stream-item.operational .inline-event-report .inline-event-type-badge {
-                background: color-mix(in srgb, var(--event-type-color) 12%, transparent);
-                border: 1px solid color-mix(in srgb, var(--event-type-color) 38%, transparent);
-                border-radius: 3px;
-                color: var(--event-type-color);
-                font-size: 0.72rem;
-                font-weight: 600;
+                background: color-mix(in srgb, var(--event-type-color) 7%, transparent);
+                border: 1px solid color-mix(in srgb, var(--event-type-color) 24%, var(--border-color));
+                border-radius: 1px;
+                color: color-mix(in srgb, var(--event-type-color) 74%, var(--text-secondary));
+                display: inline-block !important;
+                font-size: 0.67rem;
+                font-weight: 500;
                 line-height: 1;
-                padding: 3px 6px;
+                max-width: max-content;
+                padding: 1px 4px;
+                vertical-align: baseline;
+                width: auto;
+            }
+            #tab-content-interactions .crm-stream-item.operational .inline-event-report .participant-pill {
+                border-radius: 1px;
+                box-shadow: none;
+                display: inline-block !important;
+                font-size: 0.67rem;
+                font-weight: 500;
+                line-height: 1;
+                margin: 0 4px 3px 0;
+                max-width: max-content;
+                padding: 1px 4px;
+                vertical-align: baseline;
+                width: auto;
             }
             #tab-content-interactions .crm-stream-item.operational .inline-event-report .report-header {
                 margin-bottom: 8px;
@@ -1207,10 +1238,12 @@ const OpportunityInteractions = (() => {
             }
             #tab-content-interactions .crm-stream-item.operational .inline-event-report .info-label {
                 color: var(--text-muted);
+                display: block;
                 font-size: 0.72rem;
                 font-weight: 600;
                 line-height: 1.35;
                 margin: 0 0 2px;
+                text-align: left;
             }
             #tab-content-interactions .crm-stream-item.operational .inline-event-report .info-value-box {
                 background: color-mix(in srgb, var(--secondary-bg) 55%, transparent);
@@ -1314,6 +1347,7 @@ const OpportunityInteractions = (() => {
                 }
                 .crm-stream-item.micro,
                 .crm-stream-item.micro.editing,
+                .expanded-event-shell,
                 .stream-card {
                     max-width: 100%;
                 }
