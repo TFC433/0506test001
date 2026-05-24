@@ -34,6 +34,7 @@ const OpportunityInteractions = (() => {
     let _container = null;
     let _editingInteractionId = null;
     let _isCreatingInline = false;
+    const _expandedReports = new Set();
 
     // ✅ [Fix] 系統自動產生類型：必須與鎖定證據一致
     // Evidence: const isLockedRecord = ['系統事件', '事件報告'].includes(item.eventType);
@@ -155,6 +156,13 @@ const OpportunityInteractions = (() => {
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
+    }
+
+    function _getLinkedContactsContext() {
+        return _context.linkedContacts
+            || window.currentOpportunityData?.linkedContacts
+            || window.currentOpportunityDetails?.linkedContacts
+            || [];
     }
 
     function _formatInteractionTimeInput(rawTime) {
@@ -321,6 +329,8 @@ const OpportunityInteractions = (() => {
 
         const rawSummary = interaction.contentSummary || '(無內容)';
         let summaryHtml = escapeHtml(rawSummary).replace(/\n/g, '<br>');
+        const eventIdMatch = rawSummary.match(/\[[^\]]+\]\(event_log_id=([a-zA-Z0-9_-]+)\)/);
+        const reportEventId = eventIdMatch ? eventIdMatch[1] : '';
         const nextActionHtml = interaction.nextAction
             ? `<span class="stream-next-action">下一步：${escapeHtml(interaction.nextAction)}</span>`
             : '';
@@ -342,12 +352,15 @@ const OpportunityInteractions = (() => {
 
         let buttonsHtml = '';
         if (rowId) {
-            const editAction = !isLocked && renderWeight === 'micro'
+            const isEventReport = interaction.eventType === '事件報告';
+            const editAction = isEventReport
+                ? `OpportunityInteractions.toggleInlineReport('${rowId}', '${reportEventId}')`
+                : !isLocked && renderWeight === 'micro'
                 ? `OpportunityInteractions.startInlineEdit('${rowId}')`
                 : `OpportunityInteractions.showForEditing('${rowId}')`;
             buttonsHtml += `
-                <button type="button" class="stream-action-btn" onclick="${editAction}" title="${isLocked ? 'View' : 'Edit'}">
-                    ${isLocked ? 'View' : '&#9998;'}
+                <button type="button" class="stream-action-btn" ${isEventReport ? 'data-inline-report-toggle' : ''} onclick="${editAction}" title="${isEventReport ? '展開' : isLocked ? 'View' : 'Edit'}">
+                    ${isEventReport ? '展開' : isLocked ? 'View' : '&#9998;'}
                 </button>
             `;
 
@@ -388,7 +401,7 @@ const OpportunityInteractions = (() => {
         }
 
         return `
-            <div class="crm-stream-item operational">
+            <div class="crm-stream-item operational" data-interaction-id="${escapeHtml(rowId || '')}">
                 <div class="stream-card">
                     <div class="stream-card-header">
                         <strong>${typeStr}</strong>
@@ -403,6 +416,7 @@ const OpportunityInteractions = (() => {
                             ${buttonsHtml}
                         </div>
                     </div>
+                    <div class="inline-event-report" hidden></div>
                 </div>
             </div>
         `;
@@ -693,6 +707,58 @@ const OpportunityInteractions = (() => {
             hideLoading();
         }
     }
+
+    async function toggleInlineReport(interactionId, eventId) {
+        if (!_container) return;
+
+        const cardItem = Array.from(_container.querySelectorAll('.crm-stream-item.operational[data-interaction-id]'))
+            .find(element => element.getAttribute('data-interaction-id') === String(interactionId));
+        if (!cardItem) return;
+
+        const streamCard = cardItem.querySelector('.stream-card');
+        if (!streamCard) return;
+
+        let inlineContainer = streamCard.querySelector('.inline-event-report');
+        if (!inlineContainer) {
+            inlineContainer = document.createElement('div');
+            inlineContainer.className = 'inline-event-report';
+            streamCard.appendChild(inlineContainer);
+        }
+
+        const toggleButton = streamCard.querySelector('[data-inline-report-toggle]');
+        const isExpanded = _expandedReports.has(interactionId) && !inlineContainer.hidden;
+        if (isExpanded) {
+            inlineContainer.hidden = true;
+            _expandedReports.delete(interactionId);
+            if (toggleButton) toggleButton.textContent = '展開';
+            return;
+        }
+
+        inlineContainer.hidden = false;
+        inlineContainer.innerHTML = '<div class="inline-event-report__status">載入報告中...</div>';
+        _expandedReports.add(interactionId);
+        if (toggleButton) toggleButton.textContent = '收合';
+
+        if (!eventId) {
+            inlineContainer.innerHTML = '<div class="inline-event-report__status">找不到事件報告 ID。</div>';
+            return;
+        }
+
+        try {
+            const result = await authedFetch(`/api/events/${eventId}`);
+            if (!result.success || !result.data) throw new Error(result.error || '找不到該筆紀錄');
+            if (typeof renderEventLogReportHTML !== 'function') {
+                throw new Error('事件報告渲染器未載入');
+            }
+
+            inlineContainer.innerHTML = renderEventLogReportHTML(result.data, _getLinkedContactsContext());
+        } catch (error) {
+            if (error.message !== 'Unauthorized') {
+                inlineContainer.innerHTML = `<div class="inline-event-report__status">讀取事件報告失敗: ${escapeHtml(error.message)}</div>`;
+            }
+        }
+    }
+
     // 動態注入樣式（保留既有行為並補齊精確的時間軸幾何與 CSS）
     function _injectStyles() {
         const styleId = 'interactions-dynamic-styles';
@@ -1051,6 +1117,42 @@ const OpportunityInteractions = (() => {
                 margin-top: 6px;
                 padding-top: 5px;
             }
+            #tab-content-interactions .crm-stream-item.operational .inline-event-report {
+                border-top: 1px solid color-mix(in srgb, var(--border-color) 45%, transparent);
+                box-sizing: border-box;
+                margin-top: 8px;
+                max-width: 100%;
+                overflow-x: hidden;
+                padding-top: 8px;
+            }
+            #tab-content-interactions .crm-stream-item.operational .inline-event-report[hidden] {
+                display: none !important;
+            }
+            #tab-content-interactions .crm-stream-item.operational .inline-event-report__status {
+                color: var(--text-muted);
+                font-size: 0.82rem;
+                line-height: 1.45;
+            }
+            #tab-content-interactions .crm-stream-item.operational .inline-event-report .report-view {
+                background: transparent;
+                border: 0;
+                box-shadow: none;
+                margin: 0;
+                max-width: 100%;
+                overflow-x: hidden;
+                padding: 0;
+            }
+            #tab-content-interactions .crm-stream-item.operational .inline-event-report .report-header {
+                margin-bottom: 8px;
+                padding: 0 0 8px;
+            }
+            #tab-content-interactions .crm-stream-item.operational .inline-event-report .report-title {
+                font-size: 1rem;
+                line-height: 1.35;
+            }
+            #tab-content-interactions .crm-stream-item.operational .inline-event-report .info-value-box {
+                overflow-wrap: anywhere;
+            }
             .interaction-form-modal[hidden] {
                 display: none !important;
             }
@@ -1305,6 +1407,7 @@ const OpportunityInteractions = (() => {
         cancelInlineEdit,
         saveInlineCreate,
         cancelInlineCreate,
+        toggleInlineReport,
         confirmDelete
     };
 })();
