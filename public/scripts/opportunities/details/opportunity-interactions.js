@@ -751,7 +751,7 @@ const OpportunityInteractions = (() => {
                 throw new Error('事件報告渲染器未載入');
             }
 
-            inlineContainer.innerHTML = renderEventLogReportHTML(result.data, _getLinkedContactsContext());
+            inlineContainer.innerHTML = renderEventLogReportHTML(result.data, _getLinkedContactsContext(), { variant: 'inline' });
         } catch (error) {
             if (error.message !== 'Unauthorized') {
                 inlineContainer.innerHTML = `<div class="inline-event-report__status">讀取事件報告失敗: ${escapeHtml(error.message)}</div>`;
@@ -1141,6 +1141,13 @@ const OpportunityInteractions = (() => {
                 max-width: 100%;
                 overflow-x: hidden;
                 padding: 0;
+                width: 100%;
+            }
+            #tab-content-interactions .crm-stream-item.operational .inline-event-report .report-container {
+                display: block;
+                margin: 0;
+                max-width: 100%;
+                padding: 0;
             }
             #tab-content-interactions .crm-stream-item.operational .inline-event-report .report-header {
                 margin-bottom: 8px;
@@ -1150,8 +1157,53 @@ const OpportunityInteractions = (() => {
                 font-size: 1rem;
                 line-height: 1.35;
             }
+            #tab-content-interactions .crm-stream-item.operational .inline-event-report .report-section {
+                background: transparent;
+                border: 0;
+                border-top: 1px solid color-mix(in srgb, var(--border-color) 34%, transparent);
+                border-radius: 0;
+                box-shadow: none;
+                margin: 8px 0 0;
+                padding: 8px 0 0;
+            }
+            #tab-content-interactions .crm-stream-item.operational .inline-event-report .report-section:first-child {
+                border-top: 0;
+                margin-top: 0;
+                padding-top: 0;
+            }
+            #tab-content-interactions .crm-stream-item.operational .inline-event-report .section-title {
+                color: var(--text-primary);
+                font-size: 0.86rem;
+                font-weight: 600;
+                line-height: 1.35;
+                margin: 0 0 6px;
+            }
+            #tab-content-interactions .crm-stream-item.operational .inline-event-report .info-item {
+                background: transparent;
+                border: 0;
+                border-radius: 0;
+                box-shadow: none;
+                margin: 0 0 6px;
+                padding: 0;
+            }
+            #tab-content-interactions .crm-stream-item.operational .inline-event-report .info-label {
+                color: var(--text-muted);
+                font-size: 0.72rem;
+                font-weight: 600;
+                line-height: 1.35;
+                margin: 0 0 2px;
+            }
             #tab-content-interactions .crm-stream-item.operational .inline-event-report .info-value-box {
+                background: transparent;
+                border: 0;
+                border-radius: 0;
+                box-shadow: none;
+                color: var(--text-secondary);
+                font-size: 0.82rem;
+                line-height: 1.46;
+                min-height: 0;
                 overflow-wrap: anywhere;
+                padding: 0;
             }
             .interaction-form-modal[hidden] {
                 display: none !important;

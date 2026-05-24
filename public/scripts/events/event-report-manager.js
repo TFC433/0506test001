@@ -150,7 +150,8 @@ function _renderParticipantsPills(participantsStr, typeClass, contextContacts = 
  * @param {Array} contextContacts - 關聯聯絡人清單 (用於補完職稱)
  * @returns {string} HTML 字串
  */
-function renderEventLogReportHTML(event, contextContacts = []) {
+function renderEventLogReportHTML(event, contextContacts = [], options = {}) {
+    const isInlineVariant = options && options.variant === 'inline';
     
     const createItemHTML = (label, contentHTML) => {
         const finalContent = (contentHTML && contentHTML !== '') ? contentHTML : '-';
@@ -261,7 +262,7 @@ function renderEventLogReportHTML(event, contextContacts = []) {
         }
     }
 
-    return `<div class="report-view">
+    const headerHTML = isInlineVariant ? '' : `
         <div class="report-header" style="--header-color: ${headerColor};">
              <h2 class="report-title">
                 ${event.eventName || '未命名事件'} 
@@ -272,7 +273,10 @@ function renderEventLogReportHTML(event, contextContacts = []) {
                 <span><strong>建立者:</strong> ${event.creator || 'N/A'}</span>
                 <span><strong>時間:</strong> ${formatDateTime(event.createdTime)}</span>
             </div>
-        </div>
+        </div>`;
+
+    return `<div class="report-view${isInlineVariant ? ' report-view--inline' : ''}">
+        ${headerHTML}
         
         <div class="report-container">
             ${sectionsHTML || '<div class="alert alert-info">此事件沒有額外的詳細記錄。</div>'}
