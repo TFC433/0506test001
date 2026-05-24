@@ -166,6 +166,12 @@ module.exports = {
 
     // 原始名片資料欄位對應
     // [V5.1.0] Repurposed indexes 17 and 18 safely within 0-25 boundary limits
+    /*
+     * RUNTIME CONTRACT: RAW SHEET COLUMN INDICES
+     * CONTACT_FIELDS indices map directly to fixed Google Sheet columns.
+     * DO NOT shift integer indices during cleanup/refactor work.
+     * Repurpose fields if necessary, but preserve index positions.
+     */
     CONTACT_FIELDS: {
         TIME: 0, NAME: 1, COMPANY: 2, POSITION: 3, DEPARTMENT: 4, PHONE: 5, MOBILE: 6, FAX: 7, EMAIL: 8, WEBSITE: 9, ADDRESS: 10, CONFIDENCE: 11, PROCESSING_TIME: 12, DRIVE_LINK: 13, SMART_FILENAME: 14, LOCAL_PATH: 15, RAW_TEXT: 16, EXHIBITION_NAME: 17, IS_EXHIBITION: 18, DATA_SOURCE: 19, LINE_USER_ID: 20, USER_NICKNAME: 21, NOTES: 22, ORIGINAL_ID: 23, STATUS: 24
     },

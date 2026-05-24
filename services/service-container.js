@@ -159,6 +159,13 @@ async function initializeServices() {
         );
 
         // [V9.4.0] Added explicit injection of systemService to allow safe execution of Fallback Auto-Tag
+        /*
+         * ARCHITECTURE GOVERNANCE: RAW ↔ CORE BRIDGE
+         * ContactService is the active lifecycle bridge between:
+         * - RAW Google Sheets intake
+         * - CORE SQL operational entities
+         * DO NOT remove RAW readers/writers without verifying the intake pipeline lifecycle.
+         */
         const contactService = new ContactService(
             contactRawReader, // explicit RAW
             contactSqlReader, // contactCoreReader => SQL Official

@@ -20,6 +20,12 @@ window.currentOpportunityData = null;
  * Phase 8: normalize DTO (SQL) keys <-> legacy UI keys
  * Ensures BOTH display view and edit form can read values after hard refresh.
  */
+/*
+ * ARCHITECTURE GOVERNANCE: SQL ↔ UI DTO BRIDGE
+ * This function translates CORE SQL properties into legacy frontend UI keys.
+ * DO NOT remove compatibility mappings without full lifecycle verification.
+ * Removing mappings here can cause silent form blanking and SQL data overwrite.
+ */
 function normalizeOppForUi(opp) {
     const o = opp || {};
 
