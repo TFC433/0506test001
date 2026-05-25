@@ -255,17 +255,15 @@ function renderEventLogReportHTML(event, contextContacts = [], options = {}) {
     
     let commonSectionHTML = '';
     let typeSectionHTML = '';
+    const updatedTime = event.updatedTime || event.updated_time || event.updatedAt || event.updated_at;
     let topMetaHTML = isInlineVariant
-        ? createTopMetaItemHTML('', `<span class="inline-event-type-badge" style="--event-type-color: ${headerColor};">${formatTextValue(eventTypeLabel)}</span>`)
+        ? createTopMetaItemHTML('事件種類', `<span class="inline-event-type-badge" style="--event-type-color: ${headerColor};">${formatTextValue(eventTypeLabel)}</span>`)
         : '';
-    if (isInlineVariant && event.opportunityId && linkedEntityName && linkedEntityName !== '-') {
-        topMetaHTML += createTopMetaItemHTML('相關商機', formatTextValue(linkedEntityName));
-    }
-    if (isInlineVariant && event.creator) {
-        topMetaHTML += createTopMetaItemHTML('紀錄者', formatTextValue(event.creator));
-    }
     if (isInlineVariant && event.createdTime) {
-        topMetaHTML += createTopMetaItemHTML('時間', formatDateTime(event.createdTime));
+        topMetaHTML += createTopMetaItemHTML('建立時間', formatDateTime(event.createdTime));
+    }
+    if (isInlineVariant && updatedTime) {
+        topMetaHTML += createTopMetaItemHTML('更新時間', formatDateTime(updatedTime));
     }
     
     // (A) 共通區塊
