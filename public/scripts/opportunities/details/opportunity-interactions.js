@@ -239,37 +239,40 @@ const OpportunityInteractions = (() => {
         return inlineContainer;
     }
 
-    function _renderInlineReportActions(interactionId, eventId, mode, errorMessage = '') {
+    function _setInlineReportDynamicActions(interactionId, eventId, mode) {
+        if (!_container) return;
+        const cardItem = Array.from(_container.querySelectorAll('.crm-stream-item.operational[data-interaction-id]'))
+            .find(element => element.getAttribute('data-interaction-id') === String(interactionId));
+        const target = cardItem && cardItem.querySelector('.inline-report-dynamic-actions');
+        if (!target) return;
+
         const safeInteractionId = escapeHtml(interactionId);
         const safeEventId = escapeHtml(eventId);
-        const errorHTML = errorMessage
-            ? `<span class="inline-report-actions__error">${escapeHtml(errorMessage)}</span>`
-            : '';
 
         if (mode === 'edit') {
-            return `
-                <div class="inline-report-actions" data-inline-report-actions>
-                    <div class="inline-report-actions__status">${errorHTML}</div>
-                    <div class="inline-report-actions__buttons">
-                        <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineReportEdit('${safeInteractionId}', '${safeEventId}')">Save</button>
-                        <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineReportEdit('${safeInteractionId}', '${safeEventId}')">Cancel</button>
-                    </div>
-                </div>`;
+            target.innerHTML = `
+                <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineReportEdit('${safeInteractionId}', '${safeEventId}')">Save</button>
+                <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineReportEdit('${safeInteractionId}', '${safeEventId}')">Cancel</button>`;
+            return;
         }
 
-        return `
-            <div class="inline-report-actions" data-inline-report-actions>
-                <div class="inline-report-actions__status"></div>
-                <div class="inline-report-actions__buttons">
-                    <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.startInlineReportEdit('${safeInteractionId}', '${safeEventId}')">Edit</button>
-                </div>
-            </div>`;
+        target.innerHTML = `
+            <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.startInlineReportEdit('${safeInteractionId}', '${safeEventId}')">Edit</button>`;
     }
 
-    function _renderInlineReport(interactionId, eventId, mode = 'view', errorMessage = '') {
+    function _clearInlineReportDynamicActions(interactionId) {
+        if (!_container) return;
+        const cardItem = Array.from(_container.querySelectorAll('.crm-stream-item.operational[data-interaction-id]'))
+            .find(element => element.getAttribute('data-interaction-id') === String(interactionId));
+        const target = cardItem && cardItem.querySelector('.inline-report-dynamic-actions');
+        if (target) target.innerHTML = '';
+    }
+
+    function _renderInlineReport(interactionId, eventId, mode = 'view') {
         const inlineContainer = _getInlineReportContainer(interactionId);
         const eventData = _eventReportCache[eventId];
         if (!inlineContainer || !eventData) return;
+        _setInlineReportDynamicActions(interactionId, eventId, mode);
 
         if (mode === 'edit') {
             if (typeof renderOperationalWorkspaceEditHTML !== 'function') {
@@ -278,8 +281,7 @@ const OpportunityInteractions = (() => {
             }
 
             const reportHTML = renderOperationalWorkspaceEditHTML(eventData, _getLinkedContactsContext());
-            inlineContainer.innerHTML = _renderInlineReportActions(interactionId, eventId, 'edit', errorMessage)
-                + _applyOperationalWorkspaceDomainTint(reportHTML, eventData);
+            inlineContainer.innerHTML = _applyOperationalWorkspaceDomainTint(reportHTML, eventData);
             _autosizeInlineReportTextareas(inlineContainer);
             return;
         }
@@ -290,8 +292,7 @@ const OpportunityInteractions = (() => {
         }
 
         const reportHTML = renderOperationalWorkspaceHTML(eventData, _getLinkedContactsContext());
-        inlineContainer.innerHTML = _renderInlineReportActions(interactionId, eventId, 'view')
-            + _applyOperationalWorkspaceDomainTint(reportHTML, eventData);
+        inlineContainer.innerHTML = _applyOperationalWorkspaceDomainTint(reportHTML, eventData);
     }
 
     function _autosizeInlineReportTextareas(scope) {
@@ -555,6 +556,7 @@ const OpportunityInteractions = (() => {
                         <div class="stream-card-footer">
                             <div class="footer-meta">紀錄: ${recorder}</div>
                             <div class="footer-actions">
+                                <span class="inline-report-dynamic-actions"></span>
                                 ${buttonsHtml}
                             </div>
                         </div>
@@ -875,6 +877,7 @@ const OpportunityInteractions = (() => {
             cardItem.classList.remove('has-inline-report-expanded');
             _expandedReports.delete(interactionId);
             if (_editingReportEventId === eventId) _editingReportEventId = null;
+            _clearInlineReportDynamicActions(interactionId);
             if (toggleButton) toggleButton.textContent = '展開';
             return;
         }
@@ -923,10 +926,6 @@ const OpportunityInteractions = (() => {
         const originalEventType = cachedEvent && String(cachedEvent.eventType || '').trim();
         if (!originalEventType) {
             const message = 'Save blocked: cached event type is unavailable.';
-            const status = inlineContainer.querySelector('.inline-report-actions__status');
-            if (status) {
-                status.innerHTML = `<span class="inline-report-actions__error">${escapeHtml(message)}</span>`;
-            }
             showNotification(message, 'error');
             return;
         }
@@ -979,10 +978,6 @@ const OpportunityInteractions = (() => {
             }
         } catch (error) {
             if (error.message !== 'Unauthorized') {
-                const status = inlineContainer.querySelector('.inline-report-actions__status');
-                if (status) {
-                    status.innerHTML = `<span class="inline-report-actions__error">${escapeHtml(`Save failed: ${error.message}`)}</span>`;
-                }
                 showNotification(`Save failed: ${error.message}`, 'error');
             }
         }
@@ -1374,25 +1369,6 @@ const OpportunityInteractions = (() => {
                 color: var(--text-muted);
                 font-size: 0.82rem;
                 line-height: 1.45;
-            }
-            #tab-content-interactions .crm-stream-item.operational .inline-report-actions {
-                align-items: center;
-                display: flex;
-                gap: 8px;
-                justify-content: space-between;
-                margin: 0 0 8px;
-                min-height: 24px;
-            }
-            #tab-content-interactions .crm-stream-item.operational .inline-report-actions__buttons {
-                align-items: center;
-                display: flex;
-                gap: 6px;
-                margin-left: auto;
-            }
-            #tab-content-interactions .crm-stream-item.operational .inline-report-actions__error {
-                color: var(--danger-color, #dc3545);
-                font-size: 0.78rem;
-                line-height: 1.35;
             }
             #tab-content-interactions .crm-stream-item.operational .inline-event-report .report-view {
                 background: transparent;
