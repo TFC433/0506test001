@@ -1682,6 +1682,9 @@ const OpportunityInteractions = (() => {
                 font-weight: 600;
                 margin: 0 0 3px;
             }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-workspace-edit .operational-field__label {
+                margin-bottom: 0;
+            }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-field__value {
                 background: color-mix(in srgb, var(--workspace-surface-panel) 72%, var(--primary-bg));
                 border: 1px solid color-mix(in srgb, var(--workspace-divider) 34%, transparent);
