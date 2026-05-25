@@ -165,6 +165,62 @@ const OpportunityInteractions = (() => {
             || [];
     }
 
+    function _getOperationalWorkspaceDomainClass(event) {
+        const eventType = String(event?.eventType || '').trim().toLowerCase();
+        if (eventType === 'iot' || eventType === 'dt' || eventType === 'dx') {
+            return eventType;
+        }
+        return 'neutral';
+    }
+
+    function _applyOperationalWorkspaceDomainTint(reportHTML, event) {
+        const template = document.createElement('template');
+        template.innerHTML = reportHTML;
+
+        const domainType = _getOperationalWorkspaceDomainClass(event);
+        const sideSection = template.content.querySelector('.workspace-side');
+        if (sideSection) {
+            sideSection.classList.add(`domain-type-${domainType}`);
+            sideSection.dataset.domainType = domainType;
+        }
+
+        const meetingGroup = template.content.querySelector('.report-top-meta__group--meeting');
+        const rightGroup = template.content.querySelector('.report-top-meta__group--future');
+        if (meetingGroup && rightGroup) {
+            const meetingItems = Array.from(meetingGroup.querySelectorAll(':scope > .report-top-meta__item'));
+            const locationText = String(event?.visitPlace || '').trim();
+            const hasRenderedLocationItem = Boolean(locationText) || meetingItems.length > 2;
+            let locationItem = hasRenderedLocationItem ? meetingItems[0] : null;
+
+            if (!locationItem) {
+                locationItem = document.createElement('div');
+                locationItem.className = 'report-top-meta__item';
+                locationItem.innerHTML = `
+                    <span class="report-top-meta__label">會議地點</span>
+                    <span class="report-top-meta__value"></span>`;
+                meetingGroup.prepend(locationItem);
+            }
+
+            const locationValue = locationItem.querySelector('.report-top-meta__value');
+            if (locationValue) {
+                locationValue.textContent = '';
+                if (locationText) {
+                    const locationBadge = document.createElement('span');
+                    locationBadge.className = 'report-location-badge';
+                    locationBadge.textContent = locationText;
+                    locationValue.appendChild(locationBadge);
+                } else {
+                    locationValue.textContent = '-';
+                }
+            }
+
+            const participantItems = hasRenderedLocationItem ? meetingItems.slice(1) : meetingItems;
+            participantItems.forEach(item => rightGroup.appendChild(item));
+        }
+
+        return template.innerHTML;
+    }
+
     function _formatInteractionTimeInput(rawTime) {
         let value = rawTime || new Date().toISOString();
         if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(value)) {
@@ -755,7 +811,8 @@ const OpportunityInteractions = (() => {
                 throw new Error('事件報告渲染器未載入');
             }
 
-            inlineContainer.innerHTML = renderOperationalWorkspaceHTML(result.data, _getLinkedContactsContext());
+            const reportHTML = renderOperationalWorkspaceHTML(result.data, _getLinkedContactsContext());
+            inlineContainer.innerHTML = _applyOperationalWorkspaceDomainTint(reportHTML, result.data);
         } catch (error) {
             if (error.message !== 'Unauthorized') {
                 inlineContainer.innerHTML = `<div class="inline-event-report__status">讀取事件報告失敗: ${escapeHtml(error.message)}</div>`;
@@ -1176,8 +1233,8 @@ const OpportunityInteractions = (() => {
                 border-radius: 1px;
                 color: color-mix(in srgb, var(--event-type-color) 74%, var(--text-secondary));
                 display: inline-block !important;
-                font-size: 0.67rem;
-                font-weight: 500;
+                font-size: 0.78rem;
+                font-weight: 560;
                 line-height: 1;
                 max-width: max-content;
                 padding: 1px 4px;
@@ -1188,8 +1245,8 @@ const OpportunityInteractions = (() => {
                 border-radius: 1px;
                 box-shadow: none;
                 display: inline-block !important;
-                font-size: 0.67rem;
-                font-weight: 500;
+                font-size: 0.78rem;
+                font-weight: 560;
                 line-height: 1;
                 margin: 0 4px 3px 0;
                 max-width: max-content;
@@ -1267,32 +1324,32 @@ const OpportunityInteractions = (() => {
                 --workspace-text-title: var(--text-primary);
                 --workspace-text-label: color-mix(in srgb, var(--text-muted) 88%, var(--text-secondary));
                 --workspace-text-value: var(--text-primary);
-                background: var(--workspace-surface);
-                border: 1px solid var(--workspace-divider);
-                border-radius: 2px;
+                background: transparent;
+                border: 0;
+                border-radius: 0;
                 box-shadow: none;
                 box-sizing: border-box;
                 margin: 0;
                 max-width: 100%;
-                padding: 12px;
+                padding: 0;
                 width: 100%;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta {
                 background: var(--workspace-surface-panel);
                 border: 0;
-                border-bottom: 1px solid var(--workspace-divider);
+                border-bottom: 0;
                 border-radius: 0;
                 display: grid;
                 gap: 0;
                 grid-template-columns: 1fr 1fr 1fr;
-                margin: 0 0 14px;
-                padding: 10px 0;
+                margin: 0 0 12px;
+                padding: 8px 0;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__group {
                 border-right: 1px solid var(--workspace-divider);
                 display: flex;
                 flex-direction: column;
-                gap: 6px;
+                gap: 5px;
                 min-width: 0;
                 padding: 0 12px 0 0;
             }
@@ -1312,8 +1369,8 @@ const OpportunityInteractions = (() => {
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__label {
                 color: var(--workspace-text-label);
                 font-size: 0.66rem;
-                font-weight: 600;
-                line-height: 1.25;
+                font-weight: 500;
+                line-height: 1.35;
                 text-transform: none;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__value {
@@ -1322,6 +1379,19 @@ const OpportunityInteractions = (() => {
                 line-height: 1.34;
                 min-width: 0;
                 overflow-wrap: anywhere;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-location-badge {
+                background: color-mix(in srgb, var(--primary-bg) 74%, var(--workspace-surface-panel));
+                border: 1px solid color-mix(in srgb, var(--workspace-divider) 30%, transparent);
+                border-radius: 2px;
+                color: var(--workspace-text-value);
+                display: inline-block;
+                font-size: 0.78rem;
+                font-weight: 560;
+                line-height: 1;
+                max-width: 100%;
+                padding: 2px 5px;
+                vertical-align: baseline;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-workspace-grid {
                 display: grid;
@@ -1332,15 +1402,48 @@ const OpportunityInteractions = (() => {
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side {
                 min-width: 0;
             }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side {
+                --domain-accent: var(--workspace-divider);
+                --domain-section-bg: color-mix(in srgb, var(--workspace-surface-panel) 84%, var(--workspace-surface));
+                --domain-section-border: color-mix(in srgb, var(--workspace-divider) 92%, var(--text-secondary));
+                --domain-section-top-border: color-mix(in srgb, var(--workspace-divider) 86%, var(--text-primary));
+                --domain-title-color: var(--workspace-text-title);
+                --domain-field-bg: color-mix(in srgb, var(--workspace-surface-panel) 72%, var(--primary-bg));
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side.domain-type-iot {
+                --domain-accent: #2563eb;
+                --domain-section-bg: color-mix(in srgb, var(--workspace-surface-panel) 95%, var(--domain-accent));
+                --domain-section-border: color-mix(in srgb, var(--workspace-divider) 82%, var(--domain-accent));
+                --domain-section-top-border: color-mix(in srgb, var(--workspace-divider) 78%, var(--domain-accent));
+                --domain-title-color: color-mix(in srgb, var(--text-primary) 82%, var(--domain-accent));
+                --domain-field-bg: color-mix(in srgb, var(--workspace-surface-panel) 97%, var(--domain-accent));
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side.domain-type-dt {
+                --domain-accent: #7c3aed;
+                --domain-section-bg: color-mix(in srgb, var(--workspace-surface-panel) 95%, var(--domain-accent));
+                --domain-section-border: color-mix(in srgb, var(--workspace-divider) 82%, var(--domain-accent));
+                --domain-section-top-border: color-mix(in srgb, var(--workspace-divider) 78%, var(--domain-accent));
+                --domain-title-color: color-mix(in srgb, var(--text-primary) 82%, var(--domain-accent));
+                --domain-field-bg: color-mix(in srgb, var(--workspace-surface-panel) 97%, var(--domain-accent));
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side.domain-type-dx {
+                --domain-accent: #15803d;
+                --domain-section-bg: color-mix(in srgb, var(--workspace-surface-panel) 95%, var(--domain-accent));
+                --domain-section-border: color-mix(in srgb, var(--workspace-divider) 82%, var(--domain-accent));
+                --domain-section-top-border: color-mix(in srgb, var(--workspace-divider) 78%, var(--domain-accent));
+                --domain-title-color: color-mix(in srgb, var(--text-primary) 82%, var(--domain-accent));
+                --domain-field-bg: color-mix(in srgb, var(--workspace-surface-panel) 97%, var(--domain-accent));
+            }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-main .section-title,
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .section-title {
-                border-bottom: 1px solid color-mix(in srgb, var(--border-color) 36%, transparent);
+                border-bottom: 0;
                 color: var(--text-primary);
-                font-size: 0.88rem;
-                font-weight: 700;
+                font-size: 0.82rem;
+                font-weight: 760;
                 letter-spacing: 0;
-                margin: 0 0 8px;
-                padding-bottom: 6px;
+                line-height: 1.32;
+                margin: 0 0 9px;
+                padding-bottom: 0;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-main .report-section {
                 background: color-mix(in srgb, var(--primary-bg) 58%, transparent);
@@ -1359,15 +1462,13 @@ const OpportunityInteractions = (() => {
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-main .operational-section {
                 background: color-mix(in srgb, var(--workspace-surface-panel) 84%, var(--workspace-surface));
                 border: 1px solid color-mix(in srgb, var(--workspace-divider) 92%, var(--text-secondary));
-                border-top: 2px solid color-mix(in srgb, var(--workspace-divider) 86%, var(--text-primary));
                 border-radius: 3px;
                 margin: 0;
                 padding: 15px 15px 7px;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .operational-section {
-                background: color-mix(in srgb, var(--workspace-surface-panel) 84%, var(--workspace-surface));
-                border: 1px solid color-mix(in srgb, var(--workspace-divider) 92%, var(--text-secondary));
-                border-top: 2px solid color-mix(in srgb, var(--workspace-divider) 86%, var(--text-primary));
+                background: var(--domain-section-bg);
+                border: 1px solid var(--domain-section-border);
                 border-radius: 3px;
                 margin: 0;
                 padding: 15px 13px 7px;
@@ -1375,26 +1476,26 @@ const OpportunityInteractions = (() => {
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-main .operational-section .section-title,
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .operational-section .section-title {
                 border-bottom: 0;
+                border-radius: 0;
                 color: var(--workspace-text-title);
-                font-size: 1.04rem;
-                font-weight: 800;
+                font-size: 0.86rem;
+                font-weight: 780;
                 letter-spacing: 0;
-                margin: 0 0 14px;
-                padding: 0 0 10px;
-                position: relative;
+                line-height: 1.32;
+                margin: 0 0 12px;
+                padding: 0;
+                position: static;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-main .operational-section .section-title::after,
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .operational-section .section-title::after {
-                background: var(--workspace-divider);
-                bottom: 0;
-                content: '';
-                height: 2px;
-                left: 0;
-                position: absolute;
-                width: 84px;
+                content: none;
+                display: none;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .operational-section .section-title::after {
-                background: var(--workspace-divider);
+                background: var(--domain-section-top-border);
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .operational-section .section-title {
+                color: var(--domain-title-color);
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-field {
                 display: block;
@@ -1431,6 +1532,13 @@ const OpportunityInteractions = (() => {
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .operational-field {
                 margin-bottom: 8px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .operational-field__value {
+                background: var(--domain-field-bg);
+                line-height: 1.56;
+                padding: 7px 9px 8px;
+                white-space: pre-line;
+                word-break: normal;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .info-item--meta {
                 display: block;
