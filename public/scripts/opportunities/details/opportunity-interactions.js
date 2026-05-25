@@ -919,10 +919,34 @@ const OpportunityInteractions = (() => {
         const inlineContainer = _getInlineReportContainer(interactionId);
         if (!inlineContainer) return;
 
+        const cachedEvent = _eventReportCache[eventId];
+        const originalEventType = cachedEvent && String(cachedEvent.eventType || '').trim();
+        if (!originalEventType) {
+            const message = 'Save blocked: cached event type is unavailable.';
+            const status = inlineContainer.querySelector('.inline-report-actions__status');
+            if (status) {
+                status.innerHTML = `<span class="inline-report-actions__error">${escapeHtml(message)}</span>`;
+            }
+            showNotification(message, 'error');
+            return;
+        }
+
         const payload = {};
+        const excludedFields = new Set([
+            'ourParticipants',
+            'clientParticipants',
+            'participantRelationships',
+            'participantRelationship',
+            'relationshipMappings',
+            'clientParticipantRelations',
+            'ourParticipantRelations'
+        ]);
         inlineContainer.querySelectorAll('[data-report-field]').forEach(control => {
-            payload[control.getAttribute('data-report-field')] = control.value;
+            const fieldName = control.getAttribute('data-report-field');
+            if (!fieldName || excludedFields.has(fieldName)) return;
+            payload[fieldName] = control.value;
         });
+        payload.eventType = originalEventType;
 
         try {
             const result = await authedFetch(`/api/events/${eventId}`, {
@@ -934,12 +958,18 @@ const OpportunityInteractions = (() => {
             }
 
             const updatedEvent = result && (result.data || result.event || result);
-            _eventReportCache[eventId] = Object.assign(
-                {},
-                _eventReportCache[eventId] || {},
-                payload,
-                updatedEvent && typeof updatedEvent === 'object' ? updatedEvent : {}
-            );
+            const ignoredResponseFields = new Set(['success', 'message', 'ok', 'status']);
+            const recognizedFields = new Set(Object.keys(cachedEvent).concat(Object.keys(payload)));
+            const safeUpdatedEvent = {};
+            if (updatedEvent && typeof updatedEvent === 'object') {
+                Object.keys(updatedEvent).forEach(key => {
+                    if (ignoredResponseFields.has(key) || !recognizedFields.has(key)) return;
+                    safeUpdatedEvent[key] = updatedEvent[key];
+                });
+            }
+            _eventReportCache[eventId] = Object.assign({}, cachedEvent, payload, safeUpdatedEvent, {
+                eventType: originalEventType
+            });
             _editingReportEventId = null;
             _expandedReports.add(interactionId);
             _renderInlineReport(interactionId, eventId, 'view');
