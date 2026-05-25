@@ -751,11 +751,11 @@ const OpportunityInteractions = (() => {
         try {
             const result = await authedFetch(`/api/events/${eventId}`);
             if (!result.success || !result.data) throw new Error(result.error || '找不到該筆紀錄');
-            if (typeof renderEventLogReportHTML !== 'function') {
+            if (typeof renderOperationalWorkspaceHTML !== 'function') {
                 throw new Error('事件報告渲染器未載入');
             }
 
-            inlineContainer.innerHTML = renderEventLogReportHTML(result.data, _getLinkedContactsContext(), { variant: 'inline' });
+            inlineContainer.innerHTML = renderOperationalWorkspaceHTML(result.data, _getLinkedContactsContext());
         } catch (error) {
             if (error.message !== 'Unauthorized') {
                 inlineContainer.innerHTML = `<div class="inline-event-report__status">讀取事件報告失敗: ${escapeHtml(error.message)}</div>`;
@@ -1260,34 +1260,49 @@ const OpportunityInteractions = (() => {
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-view {
                 max-width: 100%;
             }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-workspace-view {
+                margin: 0;
+                max-width: 100%;
+                width: 100%;
+            }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta {
-                align-items: stretch;
-                background: color-mix(in srgb, var(--primary-bg) 78%, transparent);
-                border: 1px solid color-mix(in srgb, var(--border-color) 32%, transparent);
-                border-radius: 4px;
+                background: color-mix(in srgb, var(--primary-bg) 62%, transparent);
+                border: 1px solid color-mix(in srgb, var(--border-color) 28%, transparent);
+                border-radius: 3px;
+                display: grid;
+                gap: 0;
+                grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(120px, 0.7fr);
+                margin: 0 0 12px;
+                padding: 7px 0;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__group {
+                border-right: 1px solid color-mix(in srgb, var(--border-color) 26%, transparent);
                 display: flex;
                 flex-direction: column;
-                gap: 7px;
-                margin: 0 0 10px;
-                padding: 6px 8px;
+                gap: 6px;
+                min-width: 0;
+                padding: 0 10px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__group:last-child {
+                border-right: 0;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__item {
                 align-items: start;
                 display: grid;
-                gap: 8px;
-                grid-template-columns: 72px minmax(0, 1fr);
+                gap: 10px;
+                grid-template-columns: 82px minmax(0, 1fr);
                 min-width: 0;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__label {
-                color: var(--text-muted);
-                font-size: 0.68rem;
+                color: color-mix(in srgb, var(--text-muted) 88%, transparent);
+                font-size: 0.66rem;
                 font-weight: 600;
                 line-height: 1.25;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__value {
-                color: var(--text-secondary);
-                font-size: 0.74rem;
-                line-height: 1.3;
+                color: var(--text-primary);
+                font-size: 0.73rem;
+                line-height: 1.34;
                 min-width: 0;
                 overflow-wrap: anywhere;
             }
@@ -1323,6 +1338,67 @@ const OpportunityInteractions = (() => {
                 border-radius: 4px;
                 margin: 0;
                 padding: 8px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-main .operational-section {
+                background: transparent;
+                border: 0;
+                border-top: 1px solid color-mix(in srgb, var(--border-color) 32%, transparent);
+                border-radius: 0;
+                margin: 0;
+                padding: 9px 0 0;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .operational-section {
+                background: transparent;
+                border: 0;
+                border-top: 1px solid color-mix(in srgb, var(--border-color) 32%, transparent);
+                border-radius: 0;
+                margin: 0;
+                padding: 9px 0 0;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-main .operational-section .section-title,
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .operational-section .section-title {
+                border-bottom: 0;
+                color: var(--text-primary);
+                font-size: 0.9rem;
+                font-weight: 700;
+                letter-spacing: 0;
+                margin: 0 0 9px;
+                padding: 0 0 6px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-field {
+                display: block;
+                margin: 0 0 9px;
+                padding: 0;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-field__label {
+                color: color-mix(in srgb, var(--text-muted) 86%, var(--text-secondary));
+                display: block;
+                font-size: 0.72rem;
+                font-weight: 600;
+                margin: 0 0 3px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-field__value {
+                background: color-mix(in srgb, var(--secondary-bg) 30%, transparent);
+                border: 1px solid color-mix(in srgb, var(--border-color) 22%, transparent);
+                border-radius: 3px;
+                box-shadow: none;
+                color: var(--text-primary);
+                font-size: 0.82rem;
+                min-height: 0;
+                overflow-wrap: anywhere;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-field--narrative .operational-field__value {
+                line-height: 1.62;
+                padding: 7px 9px;
+                white-space: pre-wrap;
+                word-break: normal;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-field--meta .operational-field__value {
+                line-height: 1.38;
+                padding: 5px 7px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .operational-field {
+                margin-bottom: 7px;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .info-item--meta {
                 display: block;

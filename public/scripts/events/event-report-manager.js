@@ -110,6 +110,104 @@ async function showEventLogReport(eventId) {
     }
 }
 
+function renderOperationalWorkspaceHTML(event, contextContacts = []) {
+    const formatTextValue = (value) => {
+        if (!value) return '';
+        return String(value).replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    };
+    const formatNarrativeValue = (value) => formatTextValue(value).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const createMetaRowHTML = (label, contentHTML) => {
+        if (!contentHTML) return '';
+        return `
+            <div class="report-top-meta__item">
+                <span class="report-top-meta__label">${label}</span>
+                <span class="report-top-meta__value">${contentHTML}</span>
+            </div>`;
+    };
+    const createMetaGroupHTML = (contentHTML, modifier = '') => `
+            <div class="report-top-meta__group${modifier ? ` report-top-meta__group--${modifier}` : ''}">${contentHTML}</div>`;
+    const createWorkspaceFieldHTML = (label, contentHTML, modifier) => {
+        if (!contentHTML) return '';
+        return `
+            <div class="operational-field operational-field--${modifier}">
+                <div class="operational-field__label">${label}</div>
+                <div class="operational-field__value">${contentHTML}</div>
+            </div>`;
+    };
+
+    const eventTypeConfig = new Map((window.CRM_APP?.systemConfig['事件類型'] || []).map(t => [t.value, { note: t.note, color: t.color }]));
+    const typeInfo = eventTypeConfig.get(event.eventType) || { note: (event.eventType || 'unknown').toUpperCase(), color: '#6c757d' };
+    const eventTypeLabel = typeInfo.note;
+    const headerColor = typeInfo.color || '#6c757d';
+    const updatedTime = event.updatedTime || event.updated_time || event.updatedAt || event.updated_at;
+
+    let systemMetaHTML = createMetaRowHTML('事件種類', `<span class="inline-event-type-badge" style="--event-type-color: ${headerColor};">${formatTextValue(eventTypeLabel)}</span>`);
+    if (event.createdTime) {
+        systemMetaHTML += createMetaRowHTML('建立時間', formatDateTime(event.createdTime));
+    }
+    if (updatedTime) {
+        systemMetaHTML += createMetaRowHTML('最後修改時間', formatDateTime(updatedTime));
+    }
+    let meetingMetaHTML = createMetaRowHTML('會議地點', formatTextValue(event.visitPlace));
+    meetingMetaHTML += createMetaRowHTML('我方與會', _renderParticipantsPills(event.ourParticipants, 'our-side'));
+    meetingMetaHTML += createMetaRowHTML('客戶與會', _renderParticipantsPills(event.clientParticipants, 'client-side', contextContacts));
+    const topMetaHTML = [
+        createMetaGroupHTML(systemMetaHTML, 'system'),
+        createMetaGroupHTML(meetingMetaHTML, 'meeting'),
+        createMetaGroupHTML('', 'future')
+    ].join('');
+
+    const narrativeFields = [
+        { key: 'eventContent', label: '會議內容' },
+        { key: 'clientQuestions', label: '客戶提問' },
+        { key: 'clientIntelligence', label: '客戶情報' },
+        { key: 'eventNotes', label: '備註' }
+    ];
+    const domainFieldsByType = {
+        iot: [
+            { key: 'iot_deviceScale', fallbackKey: 'deviceScale', label: '設備規模' },
+            { key: 'iot_lineFeatures', fallbackKey: 'lineFeatures', label: '產線特徵' },
+            { key: 'iot_productionStatus', fallbackKey: 'productionStatus', label: '生產狀態' },
+            { key: 'iot_iotStatus', fallbackKey: 'iotStatus', label: 'IoT 狀態' },
+            { key: 'iot_painPoints', fallbackKey: 'painPoints', label: '痛點' },
+            { key: 'iot_systemArchitecture', fallbackKey: 'systemArchitecture', label: '系統架構' }
+        ],
+        dt: [
+            { key: 'dt_deviceScale', fallbackKey: 'deviceScale', label: '設備規模' },
+            { key: 'dt_processingType', fallbackKey: 'processingType', label: '加工類型' },
+            { key: 'dt_industry', fallbackKey: 'industry', label: '加工產業' }
+        ],
+        dx: []
+    };
+
+    const mainContentHTML = narrativeFields.map(field => (
+        createWorkspaceFieldHTML(field.label, formatNarrativeValue(event[field.key]), 'narrative')
+    )).join('');
+    const domainFields = domainFieldsByType[event.eventType] || [];
+    const sideContentHTML = domainFields.map(field => {
+        const rawValue = event[field.key] || event[field.fallbackKey];
+        return createWorkspaceFieldHTML(field.label, formatTextValue(rawValue), 'meta');
+    }).join('');
+
+    return `<div class="operational-workspace-view">
+        <div class="report-top-meta">${topMetaHTML}</div>
+        <div class="report-workspace-grid">
+            <section class="workspace-main">
+                <div class="operational-section">
+                    <h3 class="section-title">會議紀錄</h3>
+                    ${mainContentHTML || '<div class="inline-event-report__status">尚無會議敘述資料。</div>'}
+                </div>
+            </section>
+            ${sideContentHTML ? `<aside class="workspace-side">
+                <div class="operational-section">
+                    <h3 class="section-title">${eventTypeLabel} 專屬資訊</h3>
+                    ${sideContentHTML}
+                </div>
+            </aside>` : ''}
+        </div>
+    </div>`;
+}
+
 /**
  * 輔助函式：將人員字串轉換為膠囊 HTML (含智慧職稱補完)
  * @param {string} participantsStr - 原始字串
@@ -345,3 +443,4 @@ function renderEventLogReportHTML(event, contextContacts = [], options = {}) {
 
 // Ensure global accessibility
 window.showEventLogReport = showEventLogReport;
+window.renderOperationalWorkspaceHTML = renderOperationalWorkspaceHTML;
