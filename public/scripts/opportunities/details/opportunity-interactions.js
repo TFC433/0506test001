@@ -1261,27 +1261,43 @@ const OpportunityInteractions = (() => {
                 max-width: 100%;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-workspace-view {
+                --workspace-surface: color-mix(in srgb, var(--primary-bg) 90%, var(--secondary-bg));
+                --workspace-surface-panel: color-mix(in srgb, var(--secondary-bg) 48%, var(--primary-bg));
+                --workspace-divider: color-mix(in srgb, var(--border-color) 58%, var(--text-muted));
+                --workspace-text-title: var(--text-primary);
+                --workspace-text-label: color-mix(in srgb, var(--text-muted) 88%, var(--text-secondary));
+                --workspace-text-value: var(--text-primary);
+                background: var(--workspace-surface);
+                border: 1px solid var(--workspace-divider);
+                border-radius: 2px;
+                box-shadow: none;
+                box-sizing: border-box;
                 margin: 0;
                 max-width: 100%;
+                padding: 12px;
                 width: 100%;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta {
-                background: color-mix(in srgb, var(--primary-bg) 62%, transparent);
-                border: 1px solid color-mix(in srgb, var(--border-color) 28%, transparent);
-                border-radius: 3px;
+                background: var(--workspace-surface-panel);
+                border: 0;
+                border-bottom: 1px solid var(--workspace-divider);
+                border-radius: 0;
                 display: grid;
                 gap: 0;
-                grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(120px, 0.7fr);
-                margin: 0 0 12px;
-                padding: 7px 0;
+                grid-template-columns: 1fr 1fr 1fr;
+                margin: 0 0 14px;
+                padding: 10px 0;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__group {
-                border-right: 1px solid color-mix(in srgb, var(--border-color) 26%, transparent);
+                border-right: 1px solid var(--workspace-divider);
                 display: flex;
                 flex-direction: column;
                 gap: 6px;
                 min-width: 0;
-                padding: 0 10px;
+                padding: 0 12px 0 0;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__group + .report-top-meta__group {
+                padding-left: 12px;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__group:last-child {
                 border-right: 0;
@@ -1294,21 +1310,22 @@ const OpportunityInteractions = (() => {
                 min-width: 0;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__label {
-                color: color-mix(in srgb, var(--text-muted) 88%, transparent);
+                color: var(--workspace-text-label);
                 font-size: 0.66rem;
                 font-weight: 600;
                 line-height: 1.25;
+                text-transform: none;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__value {
-                color: var(--text-primary);
-                font-size: 0.73rem;
+                color: var(--workspace-text-value);
+                font-size: 0.79rem;
                 line-height: 1.34;
                 min-width: 0;
                 overflow-wrap: anywhere;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-workspace-grid {
                 display: grid;
-                gap: 12px;
+                gap: 16px;
                 grid-template-columns: minmax(0, 1.7fr) minmax(220px, 0.9fr);
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-main,
@@ -1340,65 +1357,80 @@ const OpportunityInteractions = (() => {
                 padding: 8px;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-main .operational-section {
-                background: transparent;
-                border: 0;
-                border-top: 1px solid color-mix(in srgb, var(--border-color) 32%, transparent);
-                border-radius: 0;
+                background: color-mix(in srgb, var(--workspace-surface-panel) 84%, var(--workspace-surface));
+                border: 1px solid color-mix(in srgb, var(--workspace-divider) 92%, var(--text-secondary));
+                border-top: 2px solid color-mix(in srgb, var(--workspace-divider) 86%, var(--text-primary));
+                border-radius: 3px;
                 margin: 0;
-                padding: 9px 0 0;
+                padding: 15px 15px 7px;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .operational-section {
-                background: transparent;
-                border: 0;
-                border-top: 1px solid color-mix(in srgb, var(--border-color) 32%, transparent);
-                border-radius: 0;
+                background: color-mix(in srgb, var(--workspace-surface-panel) 84%, var(--workspace-surface));
+                border: 1px solid color-mix(in srgb, var(--workspace-divider) 92%, var(--text-secondary));
+                border-top: 2px solid color-mix(in srgb, var(--workspace-divider) 86%, var(--text-primary));
+                border-radius: 3px;
                 margin: 0;
-                padding: 9px 0 0;
+                padding: 15px 13px 7px;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-main .operational-section .section-title,
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .operational-section .section-title {
                 border-bottom: 0;
-                color: var(--text-primary);
-                font-size: 0.9rem;
-                font-weight: 700;
+                color: var(--workspace-text-title);
+                font-size: 1.04rem;
+                font-weight: 800;
                 letter-spacing: 0;
-                margin: 0 0 9px;
-                padding: 0 0 6px;
+                margin: 0 0 14px;
+                padding: 0 0 10px;
+                position: relative;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-main .operational-section .section-title::after,
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .operational-section .section-title::after {
+                background: var(--workspace-divider);
+                bottom: 0;
+                content: '';
+                height: 2px;
+                left: 0;
+                position: absolute;
+                width: 84px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .operational-section .section-title::after {
+                background: var(--workspace-divider);
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-field {
                 display: block;
-                margin: 0 0 9px;
+                margin: 0 0 13px;
                 padding: 0;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-field__label {
-                color: color-mix(in srgb, var(--text-muted) 86%, var(--text-secondary));
+                color: var(--workspace-text-label);
                 display: block;
                 font-size: 0.72rem;
                 font-weight: 600;
                 margin: 0 0 3px;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-field__value {
-                background: color-mix(in srgb, var(--secondary-bg) 30%, transparent);
-                border: 1px solid color-mix(in srgb, var(--border-color) 22%, transparent);
-                border-radius: 3px;
+                background: color-mix(in srgb, var(--workspace-surface-panel) 72%, var(--primary-bg));
+                border: 1px solid color-mix(in srgb, var(--workspace-divider) 34%, transparent);
+                border-bottom-color: color-mix(in srgb, var(--workspace-divider) 62%, transparent);
+                border-radius: 2px;
                 box-shadow: none;
-                color: var(--text-primary);
+                color: var(--workspace-text-value);
                 font-size: 0.82rem;
                 min-height: 0;
                 overflow-wrap: anywhere;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-field--narrative .operational-field__value {
                 line-height: 1.62;
-                padding: 7px 9px;
+                padding: 9px 10px 10px;
                 white-space: pre-wrap;
                 word-break: normal;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-field--meta .operational-field__value {
                 line-height: 1.38;
-                padding: 5px 7px;
+                padding: 6px 8px 7px;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .operational-field {
-                margin-bottom: 7px;
+                margin-bottom: 8px;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .info-item--meta {
                 display: block;

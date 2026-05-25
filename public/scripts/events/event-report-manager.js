@@ -136,9 +136,10 @@ function renderOperationalWorkspaceHTML(event, contextContacts = []) {
     };
 
     const eventTypeConfig = new Map((window.CRM_APP?.systemConfig['事件類型'] || []).map(t => [t.value, { note: t.note, color: t.color }]));
-    const typeInfo = eventTypeConfig.get(event.eventType) || { note: (event.eventType || 'unknown').toUpperCase(), color: '#6c757d' };
+    const typeInfo = eventTypeConfig.get(event.eventType) || { note: (event.eventType || 'unknown').toUpperCase(), color: null };
     const eventTypeLabel = typeInfo.note;
-    const headerColor = typeInfo.color || '#6c757d';
+    const fallbackAccentByType = { iot: '#2563eb', dt: '#6d5bd0', dx: '#6d5bd0' };
+    const headerColor = typeInfo.color || fallbackAccentByType[event.eventType] || '#6c757d';
     const updatedTime = event.updatedTime || event.updated_time || event.updatedAt || event.updated_at;
 
     let systemMetaHTML = createMetaRowHTML('事件種類', `<span class="inline-event-type-badge" style="--event-type-color: ${headerColor};">${formatTextValue(eventTypeLabel)}</span>`);
@@ -189,7 +190,7 @@ function renderOperationalWorkspaceHTML(event, contextContacts = []) {
         return createWorkspaceFieldHTML(field.label, formatTextValue(rawValue), 'meta');
     }).join('');
 
-    return `<div class="operational-workspace-view">
+    return `<div class="operational-workspace-view" style="--workspace-domain-accent: ${headerColor};">
         <div class="report-top-meta">${topMetaHTML}</div>
         <div class="report-workspace-grid">
             <section class="workspace-main">
