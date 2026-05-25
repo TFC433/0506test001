@@ -1713,6 +1713,9 @@ const OpportunityInteractions = (() => {
                 white-space: pre-line;
                 word-break: normal;
             }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-workspace-edit .operational-field__value {
+                padding: 0;
+            }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-report-control {
                 background: transparent;
                 border: 0;
@@ -1729,6 +1732,12 @@ const OpportunityInteractions = (() => {
                 padding: 0;
                 resize: none;
                 width: 100%;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-workspace-edit .operational-field--narrative .inline-report-control {
+                padding: 9px 10px 10px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-workspace-edit .operational-field--meta .inline-report-control {
+                padding: 6px 8px 7px;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-report-control:focus {
                 outline: 1px solid color-mix(in srgb, var(--workspace-domain-accent) 46%, var(--workspace-divider));
