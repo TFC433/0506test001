@@ -215,6 +215,103 @@ function renderOperationalWorkspaceHTML(event, contextContacts = []) {
  * @param {string} typeClass - 樣式類別 ('our-side' 或 'client-side')
  * @param {Array} contextContacts - 用於比對的聯絡人清單
  */
+function renderOperationalWorkspaceEditHTML(event, contextContacts = []) {
+    const formatTextValue = (value) => {
+        if (!value) return '';
+        return String(value).replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    };
+    const formatAttributeValue = (value) => formatTextValue(value).replace(/"/g, "&quot;");
+    const createMetaRowHTML = (label, contentHTML) => `
+            <div class="report-top-meta__item">
+                <span class="report-top-meta__label">${label}</span>
+                <span class="report-top-meta__value">${contentHTML}</span>
+            </div>`;
+    const createMetaGroupHTML = (contentHTML, modifier = '') => `
+            <div class="report-top-meta__group${modifier ? ` report-top-meta__group--${modifier}` : ''}">${contentHTML}</div>`;
+    const createInputHTML = (key, value) => `
+        <input class="inline-report-control inline-report-control--input" type="text" data-report-field="${key}" value="${formatAttributeValue(value)}">`;
+    const createTextareaHTML = (key, value) => `
+        <textarea class="inline-report-control inline-report-control--textarea" data-report-field="${key}" rows="1">${formatTextValue(value)}</textarea>`;
+    const createWorkspaceFieldHTML = (label, contentHTML, modifier) => `
+            <div class="operational-field operational-field--${modifier}">
+                <div class="operational-field__label">${label}</div>
+                <div class="operational-field__value">${contentHTML}</div>
+            </div>`;
+
+    const eventTypeConfig = new Map((window.CRM_APP?.systemConfig['事件類型'] || []).map(t => [t.value, { note: t.note, color: t.color }]));
+    const typeInfo = eventTypeConfig.get(event.eventType) || { note: (event.eventType || 'unknown').toUpperCase(), color: null };
+    const eventTypeLabel = typeInfo.note;
+    const fallbackAccentByType = { iot: '#2563eb', dt: '#6d5bd0', dx: '#6d5bd0' };
+    const headerColor = typeInfo.color || fallbackAccentByType[event.eventType] || '#6c757d';
+    const updatedTime = event.updatedTime || event.updated_time || event.updatedAt || event.updated_at;
+
+    let systemMetaHTML = createMetaRowHTML('事件種類', `<span class="inline-event-type-badge" style="--event-type-color: ${headerColor};">${formatTextValue(eventTypeLabel)}</span>`);
+    if (event.createdTime) {
+        systemMetaHTML += createMetaRowHTML('建立時間', formatDateTime(event.createdTime));
+    }
+    if (updatedTime) {
+        systemMetaHTML += createMetaRowHTML('最後修改時間', formatDateTime(updatedTime));
+    }
+    let meetingMetaHTML = createMetaRowHTML('會議地點', createInputHTML('visitPlace', event.visitPlace));
+    meetingMetaHTML += createMetaRowHTML('我方與會', _renderParticipantsPills(event.ourParticipants, 'our-side'));
+    meetingMetaHTML += createMetaRowHTML('客戶與會', _renderParticipantsPills(event.clientParticipants, 'client-side', contextContacts));
+    const topMetaHTML = [
+        createMetaGroupHTML(systemMetaHTML, 'system'),
+        createMetaGroupHTML(meetingMetaHTML, 'meeting'),
+        createMetaGroupHTML('', 'future')
+    ].join('');
+
+    const narrativeFields = [
+        { key: 'eventContent', label: '會議內容' },
+        { key: 'clientQuestions', label: '客戶提問' },
+        { key: 'clientIntelligence', label: '客戶情報' },
+        { key: 'eventNotes', label: '備註' }
+    ];
+    const domainFieldsByType = {
+        iot: [
+            { key: 'iot_deviceScale', fallbackKey: 'deviceScale', label: '設備規模' },
+            { key: 'iot_lineFeatures', fallbackKey: 'lineFeatures', label: '產線特徵' },
+            { key: 'iot_productionStatus', fallbackKey: 'productionStatus', label: '生產狀態' },
+            { key: 'iot_iotStatus', fallbackKey: 'iotStatus', label: 'IoT 狀態' },
+            { key: 'iot_painPoints', fallbackKey: 'painPoints', label: '痛點' },
+            { key: 'iot_systemArchitecture', fallbackKey: 'systemArchitecture', label: '系統架構' }
+        ],
+        dt: [
+            { key: 'dt_deviceScale', fallbackKey: 'deviceScale', label: '設備規模' },
+            { key: 'dt_processingType', fallbackKey: 'processingType', label: '加工類型' },
+            { key: 'dt_industry', fallbackKey: 'industry', label: '加工產業' }
+        ],
+        dx: []
+    };
+
+    const mainContentHTML = narrativeFields.map(field => (
+        createWorkspaceFieldHTML(field.label, createTextareaHTML(field.key, event[field.key]), 'narrative')
+    )).join('');
+    const domainFields = domainFieldsByType[event.eventType] || [];
+    const sideContentHTML = domainFields.map(field => {
+        const rawValue = event[field.key] || event[field.fallbackKey];
+        return createWorkspaceFieldHTML(field.label, createTextareaHTML(field.key, rawValue), 'meta');
+    }).join('');
+
+    return `<div class="operational-workspace-view operational-workspace-edit" style="--workspace-domain-accent: ${headerColor};">
+        <div class="report-top-meta">${topMetaHTML}</div>
+        <div class="report-workspace-grid">
+            <section class="workspace-main">
+                <div class="operational-section">
+                    <h3 class="section-title">會議紀錄</h3>
+                    ${mainContentHTML}
+                </div>
+            </section>
+            ${sideContentHTML ? `<aside class="workspace-side">
+                <div class="operational-section">
+                    <h3 class="section-title">${eventTypeLabel} 專屬資訊</h3>
+                    ${sideContentHTML}
+                </div>
+            </aside>` : ''}
+        </div>
+    </div>`;
+}
+
 function _renderParticipantsPills(participantsStr, typeClass, contextContacts = []) {
     if (!participantsStr) return '-';
 
@@ -445,3 +542,4 @@ function renderEventLogReportHTML(event, contextContacts = [], options = {}) {
 // Ensure global accessibility
 window.showEventLogReport = showEventLogReport;
 window.renderOperationalWorkspaceHTML = renderOperationalWorkspaceHTML;
+window.renderOperationalWorkspaceEditHTML = renderOperationalWorkspaceEditHTML;

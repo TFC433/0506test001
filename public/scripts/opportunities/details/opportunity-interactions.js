@@ -34,7 +34,9 @@ const OpportunityInteractions = (() => {
     let _container = null;
     let _editingInteractionId = null;
     let _isCreatingInline = false;
+    let _editingReportEventId = null;
     const _expandedReports = new Set();
+    const _eventReportCache = {};
 
     // ✅ [Fix] 系統自動產生類型：必須與鎖定證據一致
     // Evidence: const isLockedRecord = ['系統事件', '事件報告'].includes(item.eventType);
@@ -219,6 +221,89 @@ const OpportunityInteractions = (() => {
         }
 
         return template.innerHTML;
+    }
+
+    function _getInlineReportContainer(interactionId) {
+        if (!_container) return null;
+        const cardItem = Array.from(_container.querySelectorAll('.crm-stream-item.operational[data-interaction-id]'))
+            .find(element => element.getAttribute('data-interaction-id') === String(interactionId));
+        if (!cardItem) return null;
+
+        let inlineContainer = cardItem.querySelector('.inline-event-report');
+        if (!inlineContainer) {
+            inlineContainer = document.createElement('div');
+            inlineContainer.className = 'inline-event-report';
+            cardItem.appendChild(inlineContainer);
+        }
+
+        return inlineContainer;
+    }
+
+    function _renderInlineReportActions(interactionId, eventId, mode, errorMessage = '') {
+        const safeInteractionId = escapeHtml(interactionId);
+        const safeEventId = escapeHtml(eventId);
+        const errorHTML = errorMessage
+            ? `<span class="inline-report-actions__error">${escapeHtml(errorMessage)}</span>`
+            : '';
+
+        if (mode === 'edit') {
+            return `
+                <div class="inline-report-actions" data-inline-report-actions>
+                    <div class="inline-report-actions__status">${errorHTML}</div>
+                    <div class="inline-report-actions__buttons">
+                        <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineReportEdit('${safeInteractionId}', '${safeEventId}')">Save</button>
+                        <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineReportEdit('${safeInteractionId}', '${safeEventId}')">Cancel</button>
+                    </div>
+                </div>`;
+        }
+
+        return `
+            <div class="inline-report-actions" data-inline-report-actions>
+                <div class="inline-report-actions__status"></div>
+                <div class="inline-report-actions__buttons">
+                    <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.startInlineReportEdit('${safeInteractionId}', '${safeEventId}')">Edit</button>
+                </div>
+            </div>`;
+    }
+
+    function _renderInlineReport(interactionId, eventId, mode = 'view', errorMessage = '') {
+        const inlineContainer = _getInlineReportContainer(interactionId);
+        const eventData = _eventReportCache[eventId];
+        if (!inlineContainer || !eventData) return;
+
+        if (mode === 'edit') {
+            if (typeof renderOperationalWorkspaceEditHTML !== 'function') {
+                inlineContainer.innerHTML = '<div class="inline-event-report__status">Inline report edit renderer is unavailable.</div>';
+                return;
+            }
+
+            const reportHTML = renderOperationalWorkspaceEditHTML(eventData, _getLinkedContactsContext());
+            inlineContainer.innerHTML = _renderInlineReportActions(interactionId, eventId, 'edit', errorMessage)
+                + _applyOperationalWorkspaceDomainTint(reportHTML, eventData);
+            _autosizeInlineReportTextareas(inlineContainer);
+            return;
+        }
+
+        if (typeof renderOperationalWorkspaceHTML !== 'function') {
+            inlineContainer.innerHTML = '<div class="inline-event-report__status">Inline report renderer is unavailable.</div>';
+            return;
+        }
+
+        const reportHTML = renderOperationalWorkspaceHTML(eventData, _getLinkedContactsContext());
+        inlineContainer.innerHTML = _renderInlineReportActions(interactionId, eventId, 'view')
+            + _applyOperationalWorkspaceDomainTint(reportHTML, eventData);
+    }
+
+    function _autosizeInlineReportTextareas(scope) {
+        if (!scope) return;
+        scope.querySelectorAll('textarea[data-report-field]').forEach(textarea => {
+            const resize = () => {
+                textarea.style.height = 'auto';
+                textarea.style.height = `${textarea.scrollHeight}px`;
+            };
+            textarea.addEventListener('input', resize);
+            resize();
+        });
     }
 
     function _formatInteractionTimeInput(rawTime) {
@@ -789,6 +874,7 @@ const OpportunityInteractions = (() => {
             inlineContainer.hidden = true;
             cardItem.classList.remove('has-inline-report-expanded');
             _expandedReports.delete(interactionId);
+            if (_editingReportEventId === eventId) _editingReportEventId = null;
             if (toggleButton) toggleButton.textContent = '展開';
             return;
         }
@@ -805,14 +891,15 @@ const OpportunityInteractions = (() => {
         }
 
         try {
-            const result = await authedFetch(`/api/events/${eventId}`);
-            if (!result.success || !result.data) throw new Error(result.error || '找不到該筆紀錄');
-            if (typeof renderOperationalWorkspaceHTML !== 'function') {
-                throw new Error('事件報告渲染器未載入');
+            let result = null;
+            if (!_eventReportCache[eventId]) {
+                result = await authedFetch(`/api/events/${eventId}`);
+            } else {
+                result = { success: true, data: _eventReportCache[eventId] };
             }
-
-            const reportHTML = renderOperationalWorkspaceHTML(result.data, _getLinkedContactsContext());
-            inlineContainer.innerHTML = _applyOperationalWorkspaceDomainTint(reportHTML, result.data);
+            if (!result.success || !result.data) throw new Error(result.error || '找不到該筆紀錄');
+            _eventReportCache[eventId] = result.data;
+            _renderInlineReport(interactionId, eventId, _editingReportEventId === eventId ? 'edit' : 'view');
         } catch (error) {
             if (error.message !== 'Unauthorized') {
                 inlineContainer.innerHTML = `<div class="inline-event-report__status">讀取事件報告失敗: ${escapeHtml(error.message)}</div>`;
@@ -821,6 +908,62 @@ const OpportunityInteractions = (() => {
     }
 
     // 動態注入樣式（保留既有行為並補齊精確的時間軸幾何與 CSS）
+    function startInlineReportEdit(interactionId, eventId) {
+        if (!_eventReportCache[eventId]) return;
+        _editingReportEventId = eventId;
+        _expandedReports.add(interactionId);
+        _renderInlineReport(interactionId, eventId, 'edit');
+    }
+
+    async function saveInlineReportEdit(interactionId, eventId) {
+        const inlineContainer = _getInlineReportContainer(interactionId);
+        if (!inlineContainer) return;
+
+        const payload = {};
+        inlineContainer.querySelectorAll('[data-report-field]').forEach(control => {
+            payload[control.getAttribute('data-report-field')] = control.value;
+        });
+
+        try {
+            const result = await authedFetch(`/api/events/${eventId}`, {
+                method: 'PUT',
+                body: JSON.stringify(payload)
+            });
+            if (result && result.success === false) {
+                throw new Error(result.details || result.error || 'Save failed');
+            }
+
+            const updatedEvent = result && (result.data || result.event || result);
+            _eventReportCache[eventId] = Object.assign(
+                {},
+                _eventReportCache[eventId] || {},
+                payload,
+                updatedEvent && typeof updatedEvent === 'object' ? updatedEvent : {}
+            );
+            _editingReportEventId = null;
+            _expandedReports.add(interactionId);
+            _renderInlineReport(interactionId, eventId, 'view');
+
+            if (window.dashboardManager && typeof window.dashboardManager.markStale === 'function') {
+                window.dashboardManager.markStale();
+            }
+        } catch (error) {
+            if (error.message !== 'Unauthorized') {
+                const status = inlineContainer.querySelector('.inline-report-actions__status');
+                if (status) {
+                    status.innerHTML = `<span class="inline-report-actions__error">${escapeHtml(`Save failed: ${error.message}`)}</span>`;
+                }
+                showNotification(`Save failed: ${error.message}`, 'error');
+            }
+        }
+    }
+
+    function cancelInlineReportEdit(interactionId, eventId) {
+        _editingReportEventId = null;
+        _expandedReports.add(interactionId);
+        _renderInlineReport(interactionId, eventId, 'view');
+    }
+
     function _injectStyles() {
         const styleId = 'interactions-dynamic-styles';
         
@@ -1202,6 +1345,25 @@ const OpportunityInteractions = (() => {
                 font-size: 0.82rem;
                 line-height: 1.45;
             }
+            #tab-content-interactions .crm-stream-item.operational .inline-report-actions {
+                align-items: center;
+                display: flex;
+                gap: 8px;
+                justify-content: space-between;
+                margin: 0 0 8px;
+                min-height: 24px;
+            }
+            #tab-content-interactions .crm-stream-item.operational .inline-report-actions__buttons {
+                align-items: center;
+                display: flex;
+                gap: 6px;
+                margin-left: auto;
+            }
+            #tab-content-interactions .crm-stream-item.operational .inline-report-actions__error {
+                color: var(--danger-color, #dc3545);
+                font-size: 0.78rem;
+                line-height: 1.35;
+            }
             #tab-content-interactions .crm-stream-item.operational .inline-event-report .report-view {
                 background: transparent;
                 border: 0;
@@ -1540,6 +1702,33 @@ const OpportunityInteractions = (() => {
                 white-space: pre-line;
                 word-break: normal;
             }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-report-control {
+                background: transparent;
+                border: 0;
+                box-shadow: none;
+                box-sizing: border-box;
+                color: inherit;
+                display: block;
+                font: inherit;
+                line-height: inherit;
+                margin: 0;
+                min-height: 0;
+                outline: none;
+                overflow: hidden;
+                padding: 0;
+                resize: none;
+                width: 100%;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-report-control:focus {
+                outline: 1px solid color-mix(in srgb, var(--workspace-domain-accent) 46%, var(--workspace-divider));
+                outline-offset: 2px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__value .inline-report-control {
+                background: color-mix(in srgb, var(--primary-bg) 74%, var(--workspace-surface-panel));
+                border: 1px solid color-mix(in srgb, var(--workspace-divider) 30%, transparent);
+                border-radius: 2px;
+                padding: 2px 5px;
+            }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .info-item--meta {
                 display: block;
                 margin: 0 0 8px;
@@ -1845,6 +2034,9 @@ const OpportunityInteractions = (() => {
         saveInlineCreate,
         cancelInlineCreate,
         toggleInlineReport,
+        startInlineReportEdit,
+        saveInlineReportEdit,
+        cancelInlineReportEdit,
         confirmDelete
     };
 })();
