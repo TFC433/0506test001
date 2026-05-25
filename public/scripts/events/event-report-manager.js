@@ -162,6 +162,14 @@ function renderEventLogReportHTML(event, contextContacts = [], options = {}) {
                 <div class="info-value-box">${finalContent}</div>
             </div>`;
     };
+    const createTopMetaItemHTML = (label, contentHTML) => {
+        if (!contentHTML) return '';
+        return `
+            <div class="report-top-meta__item">
+                <span class="report-top-meta__label">${label}</span>
+                <span class="report-top-meta__value">${contentHTML}</span>
+            </div>`;
+    };
     
     const formatTextValue = (value) => {
         if (!value) return '';
@@ -247,6 +255,18 @@ function renderEventLogReportHTML(event, contextContacts = [], options = {}) {
     
     let commonSectionHTML = '';
     let typeSectionHTML = '';
+    let topMetaHTML = isInlineVariant
+        ? createTopMetaItemHTML('', `<span class="inline-event-type-badge" style="--event-type-color: ${headerColor};">${formatTextValue(eventTypeLabel)}</span>`)
+        : '';
+    if (isInlineVariant && event.opportunityId && linkedEntityName && linkedEntityName !== '-') {
+        topMetaHTML += createTopMetaItemHTML('相關商機', formatTextValue(linkedEntityName));
+    }
+    if (isInlineVariant && event.creator) {
+        topMetaHTML += createTopMetaItemHTML('紀錄者', formatTextValue(event.creator));
+    }
+    if (isInlineVariant && event.createdTime) {
+        topMetaHTML += createTopMetaItemHTML('時間', formatDateTime(event.createdTime));
+    }
     
     // (A) 共通區塊
     const commonSection = fieldMapping.common;
@@ -265,6 +285,12 @@ function renderEventLogReportHTML(event, contextContacts = [], options = {}) {
         }
         
         if (rawValue || field.type.includes('pill')) {
+             if (isInlineVariant && ['visitPlace', 'ourParticipants', 'clientParticipants'].includes(field.key)) {
+                if (rawValue) {
+                    topMetaHTML += createTopMetaItemHTML(field.label, displayHTML);
+                }
+                return;
+             }
              commonContent += createItemHTML(field.label, displayHTML, field.layout);
         }
     });
@@ -296,10 +322,8 @@ function renderEventLogReportHTML(event, contextContacts = [], options = {}) {
         </div>`
         : `${commonSectionHTML}${typeSectionHTML}`;
 
-    const headerHTML = isInlineVariant ? `
-        <div class="inline-report-meta">
-            <span class="inline-event-type-badge" style="--event-type-color: ${headerColor};">${eventTypeLabel}</span>
-        </div>` : `
+    const headerHTML = isInlineVariant && topMetaHTML ? `
+        <div class="report-top-meta">${topMetaHTML}</div>` : isInlineVariant ? '' : `
         <div class="report-header" style="--header-color: ${headerColor};">
              <h2 class="report-title">
                 ${event.eventName || '未命名事件'} 

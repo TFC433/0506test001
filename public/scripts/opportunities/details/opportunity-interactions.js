@@ -893,13 +893,13 @@ const OpportunityInteractions = (() => {
 
             .crm-stream-item.micro {
                 border-bottom: 1px solid color-mix(in srgb, var(--border-color) 30%, transparent);
-                max-width: min(86%, 920px);
+                max-width: min(68%, 760px);
                 padding: 5px 0 6px;
                 width: 100%;
             }
             .crm-stream-item.micro.editing {
                 border-bottom: 0;
-                max-width: min(86%, 920px);
+                max-width: min(68%, 760px);
                 padding: 4px 0 7px;
                 width: 100%;
             }
@@ -1260,6 +1260,36 @@ const OpportunityInteractions = (() => {
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-view {
                 max-width: 100%;
             }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta {
+                align-items: center;
+                background: color-mix(in srgb, var(--primary-bg) 78%, transparent);
+                border: 1px solid color-mix(in srgb, var(--border-color) 32%, transparent);
+                border-radius: 4px;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px 10px;
+                margin: 0 0 10px;
+                padding: 6px 8px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__item {
+                align-items: baseline;
+                display: inline-flex;
+                gap: 4px;
+                min-width: 0;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__label {
+                color: var(--text-muted);
+                font-size: 0.68rem;
+                font-weight: 600;
+                line-height: 1.25;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__value {
+                color: var(--text-secondary);
+                font-size: 0.74rem;
+                line-height: 1.3;
+                min-width: 0;
+                overflow-wrap: anywhere;
+            }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-workspace-grid {
                 display: grid;
                 gap: 12px;
@@ -1269,10 +1299,22 @@ const OpportunityInteractions = (() => {
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side {
                 min-width: 0;
             }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-main .section-title,
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .section-title {
+                border-bottom: 1px solid color-mix(in srgb, var(--border-color) 36%, transparent);
+                color: var(--text-primary);
+                font-size: 0.88rem;
+                font-weight: 700;
+                letter-spacing: 0;
+                margin: 0 0 8px;
+                padding-bottom: 6px;
+            }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-main .report-section {
-                border-top: 0;
+                background: color-mix(in srgb, var(--primary-bg) 58%, transparent);
+                border: 1px solid color-mix(in srgb, var(--border-color) 24%, transparent);
+                border-radius: 4px;
                 margin-top: 0;
-                padding-top: 0;
+                padding: 9px 10px;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .report-section {
                 background: color-mix(in srgb, var(--secondary-bg) 42%, transparent);
@@ -1305,12 +1347,16 @@ const OpportunityInteractions = (() => {
                 margin-bottom: 3px;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .info-item--narrative .info-value-box {
-                background: transparent;
-                border: 0;
+                background: color-mix(in srgb, var(--primary-bg) 76%, transparent);
+                border: 1px solid color-mix(in srgb, var(--border-color) 28%, transparent);
                 color: var(--text-primary);
                 font-size: 0.84rem;
                 line-height: 1.58;
-                padding: 0;
+                padding: 6px 8px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-main .info-item--narrative .info-value-box {
+                background: color-mix(in srgb, var(--secondary-bg) 44%, transparent);
+                border-color: color-mix(in srgb, var(--border-color) 32%, transparent);
             }
             @media (max-width: 900px) {
                 #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-workspace-grid {
