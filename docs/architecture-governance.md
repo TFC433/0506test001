@@ -1,128 +1,688 @@
 # TFC CRM Architecture Governance
 
-## 1. Purpose
+## Operational SaaS Governance Edition
 
-This document serves as the authoritative AI governance memory layer for the TFC CRM repository. Its primary purpose is to preserve established runtime contracts, hidden architectural relationships, and transitional migration bridges. By documenting these operational realities, this guide prevents accidental cleanup regressions and enables safe, AI-assisted development and maintenance. The overriding goal is operational stability, not architectural purity.
+## 2026-05 Workspace Productization Revision
 
-## 2. Repository Architecture Summary
+---
 
-The TFC CRM operates as a hybrid architecture currently undergoing a multi-generation transition:
+# 0. Governance Purpose
 
-* **Frontend:** A Vanilla JS Single Page Application (SPA) driven by hash-based routing, manual DOM mutation (`innerHTML`), and a global state object (`window.CRM_APP`). Modules are dynamically loaded via `document.write` synchronous blocking.
-* **Backend:** A Node.js/Express API layer utilizing a centralized Inversion of Control (IoC) container (`services/service-container.js`) for dependency injection.
-* **Data Layer (Dual-World):** The system operates across two data worlds: a legacy Google Sheets environment (RAW) for intake and operational workflows, and a modernized Supabase/PostgreSQL environment (CORE) for official, verified business entities.
+This document defines the mandatory engineering, architectural, product, and AI-collaboration governance rules for the TFC CRM project.
 
-## 3. Frontend Runtime Contracts
+This is NOT:
 
-### 3.1 SPA Router Cache Contract
+* a coding style guide
+* a generic frontend handbook
+* a refactoring wishlist
 
-The frontend SPA routing (`core/router.js`) relies on a strict caching mechanism to prevent redundant API calls during navigation.
+This IS:
 
-* **Contract:** The router skips executing module load functions if a page's `config.loaded` flag is `true`.
-* **Invalidation:** Any module that mutates backend data MUST call `CRM_APP.markStale('pageName')` (or passing an array of page names). This forces the router to drop the cache and re-fetch data upon the next visit to that specific route.
+* operational architecture governance
+* AI collaboration governance
+* product-language governance
+* repository safety governance
+* visual hierarchy governance
+* minimal-diff governance
 
-### 3.2 Modal Container Ownership
+All future:
 
-* **Contract:** The `loadResources()` function in `core/main.js` performs a destructive, brute-force `innerHTML` rewrite of the `#modal-container` by concatenating multiple HTML partials.
-* **Risk:** Do NOT bind DOM event listeners or manage state on modal elements prior to the completion of `loadResources()`. Running this function multiple times will orphan event listeners and destroy existing modal DOM nodes.
+* ChatGPT
+* Gemini
+* Codex
+* AI copilots
+* contributors
 
-### 3.3 Opportunity Detail Runtime Ownership
+must follow these rules.
 
-The Opportunity Details page (`public/scripts/opportunities/opportunity-details.js`) acts as a master orchestrator rather than a standard component.
+---
 
-* **Contract:** `loadOpportunityDetailPage()` forcefully wipes the `#page-opportunity-details` container and injects the `/views/opportunity-detail.html` template.
-* **Mount Targets:** It expects strict DOM ID mount targets (e.g., `#opportunity-info-card-container`, `[data-stepper-slot="opportunity-stage-stepper"]`) to exist in the template and delegates rendering to globally registered singletons (`OpportunityInfoCard`, `OpportunityStepper`).
+# 1. Core Product Direction
 
-### 3.4 Dynamic Style Injection
+TFC CRM is NOT:
 
-* **Contract:** Certain components (e.g., `_injectStylesForOppInfoCard()` in `opportunity-details-components.js`) dynamically append `<style>` tags to the document `<head>` at runtime.
-* **Risk:** These injected styles contain unscoped, highly generic class names (e.g., `.form-group`, `.form-col`, `.form-label`) that leak into the global CSS cascade. Do NOT add new generic class names via JavaScript injection to prevent collision with static stylesheets.
+* a dashboard template
+* a CRUD admin panel
+* a Bootstrap ERP clone
+* a generic SaaS starter
 
-## 4. RAW ↔ CORE Governance
+TFC CRM IS:
 
-### 4.1 Dual-World Architecture
+* an Operational Workspace
+* a CRM Intelligence Workspace
+* a Manufacturing/Sales Operational SaaS
+* a Human Workflow System
+* a Meeting & Opportunity Intelligence Hub
 
-The CRM operates across a RAW world (Google Sheets) and a CORE world (SQL).
+The UI philosophy is:
 
-* **Boundary Management:** `services/service-container.js` controls this boundary via dependency injection.
-* **Bridge Ownership:** `ContactService` holds explicit references to both `contactRawReader` (Sheets) and `contactSqlReader` (SQL). It is the authoritative bridge for promoting unverified intake data into official CRM entities.
+```text
+Operational clarity
+Structured hierarchy
+Low-noise workspace
+Information ownership
+Human workflow continuity
+```
 
-### 4.2 Identity Contracts
+NOT:
 
-* **RAW Identity:** Bound strictly to Google Sheet array indices / row indexes.
-* **CORE Identity:** Bound strictly to standard UUIDs.
-* **Migration Bridge Identity:** The RAW sheet uses index 23 (`ORIGINAL_ID`) and index 24 (`STATUS`) to track migration state. A `STATUS` of `'已升級'` acts as the definitive state-machine lock indicating a RAW record has crossed into the CORE SQL world.
+```text
+Card explosion
+Colorful dashboard
+Marketing SaaS
+Readonly form systems
+```
 
-### 4.3 Contact Upgrade Lifecycle
+---
 
-The operational flow for promoting a contact is a strict sequence:
+# 2. AI Collaboration Roles (MANDATORY)
 
-1. **Read:** `contactRawReader` fetches the RAW lead.
-2. **Bridge Execution:** `ContactService` processes the upgrade logic.
-3. **CORE Write:** `contactSqlWriter` inserts the official UUID-based SQL record.
-4. **RAW Archive:** `contactWriter` writes back to the Google Sheet, mutating the `STATUS` column to `'已升級'`.
+## 2.1 User — Product Owner (Highest Authority)
 
-* **Contract Risk:** This requires careful transactional synchronization. If the SQL write succeeds but the Sheet write fails, the system will yield phantom duplicates in the intake pipeline.
+The user owns:
 
-### 4.4 DTO Compatibility Bridges
+* workflow direction
+* layout direction
+* operational rhythm
+* UX judgment
+* PASS / NG authority
+* product feeling
+* hierarchy judgment
 
-Because the backend migrated to SQL but the frontend UI remains largely legacy, a translation layer is mandatory.
+The user does NOT need to:
 
-* **Contract:** `normalizeOppForUi(opp)` in `opportunity-details.js` acts as the definitive DTO bridge.
-* **Mappings:** It maps SQL properties back to legacy UI keys (e.g., `productDetails` ↔ `potentialSpecification`, `salesChannel` ↔ `channelDetails`, `businessType` ↔ `business_type`).
-* **Risk:** Do NOT remove this function or its mappings. Without it, the UI edit forms will render blank and subsequently overwrite valid SQL data with `undefined` upon saving.
+* debug selectors
+* trace runtime ownership
+* inspect DOM trees
+* explain CSS architecture
 
-## 5. Dangerous Cleanup Zones
+The user's product judgment overrides:
 
-The following areas appear to contain "redundant" or "legacy" code but are structurally load-bearing. **DO NOT CLEAN UP:**
+* AI preferences
+* generic UI trends
+* optimization assumptions
 
-1. **`config.js` `CONTACT_FIELDS` Array:** The integer values map strictly to Google Sheet columns A-Z (0-25 max). Do NOT shift these indices to "clean up" space. Repurposed fields (e.g., index 22) must keep their integer intact.
-2. **`contactRawReader` DI Injection:** Located in `service-container.js`. Removing this reader because the system is "on SQL now" will instantly sever the intake pipeline (OCR/Line Leads).
-3. **`normalizeOppForUi()`:** Located in `opportunity-details.js`. As documented above, this prevents catastrophic UI-driven data loss.
-4. **Generic Injected CSS Selectors:** Located in `opportunity-details-components.js`. Attempting to "clean" these by removing them will shatter the edit mode layout.
+---
 
-## 6. Current Technical Debt Classification
+## 2.2 ChatGPT — Architecture Governor
 
-### Stable
+ChatGPT owns:
 
-* Basic Express routing layers (`routes/*`).
-* Supabase client initialization (`config/supabase.js`).
-* SQL-only read/write domain services (e.g., `EventLogService`).
+* architecture judgment
+* governance enforcement
+* prompt strategy
+* scope control
+* PASS / NG translation
+* renderer boundary reasoning
+* visual-language translation
 
-### Transitional Bridges
+ChatGPT MUST:
 
-* `ContactService` dual-reader injection signature.
-* `normalizeOppForUi()` DTO mapping function.
+* protect architecture
+* avoid scope explosion
+* enforce minimal diff
+* distinguish runtime issues vs design issues
+* preserve ownership boundaries
 
-### Hidden Runtime Contracts
+ChatGPT MUST NOT:
 
-* `CRM_APP.markStale()` requirement for cache invalidation.
-* Destructive DOM wipe of `#modal-container` during SPA initialization.
-* Writer conflict avoidance synchronizing `salesChannel` and `channelDetails` in the frontend before submission.
+* redesign frozen layouts
+* reinterpret user product decisions
+* silently optimize unrelated systems
+* enter speculative refactor mode
+* replace product direction with generic SaaS trends
 
-### Governance Risks
+---
 
-* Dynamic style injection (`_injectStylesForOppInfoCard()`) leaking generic CSS classes into the global namespace.
-* `ContactService` acting as an ambiguous provider to downstream controllers that may not distinguish between RAW and CORE payloads.
+## 2.3 Gemini — Repo Brain / Forensics Specialist
 
-### Future Stabilization Candidates
+Gemini owns:
 
-* Eliminating the RAW Sheets intake pipeline entirely in favor of SQL intake tables.
-* Scoping or migrating dynamically injected CSS to dedicated static stylesheets.
+* repo tracing
+* ownership tracing
+* selector tracing
+* payload tracing
+* runtime tracing
+* forensic analysis
+* dependency tracing
 
-## 7. AI Collaboration Rules
+Gemini MUST:
 
-All future AI-assisted modifications MUST adhere to the following principles:
+* provide evidence-first analysis
+* cite exact ownership
+* identify safe modification boundaries
+* explain selector/runtime interactions
 
-1. **ZERO ASSUMPTION POLICY:** Do not assume standard framework lifecycles (like React/Vue). The codebase is highly procedural Vanilla JS.
-2. **Runtime-First Forensics:** Trace DOM mutation ownership and global object (`window.CRM_APP`) dependencies before modifying frontend files.
-3. **Evidence-First Modifications:** Base all changes on explicit file contents, not hypothetical best practices.
-4. **Minimal Diff Discipline:** Do not rewrite files or perform preventive refactoring. Execute only the precise changes required for the immediate fix or feature.
-5. **No Cleanup Without Tracing:** Never delete legacy variables, DTO mappings, or array indices without confirming they are disconnected from both the RAW Sheet pipeline and the SQL CORE pipeline.
+Gemini MUST NOT:
 
-## 8. Governance Workflow
+* make final UX/product judgments
+* redesign architecture without instruction
+* over-refactor
+* optimize outside scope
 
-Modifications to this document are strictly governed.
+---
 
-* This document is an architectural memory layer, not a roadmap.
-* Content may only be added or modified following a verifiable forensic census of the repository proving a change in a runtime contract, lifecycle behavior, or migration bridge.
+## 2.4 Codex — Repo Hands / Patch Executor
+
+Codex owns:
+
+* patch implementation
+* minimal diff execution
+* try & error prototyping
+* syntax verification
+* scoped UI iteration
+
+Codex MUST:
+
+* stay inside prompt scope
+* avoid unrelated cleanup
+* avoid broad rewrites
+* return exact modified files and diffs
+* run syntax checks
+
+Codex MUST NOT:
+
+* reinterpret product direction
+* redesign hierarchy
+* optimize architecture without instruction
+
+---
+
+# 3. ZERO ASSUMPTION POLICY (Highest Engineering Rule)
+
+No AI or contributor may assume:
+
+* runtime behavior
+* selector ownership
+* constructor order
+* DI order
+* payload structure
+* renderer ownership
+* route ownership
+* modal ownership
+* CSS application
+* hierarchy ownership
+
+without evidence.
+
+Every meaningful modification requires:
+
+* source evidence
+* runtime evidence
+* selector evidence
+* ownership evidence
+* payload evidence
+
+Never patch based on:
+
+* memory
+* intuition
+* "probably"
+* generic framework assumptions
+
+---
+
+# 4. Forensics-First Workflow
+
+Before modification:
+
+* inspect ownership
+* inspect runtime flow
+* inspect renderer boundaries
+* inspect selector specificity
+* inspect call sites
+* inspect payload availability
+
+Every forensic phase must clearly define:
+
+* target files
+* ownership questions
+* forbidden changes
+* expected output format
+* PASS / NG criteria
+
+Forensics must separate:
+
+* runtime failure
+* selector conflict
+* architecture failure
+* visual execution failure
+
+These are NOT the same problem.
+
+---
+
+# 5. Minimal Diff Governance
+
+All modifications must:
+
+* preserve architecture
+* preserve ownership
+* preserve stable systems
+* preserve unrelated workflows
+
+DO NOT:
+
+* opportunistically refactor
+* "clean up nearby code"
+* redesign unrelated UI
+* rename broadly
+* migrate patterns globally
+
+Fix ONLY the scoped problem.
+
+---
+
+# 6. Layout Freeze Governance
+
+When the Product Owner explicitly freezes a layout:
+
+DO NOT change:
+
+* grid structure
+* left/right ratios
+* section ordering
+* narrative flow
+* metadata structure
+* density allocation
+* panel hierarchy structure
+
+After Layout Freeze:
+ONLY these are adjustable:
+
+* borders
+* typography
+* surfaces
+* divider rhythm
+* rendering strength
+* contrast hierarchy
+* spacing refinement
+
+Architecture Governor MUST NOT:
+
+* continue redesigning layout
+* question frozen hierarchy
+* reinterpret operational rhythm
+
+---
+
+# 7. Workspace vs Form Renderer Governance
+
+Operational Workspace UI is NOT equivalent to:
+
+* modal report renderer
+* readonly form renderer
+* disabled textarea system
+* admin CRUD form
+
+Legacy form semantics:
+
+* info-item
+* info-value-box
+* report-section
+
+must NOT automatically control:
+Operational Workspace rendering.
+
+Governance Rule:
+
+```text
+Modal Renderer
+and
+Operational Workspace Renderer
+
+may share:
+- formatters
+- payload mapping
+- utility helpers
+
+but may NOT share:
+- visual semantics
+- DOM ownership
+- layout assumptions
+```
+
+---
+
+# 8. Editable Surface Language Governance
+
+TFC CRM uses:
+Editable Workspace Surface Language.
+
+View mode MUST:
+
+* preserve grouping
+* preserve ownership
+* preserve editable feeling
+* preserve future inline-edit compatibility
+
+View mode MUST NOT become:
+
+* readonly textarea
+* disabled form field
+* heavy input control
+* plain markdown article
+* borderless document dump
+
+Correct editable surface characteristics:
+
+* soft surface ownership
+* restrained boundaries
+* subtle grouping
+* non-input identity
+* future transformability into edit mode
+
+---
+
+# 9. Strong Prototype First Governance
+
+When hierarchy is unclear:
+
+DO:
+
+* establish strong ownership first
+* establish visible hierarchy first
+* establish structure clarity first
+
+THEN:
+
+* refine
+* soften
+* reduce noise
+* tune subtlety
+
+DO NOT:
+
+* start with ultra-subtle refinement
+* chase maturity before hierarchy exists
+
+Weak hierarchy + subtle rendering =
+muddy UI.
+
+---
+
+# 10. Anti-Color-Rail Governance
+
+TFC CRM rejects:
+
+* side color rails
+* bottom color bars
+* giant accent strips
+* rainbow dashboard hierarchy
+* oversized domain color zones
+
+Hierarchy must primarily come from:
+
+* spacing
+* typography
+* surface depth
+* border ownership
+* divider rhythm
+* contrast hierarchy
+
+NOT from:
+
+* loud color accents
+* decorative rails
+* dashboard-style identity markers
+
+Subtle tinting is allowed only when restrained.
+
+---
+
+# 11. L2 / L3 Hierarchy Governance
+
+TFC CRM operational workspaces use:
+
+## L1
+
+Workspace Shell
+
+## L2
+
+Section Ownership Container
+
+## L3
+
+Editable Content Surface
+
+Governance Rules:
+
+L2:
+
+* owns operational zones
+* owns strong hierarchy
+* owns section authority
+
+L3:
+
+* owns editable surfaces
+* remains visually weaker than L2
+* must not compete with L2 hierarchy
+
+Forbidden:
+
+* card explosion
+* nested heavy cards
+* every field becoming equal hierarchy
+
+---
+
+# 12. Structured Workspace Document Governance
+
+Operational workspaces should feel like:
+
+```text
+Structured Workspace Document
+```
+
+NOT:
+
+* pure forms
+* pure dashboards
+* pure articles
+
+Correct direction:
+
+* operational reading flow
+* editable future
+* grouped intelligence
+* structured narrative
+* workspace ownership
+
+---
+
+# 13. Typography Governance
+
+Hierarchy must primarily rely on:
+
+* font weight
+* spacing
+* divider rhythm
+* contrast
+* content density
+
+NOT:
+
+* giant colors
+* giant borders
+* excessive decorations
+
+Section Title:
+
+* strongest hierarchy
+
+Field Label:
+
+* muted and stable
+
+Field Value:
+
+* readable and operational
+
+Narrative:
+
+* readable
+* breathable
+* calm
+
+---
+
+# 14. Surface Governance
+
+Surface hierarchy must distinguish:
+
+* workspace shell
+* section ownership
+* editable surfaces
+
+Correct surface layering:
+
+* visible enough for ownership
+* restrained enough to avoid dashboard noise
+
+Avoid:
+
+* giant shadows
+* giant cards
+* inset form feel
+* heavy UI chrome
+
+---
+
+# 15. Runtime Ownership Governance
+
+Before patching UI:
+identify:
+
+* actual DOM owner
+* actual renderer owner
+* actual injected CSS owner
+* actual runtime lifecycle owner
+
+Do NOT patch:
+child selectors
+when the problem belongs to:
+parent ownership.
+
+---
+
+# 16. Modal Isolation Governance
+
+Modal renderers and inline renderers must remain isolated.
+
+Inline workspace evolution must NOT:
+
+* break modal rendering
+* pollute modal semantics
+* overload shared renderer assumptions
+
+---
+
+# 17. Prompt Governance
+
+All Gemini prompts:
+
+* English only
+* copy-paste safe
+* single-layer formatting
+* no nested fences
+* no fragile markdown structures
+
+All prompts must:
+
+* define scope
+* define forbidden areas
+* define output format
+* define safety checks
+* define PASS / NG targets
+
+---
+
+# 18. Code Output Governance
+
+Full file outputs MUST include:
+
+* file path
+* version
+* date
+* changelog
+* comments
+
+No omitted code allowed.
+
+Minimal diff outputs MUST include:
+
+* modified files
+* exact diff
+* verification results
+
+---
+
+# 19. No Preventive Optimization Governance
+
+Do NOT:
+
+* future-proof everything
+* redesign systems early
+* abstract prematurely
+* generalize without need
+
+Build only what current operational requirements justify.
+
+---
+
+# 20. Current Workspace Productization Status (2026-05)
+
+Current Activity Hub status:
+
+PASS:
+
+* expanded-event-shell ownership
+* inline workspace renderer separation
+* dual-column workspace
+* grouped metadata strip
+* L2 section ownership
+* soft editable L3 direction
+* modal isolation
+* lightweight interaction isolation
+
+LOCKED:
+
+* layout structure
+* metadata structure
+* dual-column ratios
+* narrative flow
+
+Current refinement stage:
+
+* surface rendering refinement
+* typography refinement
+* editable-surface refinement
+* hierarchy polishing
+
+NOT:
+
+* architecture redesign
+* renderer redesign
+* layout redesign
+
+---
+
+# 21. Final Governance Principle
+
+If the UI starts feeling like:
+
+* Bootstrap admin
+* readonly CRM form
+* dashboard widget wall
+* rainbow SaaS template
+
+STOP.
+
+TFC CRM must always feel like:
+
+```text
+A restrained operational workspace
+for real human workflows.
+```
