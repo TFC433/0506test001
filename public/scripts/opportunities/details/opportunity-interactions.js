@@ -1716,9 +1716,6 @@ const OpportunityInteractions = (() => {
                 white-space: pre-line;
                 word-break: normal;
             }
-            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-workspace-edit .operational-field__value {
-                padding: 0;
-            }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-report-control {
                 background: transparent;
                 border: 0;
@@ -1736,15 +1733,9 @@ const OpportunityInteractions = (() => {
                 resize: none;
                 width: 100%;
             }
-            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-workspace-edit .operational-field--narrative .inline-report-control {
-                padding: 9px 10px 10px;
-            }
-            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-workspace-edit .operational-field--meta .inline-report-control {
-                padding: 6px 8px 7px;
-            }
-            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-report-control:focus {
-                outline: 1px solid color-mix(in srgb, var(--workspace-domain-accent) 46%, var(--workspace-divider));
-                outline-offset: 2px;
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-workspace-edit .operational-field__value:focus-within {
+                border-color: color-mix(in srgb, var(--domain-accent, var(--workspace-domain-accent)) 38%, var(--workspace-divider));
+                box-shadow: 0 0 0 1px color-mix(in srgb, var(--domain-accent, var(--workspace-domain-accent)) 18%, transparent);
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__value .inline-report-control {
                 background: color-mix(in srgb, var(--primary-bg) 74%, var(--workspace-surface-panel));
