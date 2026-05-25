@@ -153,10 +153,11 @@ function _renderParticipantsPills(participantsStr, typeClass, contextContacts = 
 function renderEventLogReportHTML(event, contextContacts = [], options = {}) {
     const isInlineVariant = options && options.variant === 'inline';
     
-    const createItemHTML = (label, contentHTML) => {
+    const createItemHTML = (label, contentHTML, layout) => {
         const finalContent = (contentHTML && contentHTML !== '') ? contentHTML : '-';
+        const layoutClass = layout ? ` info-item--${layout}` : '';
         return `
-            <div class="info-item">
+            <div class="info-item${layoutClass}">
                 <div class="info-label">${label}</div>
                 <div class="info-value-box">${finalContent}</div>
             </div>`;
@@ -218,8 +219,34 @@ function renderEventLogReportHTML(event, contextContacts = [], options = {}) {
             fields: [] 
         }
     };
+    const layoutByFieldKey = {
+        visitPlace: 'meta',
+        ourParticipants: 'meta',
+        clientParticipants: 'meta',
+        eventContent: 'narrative',
+        clientQuestions: 'narrative',
+        clientIntelligence: 'narrative',
+        eventNotes: 'narrative',
+        iot_deviceScale: 'meta',
+        iot_lineFeatures: 'meta',
+        iot_productionStatus: 'meta',
+        iot_iotStatus: 'meta',
+        iot_painPoints: 'meta',
+        iot_painPointDetails: 'narrative',
+        iot_painPointAnalysis: 'narrative',
+        iot_systemArchitecture: 'meta',
+        dt_deviceScale: 'meta',
+        dt_processingType: 'meta',
+        dt_industry: 'meta'
+    };
+    Object.values(fieldMapping).forEach(section => {
+        section.fields.forEach(field => {
+            field.layout = layoutByFieldKey[field.key];
+        });
+    });
     
-    let sectionsHTML = '';
+    let commonSectionHTML = '';
+    let typeSectionHTML = '';
     
     // (A) 共通區塊
     const commonSection = fieldMapping.common;
@@ -238,11 +265,11 @@ function renderEventLogReportHTML(event, contextContacts = [], options = {}) {
         }
         
         if (rawValue || field.type.includes('pill')) {
-             commonContent += createItemHTML(field.label, displayHTML);
+             commonContent += createItemHTML(field.label, displayHTML, field.layout);
         }
     });
     if (commonContent) {
-        sectionsHTML += `<div class="report-section"><h3 class="section-title">${commonSection.title}</h3>${commonContent}</div>`;
+        commonSectionHTML = `<div class="report-section"><h3 class="section-title">${commonSection.title}</h3>${commonContent}</div>`;
     }
 
     // (B) 專屬區塊
@@ -253,14 +280,21 @@ function renderEventLogReportHTML(event, contextContacts = [], options = {}) {
         typeSection.fields.forEach(field => {
             const rawValue = event[field.key] || event[field.key.replace(/^(iot|dt)_/, '')];
             if (rawValue) {
-                typeContent += createItemHTML(field.label, formatTextValue(rawValue));
+                typeContent += createItemHTML(field.label, formatTextValue(rawValue), field.layout);
             }
         });
         
         if (typeContent) {
-            sectionsHTML += `<div class="report-section"><h3 class="section-title">${typeSection.title}</h3>${typeContent}</div>`;
+            typeSectionHTML = `<div class="report-section"><h3 class="section-title">${typeSection.title}</h3>${typeContent}</div>`;
         }
     }
+
+    const sectionsHTML = isInlineVariant && typeSectionHTML
+        ? `<div class="report-workspace-grid">
+            <div class="workspace-main">${commonSectionHTML}</div>
+            <div class="workspace-side">${typeSectionHTML}</div>
+        </div>`
+        : `${commonSectionHTML}${typeSectionHTML}`;
 
     const headerHTML = isInlineVariant ? `
         <div class="inline-report-meta">

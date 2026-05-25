@@ -1257,6 +1257,66 @@ const OpportunityInteractions = (() => {
                 overflow-wrap: anywhere;
                 padding: 5px 7px;
             }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-view {
+                max-width: 100%;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-workspace-grid {
+                display: grid;
+                gap: 12px;
+                grid-template-columns: minmax(0, 1.7fr) minmax(220px, 0.9fr);
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-main,
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side {
+                min-width: 0;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-main .report-section {
+                border-top: 0;
+                margin-top: 0;
+                padding-top: 0;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .report-section {
+                background: color-mix(in srgb, var(--secondary-bg) 42%, transparent);
+                border: 1px solid color-mix(in srgb, var(--border-color) 38%, transparent);
+                border-radius: 4px;
+                margin: 0;
+                padding: 8px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .info-item--meta {
+                margin-bottom: 4px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .info-item--meta .info-label {
+                font-size: 0.68rem;
+                margin-bottom: 1px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .info-item--meta .info-value-box {
+                background: color-mix(in srgb, var(--primary-bg) 72%, transparent);
+                border-color: color-mix(in srgb, var(--border-color) 26%, transparent);
+                font-size: 0.76rem;
+                line-height: 1.32;
+                padding: 3px 5px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .info-item--narrative {
+                margin-bottom: 9px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .info-item--narrative .info-label {
+                color: var(--text-secondary);
+                font-size: 0.76rem;
+                font-weight: 700;
+                margin-bottom: 3px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .info-item--narrative .info-value-box {
+                background: transparent;
+                border: 0;
+                color: var(--text-primary);
+                font-size: 0.84rem;
+                line-height: 1.58;
+                padding: 0;
+            }
+            @media (max-width: 900px) {
+                #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-workspace-grid {
+                    grid-template-columns: minmax(0, 1fr);
+                }
+            }
             .interaction-form-modal[hidden] {
                 display: none !important;
             }
