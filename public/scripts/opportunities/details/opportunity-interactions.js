@@ -204,7 +204,9 @@ const OpportunityInteractions = (() => {
             }
 
             const locationValue = locationItem.querySelector('.report-top-meta__value');
-            if (locationValue) {
+            const hasEditableLocation = locationValue
+                && locationValue.querySelector('[data-report-field="visitPlace"], input, textarea');
+            if (locationValue && !hasEditableLocation) {
                 locationValue.textContent = '';
                 if (locationText) {
                     const locationBadge = document.createElement('span');
@@ -966,7 +968,7 @@ const OpportunityInteractions = (() => {
                     safeUpdatedEvent[key] = updatedEvent[key];
                 });
             }
-            _eventReportCache[eventId] = Object.assign({}, cachedEvent, payload, safeUpdatedEvent, {
+            _eventReportCache[eventId] = Object.assign({}, cachedEvent, safeUpdatedEvent, payload, {
                 eventType: originalEventType
             });
             _editingReportEventId = null;
@@ -1512,6 +1514,9 @@ const OpportunityInteractions = (() => {
                 grid-template-columns: 1fr 1fr 1fr;
                 margin: 0 0 12px;
                 padding: 8px 0;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-workspace-edit .report-top-meta {
+                padding-top: 2px;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .report-top-meta__group {
                 border-right: 1px solid var(--workspace-divider);
