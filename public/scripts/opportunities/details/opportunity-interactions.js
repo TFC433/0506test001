@@ -37,6 +37,7 @@ const OpportunityInteractions = (() => {
     let _isCreatingInlineEvent = false;
     let _inlineEventDraft = null;
     let _editingReportEventId = null;
+    let _isManagementMode = false;
     const _expandedReports = new Set();
     const _eventReportCache = {};
     const _pendingEventTypeSwitches = {};
@@ -46,6 +47,34 @@ const OpportunityInteractions = (() => {
     // ✅ [Fix] 系統自動產生類型：必須與鎖定證據一致
     // Evidence: const isLockedRecord = ['系統事件', '事件報告'].includes(item.eventType);
     const SYSTEM_GENERATED_TYPES = ['系統事件', '事件報告'];
+
+    function _isEventReportInteraction(interaction) {
+        return interaction && interaction.eventType === '事件報告';
+    }
+
+    function _isLockedInteraction(interaction) {
+        return interaction && SYSTEM_GENERATED_TYPES.includes(interaction.eventType);
+    }
+
+    function _getInteractionReportEventId(interaction) {
+        if (!interaction) return '';
+        const rawSummary = interaction.contentSummary || '';
+        const eventMeta = Array.isArray(interaction.EventLogs) && interaction.EventLogs[0] ? interaction.EventLogs[0] : null;
+        const eventIdMatch = rawSummary.match(/\[[^\]]+\]\(event_log_id=([a-zA-Z0-9_-]+)\)/);
+        return eventMeta && (eventMeta.eventId || eventMeta.id || eventMeta.event_log_id)
+            ? eventMeta.eventId || eventMeta.id || eventMeta.event_log_id
+            : interaction.eventId || interaction.event_log_id || (eventIdMatch ? eventIdMatch[1] : '');
+    }
+
+    function _isDeletableLightweightInteraction(interaction) {
+        return !!(
+            interaction
+            && interaction.interactionId
+            && !_isLockedInteraction(interaction)
+            && !_isEventReportInteraction(interaction)
+            && _getRenderWeight(interaction) === 'micro'
+        );
+    }
 
     // 子頁籤點擊事件
     function _handleTabClick(event) {
@@ -839,16 +868,13 @@ const OpportunityInteractions = (() => {
         const recorder = escapeHtml(interaction.recorder || interaction.author || interaction.modifier || '系統');
 
         const rawSummary = interaction.contentSummary || '(無內容)';
-        const isEventReportInteraction = interaction.eventType === '事件報告';
+        const isEventReportInteraction = _isEventReportInteraction(interaction);
         const eventMeta = Array.isArray(interaction.EventLogs) && interaction.EventLogs[0] ? interaction.EventLogs[0] : null;
         const eventReportNameStr = eventMeta && eventMeta.eventName
             ? escapeHtml(eventMeta.eventName)
             : isEventReportInteraction && interaction.eventTitle ? escapeHtml(interaction.eventTitle) : '';
         let summaryHtml = escapeHtml(rawSummary).replace(/\n/g, '<br>');
-        const eventIdMatch = rawSummary.match(/\[[^\]]+\]\(event_log_id=([a-zA-Z0-9_-]+)\)/);
-        const reportEventId = eventMeta && (eventMeta.eventId || eventMeta.id || eventMeta.event_log_id)
-            ? eventMeta.eventId || eventMeta.id || eventMeta.event_log_id
-            : interaction.eventId || interaction.event_log_id || (eventIdMatch ? eventIdMatch[1] : '');
+        const reportEventId = _getInteractionReportEventId(interaction);
         const nextActionHtml = interaction.nextAction
             ? `<span class="stream-next-action">下一步：${escapeHtml(interaction.nextAction)}</span>`
             : '';
@@ -862,10 +888,9 @@ const OpportunityInteractions = (() => {
         )).trim();
 
         const rowId = interaction.interactionId;
-        const rowIndex = interaction.rowIndex;
 
         // 鎖定邏輯（必須與 showForEditing 證據一致）
-        const isLocked = ['系統事件', '事件報告'].includes(interaction.eventType);
+        const isLocked = _isLockedInteraction(interaction);
 
         const renderWeight = _getRenderWeight(interaction);
 
@@ -883,12 +908,10 @@ const OpportunityInteractions = (() => {
                 </button>
             `;
 
-            // Strategy A: only render delete for editable rows with a numeric rowIndex.
-            const rowIndexNum = Number(rowIndex);
-            if (!isLocked && Number.isFinite(rowIndexNum)) {
+            if (_isDeletableLightweightInteraction(interaction)) {
                 buttonsHtml += `
-                    <button type="button" class="stream-action-btn danger" onclick="OpportunityInteractions.confirmDelete('${rowId}', ${rowIndexNum})" title="Delete">
-                        Delete
+                    <button type="button" class="stream-action-btn danger activity-management-only" onclick="OpportunityInteractions.confirmDelete('${rowId}')" title="Delete">
+                        刪除
                     </button>
                 `;
             }
@@ -1026,6 +1049,8 @@ const OpportunityInteractions = (() => {
 
         _renderTimelineList('#discussion-timeline', discussionInteractions);
         _renderTimelineList('#activity-log-timeline', activityLogInteractions);
+        _applyManagementModeState();
+        _updateEventReportsToggleButton();
     }
 
     /**
@@ -1343,11 +1368,60 @@ const OpportunityInteractions = (() => {
         }
     }
 
-    async function toggleInlineReport(interactionId, eventId) {
+    function _getEventReportDescriptors() {
+        return _interactions
+            .filter(interaction => _isEventReportInteraction(interaction) && interaction.interactionId)
+            .map(interaction => ({
+                interactionId: interaction.interactionId,
+                eventId: _getInteractionReportEventId(interaction)
+            }))
+            .filter(item => item.eventId);
+    }
+
+    function _findInlineReportCard(interactionId) {
         if (!_container) return;
 
-        const cardItem = Array.from(_container.querySelectorAll('.crm-stream-item.operational[data-interaction-id]'))
+        return Array.from(_container.querySelectorAll('.crm-stream-item.operational[data-interaction-id]'))
             .find(element => element.getAttribute('data-interaction-id') === String(interactionId));
+    }
+
+    function _isInlineReportExpanded(interactionId) {
+        const cardItem = _findInlineReportCard(interactionId);
+        const inlineContainer = cardItem && cardItem.querySelector('.inline-event-report');
+        return !!(inlineContainer && _expandedReports.has(interactionId) && !inlineContainer.hidden);
+    }
+
+    function _updateEventReportsToggleButton() {
+        if (!_container) return;
+        const button = _container.querySelector('#activity-hub-expand-reports-btn');
+        if (!button) return;
+        const reports = _getEventReportDescriptors();
+        const allExpanded = reports.length > 0 && reports.every(item => _isInlineReportExpanded(item.interactionId));
+        button.textContent = allExpanded ? '收合事件報告' : '展開事件報告';
+        button.setAttribute('aria-pressed', allExpanded ? 'true' : 'false');
+    }
+
+    function _collapseInlineReport(interactionId, eventId) {
+        const cardItem = _findInlineReportCard(interactionId);
+        if (!cardItem) return;
+
+        const inlineContainer = cardItem.querySelector('.inline-event-report');
+        if (!inlineContainer || inlineContainer.hidden) return;
+
+        const toggleButton = cardItem.querySelector('[data-inline-report-toggle]');
+        inlineContainer.hidden = true;
+        cardItem.classList.remove('has-inline-report-expanded');
+        _expandedReports.delete(interactionId);
+        if (_editingReportEventId === eventId) _editingReportEventId = null;
+        _clearInlineReportDynamicActions(interactionId);
+        if (toggleButton) toggleButton.textContent = '展開';
+        _updateEventReportsToggleButton();
+    }
+
+    async function _expandInlineReport(interactionId, eventId, options = {}) {
+        if (!_container) return;
+
+        const cardItem = _findInlineReportCard(interactionId);
         if (!cardItem) return;
 
         const streamCard = cardItem.querySelector('.stream-card');
@@ -1360,18 +1434,12 @@ const OpportunityInteractions = (() => {
             cardItem.appendChild(inlineContainer);
         }
 
-        const toggleButton = streamCard.querySelector('[data-inline-report-toggle]');
-        const isExpanded = _expandedReports.has(interactionId) && !inlineContainer.hidden;
-        if (isExpanded) {
-            inlineContainer.hidden = true;
-            cardItem.classList.remove('has-inline-report-expanded');
-            _expandedReports.delete(interactionId);
-            if (_editingReportEventId === eventId) _editingReportEventId = null;
-            _clearInlineReportDynamicActions(interactionId);
-            if (toggleButton) toggleButton.textContent = '展開';
+        if (_isInlineReportExpanded(interactionId)) {
+            _updateEventReportsToggleButton();
             return;
         }
 
+        const toggleButton = streamCard.querySelector('[data-inline-report-toggle]');
         inlineContainer.hidden = false;
         cardItem.classList.add('has-inline-report-expanded');
         inlineContainer.innerHTML = '<div class="inline-event-report__status">載入報告中...</div>';
@@ -1380,6 +1448,7 @@ const OpportunityInteractions = (() => {
 
         if (!eventId) {
             inlineContainer.innerHTML = '<div class="inline-event-report__status">找不到事件報告 ID。</div>';
+            _updateEventReportsToggleButton();
             return;
         }
 
@@ -1392,12 +1461,44 @@ const OpportunityInteractions = (() => {
             }
             if (!result.success || !result.data) throw new Error(result.error || '找不到該筆紀錄');
             _eventReportCache[eventId] = result.data;
-            _renderInlineReport(interactionId, eventId, _editingReportEventId === eventId ? 'edit' : 'view');
+            const mode = options.forceView ? 'view' : (_editingReportEventId === eventId ? 'edit' : 'view');
+            _renderInlineReport(interactionId, eventId, mode);
         } catch (error) {
             if (error.message !== 'Unauthorized') {
                 inlineContainer.innerHTML = `<div class="inline-event-report__status">讀取事件報告失敗: ${escapeHtml(error.message)}</div>`;
             }
+        } finally {
+            _updateEventReportsToggleButton();
         }
+    }
+
+    async function toggleInlineReport(interactionId, eventId) {
+        const cardItem = _findInlineReportCard(interactionId);
+        if (!cardItem) return;
+
+        if (_isInlineReportExpanded(interactionId)) {
+            _collapseInlineReport(interactionId, eventId);
+            return;
+        }
+
+        await _expandInlineReport(interactionId, eventId);
+    }
+
+    async function toggleAllEventReports() {
+        const reports = _getEventReportDescriptors();
+        const shouldCollapse = reports.length > 0 && reports.every(item => _isInlineReportExpanded(item.interactionId));
+        if (shouldCollapse) {
+            reports.forEach(item => _collapseInlineReport(item.interactionId, item.eventId));
+            _updateEventReportsToggleButton();
+            return;
+        }
+
+        for (const item of reports) {
+            if (!_isInlineReportExpanded(item.interactionId)) {
+                await _expandInlineReport(item.interactionId, item.eventId, { forceView: true });
+            }
+        }
+        _updateEventReportsToggleButton();
     }
 
     // 動態注入樣式（保留既有行為並補齊精確的時間軸幾何與 CSS）
@@ -1499,6 +1600,21 @@ const OpportunityInteractions = (() => {
         _renderInlineReport(interactionId, eventId, 'view');
     }
 
+    function _applyManagementModeState() {
+        if (!_container) return;
+        _container.classList.toggle('is-activity-management-mode', _isManagementMode);
+        const button = _container.querySelector('#activity-hub-management-toggle-btn');
+        if (button) {
+            button.textContent = _isManagementMode ? '資料維護中' : '管理';
+            button.setAttribute('aria-pressed', _isManagementMode ? 'true' : 'false');
+        }
+    }
+
+    function toggleManagementMode() {
+        _isManagementMode = !_isManagementMode;
+        _applyManagementModeState();
+    }
+
     function _injectStyles() {
         const styleId = 'interactions-dynamic-styles';
         
@@ -1580,6 +1696,24 @@ const OpportunityInteractions = (() => {
             .activity-hub-header-actions .action-btn {
                 font-size: 0.78rem;
                 padding: 6px 10px;
+            }
+            .activity-hub-header-actions .activity-hub-secondary-action {
+                background: transparent;
+                border-color: color-mix(in srgb, var(--border-color) 70%, transparent);
+                color: var(--text-secondary);
+            }
+            .activity-hub-header-actions .activity-hub-secondary-action:hover {
+                background: color-mix(in srgb, var(--primary-color) 8%, transparent);
+                color: var(--text-primary);
+            }
+            #tab-content-interactions.is-activity-management-mode #activity-hub-management-toggle-btn {
+                background: color-mix(in srgb, var(--danger-color, #dc2626) 8%, transparent);
+                border-color: color-mix(in srgb, var(--danger-color, #dc2626) 42%, transparent);
+                color: var(--danger-color, #dc2626);
+            }
+            #tab-content-interactions.is-activity-management-mode #activity-hub-management-toggle-btn:hover {
+                background: color-mix(in srgb, var(--danger-color, #dc2626) 12%, transparent);
+                color: var(--danger-color, #dc2626);
             }
 
             .crm-timeline-content {
@@ -1816,6 +1950,15 @@ const OpportunityInteractions = (() => {
             }
             .stream-action-btn.danger {
                 color: var(--text-muted);
+            }
+            .stream-action-btn.danger:hover {
+                color: var(--danger-color, #dc2626);
+            }
+            #tab-content-interactions .activity-management-only {
+                display: none;
+            }
+            #tab-content-interactions.is-activity-management-mode .activity-management-only {
+                display: inline-flex;
             }
 
             #tab-content-interactions .crm-stream-item.operational .expanded-event-shell {
@@ -2576,18 +2719,22 @@ const OpportunityInteractions = (() => {
     /**
      * 公開：刪除確認
      */
-    function confirmDelete(interactionId, rowIndex) {
+    function confirmDelete(interactionId) {
         if (!_container) return;
+        if (!_isManagementMode) return;
 
         const item = _interactions.find(i => i.interactionId === interactionId);
-        const summary = item ? (item.contentSummary || '此紀錄').substring(0, 30) + '...' : '此筆紀錄';
+        if (!_isDeletableLightweightInteraction(item)) return;
 
-        const message = `您確定要永久刪除這筆互動紀錄嗎？\n\n"${summary}"\n\n此操作無法復原。`;
+        const message = '確定刪除此互動紀錄？';
 
         showConfirmDialog(message, async () => {
             showLoading('正在刪除紀錄...');
             try {
                 await authedFetch(`/api/interactions/${interactionId}`, { method: 'DELETE' });
+                _interactions = _interactions.filter(interaction => interaction.interactionId !== interactionId);
+                if (_editingInteractionId === interactionId) _editingInteractionId = null;
+                _updateTimelineView();
                 
                 // [Phase 8.10 Dashboard Refresh Fix] 
                 if (window.dashboardManager && typeof window.dashboardManager.markStale === 'function') {
@@ -2674,6 +2821,8 @@ const OpportunityInteractions = (() => {
         saveInlineEventCreate,
         cancelInlineEventCreate,
         toggleInlineReport,
+        toggleAllEventReports,
+        toggleManagementMode,
         startInlineReportEdit,
         saveInlineReportEdit,
         cancelInlineReportEdit,
