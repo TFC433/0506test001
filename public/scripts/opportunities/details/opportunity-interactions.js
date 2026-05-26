@@ -717,18 +717,25 @@ const OpportunityInteractions = (() => {
             renderOperationalWorkspaceEditHTML(_inlineEventDraft, _getLinkedContactsContext()),
             _inlineEventDraft
         );
+        const draftEventName = escapeHtml(_inlineEventDraft.eventName || '新事件報告');
 
         return `
             <div class="crm-stream-item operational has-inline-report-expanded" data-inline-event-create-row>
                 <div class="expanded-event-shell">
+                    <div class="stream-card">
+                        <div class="stream-card-header">
+                            <label class="inline-edit-field" style="margin:0; flex:1;">
+                                <span>事件名稱</span>
+                                <input type="text" class="inline-edit-input" id="inline-draft-event-name" value="${draftEventName}" placeholder="請輸入事件名稱...">
+                            </label>
+                            <div class="footer-actions">
+                                <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineEventCreate()">Save</button>
+                                <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineEventCreate()">Cancel</button>
+                            </div>
+                        </div>
+                    </div>
                     <div class="inline-event-report">
                         ${reportHTML}
-                    </div>
-                    <div class="stream-card-footer">
-                        <div class="footer-actions">
-                            <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineEventCreate()">Save</button>
-                            <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineEventCreate()">Cancel</button>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -784,19 +791,27 @@ const OpportunityInteractions = (() => {
         const recorder = escapeHtml(interaction.recorder || interaction.author || interaction.modifier || '系統');
 
         const rawSummary = interaction.contentSummary || '(無內容)';
+        const eventMeta = Array.isArray(interaction.EventLogs) && interaction.EventLogs[0] ? interaction.EventLogs[0] : null;
+        const eventReportTypeStr = eventMeta && eventMeta.eventType
+            ? escapeHtml(_getInlineEventTypeLabel(String(eventMeta.eventType).trim()))
+            : typeStr;
+        const eventReportNameStr = eventMeta && eventMeta.eventName
+            ? escapeHtml(eventMeta.eventName)
+            : '';
         let summaryHtml = escapeHtml(rawSummary).replace(/\n/g, '<br>');
         const eventIdMatch = rawSummary.match(/\[[^\]]+\]\(event_log_id=([a-zA-Z0-9_-]+)\)/);
-        const reportEventId = eventIdMatch ? eventIdMatch[1] : '';
+        const reportEventId = eventIdMatch
+            ? eventIdMatch[1]
+            : eventMeta && (eventMeta.eventId || eventMeta.id || eventMeta.event_log_id)
+            ? eventMeta.eventId || eventMeta.id || eventMeta.event_log_id
+            : '';
         const nextActionHtml = interaction.nextAction
             ? `<span class="stream-next-action">下一步：${escapeHtml(interaction.nextAction)}</span>`
             : '';
 
-        // [Phase 8 Patch] Restore legacy clickable event report links inside contentSummary
+        // Keep legacy event_log_id markdown readable without reopening the old modal path.
         const linkRegex = /\[(.*?)\]\(event_log_id=([a-zA-Z0-9_-]+)\)/g;
-        summaryHtml = summaryHtml.replace(linkRegex, (fullMatch, text, eventId) => {
-            const safeEventId = eventId.replace(/'/g, "\\'").replace(/"/g, '&quot;');
-            return `<a href="#" class="text-link" onclick="event.preventDefault(); showEventLogReport('${safeEventId}')">${text}</a>`;
-        });
+        summaryHtml = summaryHtml.replace(linkRegex, (fullMatch, text) => `<span class="stream-next-action">${escapeHtml(text)}</span>`);
 
         const rowId = interaction.interactionId;
         const rowIndex = interaction.rowIndex;
@@ -861,7 +876,10 @@ const OpportunityInteractions = (() => {
                 <div class="expanded-event-shell">
                     <div class="stream-card">
                         <div class="stream-card-header">
-                            <strong>${typeStr}</strong>
+                            <strong>
+                                <span class="stream-type stream-type-badge">${eventReportTypeStr}</span>
+                                ${eventReportNameStr || typeStr}
+                            </strong>
                             <span class="feed-time">${escapeHtml(timeStr)}</span>
                         </div>
                         <div class="stream-card-body">
@@ -1092,6 +1110,8 @@ const OpportunityInteractions = (() => {
                 }
 
                 const draftValues = _collectInlineReportDraftValues(inlineContainer);
+                const eventNameInput = inlineContainer.querySelector('#inline-draft-event-name');
+                if (eventNameInput) draftValues.eventName = String(eventNameInput.value || '').trim();
                 _inlineEventDraft = _clearInlineReportDomainFields(Object.assign({}, _inlineEventDraft || {}, draftValues, {
                     eventType: targetEventType,
                     opportunityId: _context.opportunityId || '',
@@ -1129,10 +1149,12 @@ const OpportunityInteractions = (() => {
         if (!frame) return;
 
         const draftValues = _collectInlineReportDraftValues(frame);
+        const eventNameInput = frame.querySelector('#inline-draft-event-name');
+        const eventNameValue = String(eventNameInput ? eventNameInput.value : '').trim();
         const payload = Object.assign({}, draftValues, {
             eventType: String((_inlineEventDraft && _inlineEventDraft.eventType) || draftValues.eventType || 'general').trim() || 'general',
             opportunityId: _context.opportunityId,
-            eventName: draftValues.eventName || (_inlineEventDraft && _inlineEventDraft.eventName) || '新事件報告'
+            eventName: eventNameValue || (_inlineEventDraft && _inlineEventDraft.eventName) || '新事件報告'
         });
         if (_context.companyId) payload.companyId = _context.companyId;
 

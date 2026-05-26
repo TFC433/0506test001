@@ -59,8 +59,7 @@ exports.createEventLog = async (req, res) => {
         if (oppId || compId) {
           try {
             const eventName = req.body.eventName || req.body.eventTitle || '未命名報告';
-            // Maintain legacy regex pattern: [Text](event_log_id=ID) to ensure frontend clickability
-            const summary = `[查看事件報告詳情](event_log_id=${eventId})`;
+            const summary = `已建立事件報告: "${eventName}"`;
 
             await services.interactionService.createInteraction({
               opportunityId: oppId,
