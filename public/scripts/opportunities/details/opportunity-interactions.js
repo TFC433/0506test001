@@ -79,6 +79,17 @@ const OpportunityInteractions = (() => {
     }
 
     // 子頁籤點擊事件
+    function _getActivityBadgeTone(interaction) {
+        const eventMeta = interaction && Array.isArray(interaction.EventLogs) && interaction.EventLogs[0] ? interaction.EventLogs[0] : null;
+        if ((eventMeta && eventMeta.isVoided === true) || _isLockedInteraction(interaction)) return 'gray';
+        if (_isEventReportInteraction(interaction)) return 'purple';
+        return interaction ? 'interaction' : 'gray';
+    }
+
+    function _getActivityBadgeToneClass(interaction) {
+        return `activity-badge-tone-${_getActivityBadgeTone(interaction)}`;
+    }
+
     function _handleTabClick(event) {
         if (!event.target.classList.contains('sub-tab-link')) return;
 
@@ -485,11 +496,11 @@ const OpportunityInteractions = (() => {
             ? _getInlineEventTypeInfo(String(eventMeta.eventType).trim())
             : null;
         const eventReportTypeBadgeHtml = eventReportTypeInfo
-            ? `<span class="inline-event-type-badge" style="--event-type-color: ${escapeHtml(eventReportTypeInfo.color)};">${escapeHtml(eventReportTypeInfo.label)}</span>`
+            ? `<span class="inline-event-type-badge">${escapeHtml(eventReportTypeInfo.label)}</span>`
             : '';
         const title = eventMeta && eventMeta.eventName ? eventMeta.eventName : fallbackTitle;
         return `
-            <span class="stream-type stream-type-badge">事件報告</span>
+            <span class="stream-type stream-type-badge activity-badge-tone-purple">事件報告</span>
             ${eventReportTypeBadgeHtml}
             ${escapeHtml(title || '')}`;
     }
@@ -872,6 +883,7 @@ const OpportunityInteractions = (() => {
             : rawTime;
 
         const typeStr = escapeHtml(interaction.eventTitle || interaction.eventType || '未分類');
+        const badgeToneClass = _getActivityBadgeToneClass(interaction);
         const recorder = escapeHtml(interaction.recorder || interaction.author || interaction.modifier || '系統');
 
         const rawSummary = interaction.contentSummary || '(無內容)';
@@ -933,7 +945,7 @@ const OpportunityInteractions = (() => {
                 <div class="crm-stream-item micro">
                     <div class="stream-row-main">
                         <div class="stream-main-copy">
-                            <span class="stream-type stream-type-badge">${typeStr}</span>
+                            <span class="stream-type stream-type-badge ${badgeToneClass}">${typeStr}</span>
                             <span class="stream-summary">${summaryHtml}</span>
                         </div>
                         <span class="stream-row-time">${escapeHtml(timeStr)}</span>
@@ -1799,6 +1811,26 @@ const OpportunityInteractions = (() => {
                 background: color-mix(in srgb, var(--primary-color) 8%, transparent);
                 color: var(--text-primary);
             }
+            .activity-hub-header-actions .activity-create-interaction-action {
+                background: color-mix(in srgb, #5f7f72 10%, var(--secondary-bg));
+                border-color: color-mix(in srgb, #5f7f72 32%, var(--border-color));
+                color: color-mix(in srgb, #36584d 84%, var(--text-secondary));
+            }
+            .activity-hub-header-actions .activity-create-interaction-action:hover {
+                background: color-mix(in srgb, #5f7f72 14%, var(--secondary-bg));
+                border-color: color-mix(in srgb, #5f7f72 42%, var(--border-color));
+                color: #36584d;
+            }
+            .activity-hub-header-actions .activity-create-event-action {
+                background: color-mix(in srgb, #7c3aed 8%, var(--secondary-bg));
+                border-color: color-mix(in srgb, #7c3aed 32%, var(--border-color));
+                color: color-mix(in srgb, #6d28d9 80%, var(--text-secondary));
+            }
+            .activity-hub-header-actions .activity-create-event-action:hover {
+                background: color-mix(in srgb, #7c3aed 12%, var(--secondary-bg));
+                border-color: color-mix(in srgb, #7c3aed 42%, var(--border-color));
+                color: #5b21b6;
+            }
             #tab-content-interactions.is-activity-management-mode #activity-hub-management-toggle-btn {
                 background: color-mix(in srgb, var(--danger-color, #dc2626) 8%, transparent);
                 border-color: color-mix(in srgb, var(--danger-color, #dc2626) 42%, transparent);
@@ -1968,6 +2000,21 @@ const OpportunityInteractions = (() => {
                 font-size: 0.72rem;
                 line-height: 1;
                 padding: 2px 5px;
+            }
+            .stream-type-badge.activity-badge-tone-interaction {
+                background: color-mix(in srgb, #5f7f72 9%, transparent);
+                border-color: color-mix(in srgb, #5f7f72 26%, var(--border-color));
+                color: color-mix(in srgb, #36584d 76%, var(--text-secondary));
+            }
+            .stream-type-badge.activity-badge-tone-purple {
+                background: color-mix(in srgb, #7c3aed 8%, transparent);
+                border-color: color-mix(in srgb, #7c3aed 28%, var(--border-color));
+                color: color-mix(in srgb, #6d28d9 78%, var(--text-secondary));
+            }
+            .stream-type-badge.activity-badge-tone-gray {
+                background: color-mix(in srgb, var(--secondary-bg) 94%, transparent);
+                border-color: color-mix(in srgb, var(--border-color) 52%, transparent);
+                color: var(--text-muted);
             }
             .stream-summary {
                 color: var(--text-secondary);
@@ -2160,10 +2207,10 @@ const OpportunityInteractions = (() => {
                 width: auto;
             }
             #tab-content-interactions .crm-stream-item.operational .inline-event-type-badge {
-                background: color-mix(in srgb, var(--event-type-color) 7%, transparent);
-                border: 1px solid color-mix(in srgb, var(--event-type-color) 24%, var(--border-color));
+                background: color-mix(in srgb, var(--secondary-bg) 96%, transparent);
+                border: 1px solid color-mix(in srgb, var(--border-color) 56%, transparent);
                 border-radius: 1px;
-                color: color-mix(in srgb, var(--event-type-color) 74%, var(--text-secondary));
+                color: var(--text-secondary);
                 display: inline-block !important;
                 font-size: 0.78rem;
                 font-weight: 560;
@@ -2543,9 +2590,9 @@ const OpportunityInteractions = (() => {
                 opacity: 0.9;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-event-type-chip.is-selected {
-                background: color-mix(in srgb, var(--event-type-color) 10%, var(--secondary-bg));
-                border-color: color-mix(in srgb, var(--event-type-color) 34%, var(--border-color));
-                color: var(--event-type-color);
+                background: color-mix(in srgb, var(--secondary-bg) 96%, transparent);
+                border-color: color-mix(in srgb, var(--border-color) 58%, transparent);
+                color: var(--text-secondary);
                 cursor: default;
                 font-weight: 750;
                 opacity: 1;
