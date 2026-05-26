@@ -1511,7 +1511,7 @@ const OpportunityInteractions = (() => {
                 border-radius: 0;
                 display: grid;
                 gap: 0;
-                grid-template-columns: 1fr 1fr 1fr;
+                grid-template-columns: 1fr 1fr 2fr;
                 margin: 0 0 12px;
                 padding: 8px 0;
             }
