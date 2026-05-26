@@ -175,7 +175,10 @@ async function loadOpportunityDetailPage(opportunityId) {
             if (Interactions && typeof Interactions.init === 'function') {
                 Interactions.init(
                     interactionContainer,
-                    { opportunityId: normalizedOpp.opportunityId },
+                    {
+                        opportunityId: normalizedOpp.opportunityId,
+                        linkedContacts: linkedContacts || []
+                    },
                     interactions || []
                 );
             }

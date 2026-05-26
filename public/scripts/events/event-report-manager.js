@@ -266,11 +266,16 @@ function renderOperationalWorkspaceEditHTML(event, contextContacts = []) {
             const isSelected = selectedSet.has(candidate.value.toLowerCase());
             return `<button type="button" class="inline-participant-selector__chip${isSelected ? ' is-selected' : ''}" data-participant-value="${formatAttributeValue(candidate.value)}" aria-pressed="${isSelected ? 'true' : 'false'}">${formatTextValue(candidate.label)}</button>`;
         }).join('');
+        const candidatesHTML = chipsHTML
+            ? `<div class="inline-participant-selector__candidates">${chipsHTML}</div>`
+            : key === 'clientParticipants'
+                ? '<div class="inline-participant-selector__empty">無關聯聯絡人，請手動新增</div>'
+                : '';
 
         return `
         <div class="inline-participant-selector" data-participant-selector="${key}">
             <input type="hidden" data-report-field="${key}" value="${formatAttributeValue(hiddenValue)}">
-            ${chipsHTML ? `<div class="inline-participant-selector__candidates">${chipsHTML}</div>` : ''}
+            ${candidatesHTML}
             <input class="inline-participant-selector__manual" type="text" data-participant-manual value="${formatAttributeValue(manualNames.join(', '))}" placeholder="手動新增姓名">
         </div>`;
     };

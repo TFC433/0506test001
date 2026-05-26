@@ -1813,20 +1813,47 @@ const OpportunityInteractions = (() => {
                 gap: 4px;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-participant-selector__chip {
-                background: color-mix(in srgb, var(--primary-bg) 84%, var(--workspace-surface-panel));
-                border: 1px solid color-mix(in srgb, var(--workspace-divider) 45%, transparent);
-                border-radius: 999px;
-                color: #374151;
+                background: transparent;
+                border: 1px solid var(--border-color);
+                border-radius: 1px;
+                box-shadow: none;
+                color: var(--text-secondary);
                 cursor: pointer;
-                font: inherit;
-                line-height: 1.2;
-                padding: 2px 7px;
+                display: inline-block;
+                font-size: 0.78rem;
+                font-weight: 400;
+                line-height: 1;
+                padding: 1px 4px;
             }
-            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-participant-selector__chip.is-selected {
-                background: color-mix(in srgb, var(--domain-accent, var(--workspace-domain-accent)) 14%, #ffffff);
-                border-color: color-mix(in srgb, var(--domain-accent, var(--workspace-domain-accent)) 52%, var(--workspace-divider));
-                color: #111827;
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-participant-selector__chip:not(.is-selected) {
+                border-color: color-mix(in srgb, var(--border-color) 24%, transparent);
+                color: color-mix(in srgb, var(--text-muted, #6b7280) 62%, transparent);
+                opacity: 0.78;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-participant-selector__chip:not(.is-selected):hover {
+                background: color-mix(in srgb, var(--text-muted, #6b7280) 4%, transparent);
+                border-color: color-mix(in srgb, var(--border-color) 42%, transparent);
+                color: color-mix(in srgb, var(--text-muted, #6b7280) 82%, var(--text-secondary));
+                opacity: 0.9;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-participant-selector[data-participant-selector="ourParticipants"] .inline-participant-selector__chip.is-selected {
+                background: color-mix(in srgb, var(--accent-blue) 10%, var(--secondary-bg));
+                border-color: color-mix(in srgb, var(--accent-blue) 30%, var(--border-color));
+                color: var(--accent-blue);
                 font-weight: 700;
+                opacity: 1;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-participant-selector[data-participant-selector="clientParticipants"] .inline-participant-selector__chip.is-selected {
+                background: color-mix(in srgb, var(--accent-green) 10%, var(--secondary-bg));
+                border-color: color-mix(in srgb, var(--accent-green) 30%, var(--border-color));
+                color: var(--accent-green);
+                font-weight: 700;
+                opacity: 1;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-participant-selector__empty {
+                color: var(--text-muted, #6b7280);
+                font-size: 0.78rem;
+                line-height: 1.3;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-participant-selector__manual {
                 background: color-mix(in srgb, var(--primary-bg) 74%, var(--workspace-surface-panel));
