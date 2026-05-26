@@ -252,8 +252,8 @@ function renderOperationalWorkspaceEditHTML(event, contextContacts = []) {
         systemMetaHTML += createMetaRowHTML('最後修改時間', formatDateTime(updatedTime));
     }
     let meetingMetaHTML = createMetaRowHTML('會議地點', createInputHTML('visitPlace', event.visitPlace));
-    meetingMetaHTML += createMetaRowHTML('我方與會', _renderParticipantsPills(event.ourParticipants, 'our-side'));
-    meetingMetaHTML += createMetaRowHTML('客戶與會', _renderParticipantsPills(event.clientParticipants, 'client-side', contextContacts));
+    meetingMetaHTML += createMetaRowHTML('我方與會', createInputHTML('ourParticipants', event.ourParticipants));
+    meetingMetaHTML += createMetaRowHTML('客戶與會', createInputHTML('clientParticipants', event.clientParticipants));
     const topMetaHTML = [
         createMetaGroupHTML(systemMetaHTML, 'system'),
         createMetaGroupHTML(meetingMetaHTML, 'meeting'),

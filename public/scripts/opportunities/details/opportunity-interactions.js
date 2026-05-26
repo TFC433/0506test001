@@ -934,8 +934,6 @@ const OpportunityInteractions = (() => {
 
         const payload = {};
         const excludedFields = new Set([
-            'ourParticipants',
-            'clientParticipants',
             'participantRelationships',
             'participantRelationship',
             'relationshipMappings',
