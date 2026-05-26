@@ -38,6 +38,7 @@ const OpportunityInteractions = (() => {
     let _inlineEventDraft = null;
     let _editingReportEventId = null;
     let _isManagementMode = false;
+    let _showSystemRecords = false;
     const _expandedReports = new Set();
     const _eventReportCache = {};
     const _pendingEventTypeSwitches = {};
@@ -1043,6 +1044,9 @@ const OpportunityInteractions = (() => {
             // [Fix] Placement Rule: Only pure '系統事件' remains in activity-log. 
             // '事件報告' (Event Reports) are explicitly treated as discussions.
             if (interaction.eventType === '系統事件') {
+                if (_isManagementMode && _showSystemRecords) {
+                    discussionInteractions.push(interaction);
+                }
                 activityLogInteractions.push(interaction);
             } else {
                 discussionInteractions.push(interaction);
@@ -1673,11 +1677,35 @@ const OpportunityInteractions = (() => {
             button.textContent = _isManagementMode ? '資料維護中' : '管理';
             button.setAttribute('aria-pressed', _isManagementMode ? 'true' : 'false');
         }
+        _applySystemRecordsButtonState();
+    }
+
+    function _applySystemRecordsButtonState() {
+        if (!_container) return;
+        const button = _container.querySelector('#activity-hub-system-records-btn');
+        if (!button) return;
+        button.hidden = !_isManagementMode;
+        button.textContent = _showSystemRecords ? '隱藏系統紀錄' : '顯示系統紀錄';
+        button.setAttribute('aria-pressed', _showSystemRecords ? 'true' : 'false');
+    }
+
+    function toggleSystemRecordsVisibility() {
+        if (!_container || !_isManagementMode) return;
+        _showSystemRecords = !_showSystemRecords;
+        _applySystemRecordsButtonState();
+        _updateTimelineView();
     }
 
     function toggleManagementMode() {
+        const wasShowingSystemRecords = _showSystemRecords;
         _isManagementMode = !_isManagementMode;
+        if (!_isManagementMode) {
+            _showSystemRecords = false;
+        }
         _applyManagementModeState();
+        if (wasShowingSystemRecords || _showSystemRecords) {
+            _updateTimelineView();
+        }
     }
 
     function _injectStyles() {
@@ -2906,6 +2934,7 @@ const OpportunityInteractions = (() => {
         toggleInlineReport,
         toggleAllEventReports,
         toggleManagementMode,
+        toggleSystemRecordsVisibility,
         startInlineReportEdit,
         saveInlineReportEdit,
         cancelInlineReportEdit,
