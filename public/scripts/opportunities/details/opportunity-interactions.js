@@ -34,6 +34,8 @@ const OpportunityInteractions = (() => {
     let _container = null;
     let _editingInteractionId = null;
     let _isCreatingInline = false;
+    let _isCreatingInlineEvent = false;
+    let _inlineEventDraft = null;
     let _editingReportEventId = null;
     const _expandedReports = new Set();
     const _eventReportCache = {};
@@ -144,10 +146,39 @@ const OpportunityInteractions = (() => {
             _focusInlineCreateRow();
             return;
         }
+        _isCreatingInlineEvent = false;
+        _inlineEventDraft = null;
         _isCreatingInline = true;
         _editingInteractionId = null;
         _updateTimelineView();
         _focusInlineCreateRow();
+    }
+
+    function showInlineEventCreateForm() {
+        if (!_container) return;
+        if (_isCreatingInlineEvent) {
+            _focusInlineEventCreateRow();
+            return;
+        }
+
+        _isCreatingInline = false;
+        _editingInteractionId = null;
+        _isCreatingInlineEvent = true;
+        _inlineEventDraft = {
+            eventType: 'general',
+            eventName: '新事件報告',
+            visitPlace: '',
+            ourParticipants: '',
+            clientParticipants: '',
+            eventContent: '',
+            clientQuestions: '',
+            clientIntelligence: '',
+            eventNotes: '',
+            opportunityId: _context.opportunityId || '',
+            companyId: _context.companyId || ''
+        };
+        _updateTimelineView();
+        _focusInlineEventCreateRow();
     }
 
     /**
@@ -673,6 +704,46 @@ const OpportunityInteractions = (() => {
         `;
     }
 
+    function _renderInlineEventCreateDraftHTML() {
+        if (!_inlineEventDraft || typeof renderOperationalWorkspaceEditHTML !== 'function') {
+            return `
+            <div class="crm-stream-item operational has-inline-report-expanded" data-inline-event-create-row>
+                <div class="inline-event-report__status">Inline report create renderer is unavailable.</div>
+            </div>
+        `;
+        }
+
+        const reportHTML = _applyOperationalWorkspaceDomainTint(
+            renderOperationalWorkspaceEditHTML(_inlineEventDraft, _getLinkedContactsContext()),
+            _inlineEventDraft
+        );
+
+        return `
+            <div class="crm-stream-item operational has-inline-report-expanded" data-inline-event-create-row>
+                <div class="expanded-event-shell">
+                    <div class="inline-event-report">
+                        ${reportHTML}
+                    </div>
+                    <div class="stream-card-footer">
+                        <div class="footer-actions">
+                            <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineEventCreate()">Save</button>
+                            <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineEventCreate()">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    function _initInlineEventCreateDraftControls() {
+        if (!_container) return;
+        const draftRow = _container.querySelector('[data-inline-event-create-row]');
+        if (!draftRow) return;
+        _initInlineCreateEventTypeSwitchControl(draftRow);
+        _initInlineParticipantSelectors(draftRow);
+        _autosizeInlineReportTextareas(draftRow);
+    }
+
     /**
      * 【鑑識修補】動態取得 Left/Right 排版屬性
      * Source: window.CRM_APP.systemConfig['時間軸佈局']
@@ -826,15 +897,20 @@ const OpportunityInteractions = (() => {
         const createRowHtml = containerSelector.includes('discussion') && _isCreatingInline
             ? _renderInlineMicroCreateForm()
             : '';
+        const createEventRowHtml = containerSelector.includes('discussion') && _isCreatingInlineEvent
+            ? _renderInlineEventCreateDraftHTML()
+            : '';
         if (allInteractions.length === 0) {
             historyList.innerHTML = `
                 <div class="crm-timeline-content">
+                    ${createEventRowHtml}
                     ${createRowHtml}
                     <div class="alert alert-info">
                         ${containerSelector.includes('discussion') ? '尚無動態' : '尚無系統活動'}
                     </div>
                 </div>
             `;
+            if (createEventRowHtml) _initInlineEventCreateDraftControls();
             return;
         }
 
@@ -852,10 +928,12 @@ const OpportunityInteractions = (() => {
         // Structural visual fix: Bind the center line dynamically to the true rendered content
         historyList.innerHTML = `
             <div class="crm-timeline-content">
+                ${createEventRowHtml}
                 ${createRowHtml}
                 ${listHtml}
             </div>
         `;
+        if (createEventRowHtml) _initInlineEventCreateDraftControls();
     }
 
     /**
@@ -983,9 +1061,104 @@ const OpportunityInteractions = (() => {
         _autosizeInlineEditTextareas();
     }
 
+    function _focusInlineEventCreateRow() {
+        if (!_container) return;
+        const row = _container.querySelector('[data-inline-event-create-row]');
+        if (!row) return;
+        row.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const firstField = row.querySelector('[data-report-field="eventName"], [data-report-field="eventContent"], [data-report-field]');
+        if (firstField && typeof firstField.focus === 'function') firstField.focus();
+        _initInlineEventCreateDraftControls();
+    }
+
     function cancelInlineCreate() {
         _isCreatingInline = false;
         _updateTimelineView();
+    }
+
+    function _initInlineCreateEventTypeSwitchControl(inlineContainer) {
+        if (!inlineContainer) return;
+        inlineContainer.querySelectorAll('.inline-event-type-selector[data-protected-event-type-switch="true"]').forEach(selector => {
+            if (selector.dataset.createInitialized === 'true') return;
+            selector.dataset.createInitialized = 'true';
+            selector.addEventListener('click', event => {
+                const chip = event.target.closest('.inline-event-type-chip[data-event-type-value]');
+                if (!chip || !selector.contains(chip) || chip.classList.contains('is-selected')) return;
+
+                const targetEventType = String(chip.getAttribute('data-event-type-value') || '').trim();
+                if (!INLINE_REPORT_EVENT_TYPES.has(targetEventType)) {
+                    showNotification('Save blocked: unsupported event type.', 'error');
+                    return;
+                }
+
+                const draftValues = _collectInlineReportDraftValues(inlineContainer);
+                _inlineEventDraft = _clearInlineReportDomainFields(Object.assign({}, _inlineEventDraft || {}, draftValues, {
+                    eventType: targetEventType,
+                    opportunityId: _context.opportunityId || '',
+                    companyId: _context.companyId || ''
+                }));
+                _updateTimelineView();
+                _focusInlineEventCreateRow();
+            });
+        });
+    }
+
+    async function _refetchInteractions() {
+        if (!_context.opportunityId) return;
+        try {
+            const res = await authedFetch(`/api/opportunities/${_context.opportunityId}/details`);
+            if (res && res.success && res.data && Array.isArray(res.data.interactions)) {
+                _interactions = res.data.interactions;
+                _updateTimelineView();
+            }
+        } catch (error) {
+            console.warn('[Interactions] Failed to refetch interactions after event create:', error);
+        }
+    }
+
+    function cancelInlineEventCreate() {
+        _isCreatingInlineEvent = false;
+        _inlineEventDraft = null;
+        _updateTimelineView();
+    }
+
+    async function saveInlineEventCreate() {
+        if (!_container) return;
+
+        const frame = _container.querySelector('[data-inline-event-create-row]');
+        if (!frame) return;
+
+        const draftValues = _collectInlineReportDraftValues(frame);
+        const payload = Object.assign({}, draftValues, {
+            eventType: String((_inlineEventDraft && _inlineEventDraft.eventType) || draftValues.eventType || 'general').trim() || 'general',
+            opportunityId: _context.opportunityId,
+            eventName: draftValues.eventName || (_inlineEventDraft && _inlineEventDraft.eventName) || '新事件報告'
+        });
+        if (_context.companyId) payload.companyId = _context.companyId;
+
+        showLoading('Saving event report...');
+        try {
+            const result = await authedFetch('/api/events', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            if (result && result.success === false) {
+                throw new Error(result.details || result.error || 'Save failed');
+            }
+
+            if (window.dashboardManager && typeof window.dashboardManager.markStale === 'function') {
+                window.dashboardManager.markStale();
+            }
+
+            await _refetchInteractions();
+            _isCreatingInlineEvent = false;
+            _inlineEventDraft = null;
+            _updateTimelineView();
+        } catch (error) {
+            if (error.message !== 'Unauthorized') showNotification(`Save failed: ${error.message}`, 'error');
+        } finally {
+            hideLoading();
+        }
     }
 
     async function saveInlineCreate() {
@@ -2413,12 +2586,15 @@ const OpportunityInteractions = (() => {
     return {
         init,
         showCreateForm,
+        showInlineEventCreateForm,
         showForEditing,
         startInlineEdit,
         saveInlineEdit,
         cancelInlineEdit,
         saveInlineCreate,
         cancelInlineCreate,
+        saveInlineEventCreate,
+        cancelInlineEventCreate,
         toggleInlineReport,
         startInlineReportEdit,
         saveInlineReportEdit,
