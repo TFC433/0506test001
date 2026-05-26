@@ -367,14 +367,23 @@ function renderOperationalWorkspaceEditHTML(event, contextContacts = []) {
         </div>`;
     };
 
+    const eventTypeFallbackLabels = { general: '一般', iot: 'IOT', dt: 'DT', dx: 'DX' };
+    const supportedEventTypes = ['general', 'iot', 'dt', 'dx'];
     const eventTypeConfig = new Map((window.CRM_APP?.systemConfig['事件類型'] || []).map(t => [t.value, { note: t.note, color: t.color }]));
-    const typeInfo = eventTypeConfig.get(event.eventType) || { note: (event.eventType || 'unknown').toUpperCase(), color: null };
+    const typeInfo = eventTypeConfig.get(event.eventType) || { note: eventTypeFallbackLabels[event.eventType] || (event.eventType || 'unknown').toUpperCase(), color: null };
     const eventTypeLabel = typeInfo.note;
     const fallbackAccentByType = { iot: '#2563eb', dt: '#6d5bd0', dx: '#6d5bd0' };
     const headerColor = typeInfo.color || fallbackAccentByType[event.eventType] || '#6c757d';
     const updatedTime = event.updatedTime || event.updated_time || event.updatedAt || event.updated_at;
+    const eventTypeSelectHTML = `<select class="inline-report-control inline-report-control--select inline-event-type-select" data-report-field="eventType" data-protected-event-type-switch="true" aria-label="事件種類">
+        ${supportedEventTypes.map(typeValue => {
+            const optionInfo = eventTypeConfig.get(typeValue);
+            const optionLabel = optionInfo?.note || eventTypeFallbackLabels[typeValue] || typeValue.toUpperCase();
+            return `<option value="${formatAttributeValue(typeValue)}"${event.eventType === typeValue ? ' selected' : ''}>${formatTextValue(optionLabel)}</option>`;
+        }).join('')}
+    </select>`;
 
-    let systemMetaHTML = createMetaRowHTML('事件種類', `<span class="inline-event-type-badge" style="--event-type-color: ${headerColor};">${formatTextValue(eventTypeLabel)}</span>`);
+    let systemMetaHTML = createMetaRowHTML('事件種類', eventTypeSelectHTML);
     if (event.createdTime) {
         systemMetaHTML += createMetaRowHTML('建立時間', formatDateTime(event.createdTime));
     }

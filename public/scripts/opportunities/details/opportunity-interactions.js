@@ -37,6 +37,8 @@ const OpportunityInteractions = (() => {
     let _editingReportEventId = null;
     const _expandedReports = new Set();
     const _eventReportCache = {};
+    const _pendingEventTypeSwitches = {};
+    const INLINE_REPORT_EVENT_TYPES = new Set(['general', 'iot', 'dt', 'dx']);
 
     // ✅ [Fix] 系統自動產生類型：必須與鎖定證據一致
     // Evidence: const isLockedRecord = ['系統事件', '事件報告'].includes(item.eventType);
@@ -284,6 +286,7 @@ const OpportunityInteractions = (() => {
 
             const reportHTML = renderOperationalWorkspaceEditHTML(eventData, _getLinkedContactsContext());
             inlineContainer.innerHTML = _applyOperationalWorkspaceDomainTint(reportHTML, eventData);
+            _initInlineEventTypeSwitchControl(inlineContainer, interactionId, eventId);
             _initInlineParticipantSelectors(inlineContainer);
             _autosizeInlineReportTextareas(inlineContainer);
             return;
@@ -355,6 +358,127 @@ const OpportunityInteractions = (() => {
             };
             textarea.addEventListener('input', resize);
             resize();
+        });
+    }
+
+    function _collectInlineReportDraftValues(inlineContainer) {
+        const values = {};
+        if (!inlineContainer) return values;
+        inlineContainer.querySelectorAll('[data-report-field]').forEach(control => {
+            const fieldName = control.getAttribute('data-report-field');
+            if (!fieldName) return;
+            values[fieldName] = control.value;
+        });
+        return values;
+    }
+
+    function _pickInlineReportCommonDraftFields(draftValues) {
+        const commonFields = [
+            'visitPlace',
+            'ourParticipants',
+            'clientParticipants',
+            'eventContent',
+            'clientQuestions',
+            'clientIntelligence',
+            'eventNotes'
+        ];
+        return commonFields.reduce((result, fieldName) => {
+            if (Object.prototype.hasOwnProperty.call(draftValues, fieldName)) {
+                result[fieldName] = draftValues[fieldName];
+            }
+            return result;
+        }, {});
+    }
+
+    function _clearInlineReportDomainFields(eventDraft) {
+        [
+            'deviceScale',
+            'lineFeatures',
+            'productionStatus',
+            'iotStatus',
+            'painPoints',
+            'painPointDetails',
+            'painPointAnalysis',
+            'systemArchitecture',
+            'processingType',
+            'industry',
+            'iot_deviceScale',
+            'iot_lineFeatures',
+            'iot_productionStatus',
+            'iot_iotStatus',
+            'iot_painPoints',
+            'iot_painPointDetails',
+            'iot_painPointAnalysis',
+            'iot_systemArchitecture',
+            'dt_deviceScale',
+            'dt_processingType',
+            'dt_industry'
+        ].forEach(fieldName => {
+            delete eventDraft[fieldName];
+        });
+        return eventDraft;
+    }
+
+    function _confirmInlineEventTypeSwitch(message, onConfirm) {
+        if (typeof showConfirmDialog === 'function') {
+            showConfirmDialog(message, onConfirm);
+            return;
+        }
+        if (window.confirm(message)) onConfirm();
+    }
+
+    function _renderInlineReportEditDraft(interactionId, eventId, eventDraft) {
+        const inlineContainer = _getInlineReportContainer(interactionId);
+        if (!inlineContainer || typeof renderOperationalWorkspaceEditHTML !== 'function') return;
+        const reportHTML = renderOperationalWorkspaceEditHTML(eventDraft, _getLinkedContactsContext());
+        inlineContainer.innerHTML = _applyOperationalWorkspaceDomainTint(reportHTML, eventDraft);
+        _initInlineEventTypeSwitchControl(inlineContainer, interactionId, eventId);
+        _initInlineParticipantSelectors(inlineContainer);
+        _autosizeInlineReportTextareas(inlineContainer);
+    }
+
+    function _initInlineEventTypeSwitchControl(inlineContainer, interactionId, eventId) {
+        if (!inlineContainer) return;
+        inlineContainer.querySelectorAll('[data-protected-event-type-switch="true"][data-report-field="eventType"]').forEach(selectElement => {
+            if (selectElement.dataset.initialized === 'true') return;
+            selectElement.dataset.initialized = 'true';
+            selectElement.addEventListener('change', () => {
+                handleInlineEventTypeChange(interactionId, eventId, selectElement);
+            });
+        });
+    }
+
+    function handleInlineEventTypeChange(interactionId, eventId, selectElement) {
+        const cachedEvent = _eventReportCache[eventId];
+        const originalEventType = cachedEvent && String(cachedEvent.eventType || '').trim();
+        if (!selectElement || !cachedEvent || !originalEventType) {
+            if (selectElement) selectElement.value = originalEventType || '';
+            showNotification('Save blocked: cached event type is unavailable.', 'error');
+            return;
+        }
+
+        const previousConfirmedType = _pendingEventTypeSwitches[eventId] || originalEventType;
+        const targetEventType = String(selectElement.value || '').trim();
+        if (!INLINE_REPORT_EVENT_TYPES.has(targetEventType)) {
+            selectElement.value = previousConfirmedType;
+            showNotification('Save blocked: unsupported event type.', 'error');
+            return;
+        }
+        if (!targetEventType || targetEventType === previousConfirmedType) {
+            selectElement.value = previousConfirmedType;
+            return;
+        }
+
+        const message = '切換事件種類將重置目前種類的專屬欄位；儲存時系統會自動將舊專屬資料保留到備註。確定要切換嗎？';
+        selectElement.value = previousConfirmedType;
+        _confirmInlineEventTypeSwitch(message, () => {
+            const inlineContainer = _getInlineReportContainer(interactionId);
+            const commonDraftFields = _pickInlineReportCommonDraftFields(_collectInlineReportDraftValues(inlineContainer));
+            _pendingEventTypeSwitches[eventId] = targetEventType;
+            const eventDraft = _clearInlineReportDomainFields(Object.assign({}, cachedEvent, commonDraftFields, {
+                eventType: targetEventType
+            }));
+            _renderInlineReportEditDraft(interactionId, eventId, eventDraft);
         });
     }
 
@@ -981,6 +1105,15 @@ const OpportunityInteractions = (() => {
             return;
         }
 
+        const pendingEventType = _pendingEventTypeSwitches[eventId] && String(_pendingEventTypeSwitches[eventId]).trim();
+        const confirmedTargetEventType = INLINE_REPORT_EVENT_TYPES.has(pendingEventType) ? pendingEventType : '';
+        const finalEventType = confirmedTargetEventType || originalEventType;
+        if (!finalEventType) {
+            const message = 'Save blocked: event type is unavailable.';
+            showNotification(message, 'error');
+            return;
+        }
+
         const payload = {};
         const excludedFields = new Set([
             'participantRelationships',
@@ -994,7 +1127,7 @@ const OpportunityInteractions = (() => {
             if (!fieldName || excludedFields.has(fieldName)) return;
             payload[fieldName] = control.value;
         });
-        payload.eventType = originalEventType;
+        payload.eventType = finalEventType;
 
         try {
             const result = await authedFetch(`/api/events/${eventId}`, {
@@ -1015,9 +1148,10 @@ const OpportunityInteractions = (() => {
                     safeUpdatedEvent[key] = updatedEvent[key];
                 });
             }
-            _eventReportCache[eventId] = Object.assign({}, cachedEvent, safeUpdatedEvent, payload, {
-                eventType: originalEventType
+            _eventReportCache[eventId] = Object.assign({}, cachedEvent, payload, safeUpdatedEvent, {
+                eventType: safeUpdatedEvent.eventType || finalEventType
             });
+            delete _pendingEventTypeSwitches[eventId];
             _editingReportEventId = null;
             _expandedReports.add(interactionId);
             _renderInlineReport(interactionId, eventId, 'view');
@@ -1033,6 +1167,7 @@ const OpportunityInteractions = (() => {
     }
 
     function cancelInlineReportEdit(interactionId, eventId) {
+        delete _pendingEventTypeSwitches[eventId];
         _editingReportEventId = null;
         _expandedReports.add(interactionId);
         _renderInlineReport(interactionId, eventId, 'view');
