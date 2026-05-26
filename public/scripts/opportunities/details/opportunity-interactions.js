@@ -810,7 +810,11 @@ const OpportunityInteractions = (() => {
 
         // Keep legacy event_log_id markdown readable without reopening the old modal path.
         const linkRegex = /\[(.*?)\]\(event_log_id=([a-zA-Z0-9_-]+)\)/g;
-        summaryHtml = summaryHtml.replace(linkRegex, (fullMatch, text) => `<span class="stream-next-action">${escapeHtml(text)}</span>`);
+        summaryHtml = summaryHtml.replace(linkRegex, (fullMatch, text) => (
+            String(text || '').trim() === 'event_ref'
+                ? ''
+                : `<span class="stream-next-action">${escapeHtml(text)}</span>`
+        )).trim();
 
         const rowId = interaction.interactionId;
         const rowIndex = interaction.rowIndex;

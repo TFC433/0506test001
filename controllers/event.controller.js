@@ -59,12 +59,11 @@ exports.createEventLog = async (req, res) => {
         if (oppId || compId) {
           try {
             const eventName = req.body.eventName || req.body.eventTitle || '未命名報告';
-            const summary = `已建立事件報告: "${eventName}"`;
+            const summary = `已建立事件報告: "${eventName}" [event_ref](event_log_id=${eventId})`;
 
             await services.interactionService.createInteraction({
               opportunityId: oppId,
               companyId: compId,
-              eventId: eventId,
               interactionTime: req.body.createdTime || new Date().toISOString(),
               eventType: '事件報告',
               eventTitle: eventName,

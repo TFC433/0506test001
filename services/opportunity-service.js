@@ -228,11 +228,30 @@ class OpportunityService {
                 };
             });
             
-            const interactions = (scopedInteractions || [])
-                .sort((a, b) => new Date(b.interactionTime || b.createdTime) - new Date(a.interactionTime || a.createdTime));
-
             const eventLogs = (scopedEventLogs || [])
                 .sort((a, b) => new Date(b.createdTime || 0) - new Date(a.createdTime || 0));
+            const eventLogsById = new Map();
+            eventLogs.forEach(eventLog => {
+                const eventId = eventLog && (eventLog.eventId || eventLog.id || eventLog.event_log_id);
+                if (eventId) eventLogsById.set(String(eventId), eventLog);
+            });
+            const extractLegacyEventId = (summary) => {
+                const match = String(summary || '').match(/event_log_id=([a-zA-Z0-9_-]+)/);
+                return match ? match[1] : '';
+            };
+            const interactions = (scopedInteractions || [])
+                .map(interaction => {
+                    const eventId = interaction && (
+                        interaction.eventId
+                        || interaction.eventLogId
+                        || extractLegacyEventId(interaction.contentSummary)
+                    );
+                    const matchedEventLog = eventId ? eventLogsById.get(String(eventId)) : null;
+                    return Object.assign({}, interaction, {
+                        EventLogs: matchedEventLog ? [matchedEventLog] : []
+                    });
+                })
+                .sort((a, b) => new Date(b.interactionTime || b.createdTime) - new Date(a.interactionTime || a.createdTime));
 
             const normalizedOppCompany = this._normalizeCompanyName(opportunityInfo.customerCompany);
             
