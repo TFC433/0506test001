@@ -444,6 +444,48 @@ const OpportunityInteractions = (() => {
         };
     }
 
+    function _renderEventReportHeaderTitleHTML(eventMeta, fallbackTitle) {
+        const eventReportTypeInfo = eventMeta && eventMeta.eventType
+            ? _getInlineEventTypeInfo(String(eventMeta.eventType).trim())
+            : null;
+        const eventReportTypeBadgeHtml = eventReportTypeInfo
+            ? `<span class="inline-event-type-badge" style="--event-type-color: ${escapeHtml(eventReportTypeInfo.color)};">${escapeHtml(eventReportTypeInfo.label)}</span>`
+            : '';
+        const title = eventMeta && eventMeta.eventName ? eventMeta.eventName : fallbackTitle;
+        return `
+            <span class="stream-type stream-type-badge">事件報告</span>
+            ${eventReportTypeBadgeHtml}
+            ${escapeHtml(title || '')}`;
+    }
+
+    function _syncEventReportTimelineHeader(interactionId, eventId, eventPatch) {
+        if (!_container || !eventPatch) return;
+        const interaction = _interactions.find(item => {
+            if (!item) return false;
+            if (String(item.interactionId || '') === String(interactionId)) return true;
+            const meta = Array.isArray(item.EventLogs) && item.EventLogs[0] ? item.EventLogs[0] : null;
+            const metaEventId = meta && (meta.eventId || meta.id || meta.event_log_id);
+            return metaEventId && String(metaEventId) === String(eventId);
+        });
+        if (!interaction) return;
+
+        const existingMeta = Array.isArray(interaction.EventLogs) && interaction.EventLogs[0]
+            ? interaction.EventLogs[0]
+            : {};
+        const nextMeta = Object.assign({}, existingMeta, eventPatch, {
+            eventId: existingMeta.eventId || existingMeta.id || eventId
+        });
+        interaction.EventLogs = [nextMeta];
+        if (eventPatch.eventName) interaction.eventTitle = eventPatch.eventName;
+
+        const cardItem = Array.from(_container.querySelectorAll('.crm-stream-item.operational[data-interaction-id]'))
+            .find(element => element.getAttribute('data-interaction-id') === String(interaction.interactionId || interactionId));
+        const headerTitle = cardItem && cardItem.querySelector('.stream-card-header strong');
+        if (headerTitle) {
+            headerTitle.innerHTML = _renderEventReportHeaderTitleHTML(nextMeta, interaction.eventTitle || interaction.eventType || '');
+        }
+    }
+
     function _getInlineReportDomainFieldConfigs(eventType) {
         const fieldsByType = {
             iot: [
@@ -646,7 +688,7 @@ const OpportunityInteractions = (() => {
             <div class="crm-stream-item micro editing" data-inline-edit-id="${interactionId}">
                 <div class="interaction-inline-edit-frame">
                     <div class="inline-edit-meta">
-                        <span>${recorder}</span>
+                        <span style="font-weight: 500;">紀錄者：${recorder}</span>
                         <span class="inline-edit-actions">
                             <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineEdit('${interactionId}')">Save</button>
                             <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineEdit()">Cancel</button>
@@ -683,7 +725,7 @@ const OpportunityInteractions = (() => {
             <div class="crm-stream-item micro editing" data-inline-create-row>
                 <div class="interaction-inline-edit-frame">
                     <div class="inline-edit-meta">
-                        <span>${escapeHtml(getCurrentUser())}</span>
+                        <span style="font-weight: 500;">紀錄者：${escapeHtml(getCurrentUser())}</span>
                         <span class="inline-edit-actions">
                             <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineCreate()">Cancel</button>
                             <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineCreate()">Create</button>
@@ -731,9 +773,9 @@ const OpportunityInteractions = (() => {
         return `
             <div class="crm-stream-item operational has-inline-report-expanded" data-inline-event-create-row>
                 <div class="expanded-event-shell">
-                    <div class="stream-card">
-                        <div class="stream-card-header">
-                            <span></span>
+                    <div class="stream-card" style="padding: 4px 10px 0;">
+                        <div class="stream-card-header" style="justify-content: space-between; margin-bottom: 0; min-height: 0; padding: 0;">
+                            <span style="font-weight: 600;">新增事件紀錄</span>
                             <div class="footer-actions">
                                 <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineEventCreate()">Save</button>
                                 <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineEventCreate()">Cancel</button>
@@ -799,12 +841,6 @@ const OpportunityInteractions = (() => {
         const rawSummary = interaction.contentSummary || '(無內容)';
         const isEventReportInteraction = interaction.eventType === '事件報告';
         const eventMeta = Array.isArray(interaction.EventLogs) && interaction.EventLogs[0] ? interaction.EventLogs[0] : null;
-        const eventReportTypeInfo = eventMeta && eventMeta.eventType
-            ? _getInlineEventTypeInfo(String(eventMeta.eventType).trim())
-            : null;
-        const eventReportTypeBadgeHtml = eventReportTypeInfo
-            ? `<span class="inline-event-type-badge" style="--event-type-color: ${escapeHtml(eventReportTypeInfo.color)};">${escapeHtml(eventReportTypeInfo.label)}</span>`
-            : '';
         const eventReportNameStr = eventMeta && eventMeta.eventName
             ? escapeHtml(eventMeta.eventName)
             : isEventReportInteraction && interaction.eventTitle ? escapeHtml(interaction.eventTitle) : '';
@@ -889,9 +925,7 @@ const OpportunityInteractions = (() => {
                     <div class="stream-card">
                         <div class="stream-card-header">
                             <strong>
-                                <span class="stream-type stream-type-badge">事件報告</span>
-                                ${eventReportTypeBadgeHtml}
-                                ${eventReportNameStr || typeStr}
+                                ${_renderEventReportHeaderTitleHTML(eventMeta, eventReportNameStr || typeStr)}
                             </strong>
                             <span class="feed-time">${escapeHtml(timeStr)}</span>
                         </div>
@@ -1436,6 +1470,10 @@ const OpportunityInteractions = (() => {
             }
             _eventReportCache[eventId] = Object.assign({}, cachedEvent, cachePayload, safeUpdatedEvent, {
                 eventType: safeUpdatedEvent.eventType || finalEventType
+            });
+            _syncEventReportTimelineHeader(interactionId, eventId, {
+                eventName: _eventReportCache[eventId].eventName,
+                eventType: _eventReportCache[eventId].eventType
             });
             delete _pendingEventTypeSwitches[eventId];
             _salvageAppliedSession.delete(eventId);
