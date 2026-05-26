@@ -240,9 +240,9 @@ function renderOperationalWorkspaceHTML(event, contextContacts = []) {
             { key: 'iot_systemArchitecture', fallbackKey: 'systemArchitecture', label: '系統架構', type: 'textarea', placeholder: '系統架構簡圖或文字描述' }
         ],
         dt: [
-            { key: 'dt_deviceScale', fallbackKey: 'deviceScale', label: '設備規模' },
-            { key: 'dt_processingType', fallbackKey: 'processingType', label: '加工類型' },
-            { key: 'dt_industry', fallbackKey: 'industry', label: '加工產業' }
+            { key: 'dt_deviceScale', fallbackKey: 'deviceScale', label: '設備規模', type: 'textarea', placeholder: '請輸入設備規模，例如機台數量、產線數量或主要設備...' },
+            { key: 'dt_processingType', fallbackKey: 'processingType', label: '加工類型', type: 'textarea', placeholder: '請輸入加工類型，例如車削、銑削、磨削、複合加工...' },
+            { key: 'dt_industry', fallbackKey: 'industry', label: '加工產業別', type: 'textarea', placeholder: '請輸入加工產業別，例如航太、汽車、醫療、模具...' }
         ],
         dx: []
     };
@@ -423,9 +423,9 @@ function renderOperationalWorkspaceEditHTML(event, contextContacts = []) {
             { key: 'iot_systemArchitecture', fallbackKey: 'systemArchitecture', label: '系統架構', type: 'textarea', placeholder: '系統架構簡圖或文字描述' }
         ],
         dt: [
-            { key: 'dt_deviceScale', fallbackKey: 'deviceScale', label: '設備規模' },
-            { key: 'dt_processingType', fallbackKey: 'processingType', label: '加工類型' },
-            { key: 'dt_industry', fallbackKey: 'industry', label: '加工產業' }
+            { key: 'dt_deviceScale', fallbackKey: 'deviceScale', label: '設備規模', type: 'textarea', placeholder: '請輸入設備規模，例如機台數量、產線數量或主要設備...' },
+            { key: 'dt_processingType', fallbackKey: 'processingType', label: '加工類型', type: 'textarea', placeholder: '請輸入加工類型，例如車削、銑削、磨削、複合加工...' },
+            { key: 'dt_industry', fallbackKey: 'industry', label: '加工產業別', type: 'textarea', placeholder: '請輸入加工產業別，例如航太、汽車、醫療、模具...' }
         ],
         dx: []
     };
