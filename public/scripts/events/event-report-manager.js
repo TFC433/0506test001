@@ -375,15 +375,18 @@ function renderOperationalWorkspaceEditHTML(event, contextContacts = []) {
     const fallbackAccentByType = { iot: '#2563eb', dt: '#6d5bd0', dx: '#6d5bd0' };
     const headerColor = typeInfo.color || fallbackAccentByType[event.eventType] || '#6c757d';
     const updatedTime = event.updatedTime || event.updated_time || event.updatedAt || event.updated_at;
-    const eventTypeSelectHTML = `<select class="inline-report-control inline-report-control--select inline-event-type-select" data-report-field="eventType" data-protected-event-type-switch="true" aria-label="事件種類">
+    const eventTypeSelectorHTML = `<div class="inline-event-type-selector" data-protected-event-type-switch="true">
+        <input type="hidden" data-report-field="eventType" value="${formatAttributeValue(event.eventType)}">
         ${supportedEventTypes.map(typeValue => {
             const optionInfo = eventTypeConfig.get(typeValue);
             const optionLabel = optionInfo?.note || eventTypeFallbackLabels[typeValue] || typeValue.toUpperCase();
-            return `<option value="${formatAttributeValue(typeValue)}"${event.eventType === typeValue ? ' selected' : ''}>${formatTextValue(optionLabel)}</option>`;
+            const optionColor = optionInfo?.color || fallbackAccentByType[typeValue] || '#6c757d';
+            const isSelected = event.eventType === typeValue;
+            return `<button type="button" class="inline-event-type-chip${isSelected ? ' is-selected' : ''}" data-event-type-value="${formatAttributeValue(typeValue)}" style="--event-type-color: ${formatAttributeValue(optionColor)};" aria-pressed="${isSelected ? 'true' : 'false'}">${formatTextValue(optionLabel)}</button>`;
         }).join('')}
-    </select>`;
+    </div>`;
 
-    let systemMetaHTML = createMetaRowHTML('事件種類', eventTypeSelectHTML);
+    let systemMetaHTML = createMetaRowHTML('事件種類', eventTypeSelectorHTML);
     if (event.createdTime) {
         systemMetaHTML += createMetaRowHTML('建立時間', formatDateTime(event.createdTime));
     }

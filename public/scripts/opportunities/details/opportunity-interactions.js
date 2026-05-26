@@ -38,6 +38,7 @@ const OpportunityInteractions = (() => {
     const _expandedReports = new Set();
     const _eventReportCache = {};
     const _pendingEventTypeSwitches = {};
+    const _salvageAppliedSession = new Set();
     const INLINE_REPORT_EVENT_TYPES = new Set(['general', 'iot', 'dt', 'dx']);
 
     // ✅ [Fix] 系統自動產生類型：必須與鎖定證據一致
@@ -390,6 +391,64 @@ const OpportunityInteractions = (() => {
         }, {});
     }
 
+    function _formatInlineSalvageTimestamp(date = new Date()) {
+        const pad = value => String(value).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    function _getInlineEventTypeLabel(eventType) {
+        const fallbackLabels = { general: '一般', iot: 'IOT', dt: 'DT', dx: 'DX' };
+        const configs = window.CRM_APP?.systemConfig?.['事件類型'];
+        const match = Array.isArray(configs) ? configs.find(item => item && item.value === eventType) : null;
+        return match?.note || fallbackLabels[eventType] || String(eventType || '').toUpperCase();
+    }
+
+    function _getInlineReportDomainFieldConfigs(eventType) {
+        const fieldsByType = {
+            iot: [
+                { key: 'iot_deviceScale', label: '設備規模' },
+                { key: 'iot_lineFeatures', label: '生產線特徵' },
+                { key: 'iot_productionStatus', label: '生產現況' },
+                { key: 'iot_iotStatus', label: 'IoT現況' },
+                { key: 'iot_painPoints', label: '痛點分類' },
+                { key: 'iot_painPointDetails', label: '客戶痛點說明' },
+                { key: 'iot_painPointAnalysis', label: '痛點分析與對策' },
+                { key: 'iot_systemArchitecture', label: '系統架構' }
+            ],
+            dt: [
+                { key: 'dt_deviceScale', label: '設備規模' },
+                { key: 'dt_processingType', label: '加工類型' },
+                { key: 'dt_industry', label: '加工產業別' }
+            ],
+            dx: [],
+            general: []
+        };
+        return fieldsByType[eventType] || [];
+    }
+
+    function _buildInlineReportTypeSwitchSalvageBlock(draftValues, sourceEventType, targetEventType) {
+        const preservedLines = _getInlineReportDomainFieldConfigs(sourceEventType)
+            .map(field => {
+                const value = String(draftValues[field.key] || '').trim();
+                return value ? `${field.label}：${value}` : '';
+            })
+            .filter(Boolean);
+        if (!preservedLines.length) return '';
+
+        return [
+            '[系統保留｜事件種類切換]',
+            `時間：${_formatInlineSalvageTimestamp()}`,
+            `來源：${_getInlineEventTypeLabel(sourceEventType)} → ${_getInlineEventTypeLabel(targetEventType)}`,
+            ...preservedLines
+        ].join('\n');
+    }
+
+    function _appendInlineReportSalvageToNotes(existingNotes, salvageBlock) {
+        if (!salvageBlock) return existingNotes || '';
+        const baseNotes = String(existingNotes || '');
+        return baseNotes ? `${baseNotes}\n---\n${salvageBlock}` : salvageBlock;
+    }
+
     function _clearInlineReportDomainFields(eventDraft) {
         [
             'deviceScale',
@@ -439,41 +498,50 @@ const OpportunityInteractions = (() => {
 
     function _initInlineEventTypeSwitchControl(inlineContainer, interactionId, eventId) {
         if (!inlineContainer) return;
-        inlineContainer.querySelectorAll('[data-protected-event-type-switch="true"][data-report-field="eventType"]').forEach(selectElement => {
-            if (selectElement.dataset.initialized === 'true') return;
-            selectElement.dataset.initialized = 'true';
-            selectElement.addEventListener('change', () => {
-                handleInlineEventTypeChange(interactionId, eventId, selectElement);
+        inlineContainer.querySelectorAll('.inline-event-type-selector[data-protected-event-type-switch="true"]').forEach(selector => {
+            if (selector.dataset.initialized === 'true') return;
+            selector.dataset.initialized = 'true';
+            selector.addEventListener('click', event => {
+                const chip = event.target.closest('.inline-event-type-chip[data-event-type-value]');
+                if (!chip || !selector.contains(chip) || chip.classList.contains('is-selected')) return;
+                handleInlineEventTypeChange(interactionId, eventId, selector, chip.getAttribute('data-event-type-value'));
             });
         });
     }
 
-    function handleInlineEventTypeChange(interactionId, eventId, selectElement) {
+    function handleInlineEventTypeChange(interactionId, eventId, selectorElement, targetTypeValue) {
         const cachedEvent = _eventReportCache[eventId];
         const originalEventType = cachedEvent && String(cachedEvent.eventType || '').trim();
-        if (!selectElement || !cachedEvent || !originalEventType) {
-            if (selectElement) selectElement.value = originalEventType || '';
+        const hiddenInput = selectorElement && selectorElement.querySelector('input[type="hidden"][data-report-field="eventType"]');
+        if (!selectorElement || !hiddenInput || !cachedEvent || !originalEventType) {
+            if (hiddenInput) hiddenInput.value = originalEventType || '';
             showNotification('Save blocked: cached event type is unavailable.', 'error');
             return;
         }
 
         const previousConfirmedType = _pendingEventTypeSwitches[eventId] || originalEventType;
-        const targetEventType = String(selectElement.value || '').trim();
+        const targetEventType = String(targetTypeValue || '').trim();
         if (!INLINE_REPORT_EVENT_TYPES.has(targetEventType)) {
-            selectElement.value = previousConfirmedType;
             showNotification('Save blocked: unsupported event type.', 'error');
             return;
         }
         if (!targetEventType || targetEventType === previousConfirmedType) {
-            selectElement.value = previousConfirmedType;
             return;
         }
 
-        const message = '切換事件種類將重置目前種類的專屬欄位；儲存時系統會自動將舊專屬資料保留到備註。確定要切換嗎？';
-        selectElement.value = previousConfirmedType;
+        const message = '切換事件種類將重置目前種類的專屬欄位，系統會將目前專屬資訊追加到備註。確定要切換嗎？';
         _confirmInlineEventTypeSwitch(message, () => {
             const inlineContainer = _getInlineReportContainer(interactionId);
-            const commonDraftFields = _pickInlineReportCommonDraftFields(_collectInlineReportDraftValues(inlineContainer));
+            const draftValues = _collectInlineReportDraftValues(inlineContainer);
+            const sourceEventType = originalEventType;
+            const commonDraftFields = _pickInlineReportCommonDraftFields(draftValues);
+            if (!_salvageAppliedSession.has(eventId)) {
+                const salvageBlock = _buildInlineReportTypeSwitchSalvageBlock(draftValues, sourceEventType, targetEventType);
+                if (salvageBlock) {
+                    commonDraftFields.eventNotes = _appendInlineReportSalvageToNotes(commonDraftFields.eventNotes, salvageBlock);
+                    _salvageAppliedSession.add(eventId);
+                }
+            }
             _pendingEventTypeSwitches[eventId] = targetEventType;
             const eventDraft = _clearInlineReportDomainFields(Object.assign({}, cachedEvent, commonDraftFields, {
                 eventType: targetEventType
@@ -1128,6 +1196,9 @@ const OpportunityInteractions = (() => {
             payload[fieldName] = control.value;
         });
         payload.eventType = finalEventType;
+        if (_salvageAppliedSession.has(eventId)) {
+            payload._frontendSalvaged = true;
+        }
 
         try {
             const result = await authedFetch(`/api/events/${eventId}`, {
@@ -1140,7 +1211,9 @@ const OpportunityInteractions = (() => {
 
             const updatedEvent = result && (result.data || result.event || result);
             const ignoredResponseFields = new Set(['success', 'message', 'ok', 'status']);
-            const recognizedFields = new Set(Object.keys(cachedEvent).concat(Object.keys(payload)));
+            const cachePayload = Object.assign({}, payload);
+            delete cachePayload._frontendSalvaged;
+            const recognizedFields = new Set(Object.keys(cachedEvent).concat(Object.keys(cachePayload)));
             const safeUpdatedEvent = {};
             if (updatedEvent && typeof updatedEvent === 'object') {
                 Object.keys(updatedEvent).forEach(key => {
@@ -1148,10 +1221,11 @@ const OpportunityInteractions = (() => {
                     safeUpdatedEvent[key] = updatedEvent[key];
                 });
             }
-            _eventReportCache[eventId] = Object.assign({}, cachedEvent, payload, safeUpdatedEvent, {
+            _eventReportCache[eventId] = Object.assign({}, cachedEvent, cachePayload, safeUpdatedEvent, {
                 eventType: safeUpdatedEvent.eventType || finalEventType
             });
             delete _pendingEventTypeSwitches[eventId];
+            _salvageAppliedSession.delete(eventId);
             _editingReportEventId = null;
             _expandedReports.add(interactionId);
             _renderInlineReport(interactionId, eventId, 'view');
@@ -1168,6 +1242,7 @@ const OpportunityInteractions = (() => {
 
     function cancelInlineReportEdit(interactionId, eventId) {
         delete _pendingEventTypeSwitches[eventId];
+        _salvageAppliedSession.delete(eventId);
         _editingReportEventId = null;
         _expandedReports.add(interactionId);
         _renderInlineReport(interactionId, eventId, 'view');
@@ -1936,6 +2011,39 @@ const OpportunityInteractions = (() => {
                 border: 1px solid color-mix(in srgb, var(--workspace-divider) 30%, transparent);
                 border-radius: 2px;
                 padding: 2px 5px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-event-type-selector {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-event-type-chip {
+                background: transparent;
+                border: 1px solid color-mix(in srgb, var(--border-color) 24%, transparent);
+                border-radius: 1px;
+                box-shadow: none;
+                color: color-mix(in srgb, var(--text-muted, #6b7280) 62%, transparent);
+                cursor: pointer;
+                display: inline-block;
+                font-size: 0.78rem;
+                font-weight: 500;
+                line-height: 1;
+                opacity: 0.78;
+                padding: 2px 5px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-event-type-chip:not(.is-selected):hover {
+                background: color-mix(in srgb, var(--text-muted, #6b7280) 4%, transparent);
+                border-color: color-mix(in srgb, var(--border-color) 42%, transparent);
+                color: color-mix(in srgb, var(--text-muted, #6b7280) 82%, var(--text-secondary));
+                opacity: 0.9;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-event-type-chip.is-selected {
+                background: color-mix(in srgb, var(--event-type-color) 10%, var(--secondary-bg));
+                border-color: color-mix(in srgb, var(--event-type-color) 34%, var(--border-color));
+                color: var(--event-type-color);
+                cursor: default;
+                font-weight: 750;
+                opacity: 1;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-participant-selector {
                 display: grid;

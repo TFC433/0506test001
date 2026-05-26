@@ -333,8 +333,9 @@ ${lines.join('\n')}
     // [Phase 8.4] Type Change Logic & Backup
     const oldType = existing.eventType || existing.event_type || 'general';
     const newType = data.eventType || data.event_type || oldType;
+    const frontendSalvaged = data?._frontendSalvaged === true;
 
-    if (oldType !== newType) {
+    if (oldType !== newType && !frontendSalvaged) {
         // Generate Backup Block
         const backupBlock = this._generateTypeChangeBackup(existing, oldType);
         
@@ -351,6 +352,7 @@ ${lines.join('\n')}
             data.eventNotes = baseNotes + separator + backupBlock;
         }
     }
+    delete data._frontendSalvaged;
 
     const lastModified = new Date(); 
     const nextEditCount = Number(existing.editCount ?? existing.edit_count ?? 0) + 1;
