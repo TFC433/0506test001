@@ -230,8 +230,7 @@ function renderOperationalWorkspaceEditHTML(event, contextContacts = []) {
             <div class="report-top-meta__group${modifier ? ` report-top-meta__group--${modifier}` : ''}">${contentHTML}</div>`;
     const createInputHTML = (key, value) => `
         <input class="inline-report-control inline-report-control--input" type="text" data-report-field="${key}" value="${formatAttributeValue(value)}">`;
-    const createTextareaHTML = (key, value) => `
-        <textarea class="inline-report-control inline-report-control--textarea" data-report-field="${key}" rows="1">${formatTextValue(value)}</textarea>`;
+    const createTextareaHTML = (key, value) => `<textarea class="inline-report-control inline-report-control--textarea" data-report-field="${key}" rows="1">${formatTextValue(value)}</textarea>`;
     const createWorkspaceFieldHTML = (label, contentHTML, modifier) => `
             <div class="operational-field operational-field--${modifier}">
                 <div class="operational-field__label">${label}</div>
