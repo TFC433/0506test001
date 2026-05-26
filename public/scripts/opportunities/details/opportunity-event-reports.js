@@ -1,8 +1,13 @@
 // File: public/scripts/opportunities/details/opportunity-event-reports.js
 // views/scripts/opportunity-details/event-reports.js
-// Version: V6.1
-// Date: 2026-05-22
-// Changelog: Opportunity Activity Hub Phase 1-A: move event report list into right rail as compact index.
+// Version: V6.2
+// Date: 2026-05-26
+// Changelog: 
+// - Corrected right-rail event report list visual hierarchy.
+// - Restored single title-badge structure.
+// - Recolored the title badge to restrained purple.
+// - Removed the previous timeline-like separate main/type badge structure.
+// - Opportunity Activity Hub Phase 1-A: move event report list into right rail as compact index.
 // 職責：專門管理「事件報告」頁籤的 UI 與功能，包含總覽模式與列表模式
 // (V6 - 最終修復版：補回公開方法並整合全域樣式)
 
@@ -147,12 +152,12 @@ const OpportunityEvents = (() => {
             }
 
             .event-report-index-title {
-                background: var(--primary-bg);
-                border: 1px solid var(--border-color);
+                background: color-mix(in srgb, var(--accent-purple, #7c3aed) 8%, var(--primary-bg));
+                border: 1px solid color-mix(in srgb, var(--accent-purple, #7c3aed) 28%, var(--border-color));
                 border-radius: var(--rounded-sm);
-                color: var(--text-secondary);
+                color: color-mix(in srgb, var(--accent-purple, #6d28d9) 78%, var(--text-primary));
                 font-size: 0.78rem;
-                font-weight: 500;
+                font-weight: 600;
                 line-height: 1.25;
                 max-width: 100%;
                 overflow: hidden;
@@ -160,6 +165,7 @@ const OpportunityEvents = (() => {
                 text-overflow: ellipsis;
                 white-space: nowrap;
                 word-break: break-word;
+                box-shadow: none;
             }
 
             .event-report-index-main .event-report-index-meta {
