@@ -1648,6 +1648,7 @@ const OpportunityInteractions = (() => {
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-main .operational-section .section-title,
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .workspace-side .operational-section .section-title {
+                background: transparent;
                 border-bottom: 0;
                 border-radius: 0;
                 color: var(--workspace-text-title);
@@ -1716,6 +1717,10 @@ const OpportunityInteractions = (() => {
                 white-space: pre-line;
                 word-break: normal;
             }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-workspace-edit .operational-field__value {
+                background: #ffffff;
+                color: #111827;
+            }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-report-control {
                 background: transparent;
                 border: 0;
@@ -1732,6 +1737,13 @@ const OpportunityInteractions = (() => {
                 padding: 0;
                 resize: none;
                 width: 100%;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-workspace-edit .inline-report-control {
+                caret-color: #111827;
+                color: #111827;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-workspace-edit .inline-report-control::placeholder {
+                color: #6b7280;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-workspace-edit .operational-field__value:focus-within {
                 border-color: color-mix(in srgb, var(--domain-accent, var(--workspace-domain-accent)) 38%, var(--workspace-divider));
