@@ -212,7 +212,14 @@ class EventLogSqlReader {
             ourParticipants: row.our_participants,
             clientParticipants: row.client_participants,
             clientQuestions: row.client_questions,
-            clientIntelligence: row.client_intelligence
+            clientIntelligence: row.client_intelligence,
+
+            // Soft-void metadata
+            isVoided: row.is_voided === true,
+            voidedAt: row.voided_at,
+            voidedBy: row.voided_by,
+            voidReason: row.void_reason,
+            voidedInteractionId: row.voided_interaction_id
         };
 
         // Type Specific Mapping (Strict Schema Adherence)
@@ -291,6 +298,11 @@ class EventLogSqlReader {
                     createdTime: row.created_time,
                     opportunityId: row.opportunity_id,
                     visitPlace: row.visit_place,
+                    isVoided: row.is_voided === true,
+                    voidedAt: row.voided_at,
+                    voidedBy: row.voided_by,
+                    voidReason: row.void_reason,
+                    voidedInteractionId: row.voided_interaction_id,
                     
                     // Summary Specific fields
                     // [Phase 8.2 Fix] Apply overrides to summary as well

@@ -418,6 +418,88 @@ ${lines.join('\n')}
     return result;
   }
 
+  _extractEventIdFromInteractionSummary(summary) {
+    const match = String(summary || '').match(/event_log_id=([a-zA-Z0-9_-]+)/);
+    return match ? match[1] : '';
+  }
+
+  async voidEventLog(eventId, options = {}) {
+    if (!this.eventLogSqlReader) {
+      throw new Error('[Phase 8] EventLogSqlReader not injected (SQL-only required)');
+    }
+    if (!this.eventLogSqlWriter) {
+      throw new Error('[Phase 8] EventLogSqlWriter not injected (SQL-only required)');
+    }
+    if (!options.interactionService) {
+      throw new Error('InteractionService is required for Activity Hub void flow');
+    }
+    if (!options.interactionId) {
+      return { success: false, message: 'interactionId is required' };
+    }
+
+    const existingEvent = await this.eventLogSqlReader.getEventLogById(eventId);
+    if (!existingEvent) {
+      return { success: false, message: `Event not found (event_id=${eventId})` };
+    }
+
+    const wrapperInteraction = await options.interactionService.getInteractionById(options.interactionId);
+    if (!wrapperInteraction) {
+      return { success: false, message: 'Activity Hub wrapper interaction not found' };
+    }
+
+    const linkedEventId = this._extractEventIdFromInteractionSummary(wrapperInteraction.contentSummary);
+    if (String(linkedEventId) !== String(eventId)) {
+      return { success: false, message: 'Activity Hub wrapper does not reference this event report' };
+    }
+
+    const actor = options.user?.displayName || options.user?.username || options.user?.name || options.user || 'System';
+    const eventName = existingEvent.eventName || existingEvent.eventTitle || '未命名報告';
+    const tombstoneSummary = `已作廢事件報告：「${eventName}」`;
+
+    const voidedAt = new Date().toISOString();
+    const voidResult = await this.eventLogSqlWriter.voidEventLog(eventId, {
+      voidedAt,
+      voidedBy: actor,
+      voidReason: options.voidReason || null,
+      voidedInteractionId: options.interactionId
+    });
+
+    if (!voidResult || voidResult.success === false) {
+      return voidResult || { success: false, message: 'Void update failed' };
+    }
+
+    await options.interactionService.updateInteraction(options.interactionId, {
+      interactionTime: wrapperInteraction.interactionTime || wrapperInteraction.createdTime || new Date().toISOString(),
+      eventType: '系統事件',
+      eventTitle: '作廢事件報告',
+      contentSummary: tombstoneSummary,
+      nextAction: wrapperInteraction.nextAction || null,
+      opportunityId: wrapperInteraction.opportunityId || existingEvent.opportunityId || null,
+      companyId: wrapperInteraction.companyId || existingEvent.companyId || null
+    }, { displayName: actor });
+
+    this._invalidateEventCacheSafe();
+    return {
+      success: true,
+      eventId,
+      eventName,
+      interactionId: options.interactionId,
+      tombstone: {
+        eventType: '系統事件',
+        eventTitle: '作廢事件報告',
+        contentSummary: tombstoneSummary
+      },
+      voided: {
+        table: voidResult.table,
+        isVoided: true,
+        voidedAt,
+        voidedBy: actor,
+        voidReason: options.voidReason || null,
+        voidedInteractionId: options.interactionId
+      }
+    };
+  }
+
   async getEventTypes() {
     try {
       // [Patch 2026-03-12] Migrated to SystemService

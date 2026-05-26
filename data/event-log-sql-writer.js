@@ -385,6 +385,38 @@ class EventLogSqlWriter {
       throw error;
     }
   }
+
+  async voidEventLog(eventId, voidData) {
+    try {
+      const tables = ['event_logs_general', 'event_logs_iot', 'event_logs_dt', 'event_logs_dx', 'event_logs_summary'];
+      const updateData = {
+        is_voided: true,
+        voided_at: voidData.voidedAt,
+        voided_by: voidData.voidedBy || 'System',
+        void_reason: voidData.voidReason || null,
+        voided_interaction_id: voidData.voidedInteractionId
+      };
+
+      for (const table of tables) {
+        const { data, error } = await supabase
+          .from(table)
+          .update(updateData)
+          .eq('event_id', eventId)
+          .select('event_id');
+
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          return { success: true, eventId, table, data: data[0] };
+        }
+      }
+
+      return { success: false, message: 'Event not found' };
+    } catch (error) {
+      console.error('[EventLogSqlWriter] voidEventLog Error:', error);
+      throw error;
+    }
+  }
 }
 
 module.exports = EventLogSqlWriter;

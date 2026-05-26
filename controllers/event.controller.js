@@ -159,6 +159,32 @@ exports.updateEventLog = async (req, res) => {
   }
 };
 
+// POST /api/events/:eventId/void
+exports.voidEventLog = async (req, res) => {
+  try {
+    const eventId = req.params.eventId;
+    const interactionId = req.body && req.body.interactionId;
+    if (!eventId) {
+      return res.status(400).json({ success: false, error: 'eventId is required' });
+    }
+    if (!interactionId) {
+      return res.status(400).json({ success: false, error: 'interactionId is required' });
+    }
+
+    const services = getServices(req);
+    const result = await services.eventLogService.voidEventLog(eventId, {
+      interactionId,
+      voidReason: req.body ? req.body.voidReason : null,
+      user: req.user || {},
+      interactionService: services.interactionService
+    });
+
+    res.json(result);
+  } catch (error) {
+    handleApiError(res, error, 'Void Event Log');
+  }
+};
+
 // DELETE /api/events/:eventId
 exports.deleteEventLog = async (req, res) => {
   try {

@@ -49,7 +49,8 @@ const OpportunityInteractions = (() => {
     const SYSTEM_GENERATED_TYPES = ['系統事件', '事件報告'];
 
     function _isEventReportInteraction(interaction) {
-        return interaction && interaction.eventType === '事件報告';
+        const eventMeta = interaction && Array.isArray(interaction.EventLogs) && interaction.EventLogs[0] ? interaction.EventLogs[0] : null;
+        return interaction && interaction.eventType === '事件報告' && !(eventMeta && eventMeta.isVoided === true);
     }
 
     function _isLockedInteraction(interaction) {
@@ -63,7 +64,7 @@ const OpportunityInteractions = (() => {
         const eventIdMatch = rawSummary.match(/\[[^\]]+\]\(event_log_id=([a-zA-Z0-9_-]+)\)/);
         return eventMeta && (eventMeta.eventId || eventMeta.id || eventMeta.event_log_id)
             ? eventMeta.eventId || eventMeta.id || eventMeta.event_log_id
-            : interaction.eventId || interaction.event_log_id || (eventIdMatch ? eventIdMatch[1] : '');
+            : eventIdMatch ? eventIdMatch[1] : '';
     }
 
     function _isDeletableLightweightInteraction(interaction) {
@@ -316,8 +317,13 @@ const OpportunityInteractions = (() => {
 
         if (mode === 'edit') {
             target.innerHTML = `
-                <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineReportEdit('${safeInteractionId}', '${safeEventId}')">Save</button>
-                <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineReportEdit('${safeInteractionId}', '${safeEventId}')">Cancel</button>`;
+                <span class="inline-report-danger-actions activity-management-only">
+                    <button type="button" class="stream-action-btn danger inline-report-void-action" onclick="OpportunityInteractions.voidInlineReport('${safeInteractionId}', '${safeEventId}')">作廢事件報告</button>
+                </span>
+                <span class="inline-report-save-actions">
+                    <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineReportEdit('${safeInteractionId}', '${safeEventId}')">Save</button>
+                    <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineReportEdit('${safeInteractionId}', '${safeEventId}')">Cancel</button>
+                </span>`;
             return;
         }
 
@@ -1600,6 +1606,65 @@ const OpportunityInteractions = (() => {
         _renderInlineReport(interactionId, eventId, 'view');
     }
 
+    function _applyVoidTombstone(interactionId, eventId, tombstone) {
+        delete _eventReportCache[eventId];
+        _expandedReports.delete(interactionId);
+        if (_editingReportEventId === eventId) _editingReportEventId = null;
+        delete _pendingEventTypeSwitches[eventId];
+        _salvageAppliedSession.delete(eventId);
+
+        const interaction = _interactions.find(item => item.interactionId === interactionId);
+        if (interaction) {
+            interaction.eventType = tombstone.eventType || '系統事件';
+            interaction.interactionType = tombstone.eventType || '系統事件';
+            interaction.eventTitle = tombstone.eventTitle || '作廢事件報告';
+            interaction.contentSummary = tombstone.contentSummary || '已作廢事件報告';
+            interaction.EventLogs = [];
+        }
+
+        _updateTimelineView();
+    }
+
+    async function voidInlineReport(interactionId, eventId) {
+        if (!_container || !_isManagementMode || !interactionId || !eventId) return;
+
+        const message = '確定作廢此事件報告？此操作會保留紀錄，但此事件報告將不再作為有效事件顯示。';
+        showConfirmDialog(message, async () => {
+            showLoading('正在作廢事件報告...');
+            try {
+                const result = await authedFetch(`/api/events/${eventId}/void`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        interactionId,
+                        voidReason: null
+                    })
+                });
+                if (result && result.success === false) {
+                    throw new Error(result.details || result.message || result.error || 'Void failed');
+                }
+
+                const tombstone = result && result.tombstone
+                    ? result.tombstone
+                    : {
+                        eventType: '系統事件',
+                        eventTitle: '作廢事件報告',
+                        contentSummary: '已作廢事件報告'
+                    };
+                _applyVoidTombstone(interactionId, eventId, tombstone);
+
+                if (window.dashboardManager && typeof window.dashboardManager.markStale === 'function') {
+                    window.dashboardManager.markStale();
+                }
+            } catch (error) {
+                if (error.message !== 'Unauthorized') {
+                    showNotification(`作廢事件報告失敗: ${error.message}`, 'error');
+                }
+            } finally {
+                hideLoading();
+            }
+        });
+    }
+
     function _applyManagementModeState() {
         if (!_container) return;
         _container.classList.toggle('is-activity-management-mode', _isManagementMode);
@@ -1952,6 +2017,24 @@ const OpportunityInteractions = (() => {
                 color: var(--text-muted);
             }
             .stream-action-btn.danger:hover {
+                color: var(--danger-color, #dc2626);
+            }
+            #tab-content-interactions .inline-report-dynamic-actions {
+                align-items: center;
+                display: inline-flex;
+                gap: 10px;
+            }
+            #tab-content-interactions .inline-report-danger-actions {
+                border-right: 1px solid color-mix(in srgb, var(--danger-color, #dc2626) 24%, transparent);
+                margin-right: 2px;
+                padding-right: 10px;
+            }
+            #tab-content-interactions .inline-report-save-actions {
+                align-items: center;
+                display: inline-flex;
+                gap: 6px;
+            }
+            #tab-content-interactions .inline-report-void-action {
                 color: var(--danger-color, #dc2626);
             }
             #tab-content-interactions .activity-management-only {
@@ -2826,6 +2909,7 @@ const OpportunityInteractions = (() => {
         startInlineReportEdit,
         saveInlineReportEdit,
         cancelInlineReportEdit,
+        voidInlineReport,
         confirmDelete
     };
 })();

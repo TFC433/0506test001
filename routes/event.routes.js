@@ -10,6 +10,7 @@ const controller = require('../controllers/event.controller');
 router.get('/dashboard', controller.getDashboardData);
 
 router.post('/', controller.createEventLog);
+router.post('/:eventId/void', controller.voidEventLog);
 router.get('/:eventId', controller.getEventLogById);
 router.put('/:eventId', controller.updateEventLog);
 router.delete('/:eventId', controller.deleteEventLog);

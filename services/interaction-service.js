@@ -190,6 +190,15 @@ class InteractionService {
         }
     }
 
+    async getInteractionById(id) {
+        try {
+            return await this.interactionSqlReader.getInteractionById(id);
+        } catch (error) {
+            console.error('[InteractionService] getInteractionById Error:', error);
+            throw error;
+        }
+    }
+
     /**
      * 更新互動紀錄
      * Phase 7: Direct to SQL
