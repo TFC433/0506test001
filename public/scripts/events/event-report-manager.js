@@ -42,6 +42,11 @@ function ensureInlineIotOptionStyles() {
             border-color: color-mix(in srgb, var(--workspace-domain-accent) 44%, var(--border-color));
             color: var(--workspace-domain-accent);
         }
+        #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .operational-workspace-edit .inline-report-control::placeholder {
+            color: color-mix(in srgb, var(--text-muted, #6b7280) 52%, transparent);
+            font-weight: 400;
+            opacity: 1;
+        }
         #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-iot-option-badges {
             display: flex;
             flex-wrap: wrap;
