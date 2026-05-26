@@ -10,6 +10,58 @@
 // [Forensics Probe] Debug Counter
 window._DEBUG_SHOW_EVENT_REPORT_COUNT ||= 0;
 
+function ensureInlineIotOptionStyles() {
+    if (document.getElementById('inline-iot-option-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'inline-iot-option-styles';
+    style.textContent = `
+        #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-iot-multiselect {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-iot-multiselect__chip {
+            background: transparent;
+            border: 1px solid color-mix(in srgb, var(--border-color) 28%, transparent);
+            border-radius: 2px;
+            box-shadow: none;
+            color: color-mix(in srgb, var(--text-muted, #6b7280) 76%, var(--text-secondary));
+            cursor: pointer;
+            font: inherit;
+            font-size: 0.78rem;
+            font-weight: 600;
+            line-height: 1.1;
+            padding: 2px 6px;
+        }
+        #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-iot-multiselect__chip:hover {
+            border-color: color-mix(in srgb, var(--workspace-domain-accent) 24%, var(--border-color));
+            color: #111827;
+        }
+        #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-iot-multiselect__chip.is-selected {
+            background: color-mix(in srgb, var(--workspace-domain-accent) 10%, #ffffff);
+            border-color: color-mix(in srgb, var(--workspace-domain-accent) 44%, var(--border-color));
+            color: var(--workspace-domain-accent);
+        }
+        #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-iot-option-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-iot-option-badge {
+            background: color-mix(in srgb, var(--workspace-domain-accent) 8%, var(--workspace-surface-panel, #ffffff));
+            border: 1px solid color-mix(in srgb, var(--workspace-domain-accent) 26%, var(--workspace-divider, var(--border-color)));
+            border-radius: 2px;
+            color: color-mix(in srgb, var(--workspace-domain-accent) 72%, #111827);
+            display: inline-block;
+            font-size: 0.76rem;
+            font-weight: 700;
+            line-height: 1.1;
+            padding: 2px 6px;
+        }
+    `;
+    document.head.appendChild(style);
+}
+
 /**
  * 顯示單筆事件的詳細報告彈出視窗
  * @param {string} eventId - 要顯示報告的事件 ID
@@ -111,11 +163,23 @@ async function showEventLogReport(eventId) {
 }
 
 function renderOperationalWorkspaceHTML(event, contextContacts = []) {
+    ensureInlineIotOptionStyles();
     const formatTextValue = (value) => {
         if (!value) return '';
         return String(value).replace(/</g, "&lt;").replace(/>/g, "&gt;");
     };
     const formatNarrativeValue = (value) => formatTextValue(value).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const parseMultiSelectValue = (value) => String(value || '')
+        .split(',')
+        .map(item => item.trim())
+        .filter(Boolean);
+    const createMultiSelectBadgesHTML = (value) => {
+        const selectedValues = parseMultiSelectValue(value);
+        if (!selectedValues.length) return '';
+        return `<div class="inline-iot-option-badges">${selectedValues.map(item => (
+            `<span class="inline-iot-option-badge">${formatTextValue(item)}</span>`
+        )).join('')}</div>`;
+    };
     const createMetaRowHTML = (label, contentHTML) => {
         if (!contentHTML) return '';
         return `
@@ -159,19 +223,21 @@ function renderOperationalWorkspaceHTML(event, contextContacts = []) {
     ].join('');
 
     const narrativeFields = [
-        { key: 'eventContent', label: '會議內容' },
-        { key: 'clientQuestions', label: '客戶提問' },
-        { key: 'clientIntelligence', label: '客戶情報' },
-        { key: 'eventNotes', label: '備註' }
+        { key: 'eventContent', label: '會議內容', type: 'textarea', placeholder: '請輸入會議紀錄...' },
+        { key: 'clientQuestions', label: '客戶提問', type: 'textarea', placeholder: '客戶提出的問題...' },
+        { key: 'clientIntelligence', label: '客戶情報', type: 'textarea', placeholder: '收集到的情報...' },
+        { key: 'eventNotes', label: '備註', type: 'textarea', placeholder: '其他備註事項...' }
     ];
     const domainFieldsByType = {
         iot: [
-            { key: 'iot_deviceScale', fallbackKey: 'deviceScale', label: '設備規模' },
-            { key: 'iot_lineFeatures', fallbackKey: 'lineFeatures', label: '產線特徵' },
-            { key: 'iot_productionStatus', fallbackKey: 'productionStatus', label: '生產狀態' },
-            { key: 'iot_iotStatus', fallbackKey: 'iotStatus', label: 'IoT 狀態' },
-            { key: 'iot_painPoints', fallbackKey: 'painPoints', label: '痛點' },
-            { key: 'iot_systemArchitecture', fallbackKey: 'systemArchitecture', label: '系統架構' }
+            { key: 'iot_deviceScale', fallbackKey: 'deviceScale', label: '設備規模', type: 'textarea', placeholder: '例: 機台數量、PLC 數量' },
+            { key: 'iot_lineFeatures', fallbackKey: 'lineFeatures', label: '生產線特徵', type: 'multiselect', options: ['工具機', 'ROBOT', '傳產機', 'PLC'] },
+            { key: 'iot_productionStatus', fallbackKey: 'productionStatus', label: '生產現況', type: 'textarea', placeholder: '客戶目前生產情況' },
+            { key: 'iot_iotStatus', fallbackKey: 'iotStatus', label: 'IoT現況', type: 'textarea', placeholder: '客戶 IoT 導入情況' },
+            { key: 'iot_painPoints', fallbackKey: 'painPoints', label: '痛點分類', type: 'multiselect', options: ['Monitoring', 'Improve OEE', 'Reduce Man-hours', 'Others'] },
+            { key: 'iot_painPointDetails', fallbackKey: 'painPointDetails', label: '客戶痛點說明', type: 'textarea', placeholder: '請詳細描述客戶提出的具體困難點...' },
+            { key: 'iot_painPointAnalysis', fallbackKey: 'painPointAnalysis', label: '痛點分析與對策', type: 'textarea', placeholder: '針對上述痛點，我方提出的分析觀點或初步對策...' },
+            { key: 'iot_systemArchitecture', fallbackKey: 'systemArchitecture', label: '系統架構', type: 'textarea', placeholder: '系統架構簡圖或文字描述' }
         ],
         dt: [
             { key: 'dt_deviceScale', fallbackKey: 'deviceScale', label: '設備規模' },
@@ -187,7 +253,10 @@ function renderOperationalWorkspaceHTML(event, contextContacts = []) {
     const domainFields = domainFieldsByType[event.eventType] || [];
     const sideContentHTML = domainFields.map(field => {
         const rawValue = event[field.key] || event[field.fallbackKey];
-        return createWorkspaceFieldHTML(field.label, formatTextValue(rawValue), 'meta');
+        const contentHTML = field.type === 'multiselect'
+            ? createMultiSelectBadgesHTML(rawValue)
+            : formatTextValue(rawValue);
+        return createWorkspaceFieldHTML(field.label, contentHTML, 'meta');
     }).join('');
 
     return `<div class="operational-workspace-view" style="--workspace-domain-accent: ${headerColor};">
@@ -216,6 +285,7 @@ function renderOperationalWorkspaceHTML(event, contextContacts = []) {
  * @param {Array} contextContacts - 用於比對的聯絡人清單
  */
 function renderOperationalWorkspaceEditHTML(event, contextContacts = []) {
+    ensureInlineIotOptionStyles();
     const formatTextValue = (value) => {
         if (!value) return '';
         return String(value).replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -228,14 +298,31 @@ function renderOperationalWorkspaceEditHTML(event, contextContacts = []) {
             </div>`;
     const createMetaGroupHTML = (contentHTML, modifier = '') => `
             <div class="report-top-meta__group${modifier ? ` report-top-meta__group--${modifier}` : ''}">${contentHTML}</div>`;
-    const createInputHTML = (key, value) => `
-        <input class="inline-report-control inline-report-control--input" type="text" data-report-field="${key}" value="${formatAttributeValue(value)}">`;
-    const createTextareaHTML = (key, value) => `<textarea class="inline-report-control inline-report-control--textarea" data-report-field="${key}" rows="1">${formatTextValue(value)}</textarea>`;
+    const createInputHTML = (key, value, placeholder = '') => `
+        <input class="inline-report-control inline-report-control--input" type="text" data-report-field="${key}" value="${formatAttributeValue(value)}"${placeholder ? ` placeholder="${formatAttributeValue(placeholder)}"` : ''}>`;
+    const createTextareaHTML = (key, value, placeholder = '') => `<textarea class="inline-report-control inline-report-control--textarea" data-report-field="${key}" rows="1"${placeholder ? ` placeholder="${formatAttributeValue(placeholder)}"` : ''}>${formatTextValue(value)}</textarea>`;
     const createWorkspaceFieldHTML = (label, contentHTML, modifier) => `
             <div class="operational-field operational-field--${modifier}">
                 <div class="operational-field__label">${label}</div>
                 <div class="operational-field__value">${contentHTML}</div>
             </div>`;
+    const parseMultiSelectValue = (value) => String(value || '')
+        .split(',')
+        .map(item => item.trim())
+        .filter(Boolean);
+    const createMultiSelectHTML = (fieldConfig, currentValue) => {
+        const selectedValues = parseMultiSelectValue(currentValue);
+        const selectedSet = new Set(selectedValues.map(item => item.toLowerCase()));
+        const toggleScript = "const root=this.closest('.inline-iot-multiselect');this.classList.toggle('is-selected');this.setAttribute('aria-pressed',this.classList.contains('is-selected')?'true':'false');root.querySelector('input[data-report-field]').value=Array.from(root.querySelectorAll('.inline-iot-multiselect__chip.is-selected')).map(chip=>chip.getAttribute('data-iot-option')).join(', ');";
+        const optionsHTML = (fieldConfig.options || []).map(option => {
+            const isSelected = selectedSet.has(option.toLowerCase());
+            return `<button type="button" class="inline-iot-multiselect__chip${isSelected ? ' is-selected' : ''}" data-iot-option="${formatAttributeValue(option)}" aria-pressed="${isSelected ? 'true' : 'false'}" onclick="${toggleScript}">${formatTextValue(option)}</button>`;
+        }).join('');
+        return `<div class="inline-iot-multiselect" data-iot-multiselect="${formatAttributeValue(fieldConfig.key)}">
+            <input type="hidden" data-report-field="${formatAttributeValue(fieldConfig.key)}" value="${formatAttributeValue(selectedValues.join(', '))}">
+            ${optionsHTML}
+        </div>`;
+    };
     const parseParticipants = (value) => String(value || '')
         .split(/[,，、;；]/)
         .map(name => name.trim())
@@ -319,19 +406,21 @@ function renderOperationalWorkspaceEditHTML(event, contextContacts = []) {
     ].join('');
 
     const narrativeFields = [
-        { key: 'eventContent', label: '會議內容' },
-        { key: 'clientQuestions', label: '客戶提問' },
-        { key: 'clientIntelligence', label: '客戶情報' },
-        { key: 'eventNotes', label: '備註' }
+        { key: 'eventContent', label: '會議內容', type: 'textarea', placeholder: '請輸入會議紀錄...' },
+        { key: 'clientQuestions', label: '客戶提問', type: 'textarea', placeholder: '客戶提出的問題...' },
+        { key: 'clientIntelligence', label: '客戶情報', type: 'textarea', placeholder: '收集到的情報...' },
+        { key: 'eventNotes', label: '備註', type: 'textarea', placeholder: '其他備註事項...' }
     ];
     const domainFieldsByType = {
         iot: [
-            { key: 'iot_deviceScale', fallbackKey: 'deviceScale', label: '設備規模' },
-            { key: 'iot_lineFeatures', fallbackKey: 'lineFeatures', label: '產線特徵' },
-            { key: 'iot_productionStatus', fallbackKey: 'productionStatus', label: '生產狀態' },
-            { key: 'iot_iotStatus', fallbackKey: 'iotStatus', label: 'IoT 狀態' },
-            { key: 'iot_painPoints', fallbackKey: 'painPoints', label: '痛點' },
-            { key: 'iot_systemArchitecture', fallbackKey: 'systemArchitecture', label: '系統架構' }
+            { key: 'iot_deviceScale', fallbackKey: 'deviceScale', label: '設備規模', type: 'textarea', placeholder: '例: 機台數量、PLC 數量' },
+            { key: 'iot_lineFeatures', fallbackKey: 'lineFeatures', label: '生產線特徵', type: 'multiselect', options: ['工具機', 'ROBOT', '傳產機', 'PLC'] },
+            { key: 'iot_productionStatus', fallbackKey: 'productionStatus', label: '生產現況', type: 'textarea', placeholder: '客戶目前生產情況' },
+            { key: 'iot_iotStatus', fallbackKey: 'iotStatus', label: 'IoT現況', type: 'textarea', placeholder: '客戶 IoT 導入情況' },
+            { key: 'iot_painPoints', fallbackKey: 'painPoints', label: '痛點分類', type: 'multiselect', options: ['Monitoring', 'Improve OEE', 'Reduce Man-hours', 'Others'] },
+            { key: 'iot_painPointDetails', fallbackKey: 'painPointDetails', label: '客戶痛點說明', type: 'textarea', placeholder: '請詳細描述客戶提出的具體困難點...' },
+            { key: 'iot_painPointAnalysis', fallbackKey: 'painPointAnalysis', label: '痛點分析與對策', type: 'textarea', placeholder: '針對上述痛點，我方提出的分析觀點或初步對策...' },
+            { key: 'iot_systemArchitecture', fallbackKey: 'systemArchitecture', label: '系統架構', type: 'textarea', placeholder: '系統架構簡圖或文字描述' }
         ],
         dt: [
             { key: 'dt_deviceScale', fallbackKey: 'deviceScale', label: '設備規模' },
@@ -342,12 +431,15 @@ function renderOperationalWorkspaceEditHTML(event, contextContacts = []) {
     };
 
     const mainContentHTML = narrativeFields.map(field => (
-        createWorkspaceFieldHTML(field.label, createTextareaHTML(field.key, event[field.key]), 'narrative')
+        createWorkspaceFieldHTML(field.label, createTextareaHTML(field.key, event[field.key], field.placeholder), 'narrative')
     )).join('');
     const domainFields = domainFieldsByType[event.eventType] || [];
     const sideContentHTML = domainFields.map(field => {
         const rawValue = event[field.key] || event[field.fallbackKey];
-        return createWorkspaceFieldHTML(field.label, createTextareaHTML(field.key, rawValue), 'meta');
+        const controlHTML = field.type === 'multiselect'
+            ? createMultiSelectHTML(field, rawValue)
+            : createTextareaHTML(field.key, rawValue, field.placeholder);
+        return createWorkspaceFieldHTML(field.label, controlHTML, 'meta');
     }).join('');
 
     return `<div class="operational-workspace-view operational-workspace-edit" style="--workspace-domain-accent: ${headerColor};">
