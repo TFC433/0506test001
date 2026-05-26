@@ -284,6 +284,7 @@ const OpportunityInteractions = (() => {
 
             const reportHTML = renderOperationalWorkspaceEditHTML(eventData, _getLinkedContactsContext());
             inlineContainer.innerHTML = _applyOperationalWorkspaceDomainTint(reportHTML, eventData);
+            _initInlineParticipantSelectors(inlineContainer);
             _autosizeInlineReportTextareas(inlineContainer);
             return;
         }
@@ -295,6 +296,54 @@ const OpportunityInteractions = (() => {
 
         const reportHTML = renderOperationalWorkspaceHTML(eventData, _getLinkedContactsContext());
         inlineContainer.innerHTML = _applyOperationalWorkspaceDomainTint(reportHTML, eventData);
+    }
+
+    function _initInlineParticipantSelectors(inlineContainer) {
+        if (!inlineContainer) return;
+        const parseNames = (value) => String(value || '')
+            .split(/[,，、;；]/)
+            .map(name => name.trim())
+            .filter(Boolean);
+        const uniqueNames = (names) => {
+            const seen = new Set();
+            return names.filter(name => {
+                const key = name.toLowerCase();
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+        };
+
+        inlineContainer.querySelectorAll('.inline-participant-selector').forEach(selector => {
+            if (selector.dataset.initialized === 'true') return;
+            selector.dataset.initialized = 'true';
+
+            const hiddenInput = selector.querySelector('input[type="hidden"][data-report-field]');
+            const manualInput = selector.querySelector('[data-participant-manual]');
+            const syncValue = () => {
+                const selectedNames = Array.from(selector.querySelectorAll('.inline-participant-selector__chip.is-selected'))
+                    .map(chip => String(chip.getAttribute('data-participant-value') || '').trim())
+                    .filter(Boolean);
+                const manualNames = parseNames(manualInput ? manualInput.value : '');
+                if (hiddenInput) hiddenInput.value = uniqueNames(selectedNames.concat(manualNames)).join(', ');
+            };
+
+            selector.addEventListener('click', event => {
+                const chip = event.target.closest('.inline-participant-selector__chip');
+                if (!chip || !selector.contains(chip)) return;
+                const isSelected = !chip.classList.contains('is-selected');
+                chip.classList.toggle('is-selected', isSelected);
+                chip.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+                syncValue();
+            });
+
+            if (manualInput) {
+                manualInput.addEventListener('input', syncValue);
+                manualInput.addEventListener('change', syncValue);
+            }
+
+            syncValue();
+        });
     }
 
     function _autosizeInlineReportTextareas(scope) {
@@ -1752,6 +1801,49 @@ const OpportunityInteractions = (() => {
                 border: 1px solid color-mix(in srgb, var(--workspace-divider) 30%, transparent);
                 border-radius: 2px;
                 padding: 2px 5px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-participant-selector {
+                display: grid;
+                gap: 5px;
+                width: 100%;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-participant-selector__candidates {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-participant-selector__chip {
+                background: color-mix(in srgb, var(--primary-bg) 84%, var(--workspace-surface-panel));
+                border: 1px solid color-mix(in srgb, var(--workspace-divider) 45%, transparent);
+                border-radius: 999px;
+                color: #374151;
+                cursor: pointer;
+                font: inherit;
+                line-height: 1.2;
+                padding: 2px 7px;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-participant-selector__chip.is-selected {
+                background: color-mix(in srgb, var(--domain-accent, var(--workspace-domain-accent)) 14%, #ffffff);
+                border-color: color-mix(in srgb, var(--domain-accent, var(--workspace-domain-accent)) 52%, var(--workspace-divider));
+                color: #111827;
+                font-weight: 700;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-participant-selector__manual {
+                background: color-mix(in srgb, var(--primary-bg) 74%, var(--workspace-surface-panel));
+                border: 1px solid color-mix(in srgb, var(--workspace-divider) 30%, transparent);
+                border-radius: 2px;
+                box-sizing: border-box;
+                color: #111827;
+                font: inherit;
+                line-height: inherit;
+                min-width: 0;
+                outline: none;
+                padding: 2px 5px;
+                width: 100%;
+            }
+            #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .inline-participant-selector__manual:focus {
+                border-color: color-mix(in srgb, var(--domain-accent, var(--workspace-domain-accent)) 38%, var(--workspace-divider));
+                box-shadow: 0 0 0 1px color-mix(in srgb, var(--domain-accent, var(--workspace-domain-accent)) 18%, transparent);
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .inline-event-report .info-item--meta {
                 display: block;

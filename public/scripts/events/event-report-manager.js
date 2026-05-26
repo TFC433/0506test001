@@ -236,6 +236,44 @@ function renderOperationalWorkspaceEditHTML(event, contextContacts = []) {
                 <div class="operational-field__label">${label}</div>
                 <div class="operational-field__value">${contentHTML}</div>
             </div>`;
+    const parseParticipants = (value) => String(value || '')
+        .split(/[,，、;；]/)
+        .map(name => name.trim())
+        .filter(Boolean);
+    const uniqueNames = (names) => {
+        const seen = new Set();
+        return names.filter(name => {
+            const key = name.toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+    };
+    const createParticipantSelectorHTML = (key, value, candidates) => {
+        const selectedNames = uniqueNames(parseParticipants(value));
+        const selectedSet = new Set(selectedNames.map(name => name.toLowerCase()));
+        const candidateItems = uniqueNames(candidates.map(candidate => candidate.value)).map(candidateValue => {
+            const candidate = candidates.find(item => item.value === candidateValue);
+            return {
+                value: candidateValue,
+                label: candidate?.label || candidateValue
+            };
+        });
+        const candidateSet = new Set(candidateItems.map(candidate => candidate.value.toLowerCase()));
+        const manualNames = selectedNames.filter(name => !candidateSet.has(name.toLowerCase()));
+        const hiddenValue = selectedNames.join(', ');
+        const chipsHTML = candidateItems.map(candidate => {
+            const isSelected = selectedSet.has(candidate.value.toLowerCase());
+            return `<button type="button" class="inline-participant-selector__chip${isSelected ? ' is-selected' : ''}" data-participant-value="${formatAttributeValue(candidate.value)}" aria-pressed="${isSelected ? 'true' : 'false'}">${formatTextValue(candidate.label)}</button>`;
+        }).join('');
+
+        return `
+        <div class="inline-participant-selector" data-participant-selector="${key}">
+            <input type="hidden" data-report-field="${key}" value="${formatAttributeValue(hiddenValue)}">
+            ${chipsHTML ? `<div class="inline-participant-selector__candidates">${chipsHTML}</div>` : ''}
+            <input class="inline-participant-selector__manual" type="text" data-participant-manual value="${formatAttributeValue(manualNames.join(', '))}" placeholder="手動新增姓名">
+        </div>`;
+    };
 
     const eventTypeConfig = new Map((window.CRM_APP?.systemConfig['事件類型'] || []).map(t => [t.value, { note: t.note, color: t.color }]));
     const typeInfo = eventTypeConfig.get(event.eventType) || { note: (event.eventType || 'unknown').toUpperCase(), color: null };
@@ -251,9 +289,24 @@ function renderOperationalWorkspaceEditHTML(event, contextContacts = []) {
     if (updatedTime) {
         systemMetaHTML += createMetaRowHTML('最後修改時間', formatDateTime(updatedTime));
     }
+    const teamMembers = Array.isArray(window.CRM_APP?.systemConfig?.['團隊成員'])
+        ? window.CRM_APP.systemConfig['團隊成員']
+        : [];
+    const ourParticipantCandidates = teamMembers.map(member => {
+        const name = member && typeof member === 'object'
+            ? (member.note || member.value || member.name || '')
+            : member;
+        return String(name || '').trim();
+    }).filter(Boolean).map(name => ({ value: name, label: name }));
+    const clientParticipantCandidates = (Array.isArray(contextContacts) ? contextContacts : []).map(contact => {
+        const name = String(contact?.name || '').trim();
+        const position = String(contact?.position || '').trim();
+        return name ? { value: name, label: position ? `${name} (${position})` : name } : null;
+    }).filter(Boolean);
+
     let meetingMetaHTML = createMetaRowHTML('會議地點', createInputHTML('visitPlace', event.visitPlace));
-    meetingMetaHTML += createMetaRowHTML('我方與會', createInputHTML('ourParticipants', event.ourParticipants));
-    meetingMetaHTML += createMetaRowHTML('客戶與會', createInputHTML('clientParticipants', event.clientParticipants));
+    meetingMetaHTML += createMetaRowHTML('我方與會', createParticipantSelectorHTML('ourParticipants', event.ourParticipants, ourParticipantCandidates));
+    meetingMetaHTML += createMetaRowHTML('客戶與會', createParticipantSelectorHTML('clientParticipants', event.clientParticipants, clientParticipantCandidates));
     const topMetaHTML = [
         createMetaGroupHTML(systemMetaHTML, 'system'),
         createMetaGroupHTML(meetingMetaHTML, 'meeting'),
