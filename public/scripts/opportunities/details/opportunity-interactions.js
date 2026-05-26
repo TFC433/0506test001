@@ -166,7 +166,7 @@ const OpportunityInteractions = (() => {
         _isCreatingInlineEvent = true;
         _inlineEventDraft = {
             eventType: 'general',
-            eventName: '新事件報告',
+            eventName: '',
             visitPlace: '',
             ourParticipants: '',
             clientParticipants: '',
@@ -717,7 +717,7 @@ const OpportunityInteractions = (() => {
             renderOperationalWorkspaceEditHTML(_inlineEventDraft, _getLinkedContactsContext()),
             _inlineEventDraft
         );
-        const draftEventName = escapeHtml(_inlineEventDraft.eventName || '新事件報告');
+        const draftEventName = escapeHtml(_inlineEventDraft.eventName || '');
 
         return `
             <div class="crm-stream-item operational has-inline-report-expanded" data-inline-event-create-row>
@@ -791,20 +791,19 @@ const OpportunityInteractions = (() => {
         const recorder = escapeHtml(interaction.recorder || interaction.author || interaction.modifier || '系統');
 
         const rawSummary = interaction.contentSummary || '(無內容)';
+        const isEventReportInteraction = interaction.eventType === '事件報告';
         const eventMeta = Array.isArray(interaction.EventLogs) && interaction.EventLogs[0] ? interaction.EventLogs[0] : null;
         const eventReportTypeStr = eventMeta && eventMeta.eventType
             ? escapeHtml(_getInlineEventTypeLabel(String(eventMeta.eventType).trim()))
-            : typeStr;
+            : isEventReportInteraction ? escapeHtml('事件報告') : typeStr;
         const eventReportNameStr = eventMeta && eventMeta.eventName
             ? escapeHtml(eventMeta.eventName)
-            : '';
+            : isEventReportInteraction && interaction.eventTitle ? escapeHtml(interaction.eventTitle) : '';
         let summaryHtml = escapeHtml(rawSummary).replace(/\n/g, '<br>');
         const eventIdMatch = rawSummary.match(/\[[^\]]+\]\(event_log_id=([a-zA-Z0-9_-]+)\)/);
-        const reportEventId = eventIdMatch
-            ? eventIdMatch[1]
-            : eventMeta && (eventMeta.eventId || eventMeta.id || eventMeta.event_log_id)
+        const reportEventId = eventMeta && (eventMeta.eventId || eventMeta.id || eventMeta.event_log_id)
             ? eventMeta.eventId || eventMeta.id || eventMeta.event_log_id
-            : '';
+            : interaction.eventId || interaction.event_log_id || (eventIdMatch ? eventIdMatch[1] : '');
         const nextActionHtml = interaction.nextAction
             ? `<span class="stream-next-action">下一步：${escapeHtml(interaction.nextAction)}</span>`
             : '';
@@ -823,7 +822,7 @@ const OpportunityInteractions = (() => {
 
         let buttonsHtml = '';
         if (rowId) {
-            const isEventReport = interaction.eventType === '事件報告';
+            const isEventReport = isEventReportInteraction;
             const editAction = isEventReport
                 ? `OpportunityInteractions.toggleInlineReport('${rowId}', '${reportEventId}')`
                 : !isLocked && renderWeight === 'micro'
@@ -1151,10 +1150,15 @@ const OpportunityInteractions = (() => {
         const draftValues = _collectInlineReportDraftValues(frame);
         const eventNameInput = frame.querySelector('#inline-draft-event-name');
         const eventNameValue = String(eventNameInput ? eventNameInput.value : '').trim();
+        if (!eventNameValue) {
+            showNotification('請輸入事件名稱', 'warning');
+            if (eventNameInput && typeof eventNameInput.focus === 'function') eventNameInput.focus();
+            return;
+        }
         const payload = Object.assign({}, draftValues, {
             eventType: String((_inlineEventDraft && _inlineEventDraft.eventType) || draftValues.eventType || 'general').trim() || 'general',
             opportunityId: _context.opportunityId,
-            eventName: eventNameValue || (_inlineEventDraft && _inlineEventDraft.eventName) || '新事件報告'
+            eventName: eventNameValue
         });
         if (_context.companyId) payload.companyId = _context.companyId;
 

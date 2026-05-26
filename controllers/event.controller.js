@@ -64,6 +64,7 @@ exports.createEventLog = async (req, res) => {
             await services.interactionService.createInteraction({
               opportunityId: oppId,
               companyId: compId,
+              eventId: eventId,
               interactionTime: req.body.createdTime || new Date().toISOString(),
               eventType: '事件報告',
               eventTitle: eventName,
