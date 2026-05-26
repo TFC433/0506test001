@@ -434,6 +434,16 @@ const OpportunityInteractions = (() => {
         return match?.note || fallbackLabels[eventType] || String(eventType || '').toUpperCase();
     }
 
+    function _getInlineEventTypeInfo(eventType) {
+        const fallbackColors = { general: '#6c757d', iot: '#2563eb', dt: '#6d5bd0', dx: '#6d5bd0' };
+        const configs = window.CRM_APP?.systemConfig?.['事件類型'];
+        const match = Array.isArray(configs) ? configs.find(item => item && item.value === eventType) : null;
+        return {
+            label: _getInlineEventTypeLabel(eventType),
+            color: match?.color || fallbackColors[eventType] || '#6c757d'
+        };
+    }
+
     function _getInlineReportDomainFieldConfigs(eventType) {
         const fieldsByType = {
             iot: [
@@ -635,6 +645,13 @@ const OpportunityInteractions = (() => {
         return `
             <div class="crm-stream-item micro editing" data-inline-edit-id="${interactionId}">
                 <div class="interaction-inline-edit-frame">
+                    <div class="inline-edit-meta">
+                        <span>${recorder}</span>
+                        <span class="inline-edit-actions">
+                            <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineEdit('${interactionId}')">Save</button>
+                            <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineEdit()">Cancel</button>
+                        </span>
+                    </div>
                     <div class="inline-edit-row">
                         <label class="inline-edit-field inline-edit-type-field">
                             <span>互動種類</span>
@@ -655,13 +672,6 @@ const OpportunityInteractions = (() => {
                         <span>下一步</span>
                         <textarea class="inline-edit-input inline-edit-next-action" data-inline-field="nextAction">${escapeHtml(interaction.nextAction || '')}</textarea>
                     </label>
-                    <div class="inline-edit-meta">
-                        <span>${recorder}</span>
-                        <span class="inline-edit-actions">
-                            <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineEdit('${interactionId}')">Save</button>
-                            <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineEdit()">Cancel</button>
-                        </span>
-                    </div>
                 </div>
             </div>
         `;
@@ -672,6 +682,13 @@ const OpportunityInteractions = (() => {
         return `
             <div class="crm-stream-item micro editing" data-inline-create-row>
                 <div class="interaction-inline-edit-frame">
+                    <div class="inline-edit-meta">
+                        <span>${escapeHtml(getCurrentUser())}</span>
+                        <span class="inline-edit-actions">
+                            <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineCreate()">Cancel</button>
+                            <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineCreate()">Create</button>
+                        </span>
+                    </div>
                     <div class="inline-edit-row">
                         <label class="inline-edit-field inline-edit-type-field">
                             <span>互動種類</span>
@@ -692,13 +709,6 @@ const OpportunityInteractions = (() => {
                         <span>下一步</span>
                         <textarea class="inline-edit-input inline-edit-next-action" data-inline-field="nextAction"></textarea>
                     </label>
-                    <div class="inline-edit-meta">
-                        <span>${escapeHtml(getCurrentUser())}</span>
-                        <span class="inline-edit-actions">
-                            <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineCreate()">Cancel</button>
-                            <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineCreate()">Create</button>
-                        </span>
-                    </div>
                 </div>
             </div>
         `;
@@ -717,17 +727,13 @@ const OpportunityInteractions = (() => {
             renderOperationalWorkspaceEditHTML(_inlineEventDraft, _getLinkedContactsContext()),
             _inlineEventDraft
         );
-        const draftEventName = escapeHtml(_inlineEventDraft.eventName || '');
 
         return `
             <div class="crm-stream-item operational has-inline-report-expanded" data-inline-event-create-row>
                 <div class="expanded-event-shell">
                     <div class="stream-card">
                         <div class="stream-card-header">
-                            <label class="inline-edit-field" style="margin:0; flex:1;">
-                                <span>事件名稱</span>
-                                <input type="text" class="inline-edit-input" id="inline-draft-event-name" value="${draftEventName}" placeholder="請輸入事件名稱...">
-                            </label>
+                            <span></span>
                             <div class="footer-actions">
                                 <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.saveInlineEventCreate()">Save</button>
                                 <button type="button" class="stream-action-btn" onclick="OpportunityInteractions.cancelInlineEventCreate()">Cancel</button>
@@ -793,9 +799,12 @@ const OpportunityInteractions = (() => {
         const rawSummary = interaction.contentSummary || '(無內容)';
         const isEventReportInteraction = interaction.eventType === '事件報告';
         const eventMeta = Array.isArray(interaction.EventLogs) && interaction.EventLogs[0] ? interaction.EventLogs[0] : null;
-        const eventReportTypeStr = eventMeta && eventMeta.eventType
-            ? escapeHtml(_getInlineEventTypeLabel(String(eventMeta.eventType).trim()))
-            : isEventReportInteraction ? escapeHtml('事件報告') : typeStr;
+        const eventReportTypeInfo = eventMeta && eventMeta.eventType
+            ? _getInlineEventTypeInfo(String(eventMeta.eventType).trim())
+            : null;
+        const eventReportTypeBadgeHtml = eventReportTypeInfo
+            ? `<span class="inline-event-type-badge" style="--event-type-color: ${escapeHtml(eventReportTypeInfo.color)};">${escapeHtml(eventReportTypeInfo.label)}</span>`
+            : '';
         const eventReportNameStr = eventMeta && eventMeta.eventName
             ? escapeHtml(eventMeta.eventName)
             : isEventReportInteraction && interaction.eventTitle ? escapeHtml(interaction.eventTitle) : '';
@@ -880,7 +889,8 @@ const OpportunityInteractions = (() => {
                     <div class="stream-card">
                         <div class="stream-card-header">
                             <strong>
-                                <span class="stream-type stream-type-badge">${eventReportTypeStr}</span>
+                                <span class="stream-type stream-type-badge">事件報告</span>
+                                ${eventReportTypeBadgeHtml}
                                 ${eventReportNameStr || typeStr}
                             </strong>
                             <span class="feed-time">${escapeHtml(timeStr)}</span>
@@ -1113,7 +1123,7 @@ const OpportunityInteractions = (() => {
                 }
 
                 const draftValues = _collectInlineReportDraftValues(inlineContainer);
-                const eventNameInput = inlineContainer.querySelector('#inline-draft-event-name');
+                const eventNameInput = inlineContainer.querySelector('[data-report-field="eventName"]');
                 if (eventNameInput) draftValues.eventName = String(eventNameInput.value || '').trim();
                 _inlineEventDraft = _clearInlineReportDomainFields(Object.assign({}, _inlineEventDraft || {}, draftValues, {
                     eventType: targetEventType,
@@ -1152,7 +1162,7 @@ const OpportunityInteractions = (() => {
         if (!frame) return;
 
         const draftValues = _collectInlineReportDraftValues(frame);
-        const eventNameInput = frame.querySelector('#inline-draft-event-name');
+        const eventNameInput = frame.querySelector('[data-report-field="eventName"]');
         const eventNameValue = String(eventNameInput ? eventNameInput.value : '').trim();
         if (!eventNameValue) {
             showNotification('請輸入事件名稱', 'warning');
@@ -1857,7 +1867,7 @@ const OpportunityInteractions = (() => {
                 max-width: max-content;
                 width: auto;
             }
-            #tab-content-interactions .crm-stream-item.operational .inline-event-report .inline-event-type-badge {
+            #tab-content-interactions .crm-stream-item.operational .inline-event-type-badge {
                 background: color-mix(in srgb, var(--event-type-color) 7%, transparent);
                 border: 1px solid color-mix(in srgb, var(--event-type-color) 24%, var(--border-color));
                 border-radius: 1px;

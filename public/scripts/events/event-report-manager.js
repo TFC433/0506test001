@@ -391,7 +391,8 @@ function renderOperationalWorkspaceEditHTML(event, contextContacts = []) {
         }).join('')}
     </div>`;
 
-    let systemMetaHTML = createMetaRowHTML('事件種類', eventTypeSelectorHTML);
+    let systemMetaHTML = createMetaRowHTML('事件名稱', createInputHTML('eventName', event.eventName, '請輸入事件名稱...'));
+    systemMetaHTML += createMetaRowHTML('事件種類', eventTypeSelectorHTML);
     if (event.createdTime) {
         systemMetaHTML += createMetaRowHTML('建立時間', formatDateTime(event.createdTime));
     }
