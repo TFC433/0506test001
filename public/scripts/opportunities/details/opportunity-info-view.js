@@ -100,7 +100,7 @@ const OpportunityInfoView = (() => {
             }
 
             .name-title {
-                font-size: 1.65rem;
+                font-size: 22px;
                 font-weight: 700;
                 color: var(--text-primary);
                 line-height: 1.18;
@@ -158,6 +158,11 @@ const OpportunityInfoView = (() => {
                 gap: 6px;
                 margin-left: auto;
                 flex-wrap: wrap;
+            }
+
+            .opp-header-actions .lineage-action-btn {
+                font-size: 12px;
+                font-weight: 600;
             }
 
             .lineage-action-btn {
@@ -226,8 +231,8 @@ const OpportunityInfoView = (() => {
             }
 
             .field-value {
-                font-size: 0.98rem;
-                font-weight: 500;
+                font-size: 14px;
+                font-weight: 600;
                 color: var(--text-primary);
                 line-height: 1.4;
                 word-break: break-word;
@@ -241,12 +246,12 @@ const OpportunityInfoView = (() => {
             .op-card-business .field-row:nth-child(3) .field-value,
             .op-card-business .field-row:nth-child(4) .field-value,
             .split-contact-row > span:not(.contact-prefix):not(.job-title-badge) {
-                font-weight: 550;
+                font-weight: 600;
             }
 
             .business-customer-value {
-                font-size: 0.94rem;
-                font-weight: 520 !important;
+                font-size: 14px;
+                font-weight: 600 !important;
                 line-height: 1.35;
                 word-break: normal;
                 overflow-wrap: anywhere;
@@ -265,7 +270,7 @@ const OpportunityInfoView = (() => {
                 align-items: center;
                 width: fit-content;
                 border-radius: var(--rounded-sm);
-                font-size: 0.78rem;
+                font-size: 12px;
                 line-height: 1.25;
                 font-weight: 600;
                 white-space: normal;
@@ -290,21 +295,21 @@ const OpportunityInfoView = (() => {
                 flex-wrap: wrap;
                 align-items: center;
                 gap: 5px;
-                font-weight: 550;
+                font-weight: 600;
             }
 
             .field-value.val-money {
                 font-family: 'Roboto Mono', monospace;
-                font-size: 1rem;
-                font-weight: 650;
+                font-size: 15px;
+                font-weight: 700;
                 font-variant-numeric: tabular-nums;
                 letter-spacing: 0;
             }
 
             /* 統一標題樣式 (預設灰色) */
             .unified-label {
-                font-size: var(--font-size-xs);
-                font-weight: 450;
+                font-size: 12px;
+                font-weight: 500;
                 color: var(--text-muted);
                 text-transform: uppercase;
                 letter-spacing: 0.32px;
@@ -313,8 +318,8 @@ const OpportunityInfoView = (() => {
 
             /* 內部卡片標題 (預設灰色) */
             .inner-card-title {
-                font-size: var(--font-size-xs);
-                font-weight: 600;
+                font-size: 12px;
+                font-weight: 500;
                 color: var(--text-muted);
                 margin-bottom: 0;
                 padding-bottom: var(--spacing-2);
@@ -337,7 +342,7 @@ const OpportunityInfoView = (() => {
                 cursor: pointer;
                 text-align: center;
                 color: var(--text-muted);
-                font-weight: 700;
+                font-weight: 600;
                 text-decoration: none;
                 transform: none;
                 transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
@@ -355,7 +360,7 @@ const OpportunityInfoView = (() => {
                 align-items: center;
                 justify-content: center;
                 gap: 6px;
-                font-size: 0.85rem;
+                font-size: 12px;
                 letter-spacing: 1px;
             }
             .edit-icon-svg { width: 14px; height: 14px; stroke-width: 3; }
@@ -365,7 +370,7 @@ const OpportunityInfoView = (() => {
                 align-items: center;
                 justify-content: flex-start;
                 gap: 6px;
-                font-size: 0.95rem;
+                font-size: 14px;
                 color: var(--text-primary);
                 flex-wrap: wrap;
                 width: 100%;
@@ -404,15 +409,15 @@ const OpportunityInfoView = (() => {
                 background-color: color-mix(in srgb, var(--accent-blue, #2563eb) 10%, transparent);
                 padding: 4px 10px;
                 border-radius: var(--rounded-sm);
-                font-size: 0.82rem;
-                font-weight: 700;
+                font-size: 12px;
+                font-weight: 600;
                 line-height: 1.25;
             }
             .spec-qty-text {
                 margin-left: 4px;
                 opacity: 0.9;
                 font-family: monospace; 
-                font-weight: 700;
+                font-weight: 600;
             }
 
             .dates-content {
@@ -430,8 +435,8 @@ const OpportunityInfoView = (() => {
                 border-top: 1px solid color-mix(in srgb, var(--border-color) 35%, transparent);
             }
             .date-row:last-child { padding-bottom: 0; }
-            .date-key { font-size: var(--font-size-xs); color: var(--text-muted); font-weight: 450; text-transform: uppercase; letter-spacing: 0.32px; }
-            .date-val { font-size: 0.95rem; color: var(--text-primary); font-weight: 600; line-height: 1.4; font-family: monospace; }
+            .date-key { font-size: 12px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.32px; }
+            .date-val { font-size: 14px; color: var(--text-primary); font-weight: 600; line-height: 1.4; font-family: monospace; }
 
             .empty-inline {
                 color: var(--text-muted);
@@ -442,7 +447,8 @@ const OpportunityInfoView = (() => {
             }
 
             .notes-text-clean {
-                font-size: 0.98rem;
+                font-size: 14px;
+                font-weight: 400;
                 color: var(--text-primary);
                 line-height: 1.5;
                 white-space: pre-wrap;

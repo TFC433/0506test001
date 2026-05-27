@@ -1779,14 +1779,15 @@ const OpportunityInteractions = (() => {
                 border: 0;
                 color: var(--text-muted);
                 cursor: default;
-                font-size: 0.82rem;
-                font-weight: 600;
-                letter-spacing: 0.02em;
+                font-size: 12px;
+                font-weight: 500;
+                letter-spacing: 0.32px;
+                line-height: 1.2;
                 padding: 0;
             }
             .interaction-layout > .activity-hub-header .sub-tab-link.active {
                 color: var(--text-muted);
-                font-weight: 600;
+                font-weight: 500;
             }
             .interaction-layout > .activity-hub-header .sub-tab-link[data-tab="activity"] {
                 display: none;

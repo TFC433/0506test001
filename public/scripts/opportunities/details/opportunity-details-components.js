@@ -152,12 +152,14 @@ function _injectStylesForOppInfoCard() {
         }
         #opportunity-detail-container .opp-rail-chip-main {
             color: var(--text-primary);
+            font-size: 13px;
             font-weight: 600;
         }
         #opportunity-detail-container .opp-rail-chip-meta,
         #opportunity-detail-container .opp-rail-mini-meta {
             color: var(--text-muted);
-            font-size: var(--font-size-xs);
+            font-size: 12px;
+            font-weight: 400;
         }
         #opportunity-detail-container .opp-rail-mini-card {
             display: flex;
@@ -207,11 +209,13 @@ function _injectStylesForOppInfoCard() {
             text-overflow: ellipsis;
             white-space: nowrap;
             color: var(--text-primary);
-            font-size: var(--font-size-sm);
+            font-size: 13px;
+            font-weight: 600;
             line-height: 1.35;
         }
         #opportunity-detail-container .opp-rail-contact-role {
             color: var(--text-muted);
+            font-size: 12px;
             font-weight: 400;
         }
         #opportunity-detail-container .opp-rail-contact-list:not(.is-managing) .opp-rail-actions {
