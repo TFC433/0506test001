@@ -2125,11 +2125,13 @@ const OpportunityInteractions = (() => {
                 border-radius: var(--rounded-sm);
                 box-sizing: border-box;
                 box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
-                max-width: min(68%, 760px);
-                width: 100%;
+                max-width: min(100%, 720px);
+                min-width: min(420px, 100%);
+                width: fit-content;
             }
             #tab-content-interactions .crm-stream-item.operational.has-inline-report-expanded .expanded-event-shell {
                 max-width: 100%;
+                width: 100%;
             }
             .stream-card {
                 box-sizing: border-box;
@@ -2143,6 +2145,10 @@ const OpportunityInteractions = (() => {
                 font-size: 0.9rem;
                 gap: 8px;
                 margin-bottom: 4px;
+            }
+            .stream-card-header strong {
+                min-width: 0;
+                overflow-wrap: anywhere;
             }
             .stream-card-header .feed-time {
                 color: var(--text-muted);
