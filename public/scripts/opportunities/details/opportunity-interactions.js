@@ -1887,13 +1887,13 @@ const OpportunityInteractions = (() => {
 
             .crm-stream-item.micro {
                 border-bottom: 1px solid color-mix(in srgb, var(--border-color) 30%, transparent);
-                max-width: min(68%, 760px);
+                max-width: min(100%, 740px);
                 padding: 5px 0 6px;
                 width: 100%;
             }
             .crm-stream-item.micro.editing {
                 border-bottom: 0;
-                max-width: min(68%, 760px);
+                max-width: min(100%, 740px);
                 padding: 4px 0 7px;
                 width: 100%;
             }
