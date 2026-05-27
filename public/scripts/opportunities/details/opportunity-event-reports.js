@@ -157,7 +157,7 @@ const OpportunityEvents = (() => {
                 border-radius: var(--rounded-sm);
                 color: color-mix(in srgb, var(--accent-purple, #6d28d9) 78%, var(--text-primary));
                 font-size: 0.78rem;
-                font-weight: 600;
+                font-weight: 400;
                 line-height: 1.25;
                 max-width: 100%;
                 overflow: hidden;
