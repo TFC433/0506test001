@@ -123,6 +123,7 @@ const PotentialContactsManager = (() => {
             context,
             opportunityId
         } = options;
+        const normalizeComparisonValue = value => String(value || '').trim();
 
         const container = document.querySelector(containerSelector);
         if (!container) {
@@ -139,10 +140,17 @@ const PotentialContactsManager = (() => {
 
         // [WORLD MODEL] Comparison Logic: Preparing the CORE list for efficient lookup
         // Comparison only; no write authority here.
-        const comparisonSet = new Set(comparisonList.map(item => item[comparisonKey]));
+        const comparisonSet = new Set(
+            comparisonList
+                .map(item => normalizeComparisonValue(item && item[comparisonKey]))
+                .filter(Boolean)
+        );
 
         if (context === 'opportunity') {
-            const visiblePotentialContacts = potentialContacts;
+            const visiblePotentialContacts = potentialContacts.filter(contact => {
+                const value = normalizeComparisonValue(contact && contact[comparisonKey]);
+                return !value || !comparisonSet.has(value);
+            });
             if (visiblePotentialContacts.length === 0) {
                 container.innerHTML = '<div class="opp-rail-empty">尚無同公司潛在聯絡人</div>';
                 return;
@@ -191,7 +199,8 @@ const PotentialContactsManager = (() => {
             const roleText = getContactRoleText(contact);
             
             // [STATUS INFERENCE] Determines if RAW contact exists in CORE based on comparisonKey.
-            const isAlreadyHandled = comparisonSet.has(contact[comparisonKey]);
+            const comparisonValue = normalizeComparisonValue(contact && contact[comparisonKey]);
+            const isAlreadyHandled = comparisonValue ? comparisonSet.has(comparisonValue) : false;
             
             let statusBadge = '';
             let actionButton = '';

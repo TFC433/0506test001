@@ -566,7 +566,10 @@ const OpportunityInfoView = (() => {
         }
 
         if (parsed && typeof parsed === 'object') {
-            const entries = Object.entries(parsed);
+            const entries = Object.entries(parsed).filter(([name]) => {
+                const configItem = _getSpecConfig(name);
+                return !(/^\d+$/.test(name) && !configItem);
+            });
             if (entries.length > 0) {
                 specsContent = entries.map(([name, qty]) => {
                     const configItem = _getSpecConfig(name);
@@ -655,7 +658,7 @@ const OpportunityInfoView = (() => {
                     </div>
 
                     <div class="layer-card op-card-business">
-                        <div class="inner-card-title">商務脈絡</div>
+                        <div class="inner-card-title">客戶與銷售脈絡</div>
                         <div class="field-list">
                             <div class="field-row">
                                 <span class="unified-label">終端客戶</span>
