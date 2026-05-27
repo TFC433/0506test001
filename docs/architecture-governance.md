@@ -1091,6 +1091,126 @@ Break Activity Hub inline create/edit/void.
 
 ---
 
+# 26.1 Accepted Opportunity Detail / Activity Hub Baselines (2026-05)
+
+These baselines record accepted Opportunity Detail and Activity Hub behavior from the current workspace refinement cycle.
+
+## 26.1.1 Event Module Primary Entry Downgrade
+
+Event reports are no longer treated as a primary top-level module.
+
+Primary event report workflow is contextual:
+
+```text
+Opportunity Detail / Activity Hub
+```
+
+Global event list and global create-event entry points may be hidden or downgraded.
+
+Do NOT delete:
+
+* event module files
+* backend routes
+* modal manager
+* legacy event infrastructure
+
+without separate forensic approval.
+
+Activity Hub inline event report creation must remain intact.
+
+## 26.1.2 Activity Hub Visual Hierarchy Baseline
+
+Accepted visual hierarchy:
+
+* muted gray-green = lightweight CRM interaction / general activity
+* purple = formal event report / structured report
+* neutral gray-white = secondary metadata such as event category/type
+* subdued gray = system records / void / tombstone / audit-like records
+
+Rules:
+
+* `新增互動` uses muted gray-green.
+* `新增事件報告` uses purple.
+* lightweight interaction badges use muted gray-green.
+* main event report badges use purple.
+* event category/type metadata badges should stay neutral.
+* system / void / tombstone records must stay subdued.
+
+## 26.1.3 Right Rail Event Report List Baseline
+
+The right-side event report list is a compact index, not a timeline clone.
+
+It must keep the original structure:
+
+```text
+date
+title badge + actor
+divider
+```
+
+Do NOT split it into separate `事件報告` and `IOT/DT/DX` badges.
+
+The single title badge uses restrained purple styling.
+
+The title badge font weight is `400`.
+
+## 26.1.4 Opportunity Detail Data / Label Consistency Baseline
+
+Same-company potential contacts must not show contacts already linked in `關聯聯絡人`.
+
+`PotentialContactsManager` must honor `comparisonList` / `comparisonKey` in opportunity context.
+
+Potential specification chips must filter numeric artifact keys such as invalid `0` while preserving valid configured options such as `SDTM` and `技術服務(一般)`.
+
+Accepted label changes:
+
+```text
+Main card:
+商務脈絡 -> 客戶與銷售脈絡
+
+Right rail:
+商務脈絡 -> 商務關聯紀錄
+```
+
+## 26.1.5 Activity Hub Width Baseline
+
+Event report cards may use content-fit behavior with readable min/max bounds.
+
+Lightweight interaction rows should be narrowed by adjusting the whole micro row width, not by only constraining the text/copy layer.
+
+When tuning lightweight interaction width:
+
+* do not alter time / actor / edit icon placement
+* do not change event report width
+
+## 26.1.6 Opportunity Detail Typography Baseline
+
+The top `機會名稱` label is the benchmark for peer card/widget section titles.
+
+Peer section/widget titles include:
+
+```text
+機會進程
+基本資訊
+客戶與銷售脈絡
+商機概況
+關鍵日期
+備註
+動態牆
+關聯聯絡人
+商務關聯紀錄
+同公司潛在聯絡人
+事件報告列表
+```
+
+These titles should match the small restrained `機會名稱` label style.
+
+They must not be larger, bolder, or more visually dominant than the benchmark.
+
+Do NOT confuse this with the large opportunity name value/title.
+
+---
+
 # 27. Current Workspace Productization Status (2026-05)
 
 Current Activity Hub status:
