@@ -2,7 +2,7 @@
 // (Stability Overhaul: Duplicate Init Fix + Delegation)
 
 const DashboardKanban = {
-    viewMode: localStorage.getItem('dashboardKanbanViewMode') || 'kanban',
+    viewMode: 'chip-wall',
     chipWallInstance: null,
     isInitialized: false, // Flag to prevent duplicate initialization
     
@@ -21,13 +21,12 @@ const DashboardKanban = {
 
         this.refreshCallback = refreshCallback; 
         
-        document.getElementById('kanban-view-toggle')?.addEventListener('click', () => this.toggleView());
-
         document.getElementById('chip-wall-view-mode-toggle')?.addEventListener('click', () => {
             if (this.chipWallInstance) {
                 this.chipWallInstance.viewMode = this.chipWallInstance.viewMode === 'grid' ? 'flex' : 'grid';
                 localStorage.setItem('chipWallViewMode', this.chipWallInstance.viewMode);
                 this.chipWallInstance.render();
+                this._expandChipWallByDefault();
                 document.getElementById('chip-wall-view-mode-toggle').textContent = this.chipWallInstance.viewMode === 'grid' ? '切換流體模式' : '切換網格模式';
             }
         });
@@ -35,9 +34,9 @@ const DashboardKanban = {
         document.getElementById('chip-wall-toggle-all')?.addEventListener('click', (e) => {
             if (this.chipWallInstance) {
                 const btn = e.currentTarget;
-                const isExpanding = btn.textContent.includes('展開');
+                const isExpanding = btn.textContent.includes('全部展開');
                 this.chipWallInstance.container.querySelectorAll('.chip-container').forEach(c => c.classList.toggle('is-expanded', isExpanding));
-                this.chipWallInstance.container.querySelectorAll('.chip-expand-btn').forEach(b => { b.textContent = isExpanding ? '收合' : '展開更多...'; });
+                this.chipWallInstance.container.querySelectorAll('.chip-expand-btn').forEach(b => { b.textContent = isExpanding ? '收合' : '展開'; });
                 btn.textContent = isExpanding ? '全部收合' : '全部展開';
             }
         });
@@ -112,10 +111,7 @@ const DashboardKanban = {
             <div class="kanban-actions-group">
                 <div class="chip-wall-extra-controls">
                     <button class="action-btn small secondary" id="chip-wall-view-mode-toggle">切換模式</button>
-                    <button class="action-btn small secondary" id="chip-wall-toggle-all">全部展開</button>
-                </div>
-                <div class="kanban-main-toggle">
-                    <button class="action-btn small secondary" id="kanban-view-toggle" title="切換檢視模式">切換晶片牆</button>
+                    <button class="action-btn small secondary" id="chip-wall-toggle-all">全部收合</button>
                 </div>
             </div>
         `;
@@ -126,8 +122,6 @@ const DashboardKanban = {
             document.getElementById(id)?.addEventListener('change', () => this.render());
         });
 
-        document.getElementById('kanban-view-toggle')?.addEventListener('click', () => this.toggleView());
-        
         const chipToggle = document.getElementById('chip-wall-view-mode-toggle');
         if (chipToggle) {
              chipToggle.addEventListener('click', () => {
@@ -135,6 +129,7 @@ const DashboardKanban = {
                     this.chipWallInstance.viewMode = this.chipWallInstance.viewMode === 'grid' ? 'flex' : 'grid';
                     localStorage.setItem('chipWallViewMode', this.chipWallInstance.viewMode);
                     this.chipWallInstance.render();
+                    this._expandChipWallByDefault();
                     chipToggle.textContent = this.chipWallInstance.viewMode === 'grid' ? '切換流體模式' : '切換網格模式';
                 }
             });
@@ -145,9 +140,9 @@ const DashboardKanban = {
             expandAllBtn.addEventListener('click', (e) => {
                 if (this.chipWallInstance) {
                     const btn = e.currentTarget;
-                    const isExpanding = btn.textContent.includes('展開');
+                    const isExpanding = btn.textContent.includes('全部展開');
                     this.chipWallInstance.container.querySelectorAll('.chip-container').forEach(c => c.classList.toggle('is-expanded', isExpanding));
-                    this.chipWallInstance.container.querySelectorAll('.chip-expand-btn').forEach(b => { b.textContent = isExpanding ? '收合' : '展開更多...'; });
+                    this.chipWallInstance.container.querySelectorAll('.chip-expand-btn').forEach(b => { b.textContent = isExpanding ? '收合' : '展開'; });
                     btn.textContent = isExpanding ? '全部收合' : '全部展開';
                 }
             });
@@ -155,12 +150,12 @@ const DashboardKanban = {
     },
 
     toggleView() {
-        this.viewMode = this.viewMode === 'kanban' ? 'chip-wall' : 'kanban';
-        localStorage.setItem('dashboardKanbanViewMode', this.viewMode);
+        this.viewMode = 'chip-wall';
         this.render();
     },
 
     render() {
+        this.viewMode = 'chip-wall';
         const year = document.getElementById('kanban-year-filter')?.value || 'all';
         const type = document.getElementById('kanban-type-filter')?.value || 'all';
         const source = document.getElementById('kanban-source-filter')?.value || 'all';
@@ -200,6 +195,7 @@ const DashboardKanban = {
                     onItemUpdate: () => { if(this.refreshCallback) this.refreshCallback(true); } 
                 });
                 this.chipWallInstance.render();
+                this._expandChipWallByDefault();
             } else {
                 chipWallContainer.innerHTML = `<div class="alert alert-error">晶片牆元件載入失敗</div>`;
             }
@@ -228,6 +224,17 @@ const DashboardKanban = {
             
             this.renderKanbanColumns(filteredKanbanData);
         }
+    },
+
+    _expandChipWallByDefault() {
+        const container = this.chipWallInstance?.container || document.getElementById('chip-wall-board-container');
+        if (!container) return;
+
+        container.querySelectorAll('.chip-container').forEach(c => c.classList.add('is-expanded'));
+        container.querySelectorAll('.chip-expand-btn').forEach(b => { b.textContent = '收合'; });
+
+        const expandAllBtn = document.getElementById('chip-wall-toggle-all');
+        if (expandAllBtn) expandAllBtn.textContent = '全部收合';
     },
 
     renderKanbanColumns(stagesData) {
