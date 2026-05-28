@@ -63,11 +63,6 @@ const DashboardKanban = {
 
         this._ensureStyles();
 
-        if (container.querySelector('[data-filter-group]')) {
-            this._updateFilterTabStates();
-            return;
-        }
-
         const typeTabs = [
             { value: 'all', label: '全部' },
             ...this._getEnabledOpportunityTypes().map(opt => ({
@@ -78,11 +73,11 @@ const DashboardKanban = {
 
         const filtersHTML = `
             <div class="kanban-filter">
-                ${this._renderFilterTabs('時間', 'time', [
-                    { value: 'history', label: '歷史' },
-                    { value: 'this_year', label: '今年' }
+                ${this._renderFilterTabs('時間範圍', 'time', [
+                    { value: 'history', label: '歷史全資料' },
+                    { value: 'this_year', label: '今年業績' }
                 ])}
-                ${this._renderFilterTabs('種類', 'type', typeTabs)}
+                ${this._renderFilterTabs('機會種類', 'type', typeTabs)}
             </div>
         `;
 
@@ -98,13 +93,16 @@ const DashboardKanban = {
         container.innerHTML = filtersHTML;
         this._updateFilterTabStates();
 
-        container.addEventListener('click', (e) => {
-            const tab = e.target.closest('[data-filter-group]');
-            if (!tab) return;
-            this.currentFilters[tab.dataset.filterGroup] = tab.dataset.filterValue;
-            this._updateFilterTabStates();
-            this.render();
-        });
+        if (container.dataset.eventsBound !== 'true') {
+            container.addEventListener('click', (e) => {
+                const tab = e.target.closest('[data-filter-group]');
+                if (!tab) return;
+                this.currentFilters[tab.dataset.filterGroup] = tab.dataset.filterValue;
+                this._updateFilterTabStates();
+                this.render();
+            });
+            container.dataset.eventsBound = 'true';
+        }
 
         const chipToggle = document.getElementById('chip-wall-view-mode-toggle');
         if (chipToggle) {
@@ -383,8 +381,9 @@ const DashboardKanban = {
                 }
                 .kanban-filter-tab:hover { background: var(--secondary-bg); color: var(--text-primary); }
                 .kanban-filter-tab.is-active {
-                    background: var(--secondary-bg); border-color: var(--text-muted);
-                    color: var(--text-primary); font-weight: 500;
+                    background: color-mix(in srgb, var(--accent-blue) 10%, transparent);
+                    border-color: color-mix(in srgb, var(--accent-blue) 40%, var(--border-color));
+                    color: var(--accent-blue); font-weight: 600;
                 }
             `;
             document.head.appendChild(style);
