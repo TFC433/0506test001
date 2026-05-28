@@ -47,6 +47,10 @@ class OpportunityReader extends BaseReader {
      */
     async getSalesAnalysisBaseDeals(startDateISO, endDateISO) {
         const allOpportunities = await this.getOpportunities();
+        if (!startDateISO && !endDateISO) {
+            return allOpportunities.filter(opp => opp.currentStage === '?釣');
+        }
+
         const start = startDateISO ? new Date(startDateISO) : new Date(0);
         const end = endDateISO ? new Date(endDateISO) : new Date();
 

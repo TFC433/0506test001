@@ -73,13 +73,14 @@ const SalesAnalysisComponents = {
         const now = new Date();
         const todayStr = formatDateLocal(now);
         const ytdStr = formatDateLocal(new Date(now.getFullYear(), 0, 1));
+        const yearEndStr = formatDateLocal(new Date(now.getFullYear(), 11, 31));
         const thirtyDate = new Date();
         thirtyDate.setDate(thirtyDate.getDate() - 30);
         const thirtyStr = formatDateLocal(thirtyDate);
 
         let activeRange = 'custom';
         if (sVal === '' && eVal === '') activeRange = 'all';
-        else if (sVal === ytdStr && eVal === todayStr) activeRange = 'ytd';
+        else if (sVal === ytdStr && eVal === yearEndStr) activeRange = 'ytd';
         else if (sVal === thirtyStr && eVal === todayStr) activeRange = '30d';
 
         const btnClass = (range) => range === activeRange ? 'action-btn primary quick-date-btn' : 'action-btn secondary quick-date-btn';
@@ -94,7 +95,7 @@ const SalesAnalysisComponents = {
                     <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
                         <div style="display: flex; gap: 6px;">
                             <button class="${btnClass('all')}" style="padding: 4px 10px; font-size: 0.85rem;" onclick="window.setQuickDate('all')">歷史全資料</button>
-                            <button class="${btnClass('ytd')}" style="padding: 4px 10px; font-size: 0.85rem;" onclick="window.setQuickDate('ytd')">YTD</button>
+                            <button class="${btnClass('ytd')}" style="padding: 4px 10px; font-size: 0.85rem;" onclick="window.setQuickDate('ytd')">今年業績</button>
                             <button class="${btnClass('30d')}" style="padding: 4px 10px; font-size: 0.85rem;" onclick="window.setQuickDate('30d')">最近30天</button>
                         </div>
                         <div style="display: flex; gap: 6px; align-items: center;">

@@ -52,7 +52,7 @@ async function loadSalesAnalysisPage(startDateISO, endDateISO) {
     if (startDateISO === undefined && endDateISO === undefined) {
         const now = new Date();
         salesStartDate = formatDateLocal(new Date(now.getFullYear(), 0, 1));
-        salesEndDate = formatDateLocal(now);
+        salesEndDate = formatDateLocal(new Date(now.getFullYear(), 11, 31));
     } else if (startDateISO === null && endDateISO === null) {
         salesStartDate = '';
         salesEndDate = '';
@@ -85,7 +85,7 @@ window.setQuickDate = function(range) {
     
     if (range === 'ytd') {
         start = formatDateLocal(new Date(now.getFullYear(), 0, 1)); 
-        end = todayStr;
+        end = formatDateLocal(new Date(now.getFullYear(), 11, 31));
     } else if (range === '30d') {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);

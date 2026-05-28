@@ -50,6 +50,10 @@ class OpportunitySqlReader {
     }
 
     _applySalesAnalysisTimeFilter(data, startDateISO, endDateISO) {
+        if (!startDateISO && !endDateISO) {
+            return (data || []).map(row => this._mapRowToDto(row));
+        }
+
         const start = startDateISO ? new Date(startDateISO) : new Date(0);
         const end = endDateISO ? new Date(endDateISO) : new Date();
 
