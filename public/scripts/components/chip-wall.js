@@ -571,14 +571,14 @@ class ChipWall {
             }
             .chip-wall-stage-title {
                 display: flex; justify-content: space-between; align-items: center;
-                font-size: 13px; font-weight: 500; color: var(--text-muted); line-height: 1.2; letter-spacing: 0.24px;
+                font-size: 14px; font-weight: 600; color: var(--text-primary); line-height: 1.2; letter-spacing: 0.16px;
                 margin-bottom: var(--spacing-3); padding-bottom: var(--spacing-3);
                 border-bottom: 1px solid var(--border-color);
             }
             .chip-wall-stage-title.is-collapsible .stage-name::before { content: '▾ '; }
             .is-expanded .chip-wall-stage-title.is-collapsible .stage-name::before { content: '▴ '; }
             .chip-wall-stage-title.is-collapsible { cursor: pointer; }
-            .chip-wall-stage-count { color: var(--text-muted); font-weight: 500; }
+            .chip-wall-stage-count { color: var(--text-muted); font-size: 13px; font-weight: 600; }
             .chip-container {
                 display: flex; flex-wrap: wrap; gap: var(--spacing-2);
                 flex-grow: 1; transition: max-height 0.4s ease-out;
