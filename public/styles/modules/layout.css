@@ -401,6 +401,14 @@
     border-radius: var(--dashboard-card-radius);
 }
 
+#page-dashboard .dashboard-widget .widget-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+    line-height: 1.2;
+    letter-spacing: 0.24px;
+}
+
 /* Fix stats-grid grid span conflict (cite: Phase 1.9-C) */
 #page-dashboard .dashboard-grid-flexible > .stats-grid.grid-col-6 {
     grid-column: span 6;

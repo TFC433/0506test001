@@ -23,6 +23,7 @@ class ChipWall {
             onFilterChange: null,
             ...options
         };
+        this.options.isCollapsible = false;
 
         this.viewMode = localStorage.getItem('chipWallViewMode') || 'grid';
         this.filters = { type: 'all', source: 'all', time: 'all', year: 'all' };
@@ -153,7 +154,7 @@ class ChipWall {
                         <span class="stage-name">${stageData.name}</span>
                         <span class="chip-wall-stage-count">(${stageData.items.length})</span>
                     </h3>
-                    <div class="chip-container">
+                    <div class="chip-container is-expanded">
                         ${stageData.items.length > 0 ? stageData.items.map(item => this._renderChip(item)).join('') : '<span class="no-opps-text">尚無案件</span>'}
                     </div>
                 </div>
@@ -570,7 +571,7 @@ class ChipWall {
             }
             .chip-wall-stage-title {
                 display: flex; justify-content: space-between; align-items: center;
-                font-size: var(--font-size-base); font-weight: 600; color: var(--text-primary);
+                font-size: 13px; font-weight: 500; color: var(--text-muted); line-height: 1.2; letter-spacing: 0.24px;
                 margin-bottom: var(--spacing-3); padding-bottom: var(--spacing-3);
                 border-bottom: 1px solid var(--border-color);
             }
@@ -584,8 +585,9 @@ class ChipWall {
                 overflow: hidden; max-height: 200px;
                 padding-top: var(--spacing-1);
             }
-            .chip-container.is-expanded { max-height: 1000px; }
+            .chip-container.is-expanded { max-height: none; overflow: visible; }
             .chip-expand-btn {
+                display: none !important;
                 background: var(--glass-bg); color: var(--text-secondary); border: 1px solid var(--border-color);
                 padding: 3px 7px; border-radius: 0;
                 font-size: 11px; line-height: 1.2; cursor: pointer; width: 100%;
@@ -636,6 +638,7 @@ class ChipWall {
                 display: flex; gap: var(--spacing-4); align-items: center; flex-wrap: wrap;
             }
             .chip-wall-filters { display: flex; gap: var(--spacing-3); flex-wrap: wrap; }
+            .chip-wall-toggle-all-btn { display: none !important; }
             .chip-wall-actions { display: flex; gap: var(--spacing-2); }
             @media (max-width: 900px) {
                 .chip-wall-stage-row { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
