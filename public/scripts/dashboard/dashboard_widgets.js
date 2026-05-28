@@ -323,7 +323,6 @@ const DashboardWidgets = {
                     pointPadding: 0.2,
                     groupPadding: 0.3,
                     borderWidth: 0,
-                    visible: false,
                     legendIndex: 99,
                     tooltip: {
                         pointFormatter: function () {

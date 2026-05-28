@@ -593,8 +593,8 @@ class ChipWall {
             }
             .chip-expand-btn:hover { background: var(--secondary-bg); color: var(--text-primary); }
             .opportunity-chip {
-                color: var(--text-secondary); font-size: 12px; font-weight: 400; line-height: 1.2;
-                padding: 3px 7px; border-radius: 0; letter-spacing: 0;
+                color: var(--text-secondary); font-size: 13px; font-weight: 400; line-height: 1.2;
+                padding: 4px 8px; border-radius: 0; letter-spacing: 0;
                 border: 1px solid transparent; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
                 --chip-color: var(--text-muted);
                 background: color-mix(in srgb, var(--chip-color) 10%, var(--primary-bg));

@@ -5,6 +5,7 @@ const DashboardKanban = {
     viewMode: 'chip-wall',
     chipWallInstance: null,
     isInitialized: false, // Flag to prevent duplicate initialization
+    currentFilters: { time: 'history', type: 'all' },
     
     // Internal data
     data: {
@@ -62,48 +63,26 @@ const DashboardKanban = {
 
         this._ensureStyles();
 
-        if (document.getElementById('kanban-year-filter')) {
+        if (container.querySelector('[data-filter-group]')) {
+            this._updateFilterTabStates();
             return;
         }
 
-        const systemConfig = window.CRM_APP?.systemConfig || {};
-        
-        const yearFilterHTML = `
-            <div>
-                <label for="kanban-year-filter">年度</label>
-                <select id="kanban-year-filter" class="form-select-sm">
-                    <option value="all">全部年度</option>
-                    ${this.data.availableYears.map(y => `<option value="${y}">${y}年</option>`).join('')}
-                </select>
-            </div>
-        `;
+        const typeTabs = [
+            { value: 'all', label: '全部' },
+            ...this._getEnabledOpportunityTypes().map(opt => ({
+                value: opt.value,
+                label: opt.note || opt.value
+            }))
+        ];
 
         const filtersHTML = `
             <div class="kanban-filter">
-                ${yearFilterHTML}
-                <div>
-                    <label for="kanban-type-filter">種類</label>
-                    <select id="kanban-type-filter" class="form-select-sm">
-                        <option value="all">所有種類</option>
-                        ${(systemConfig['機會種類'] || []).map(opt => `<option value="${opt.value}">${opt.note || opt.value}</option>`).join('')}
-                    </select>
-                </div>
-                <div>
-                    <label for="kanban-source-filter">來源</label>
-                    <select id="kanban-source-filter" class="form-select-sm">
-                        <option value="all">所有來源</option>
-                         ${(systemConfig['機會來源'] || []).map(opt => `<option value="${opt.value}">${opt.note || opt.value}</option>`).join('')}
-                    </select>
-                </div>
-                <div>
-                    <label for="kanban-time-filter">活動時間</label>
-                    <select id="kanban-time-filter" class="form-select-sm">
-                        <option value="all">不限</option>
-                        <option value="7">近 7 天</option>
-                        <option value="30">近 30 天</option>
-                        <option value="90">近 90 天</option>
-                    </select>
-                </div>
+                ${this._renderFilterTabs('時間', 'time', [
+                    { value: 'history', label: '歷史' },
+                    { value: 'this_year', label: '今年' }
+                ])}
+                ${this._renderFilterTabs('種類', 'type', typeTabs)}
             </div>
         `;
 
@@ -117,9 +96,14 @@ const DashboardKanban = {
         `; */ const actionsHTML = '';
 
         container.innerHTML = filtersHTML;
+        this._updateFilterTabStates();
 
-        ['kanban-year-filter', 'kanban-type-filter', 'kanban-source-filter', 'kanban-time-filter'].forEach(id => {
-            document.getElementById(id)?.addEventListener('change', () => this.render());
+        container.addEventListener('click', (e) => {
+            const tab = e.target.closest('[data-filter-group]');
+            if (!tab) return;
+            this.currentFilters[tab.dataset.filterGroup] = tab.dataset.filterValue;
+            this._updateFilterTabStates();
+            this.render();
         });
 
         const chipToggle = document.getElementById('chip-wall-view-mode-toggle');
@@ -156,21 +140,7 @@ const DashboardKanban = {
 
     render() {
         this.viewMode = 'chip-wall';
-        const year = document.getElementById('kanban-year-filter')?.value || 'all';
-        const type = document.getElementById('kanban-type-filter')?.value || 'all';
-        const source = document.getElementById('kanban-source-filter')?.value || 'all';
-        const time = document.getElementById('kanban-time-filter')?.value || 'all';
-
-        let filteredOpportunities = this.data.opportunities;
-
-        if (year !== 'all') filteredOpportunities = filteredOpportunities.filter(opp => String(opp.creationYear) === year);
-        if (type !== 'all') filteredOpportunities = filteredOpportunities.filter(opp => opp.opportunityType === type);
-        if (source !== 'all') filteredOpportunities = filteredOpportunities.filter(opp => opp.opportunitySource === source);
-        if (time !== 'all') {
-            const days = parseInt(time);
-            const cutoff = new Date().getTime() - days * 24 * 60 * 60 * 1000;
-            filteredOpportunities = filteredOpportunities.filter(opp => opp.effectiveLastActivity && opp.effectiveLastActivity >= cutoff);
-        }
+        const filteredOpportunities = this.data.opportunities.filter(opp => this._matchesCurrentFilters(opp));
 
         const kanbanWidget = document.getElementById('kanban-widget');
         const kanbanContainer = document.getElementById('kanban-board-container');
@@ -323,23 +293,10 @@ const DashboardKanban = {
     expandStage(stageId) {
         const stageData = this.data.rawKanbanData[stageId]; 
         if (!stageData) return;
-        
-        const year = document.getElementById('kanban-year-filter')?.value || 'all';
-        const type = document.getElementById('kanban-type-filter')?.value || 'all';
-        const source = document.getElementById('kanban-source-filter')?.value || 'all';
-        const time = document.getElementById('kanban-time-filter')?.value || 'all';
 
         const opportunitiesToShow = this.data.opportunities.filter(opp => {
             if (opp.currentStage !== stageId) return false;
-            if (year !== 'all' && String(opp.creationYear) !== year) return false;
-            if (type !== 'all' && opp.opportunityType !== type) return false;
-            if (source !== 'all' && opp.opportunitySource !== source) return false;
-            if (time !== 'all') {
-                const days = parseInt(time);
-                const cutoff = new Date().getTime() - days * 24 * 60 * 60 * 1000;
-                if (!opp.effectiveLastActivity || opp.effectiveLastActivity < cutoff) return false;
-            }
-            return true;
+            return this._matchesCurrentFilters(opp);
         });
 
         const modalTitle = document.getElementById('kanban-expand-title');
@@ -352,6 +309,55 @@ const DashboardKanban = {
                 : '<div class="alert alert-error">無法渲染，找不到表格生成函式</div>';
             showModal('kanban-expand-modal');
         }
+    },
+
+    _getEnabledOpportunityTypes() {
+        const systemConfig = window.CRM_APP?.systemConfig || {};
+        return (systemConfig['機會種類'] || [])
+            .filter(opt => this._isEnabledConfigOption(opt))
+            .sort((a, b) => this._getDisplayOrder(a) - this._getDisplayOrder(b));
+    },
+
+    _isEnabledConfigOption(opt) {
+        return opt?.enabled === true || opt?.enabled === 'TRUE' || opt?.enabled === 'true' || opt?.enabled === '1';
+    },
+
+    _getDisplayOrder(opt) {
+        const order = opt?.displayOrder ?? opt?.display_order;
+        const parsed = Number(order);
+        return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
+    },
+
+    _renderFilterTabs(label, group, options) {
+        return `
+            <div class="kanban-tab-filter" role="group" aria-label="${label}">
+                <span class="kanban-tab-label">${label}</span>
+                <div class="kanban-tab-list">
+                    ${options.map(opt => `
+                        <button type="button"
+                                class="kanban-filter-tab"
+                                data-filter-group="${group}"
+                                data-filter-value="${opt.value}">
+                            ${opt.label}
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    },
+
+    _updateFilterTabStates() {
+        document.querySelectorAll('#kanban-widget [data-filter-group]').forEach(tab => {
+            const isActive = this.currentFilters[tab.dataset.filterGroup] === tab.dataset.filterValue;
+            tab.classList.toggle('is-active', isActive);
+            tab.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+        });
+    },
+
+    _matchesCurrentFilters(opp) {
+        if (this.currentFilters.time === 'this_year' && String(opp.creationYear) !== String(new Date().getFullYear())) return false;
+        if (this.currentFilters.type !== 'all' && opp.opportunityType !== this.currentFilters.type) return false;
+        return true;
     },
 
     _ensureStyles() {
@@ -367,6 +373,19 @@ const DashboardKanban = {
                 .chip-wall-extra-controls { display: none; gap: var(--spacing-3); }
                 #kanban-widget.chip-wall-active .chip-wall-extra-controls { display: flex; }
                 .kanban-filter label { font-size: 0.8rem; color: var(--text-muted); }
+                .kanban-tab-filter { display: inline-flex; align-items: center; gap: var(--spacing-2); }
+                .kanban-tab-label { font-size: 0.8rem; color: var(--text-muted); line-height: 1.2; }
+                .kanban-tab-list { display: inline-flex; align-items: center; gap: var(--spacing-1); flex-wrap: wrap; }
+                .kanban-filter-tab {
+                    min-height: 24px; padding: 3px 8px; border-radius: 2px;
+                    border: 1px solid var(--border-color); background: var(--primary-bg);
+                    color: var(--text-secondary); font-size: 12px; line-height: 1.2; cursor: pointer;
+                }
+                .kanban-filter-tab:hover { background: var(--secondary-bg); color: var(--text-primary); }
+                .kanban-filter-tab.is-active {
+                    background: var(--secondary-bg); border-color: var(--text-muted);
+                    color: var(--text-primary); font-weight: 500;
+                }
             `;
             document.head.appendChild(style);
         }
