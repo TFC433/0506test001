@@ -107,16 +107,16 @@ const DashboardKanban = {
             </div>
         `;
 
-        const actionsHTML = `
+        /* const actionsHTML = `
             <div class="kanban-actions-group">
                 <div class="chip-wall-extra-controls">
                     <button class="action-btn small secondary" id="chip-wall-view-mode-toggle">切換模式</button>
                     <button class="action-btn small secondary" id="chip-wall-toggle-all">全部收合</button>
                 </div>
             </div>
-        `;
+        `; */ const actionsHTML = '';
 
-        container.innerHTML = filtersHTML + actionsHTML;
+        container.innerHTML = filtersHTML;
 
         ['kanban-year-filter', 'kanban-type-filter', 'kanban-source-filter', 'kanban-time-filter'].forEach(id => {
             document.getElementById(id)?.addEventListener('change', () => this.render());

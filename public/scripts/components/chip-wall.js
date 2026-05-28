@@ -89,7 +89,13 @@ class ChipWall {
         this._prepareData(itemsToRender);
 
         const containerClass = this.viewMode === 'grid' ? 'chip-wall-grid-container' : 'chip-wall-flex-container';
-        let html = `<div class="${containerClass}">`;
+        let html = `
+            <div class="chip-wall-legend">
+                <span class="chip-wall-legend-marker"></span>
+                <span>灰色為 90 天未活動案件</span>
+            </div>
+            <div class="${containerClass}">
+        `;
 
         const totalItems = itemsToRender.length;
         const GRID_COLUMNS = 12;
@@ -113,7 +119,12 @@ class ChipWall {
         }
         
         let spanIndex = 0;
-        this.stageGroups.forEach((stageData, stageId) => {
+        const stageEntries = Array.from(this.stageGroups.entries());
+        const primaryRowCount = Math.min(stageEntries.length, 6);
+        const secondaryRowCount = Math.max(stageEntries.length - 6, 0);
+        this._staleSeparatorStage = null;
+        this._staleSeparatorRendered = false;
+        stageEntries.forEach(([stageId, stageData], stageIndex) => {
             let blockStyle = '';
             if (this.options.useDynamicSize) {
                 if (this.viewMode === 'grid') {
@@ -128,6 +139,14 @@ class ChipWall {
                 }
             }
 
+            if (stageIndex === 0) {
+                html += `<div class="chip-wall-stage-row chip-wall-stage-row-primary" style="--chip-wall-row-columns: ${primaryRowCount};">`;
+            }
+            if (stageIndex === 6) {
+                html += `</div><div class="chip-wall-stage-row chip-wall-stage-row-secondary" style="--chip-wall-row-columns: ${secondaryRowCount};">`;
+            }
+            blockStyle = '';
+
             html += `
                 <div class="chip-wall-stage-block" ${blockStyle} data-stage-id="${stageId}">
                     <h3 class="chip-wall-stage-title ${this.options.isCollapsible ? 'is-collapsible' : ''}">
@@ -140,6 +159,7 @@ class ChipWall {
                 </div>
             `;
         });
+        if (stageEntries.length > 0) html += '</div>';
         html += '</div>';
         widgetContent.innerHTML = html;
         
@@ -286,7 +306,12 @@ class ChipWall {
             }
         });
         this.stageGroups.forEach(stageData => {
-            stageData.items.sort((a, b) => (b.effectiveLastActivity || 0) - (a.effectiveLastActivity || 0));
+            stageData.items.sort((a, b) => {
+                const aStale = this._isStaleItem(a);
+                const bStale = this._isStaleItem(b);
+                if (aStale !== bStale) return aStale ? 1 : -1;
+                return (b.effectiveLastActivity || 0) - (a.effectiveLastActivity || 0);
+            });
         });
     }
 
@@ -305,11 +330,29 @@ class ChipWall {
         });
     }
 
+    _isStaleItem(item) {
+        const lastActivity = Number(item.effectiveLastActivity);
+        const staleCutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+        return Number.isFinite(lastActivity) && lastActivity > 0 && lastActivity < staleCutoff;
+    }
+
     _renderChip(item) {
         const color = this.colorMap.get(item.opportunityType) || '#6b7280';
         const draggableAttr = this.options.isDraggable ? 'draggable="true"' : '';
+        const isStale = this._isStaleItem(item);
+        const chipClass = isStale ? 'opportunity-chip is-stale' : 'opportunity-chip';
+        let separatorHTML = '';
+        if (this._staleSeparatorStage !== item.currentStage) {
+            this._staleSeparatorStage = item.currentStage;
+            this._staleSeparatorRendered = false;
+        }
+        if (isStale && !this._staleSeparatorRendered) {
+            separatorHTML = '<div class="chip-stale-separator">90 天以上未活動</div>';
+            this._staleSeparatorRendered = true;
+        }
         return `
-            <div class="opportunity-chip" 
+            ${separatorHTML}
+            <div class="${chipClass}"
                  ${draggableAttr}
                  data-item-id="${item.opportunityId}" 
                  style="--chip-color: ${color};"
@@ -501,13 +544,29 @@ class ChipWall {
         const style = document.createElement('style');
         style.id = styleId;
         style.innerHTML = `
-            .chip-wall-grid-container { display: grid; grid-template-columns: repeat(12, 1fr); gap: var(--spacing-3); align-items: flex-start; }
-            .chip-wall-flex-container { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--spacing-3); }
-            .chip-wall-flex-container::after { content: ""; flex: auto; }
+            .chip-wall-grid-container { display: flex; flex-direction: column; gap: var(--spacing-3); }
+            .chip-wall-flex-container { display: flex; flex-direction: column; gap: var(--spacing-3); }
+            .chip-wall-flex-container::after { content: none; }
+            .chip-wall-stage-row {
+                display: grid;
+                grid-template-columns: repeat(var(--chip-wall-row-columns), minmax(0, 1fr));
+                gap: var(--spacing-3);
+                align-items: start;
+            }
+            .chip-wall-legend {
+                display: inline-flex; align-items: center; gap: var(--spacing-2);
+                color: var(--text-muted); font-size: 12px; line-height: 1.2;
+                margin-bottom: var(--spacing-3);
+            }
+            .chip-wall-legend-marker {
+                width: 8px; height: 8px; background: var(--secondary-bg);
+                border: 1px solid var(--border-color); display: inline-block;
+            }
             .chip-wall-stage-block {
                 background-color: var(--primary-bg); border: 1px solid var(--border-color);
-                border-radius: var(--rounded-lg); padding: var(--spacing-4);
+                border-radius: 0; padding: var(--spacing-4);
                 transition: all 0.3s ease; display: flex; flex-direction: column; min-width: 160px;
+                align-self: start;
             }
             .chip-wall-stage-title {
                 display: flex; justify-content: space-between; align-items: center;
@@ -528,27 +587,48 @@ class ChipWall {
             .chip-container.is-expanded { max-height: 1000px; }
             .chip-expand-btn {
                 background: var(--glass-bg); color: var(--text-secondary); border: 1px solid var(--border-color);
-                padding: var(--spacing-1) var(--spacing-3); border-radius: var(--rounded-md);
-                font-size: var(--font-size-xs); cursor: pointer; width: 100%;
+                padding: 3px 7px; border-radius: 0;
+                font-size: 11px; line-height: 1.2; cursor: pointer; width: 100%;
                 margin-top: var(--spacing-3); transition: all 0.2s ease;
             }
             .chip-expand-btn:hover { background: var(--secondary-bg); color: var(--text-primary); }
             .opportunity-chip {
-                color: var(--text-secondary); font-size: var(--font-size-sm); font-weight: 500;
-                padding: var(--spacing-1) var(--spacing-3); border-radius: var(--rounded-md);
+                color: var(--text-secondary); font-size: 12px; font-weight: 400; line-height: 1.2;
+                padding: 3px 7px; border-radius: 0; letter-spacing: 0;
                 border: 1px solid transparent; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
                 --chip-color: var(--text-muted);
-                background: radial-gradient(circle at 10% 10%, color-mix(in srgb, white 8%, transparent), transparent 40%),
-                            color-mix(in srgb, var(--chip-color) 15%, transparent);
-                border-color: color-mix(in srgb, var(--chip-color) 30%, transparent);
+                background: color-mix(in srgb, var(--chip-color) 10%, var(--primary-bg));
+                border-color: color-mix(in srgb, var(--chip-color) 22%, var(--border-color));
                 transition: all 0.2s ease; cursor: pointer; max-width: 200px;
             }
             .opportunity-chip:hover {
-                background: radial-gradient(circle at 10% 10%, color-mix(in srgb, white 15%, transparent), transparent 50%),
-                            color-mix(in srgb, var(--chip-color) 25%, transparent);
-                border-color: color-mix(in srgb, var(--chip-color) 50%, transparent);
-                transform: translateY(-1px);
+                background: color-mix(in srgb, var(--chip-color) 16%, var(--primary-bg));
+                border-color: color-mix(in srgb, var(--chip-color) 34%, var(--border-color));
             }
+            .opportunity-chip.is-stale {
+                background: var(--secondary-bg);
+                color: var(--text-muted);
+                border-color: var(--border-color);
+                box-shadow: none;
+                opacity: 0.78;
+            }
+            .opportunity-chip.is-stale:hover {
+                background: var(--secondary-bg);
+                color: var(--text-secondary);
+                border-color: var(--border-color);
+                opacity: 0.85;
+            }
+            .chip-stale-separator {
+                flex: 0 0 100%; display: flex; align-items: center; gap: var(--spacing-2);
+                color: var(--text-muted); font-size: 12px; font-weight: 400; line-height: 1.2;
+                margin: var(--spacing-2) 0 0;
+            }
+            .chip-stale-separator::before,
+            .chip-stale-separator::after {
+                content: ""; height: 1px; background: var(--border-color); opacity: 0.75;
+            }
+            .chip-stale-separator::before { flex: 0 0 18px; }
+            .chip-stale-separator::after { flex: 1 1 auto; }
             .opportunity-chip.dragging { opacity: 0.5; cursor: grabbing; }
             .chip-wall-stage-block.drag-over { background-color: color-mix(in srgb, var(--accent-blue) 10%, var(--primary-bg)); }
             .no-opps-text { color: var(--text-muted); font-size: var(--font-size-sm); font-style: italic; }
@@ -557,6 +637,9 @@ class ChipWall {
             }
             .chip-wall-filters { display: flex; gap: var(--spacing-3); flex-wrap: wrap; }
             .chip-wall-actions { display: flex; gap: var(--spacing-2); }
+            @media (max-width: 900px) {
+                .chip-wall-stage-row { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+            }
         `;
         document.head.appendChild(style);
     }
