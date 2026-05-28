@@ -311,9 +311,7 @@ const DashboardKanban = {
 
     _getEnabledOpportunityTypes() {
         const systemConfig = window.CRM_APP?.systemConfig || {};
-        return (systemConfig['機會種類'] || [])
-            .filter(opt => this._isEnabledConfigOption(opt))
-            .sort((a, b) => this._getDisplayOrder(a) - this._getDisplayOrder(b));
+        return systemConfig['機會種類'] || [];
     },
 
     _isEnabledConfigOption(opt) {
