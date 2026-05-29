@@ -8,6 +8,8 @@
  */
 
 const SalesAnalysisComponents = {
+    _latestEChartsOptions: {},
+    _previewChart: null,
     _icons: {
         money: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>`,
         check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>`,
@@ -50,6 +52,18 @@ const SalesAnalysisComponents = {
             .sort-icon { margin-left: 4px; font-size: 0.8em; color: #9ca3af; }
             .pagination-container { display: flex; align-items: center; justify-content: center; gap: 15px; }
             .page-btn { padding: 6px 12px; border: 1px solid #d1d5db; border-radius: 6px; background-color: white; cursor: pointer; }
+            .sales-chart-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+            .sales-chart-expand-btn { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-color); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; flex: 0 0 auto; }
+            .sales-chart-expand-btn:hover { color: var(--text-primary); background: var(--hover-bg, rgba(148, 163, 184, 0.08)); }
+            .sales-chart-expand-btn svg { width: 14px; height: 14px; }
+            #sales-chart-preview-modal { position: fixed; inset: 0; z-index: 2000; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(15, 23, 42, 0.42); }
+            #sales-chart-preview-modal.show { display: flex; }
+            .sales-chart-preview-dialog { width: min(980px, 96vw); background: var(--card-bg, #fff); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 20px 45px rgba(15, 23, 42, 0.18); overflow: hidden; }
+            .sales-chart-preview-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border-color); }
+            #sales-chart-preview-title { margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary); }
+            .sales-chart-preview-close { width: 30px; height: 30px; border: 1px solid var(--border-color); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 18px; line-height: 1; }
+            .sales-chart-preview-close:hover { color: var(--text-primary); background: var(--hover-bg, rgba(148, 163, 184, 0.08)); }
+            #sales-chart-preview-container { height: min(500px, 68vh); padding: 8px 14px 16px; }
             
             @media (min-width: 1000px) { 
                 .three-charts-row { display: grid !important; grid-template-columns: 2fr 1fr 1fr !important; gap: 16px; }
@@ -144,6 +158,15 @@ const SalesAnalysisComponents = {
                     </div>
                 </div>
             </div>
+            <div id="sales-chart-preview-modal" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="sales-chart-preview-title" onclick="if(event.target === this) SalesAnalysisComponents.closeChartPreview()">
+                <div class="sales-chart-preview-dialog">
+                    <div class="sales-chart-preview-header">
+                        <h2 id="sales-chart-preview-title">圖表預覽</h2>
+                        <button type="button" class="sales-chart-preview-close" title="關閉預覽" aria-label="關閉預覽" onclick="SalesAnalysisComponents.closeChartPreview()">×</button>
+                    </div>
+                    <div id="sales-chart-preview-container"></div>
+                </div>
+            </div>
         `;
     },
 
@@ -173,8 +196,8 @@ const SalesAnalysisComponents = {
         container.innerHTML = `
             <div class="three-charts-row">
                 <div class="dashboard-widget"><div class="widget-header"><h2 class="widget-title">${trendTitle}</h2></div><div id="chart-area-trend" style="height: 300px;"></div></div>
-                <div class="dashboard-widget"><div class="widget-header"><h2 class="widget-title">成交類型 (依金額計)</h2></div><div id="chart-pie-type" style="height: 300px;"></div></div>
-                <div class="dashboard-widget"><div class="widget-header"><h2 class="widget-title">成交來源 (依金額計)</h2></div><div id="chart-pie-source" style="height: 300px;"></div></div>
+                <div class="dashboard-widget"><div class="widget-header sales-chart-header"><h2 class="widget-title">成交類型 (依金額計)</h2><button type="button" class="sales-chart-expand-btn" title="放大成交類型圖表" aria-label="放大成交類型圖表" onclick="SalesAnalysisComponents.openChartPreview('type', '成交類型（依金額計）')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"></path><path d="M21 3l-7 7"></path><path d="M9 21H3v-6"></path><path d="M3 21l7-7"></path></svg></button></div><div id="chart-pie-type" style="height: 300px;"></div></div>
+                <div class="dashboard-widget"><div class="widget-header sales-chart-header"><h2 class="widget-title">成交來源 (依金額占比)</h2><button type="button" class="sales-chart-expand-btn" title="放大成交來源圖表" aria-label="放大成交來源圖表" onclick="SalesAnalysisComponents.openChartPreview('source', '成交來源（依金額占比）')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"></path><path d="M21 3l-7 7"></path><path d="M9 21H3v-6"></path><path d="M3 21l7-7"></path></svg></button></div><div id="chart-pie-source" style="height: 300px;"></div></div>
             </div>
         `;
 
@@ -226,49 +249,65 @@ const SalesAnalysisComponents = {
             const sumValues = data => (data || []).reduce((sum, item) => sum + Number(item.y || 0), 0);
 
             const typeDonutOpt = (name, data) => {
-                const total = sumValues(data);
+                const realTotal = sumValues(data);
+                const roseData = (data || []).map(item => {
+                    const realValue = Number(item.y || 0);
+                    const realPercent = realTotal ? (realValue / realTotal) * 100 : 0;
+                    const displayValue = realTotal > 0 && realPercent > 0 && realPercent < 3
+                        ? realTotal * 0.03
+                        : realValue;
+
+                    return {
+                        name: item.name,
+                        value: displayValue,
+                        realValue,
+                        realPercent,
+                        percentLabel: `${realPercent.toFixed(1)}%`
+                    };
+                });
+
                 return {
+                    color: ['#4f8ef7', '#36b37e', '#f59e42', '#8b5cf6', '#e86f7d', '#14b8a6'],
                     legend: { show: false },
-                    title: {
-                        text: '成交總額',
-                        subtext: formatMoneyCompact(total),
-                        left: 'center',
-                        top: '39%',
-                        textStyle: {
-                            fontSize: 11,
-                            fontWeight: 500
-                        },
-                        subtextStyle: {
-                            fontSize: 13,
-                            fontWeight: 600
-                        }
-                    },
                     tooltip: {
                         formatter: params => {
                             const safeName = escapeChartText(params.name);
-                            return `${params.marker || ''}${safeName}<br/><b>${formatMoneyCompact(params.value)}</b><br/>${params.percent.toFixed(1)}%`;
+                            const realValue = params.data && params.data.realValue !== undefined ? params.data.realValue : params.value;
+                            const realPercent = params.data && params.data.realPercent !== undefined ? params.data.realPercent : params.percent;
+                            return `${params.marker || ''}${safeName}<br/><b>${formatMoneyCompact(realValue)}</b><br/>${realPercent.toFixed(2)}%`;
                         }
                     },
                     series: [{
                         name,
                         type: 'pie',
-                        radius: ['44%', '68%'],
-                        center: ['50%', '45%'],
+                        radius: ['26%', '76%'],
+                        center: ['50%', '52%'],
                         minShowLabelAngle: 8,
+                        padAngle: 2,
+                        itemStyle: {
+                            borderRadius: 12,
+                            borderColor: 'transparent',
+                            borderWidth: 3
+                        },
                         label: {
                             show: true,
-                            formatter: params => params.percent >= 3 ? `${params.name}\n${params.percent.toFixed(1)}%` : '',
+                            formatter: params => `${params.name}\n${params.data && params.data.percentLabel ? params.data.percentLabel : `${params.percent.toFixed(1)}%`}`,
                             overflow: 'break',
                             width: 86
                         },
                         labelLine: {
                             show: true,
+                            length: 14,
+                            length2: 10,
                             minTurnAngle: 45
                         },
-                        data: (data || []).map(item => ({
-                            name: item.name,
-                            value: item.y || 0
-                        }))
+                        emphasis: {
+                            itemStyle: {
+                                shadowBlur: 10,
+                                shadowColor: 'rgba(15, 23, 42, 0.18)'
+                            }
+                        },
+                        data: roseData
                     }]
                 };
             };
@@ -278,13 +317,30 @@ const SalesAnalysisComponents = {
                     name: item.name,
                     y: Number(item.y || 0)
                 })).sort((a, b) => b.y - a.y);
-                const total = sumValues(sourceItems);
+                const totalSourceAmount = sumValues(sourceItems);
                 const rankedItems = sourceItems.length > 7
                     ? sourceItems.slice(0, 6).concat({
                         name: '其他',
                         y: sourceItems.slice(6).reduce((sum, item) => sum + item.y, 0)
                     })
                     : sourceItems;
+                const sourceChartData = rankedItems.map(item => {
+                    const realValue = Number(item.y || 0);
+                    const realPercent = totalSourceAmount > 0 ? (realValue / totalSourceAmount) * 100 : 0;
+                    return {
+                        name: item.name,
+                        value: realPercent,
+                        realValue,
+                        realPercent
+                    };
+                });
+                const rootStyle = getComputedStyle(document.documentElement);
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                const textColorPrimary = rootStyle.getPropertyValue('--text-primary').trim() || (isDark ? '#f8fafc' : '#0f172a');
+                const textColorSecondary = rootStyle.getPropertyValue('--text-secondary').trim() || (isDark ? '#cbd5e1' : '#475569');
+                const textColorMuted = rootStyle.getPropertyValue('--text-muted').trim() || (isDark ? '#94a3b8' : '#64748b');
+                const borderColor = rootStyle.getPropertyValue('--border-color').trim() || (isDark ? '#334155' : '#cbd5e1');
+                const cardBg = rootStyle.getPropertyValue('--card-bg').trim() || (isDark ? '#1e293b' : '#ffffff');
 
                 return {
                     legend: { show: false },
@@ -297,11 +353,20 @@ const SalesAnalysisComponents = {
                     },
                     xAxis: {
                         type: 'value',
+                        min: 0,
+                        max: 100,
                         axisLabel: {
-                            formatter: value => formatMoneyCompact(value)
+                            formatter: value => `${Number(value).toFixed(0)}%`,
+                            color: textColorMuted
+                        },
+                        axisLine: {
+                            lineStyle: { color: borderColor }
+                        },
+                        axisTick: {
+                            lineStyle: { color: borderColor }
                         },
                         splitLine: {
-                            lineStyle: { type: 'dashed', opacity: 0.45 }
+                            lineStyle: { color: borderColor, type: 'dashed', opacity: isDark ? 0.28 : 0.38 }
                         }
                     },
                     yAxis: {
@@ -309,40 +374,106 @@ const SalesAnalysisComponents = {
                         inverse: true,
                         data: rankedItems.map(item => item.name),
                         axisTick: { show: false },
+                        axisLine: {
+                            lineStyle: { color: borderColor }
+                        },
                         axisLabel: {
                             width: 86,
-                            overflow: 'truncate'
+                            overflow: 'truncate',
+                            color: textColorSecondary
                         }
                     },
                     tooltip: {
                         trigger: 'item',
+                        backgroundColor: cardBg,
+                        borderColor,
+                        textStyle: { color: textColorPrimary },
                         formatter: params => {
-                            const value = Number(params.value || 0);
-                            const percent = total ? (value / total) * 100 : 0;
-                            return `${params.marker || ''}${escapeChartText(params.name)}<br/><b>${formatMoneyCompact(value)}</b><br/>${percent.toFixed(1)}%`;
+                            const realValue = params.data && params.data.realValue !== undefined ? params.data.realValue : 0;
+                            const realPercent = params.data && params.data.realPercent !== undefined ? params.data.realPercent : Number(params.value || 0);
+                            return `${params.marker || ''}${escapeChartText(params.name)}<br/>金額：<b>${formatMoneyCompact(realValue)}</b><br/>占比：${realPercent.toFixed(1)}%`;
                         }
                     },
                     series: [{
                         name: '來源',
                         type: 'bar',
-                        data: rankedItems.map(item => item.y),
+                        data: sourceChartData,
                         barMaxWidth: 18,
+                        showBackground: true,
+                        backgroundStyle: {
+                            color: isDark ? 'rgba(148, 163, 184, 0.12)' : 'rgba(148, 163, 184, 0.14)',
+                            borderRadius: [0, 4, 4, 0]
+                        },
                         itemStyle: {
                             borderRadius: [0, 4, 4, 0],
-                            color: '#60a5fa'
+                            color: isDark ? '#7dd3fc' : '#3b82f6'
                         },
                         label: {
                             show: true,
                             position: 'right',
-                            formatter: params => formatMoneyCompact(params.value)
+                            color: textColorSecondary,
+                            formatter: params => {
+                                const realPercent = params.data && params.data.realPercent !== undefined ? params.data.realPercent : Number(params.value || 0);
+                                return `${realPercent.toFixed(1)}%`;
+                            }
                         }
                     }]
                 };
             };
 
-            createEChartsThemedChart('chart-pie-type', typeDonutOpt('類型', typeData));
-            createEChartsThemedChart('chart-pie-source', sourceBarOpt(sourceData));
+            const typeOption = typeDonutOpt('類型', typeData);
+            const sourceOption = sourceBarOpt(sourceData);
+            this._latestEChartsOptions = {
+                type: typeOption,
+                source: sourceOption
+            };
+
+            createEChartsThemedChart('chart-pie-type', typeOption);
+            createEChartsThemedChart('chart-pie-source', sourceOption);
         }, 50);
+    },
+
+    openChartPreview: function(chartKey, title) {
+        const modal = document.getElementById('sales-chart-preview-modal');
+        const titleEl = document.getElementById('sales-chart-preview-title');
+        const chartEl = document.getElementById('sales-chart-preview-container');
+        const option = this._latestEChartsOptions && this._latestEChartsOptions[chartKey];
+
+        if (!modal || !titleEl || !chartEl || !option || !window.echarts) return;
+
+        this.closeChartPreview();
+        titleEl.textContent = title || '圖表預覽';
+        modal.classList.add('show');
+        modal.setAttribute('aria-hidden', 'false');
+
+        requestAnimationFrame(() => {
+            if (typeof createEChartsThemedChart !== 'function') return;
+            this._previewChart = createEChartsThemedChart('sales-chart-preview-container', option);
+            if (this._previewChart) {
+                this._previewChart.resize();
+            }
+        });
+    },
+
+    closeChartPreview: function() {
+        const modal = document.getElementById('sales-chart-preview-modal');
+        const chartEl = document.getElementById('sales-chart-preview-container');
+
+        if (chartEl) {
+            if (chartEl._echartsResizeHandler) {
+                window.removeEventListener('resize', chartEl._echartsResizeHandler);
+                chartEl._echartsResizeHandler = null;
+            }
+            const existingChart = window.echarts && window.echarts.getInstanceByDom(chartEl);
+            if (existingChart) existingChart.dispose();
+            chartEl.innerHTML = '';
+        }
+
+        this._previewChart = null;
+        if (modal) {
+            modal.classList.remove('show');
+            modal.setAttribute('aria-hidden', 'true');
+        }
     },
 
     renderWonDealsTable: function(deals, page, perPage, sortState, modelColors, typeColors) {
