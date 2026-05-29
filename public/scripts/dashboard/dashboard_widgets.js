@@ -334,9 +334,9 @@ const DashboardWidgets = {
                 }
             },
             legend: {
-                top: 0,
+                top: 16,
                 type: 'plain',
-                textStyle: { color: textColorPrimary, fontSize: 14, fontWeight: 600 },
+                textStyle: { color: textColorPrimary, fontSize: 13, fontWeight: 400 },
                 data: [
                     `機會案件${viewLabel}`,
                     `事件紀錄${viewLabel}`,
@@ -344,7 +344,7 @@ const DashboardWidgets = {
                     `成交金額${viewLabel}`
                 ]
             },
-            grid: { top: 48, right: 74, bottom: 28, left: 54, containLabel: true },
+            grid: { top: 64, right: 16, bottom: 12, left: 16, containLabel: true },
             xAxis: {
                 type: 'category',
                 data: categories,
@@ -365,7 +365,7 @@ const DashboardWidgets = {
                     min: 0,
                     position: 'left',
                     nameTextStyle: { color: textColorMuted },
-                    axisLine: { show: true, lineStyle: { color: borderColor } },
+                    axisLine: { show: false, lineStyle: { color: borderColor } },
                     axisTick: { show: false },
                     axisLabel: { show: false, color: textColorMuted, formatter: value => formatNumber(value) },
                     splitLine: { lineStyle: { color: borderColor, type: 'dashed', opacity: isDark ? 0.25 : 0.35 } }
@@ -377,7 +377,7 @@ const DashboardWidgets = {
                     min: 0,
                     position: 'right',
                     nameTextStyle: { color: textColorMuted },
-                    axisLine: { show: true, lineStyle: { color: borderColor } },
+                    axisLine: { show: false, lineStyle: { color: borderColor } },
                     axisTick: { show: false },
                     axisLabel: { show: false, color: textColorMuted, formatter: value => formatCompactMoney(value) },
                     splitLine: { show: false }
@@ -514,20 +514,16 @@ const DashboardWidgets = {
             if (!quickControls) {
                 quickControls = document.createElement('div');
                 quickControls.id = 'dashboard-trend-quick-controls';
-                quickControls.className = 'dashboard-trend-quick-controls';
+                quickControls.className = 'trend-tab-filter';
 
-                [
-                    { group: 'mode', value: 'ytd', label: '今年業績' },
-                    { group: 'mode', value: 'all', label: '歷史全資料' },
-                    { group: 'view', value: 'monthly', label: '每月新增' },
-                    { group: 'view', value: 'cumulative', label: '累積總量' }
-                ].forEach(item => {
+                const createTabButton = item => {
                     const button = document.createElement('button');
                     button.type = 'button';
-                    button.className = 'dashboard-trend-filter-btn';
+                    button.className = 'trend-filter-tab';
                     button.dataset.group = item.group;
                     button.dataset.value = item.value;
                     button.textContent = item.label;
+                    button.setAttribute('aria-pressed', 'false');
                     button.addEventListener('click', () => {
                         if (item.group === 'mode') {
                             modeSelect.value = item.value;
@@ -537,17 +533,44 @@ const DashboardWidgets = {
                             this.renderTrendWidget(null, null, item.value);
                         }
                     });
-                    quickControls.appendChild(button);
+                    return button;
+                };
+
+                [
+                    {
+                        label: '時間範圍',
+                        items: [
+                            { group: 'mode', value: 'ytd', label: '今年業績' },
+                            { group: 'mode', value: 'all', label: '歷史全資料' }
+                        ]
+                    },
+                    {
+                        label: '顯示方式',
+                        items: [
+                            { group: 'view', value: 'monthly', label: '每月新增' },
+                            { group: 'view', value: 'cumulative', label: '累積總量' }
+                        ]
+                    }
+                ].forEach(group => {
+                    const label = document.createElement('span');
+                    label.className = 'trend-tab-label';
+                    label.textContent = group.label;
+                    const list = document.createElement('div');
+                    list.className = 'trend-tab-list';
+                    group.items.forEach(item => list.appendChild(createTabButton(item)));
+                    quickControls.appendChild(label);
+                    quickControls.appendChild(list);
                 });
 
                 controlsHost.appendChild(quickControls);
             }
 
-            quickControls.querySelectorAll('.dashboard-trend-filter-btn').forEach(button => {
+            quickControls.querySelectorAll('.trend-filter-tab').forEach(button => {
                 const active = button.dataset.group === 'mode'
                     ? button.dataset.value === modeSelect.value
                     : button.dataset.value === viewSelect.value;
-                button.classList.toggle('active', active);
+                button.classList.toggle('is-active', active);
+                button.setAttribute('aria-pressed', active ? 'true' : 'false');
             });
         }
 
@@ -692,11 +715,21 @@ const DashboardWidgets = {
             style.innerHTML = `
                 .dashboard-trend-header { display: flex; align-items: center; gap: 8px; }
                 .dashboard-trend-controls { display: flex !important; align-items: center; justify-content: flex-end; gap: 6px !important; flex-wrap: nowrap; min-width: 0; }
-                .dashboard-trend-quick-controls { display: inline-flex; align-items: center; gap: 4px; flex-wrap: nowrap; white-space: nowrap; }
-                .dashboard-trend-filter-btn { height: 28px; padding: 0 9px; border: 1px solid var(--border-color); border-radius: 6px; background: transparent; color: var(--text-muted); font-size: 12px; font-weight: 500; line-height: 1; cursor: pointer; }
-                .dashboard-trend-filter-btn:hover { color: var(--text-primary); background: var(--hover-bg, rgba(148, 163, 184, 0.08)); }
-                .dashboard-trend-filter-btn.active { color: var(--text-primary); border-color: color-mix(in srgb, var(--text-primary) 28%, var(--border-color)); background: color-mix(in srgb, var(--text-primary) 7%, transparent); font-weight: 600; }
-                .dashboard-trend-expand-btn { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-color); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; flex: 0 0 auto; margin-left: 2px; }
+                .trend-tab-filter { display: inline-flex; align-items: center; gap: var(--spacing-2, 6px); flex-wrap: nowrap; white-space: nowrap; }
+                .trend-tab-label { font-size: 0.8rem; color: var(--text-muted); line-height: 1.2; flex: 0 0 auto; }
+                .trend-tab-list { display: inline-flex; align-items: center; gap: var(--spacing-1, 4px); flex-wrap: nowrap; }
+                .trend-filter-tab {
+                    min-height: 24px; padding: 3px 8px; border-radius: 2px;
+                    border: 1px solid var(--border-color); background: var(--primary-bg, transparent);
+                    color: var(--text-secondary, var(--text-muted)); font-size: 12px; line-height: 1.2; cursor: pointer;
+                }
+                .trend-filter-tab:hover { background: var(--secondary-bg, rgba(148, 163, 184, 0.08)); color: var(--text-primary); }
+                .trend-filter-tab.is-active {
+                    background: color-mix(in srgb, var(--accent-blue) 10%, transparent);
+                    border-color: color-mix(in srgb, var(--accent-blue) 40%, var(--border-color));
+                    color: var(--accent-blue); font-weight: 600;
+                }
+                .dashboard-trend-expand-btn { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-color); border-radius: 2px; background: var(--primary-bg, transparent); color: var(--text-muted); cursor: pointer; flex: 0 0 auto; margin-left: 0; }
                 .dashboard-trend-expand-btn:hover { color: var(--text-primary); background: var(--hover-bg, rgba(148, 163, 184, 0.08)); }
                 .dashboard-trend-expand-btn svg { width: 14px; height: 14px; }
                 #dashboard-trend-preview-modal { position: fixed; inset: 0; z-index: 2000; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(15, 23, 42, 0.42); }
