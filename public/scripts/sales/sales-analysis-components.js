@@ -65,8 +65,10 @@ const SalesAnalysisComponents = {
             .sales-chart-preview-close:hover { color: var(--text-primary); background: var(--hover-bg, rgba(148, 163, 184, 0.08)); }
             #sales-chart-preview-container { height: min(500px, 68vh); padding: 8px 14px 16px; }
             
+            .three-charts-row { display: grid; grid-template-columns: 1fr; gap: 16px; }
+            .three-charts-row > .dashboard-widget { min-width: 0; }
             @media (min-width: 1000px) { 
-                .three-charts-row { display: grid !important; grid-template-columns: 2fr 1fr 1fr !important; gap: 16px; }
+                .three-charts-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
             }
         `;
         document.head.appendChild(style);
@@ -191,46 +193,17 @@ const SalesAnalysisComponents = {
         const container = document.getElementById('sales-charts-container');
         if (!container) return;
         
-        const trendTitle = isAllHistory ? '歷史月份分布 (件數)' : '每月成交趨勢 (件數)';
+        const trendTitle = isAllHistory ? '歷史成交趨勢（件數）' : '每月成交趨勢（件數）';
         
         container.innerHTML = `
             <div class="three-charts-row">
-                <div class="dashboard-widget"><div class="widget-header"><h2 class="widget-title">${trendTitle}</h2></div><div id="chart-area-trend" style="height: 300px;"></div></div>
+                <div class="dashboard-widget"><div class="widget-header sales-chart-header"><h2 class="widget-title">${trendTitle}</h2><button type="button" class="sales-chart-expand-btn" title="放大成交趨勢圖表" aria-label="放大成交趨勢圖表" onclick="SalesAnalysisComponents.openChartPreview('trend', '${trendTitle}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"></path><path d="M21 3l-7 7"></path><path d="M9 21H3v-6"></path><path d="M3 21l7-7"></path></svg></button></div><div id="chart-area-trend" style="height: 300px;"></div></div>
                 <div class="dashboard-widget"><div class="widget-header sales-chart-header"><h2 class="widget-title">成交類型 (依金額計)</h2><button type="button" class="sales-chart-expand-btn" title="放大成交類型圖表" aria-label="放大成交類型圖表" onclick="SalesAnalysisComponents.openChartPreview('type', '成交類型（依金額計）')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"></path><path d="M21 3l-7 7"></path><path d="M9 21H3v-6"></path><path d="M3 21l7-7"></path></svg></button></div><div id="chart-pie-type" style="height: 300px;"></div></div>
                 <div class="dashboard-widget"><div class="widget-header sales-chart-header"><h2 class="widget-title">成交來源 (依金額占比)</h2><button type="button" class="sales-chart-expand-btn" title="放大成交來源圖表" aria-label="放大成交來源圖表" onclick="SalesAnalysisComponents.openChartPreview('source', '成交來源（依金額占比）')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"></path><path d="M21 3l-7 7"></path><path d="M9 21H3v-6"></path><path d="M3 21l7-7"></path></svg></button></div><div id="chart-pie-source" style="height: 300px;"></div></div>
             </div>
         `;
 
         setTimeout(() => {
-            if (typeof createThemedChart !== 'function') return;
-            
-            const currentMonth = new Date().getMonth(); 
-            createThemedChart('chart-area-trend', {
-                chart: { type: 'area', margin: [20, 15, 30, 40] },
-                title: { text: '' },
-                xAxis: { 
-                    categories: ['1月','2月','3月','4月','5月','6月','7月','8月','9月','10月','11月','12月'],
-                    plotBands: [{
-                        from: currentMonth - 0.5,
-                        to: currentMonth + 0.5,
-                        color: 'rgba(59, 130, 246, 0.08)',
-                        label: { text: '本月', style: { color: '#9ca3af', fontSize: '10px' }, y: 15 }
-                    }]
-                },
-                yAxis: { title: { text: '' }, allowDecimals: false },
-                legend: { enabled: false },
-                tooltip: { pointFormat: '<b>{point.y} 件</b>' },
-                plotOptions: { 
-                    area: { 
-                        fillColor: 'rgba(59, 130, 246, 0.2)', 
-                        lineColor: '#3b82f6', 
-                        lineWidth: 2,
-                        marker: { radius: 3, fillColor: '#3b82f6' }
-                    } 
-                },
-                series: [{ name: '成交件數', data: (trendData || []).map(d => d.count) }]
-            });
-
             if (typeof createEChartsThemedChart !== 'function') return;
 
             const escapeChartText = value => String(value || '').replace(/[&<>"']/g, ch => ({
@@ -245,6 +218,110 @@ const SalesAnalysisComponents = {
                 if (Math.abs(amount) >= 100000000) return `${(amount / 100000000).toFixed(1).replace(/\.0$/, '')}億`;
                 if (Math.abs(amount) >= 10000) return `${(amount / 10000).toFixed(1).replace(/\.0$/, '')}萬`;
                 return amount.toLocaleString();
+            };
+
+            const trendBarOpt = data => {
+                const rows = data || [];
+                const now = new Date();
+                const currentMonthLabel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                const hasCurrentMonth = rows.some(item => item.label === currentMonthLabel);
+                const rootStyle = getComputedStyle(document.documentElement);
+                const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                const textColorPrimary = rootStyle.getPropertyValue('--text-primary').trim() || (isDark ? '#f8fafc' : '#0f172a');
+                const textColorSecondary = rootStyle.getPropertyValue('--text-secondary').trim() || (isDark ? '#cbd5e1' : '#475569');
+                const textColorMuted = rootStyle.getPropertyValue('--text-muted').trim() || (isDark ? '#94a3b8' : '#64748b');
+                const borderColor = rootStyle.getPropertyValue('--border-color').trim() || (isDark ? '#334155' : '#cbd5e1');
+                const cardBg = rootStyle.getPropertyValue('--card-bg').trim() || (isDark ? '#1e293b' : '#ffffff');
+                const trendColor = isDark ? '#7dd3fc' : '#3b82f6';
+
+                return {
+                    legend: { show: false },
+                    grid: {
+                        top: 18,
+                        right: 18,
+                        bottom: rows.length > 12 ? 56 : 34,
+                        left: 12,
+                        containLabel: true
+                    },
+                    xAxis: {
+                        type: 'category',
+                        data: rows.map(item => item.label),
+                        axisTick: { show: false },
+                        axisLine: {
+                            lineStyle: { color: borderColor }
+                        },
+                        axisLabel: {
+                            color: textColorMuted,
+                            rotate: rows.length > 12 ? 45 : 0,
+                            interval: rows.length > 18 ? Math.ceil(rows.length / 12) - 1 : 0
+                        }
+                    },
+                    yAxis: {
+                        type: 'value',
+                        minInterval: 1,
+                        axisLabel: {
+                            color: textColorMuted,
+                            formatter: value => `${Number(value).toFixed(0)}`
+                        },
+                        splitLine: {
+                            lineStyle: { color: borderColor, type: 'dashed', opacity: isDark ? 0.28 : 0.38 }
+                        }
+                    },
+                    tooltip: {
+                        trigger: 'item',
+                        backgroundColor: cardBg,
+                        borderColor,
+                        textStyle: { color: textColorPrimary },
+                        formatter: params => `${escapeChartText(params.name)}<br/>成交件數：<b>${Number(params.value || 0)}</b> 件`
+                    },
+                    series: [{
+                        name: '成交件數',
+                        type: 'line',
+                        data: rows.map(item => ({
+                            value: item.count,
+                            symbolSize: item.label === currentMonthLabel ? 9 : (rows.length <= 18 ? 6 : 0),
+                            itemStyle: item.label === currentMonthLabel ? {
+                                color: trendColor,
+                                borderColor: isDark ? '#0f172a' : '#ffffff',
+                                borderWidth: 2
+                            } : undefined
+                        })),
+                        smooth: false,
+                        symbol: 'circle',
+                        showSymbol: true,
+                        lineStyle: {
+                            width: 2,
+                            color: trendColor
+                        },
+                        areaStyle: {
+                            color: isDark ? 'rgba(125, 211, 252, 0.16)' : 'rgba(59, 130, 246, 0.14)'
+                        },
+                        itemStyle: {
+                            color: trendColor
+                        },
+                        label: {
+                            show: false,
+                            color: textColorSecondary
+                        },
+                        markLine: hasCurrentMonth ? {
+                            symbol: 'none',
+                            silent: true,
+                            label: {
+                                show: true,
+                                formatter: '本月',
+                                color: textColorMuted,
+                                fontSize: 10
+                            },
+                            lineStyle: {
+                                color: trendColor,
+                                type: 'dashed',
+                                opacity: 0.45,
+                                width: 1
+                            },
+                            data: [{ xAxis: currentMonthLabel }]
+                        } : undefined
+                    }]
+                };
             };
             const sumValues = data => (data || []).reduce((sum, item) => sum + Number(item.y || 0), 0);
 
@@ -421,13 +498,16 @@ const SalesAnalysisComponents = {
                 };
             };
 
+            const trendOption = trendBarOpt(trendData);
             const typeOption = typeDonutOpt('類型', typeData);
             const sourceOption = sourceBarOpt(sourceData);
             this._latestEChartsOptions = {
+                trend: trendOption,
                 type: typeOption,
                 source: sourceOption
             };
 
+            createEChartsThemedChart('chart-area-trend', trendOption);
             createEChartsThemedChart('chart-pie-type', typeOption);
             createEChartsThemedChart('chart-pie-source', sourceOption);
         }, 50);

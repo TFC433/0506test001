@@ -15,18 +15,50 @@ function formatDateLocal(date) {
     return `${y}-${m}-${d}`;
 }
 
-// 輔助函式：計算 1-12 月成交趨勢 (件數)
-function calculateMonthlyTrend(deals) {
-    const trend = Array.from({length: 12}, (_, i) => ({ month: i + 1, count: 0 }));
-    (deals || []).forEach(d => {
-        if (d.wonDate) {
-            const date = new Date(d.wonDate);
-            if (!isNaN(date.getTime())) {
-                trend[date.getMonth()].count += 1;
-            }
+// 輔助函式：計算成交月份趨勢 (件數)
+function calculateMonthlyTrend(deals, isAllHistory = false) {
+    const toMonthKey = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const parseWonMonth = deal => {
+        if (!deal || !deal.wonDate) return null;
+        const date = new Date(deal.wonDate);
+        if (isNaN(date.getTime())) return null;
+        return new Date(date.getFullYear(), date.getMonth(), 1);
+    };
+    const addMonth = date => new Date(date.getFullYear(), date.getMonth() + 1, 1);
+    const makeBucket = label => ({ label, count: 0 });
+
+    const now = new Date();
+    const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    let startMonth;
+    let endMonth;
+
+    if (isAllHistory) {
+        const validMonths = (deals || []).map(parseWonMonth).filter(Boolean);
+        startMonth = validMonths.length
+            ? validMonths.reduce((earliest, date) => date < earliest ? date : earliest, validMonths[0])
+            : currentMonth;
+        endMonth = currentMonth;
+    } else {
+        const currentYear = now.getFullYear();
+        startMonth = new Date(currentYear, 0, 1);
+        endMonth = new Date(currentYear, 11, 1);
+    }
+
+    const trendMap = new Map();
+    for (let cursor = startMonth; cursor <= endMonth; cursor = addMonth(cursor)) {
+        trendMap.set(toMonthKey(cursor), makeBucket(toMonthKey(cursor)));
+    }
+
+    (deals || []).forEach(deal => {
+        const wonMonth = parseWonMonth(deal);
+        if (!wonMonth) return;
+        const key = toMonthKey(wonMonth);
+        if (trendMap.has(key)) {
+            trendMap.get(key).count += 1;
         }
     });
-    return trend;
+
+    return Array.from(trendMap.values());
 }
 
 // 全域狀態管理
@@ -156,9 +188,9 @@ async function fetchAndRenderSalesData(startDate, endDate) {
         displayedDeals = [...(salesAnalysisData.wonDeals || [])];
         sortDeals(currentSortState.field, currentSortState.direction, true);
 
-        const trendData = calculateMonthlyTrend(displayedDeals);
         // [Semantic UI Patch] 偵測是否為全歷史資料
         const isAllHistory = (sParam === '' && eParam === '');
+        const trendData = calculateMonthlyTrend(displayedDeals, isAllHistory);
 
         if (salesAnalysisData.overview && salesAnalysisData.kpis && salesAnalysisData.byType) {
             SalesAnalysisComponents.renderSalesOverviewAndKpis(salesAnalysisData.overview, salesAnalysisData.kpis);
@@ -211,9 +243,9 @@ function updateDashboard(deals) {
     const productData = SalesAnalysisHelper.calculateProductStats(deals);
     const channelData = SalesAnalysisHelper.calculateChannelStats(deals);
     
-    const trendData = calculateMonthlyTrend(deals);
     // [Semantic UI Patch] 降級模式亦偵測是否為全歷史資料
     const isAllHistory = (salesStartDate === '' && salesEndDate === '');
+    const trendData = calculateMonthlyTrend(deals, isAllHistory);
 
     SalesAnalysisComponents.renderAllCharts(typeData, sourceData, productData, channelData, trendData, isAllHistory);
 }
