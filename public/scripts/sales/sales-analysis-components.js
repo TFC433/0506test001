@@ -208,16 +208,33 @@ const SalesAnalysisComponents = {
                 series: [{ name: '成交件數', data: (trendData || []).map(d => d.count) }]
             });
 
+            if (typeof createEChartsThemedChart !== 'function') return;
+
             const pieOpt = (name, data) => ({
-                chart: { type: 'pie', margin: [0, 0, 0, 0] }, title: { text: '' }, 
-                tooltip: { pointFormat: '<b>{point.percentage:.1f}%</b> ({point.y:,.0f})' },
-                plotOptions: { pie: { dataLabels: { enabled: true, format: '<b>{point.name}</b>: {point.percentage:.1f} %', distance: 10 }, showInLegend: true } },
-                legend: { align: 'center', verticalAlign: 'bottom', layout: 'horizontal', itemStyle: { fontSize: '10px' } },
-                series: [{ name, data }]
+                tooltip: {
+                    formatter: params => {
+                        const safeName = String(params.name || '').replace(/[&<>"']/g, ch => ({
+                            '&': '&amp;',
+                            '<': '&lt;',
+                            '>': '&gt;',
+                            '"': '&quot;',
+                            "'": '&#39;'
+                        })[ch]);
+                        return `${params.marker || ''}${safeName}<br/><b>${params.percent.toFixed(1)}%</b> (${Number(params.value || 0).toLocaleString()})`;
+                    }
+                },
+                series: [{
+                    name,
+                    type: 'pie',
+                    data: (data || []).map(item => ({
+                        name: item.name,
+                        value: item.y || 0
+                    }))
+                }]
             });
 
-            createThemedChart('chart-pie-type', pieOpt('類型', typeData));
-            createThemedChart('chart-pie-source', pieOpt('來源', sourceData));
+            createEChartsThemedChart('chart-pie-type', pieOpt('類型', typeData));
+            createEChartsThemedChart('chart-pie-source', pieOpt('來源', sourceData));
         }, 50);
     },
 
