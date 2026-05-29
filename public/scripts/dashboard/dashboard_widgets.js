@@ -15,6 +15,9 @@
  */
 
 const DashboardWidgets = {
+    _latestTrendChartOption: null,
+    _trendPreviewChart: null,
+
     /**
      * 渲染儀表板上方的統計數字卡片
      * @param {Object} stats - 統計資料物件
@@ -288,6 +291,153 @@ const DashboardWidgets = {
             }
         }
 
+        if (typeof createEChartsThemedChart !== 'function') {
+            console.warn('[DashboardWidgets] createEChartsThemedChart unavailable; skipped trend chart render.');
+            return;
+        }
+
+        {
+        const viewLabel = currentView === 'cumulative' ? '（累積）' : '（月增）';
+        const rootStyle = getComputedStyle(document.documentElement);
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const textColorPrimary = rootStyle.getPropertyValue('--text-primary').trim() || (isDark ? '#f8fafc' : '#0f172a');
+        const textColorMuted = rootStyle.getPropertyValue('--text-muted').trim() || (isDark ? '#94a3b8' : '#64748b');
+        const borderColor = rootStyle.getPropertyValue('--border-color').trim() || (isDark ? '#334155' : '#cbd5e1');
+        const cardBg = rootStyle.getPropertyValue('--card-bg').trim() || (isDark ? '#1e293b' : '#ffffff');
+        const formatNumber = value => value === null || value === undefined ? '-' : Number(value || 0).toLocaleString();
+
+        const formatCompactMoney = value => {
+            const amount = Number(value || 0);
+            if (Math.abs(amount) >= 100000000) return `${(amount / 100000000).toFixed(1).replace(/\.0$/, '')}億`;
+            if (Math.abs(amount) >= 10000) return `${(amount / 10000).toFixed(1).replace(/\.0$/, '')}萬`;
+            return amount.toLocaleString();
+        };
+
+        const trendOption = {
+            color: ['#10b981', '#f59e0b', '#8b5cf6', '#3b82f6'],
+            tooltip: {
+                trigger: 'axis',
+                axisPointer: { type: 'cross', lineStyle: { color: borderColor, opacity: 0.55 } },
+                backgroundColor: cardBg,
+                borderColor,
+                textStyle: { color: textColorPrimary },
+                formatter: params => {
+                    const rows = Array.isArray(params) ? params : [params];
+                    const title = rows[0] ? rows[0].axisValueLabel : '';
+                    const lines = rows.map(item => {
+                        const isRevenue = item.seriesName && item.seriesName.indexOf('成交金額') === 0;
+                        const value = item.value === null || item.value === undefined ? '-' : formatNumber(item.value);
+                        const suffix = isRevenue || value === '-' ? '' : ' 件';
+                        return `${item.marker || ''}${item.seriesName}: <b>${value}${suffix}</b>`;
+                    });
+                    return [title].concat(lines).join('<br/>');
+                }
+            },
+            legend: {
+                top: 0,
+                type: 'plain',
+                textStyle: { color: textColorPrimary, fontSize: 14, fontWeight: 600 },
+                data: [
+                    `機會案件${viewLabel}`,
+                    `事件紀錄${viewLabel}`,
+                    `成交案件${viewLabel}`,
+                    `成交金額${viewLabel}`
+                ]
+            },
+            grid: { top: 48, right: 74, bottom: 28, left: 54, containLabel: true },
+            xAxis: {
+                type: 'category',
+                data: categories,
+                boundaryGap: true,
+                axisTick: { show: false },
+                axisLine: { lineStyle: { color: borderColor } },
+                axisLabel: {
+                    color: textColorMuted,
+                    interval: categories.length > 18 ? Math.ceil(categories.length / 12) - 1 : 0,
+                    rotate: categories.length > 18 ? 45 : 0
+                }
+            },
+            yAxis: [
+                {
+                    show: true,
+                    type: 'value',
+                    name: '',
+                    min: 0,
+                    position: 'left',
+                    nameTextStyle: { color: textColorMuted },
+                    axisLine: { show: true, lineStyle: { color: borderColor } },
+                    axisTick: { show: false },
+                    axisLabel: { show: false, color: textColorMuted, formatter: value => formatNumber(value) },
+                    splitLine: { lineStyle: { color: borderColor, type: 'dashed', opacity: isDark ? 0.25 : 0.35 } }
+                },
+                {
+                    show: true,
+                    type: 'value',
+                    name: '',
+                    min: 0,
+                    position: 'right',
+                    nameTextStyle: { color: textColorMuted },
+                    axisLine: { show: true, lineStyle: { color: borderColor } },
+                    axisTick: { show: false },
+                    axisLabel: { show: false, color: textColorMuted, formatter: value => formatCompactMoney(value) },
+                    splitLine: { show: false }
+                }
+            ],
+            series: [
+                {
+                    name: `成交金額${viewLabel}`,
+                    type: 'bar',
+                    data: revenueData,
+                    yAxisIndex: 1,
+                    itemStyle: { color: 'rgba(59, 130, 246, 0.35)', borderRadius: [3, 3, 0, 0] },
+                    barMaxWidth: 22,
+                    z: 1
+                },
+                {
+                    name: `機會案件${viewLabel}`,
+                    type: 'line',
+                    data: oppData,
+                    yAxisIndex: 0,
+                    smooth: true,
+                    showSymbol: false,
+                    lineStyle: { width: 2, color: '#10b981' },
+                    areaStyle: { color: 'rgba(16, 185, 129, 0.10)' },
+                    z: 3
+                },
+                {
+                    name: `事件紀錄${viewLabel}`,
+                    type: 'line',
+                    data: eventData,
+                    yAxisIndex: 0,
+                    smooth: true,
+                    showSymbol: false,
+                    lineStyle: { width: 2, color: '#f59e0b' },
+                    areaStyle: { color: 'rgba(245, 158, 11, 0.08)' },
+                    z: 3
+                },
+                {
+                    name: `成交案件${viewLabel}`,
+                    type: 'line',
+                    data: wonData,
+                    yAxisIndex: 0,
+                    smooth: true,
+                    showSymbol: false,
+                    lineStyle: { width: 3, color: '#8b5cf6' },
+                    areaStyle: { color: 'rgba(139, 92, 246, 0.10)' },
+                    z: 4
+                }
+            ]
+        };
+
+        this._latestTrendChartOption = trendOption;
+        this._ensureTrendPreviewControls();
+        createEChartsThemedChart('trend-chart-container', trendOption);
+
+        // 注入樣式
+        this._ensureStyles();
+        return;
+        }
+
         if (typeof Highcharts === 'undefined') return;
 
         const viewLabel = currentView === 'cumulative' ? '（累積）' : '（月增）';
@@ -343,6 +493,142 @@ const DashboardWidgets = {
         
         // 注入樣式
         this._ensureStyles();
+    },
+
+    _ensureTrendPreviewControls() {
+        const chartEl = document.getElementById('trend-chart-container');
+        if (!chartEl) return;
+
+        const widget = chartEl.closest('.dashboard-widget');
+        const header = widget ? widget.querySelector('.widget-header') : null;
+        const modeSelect = document.getElementById('trend-mode-select');
+        const viewSelect = document.getElementById('trend-view-select');
+        const controlsHost = modeSelect && modeSelect.parentElement ? modeSelect.parentElement : header;
+
+        if (controlsHost && modeSelect && viewSelect) {
+            controlsHost.classList.add('dashboard-trend-controls');
+            modeSelect.style.display = 'none';
+            viewSelect.style.display = 'none';
+
+            let quickControls = document.getElementById('dashboard-trend-quick-controls');
+            if (!quickControls) {
+                quickControls = document.createElement('div');
+                quickControls.id = 'dashboard-trend-quick-controls';
+                quickControls.className = 'dashboard-trend-quick-controls';
+
+                [
+                    { group: 'mode', value: 'ytd', label: '今年業績' },
+                    { group: 'mode', value: 'all', label: '歷史全資料' },
+                    { group: 'view', value: 'monthly', label: '每月新增' },
+                    { group: 'view', value: 'cumulative', label: '累積總量' }
+                ].forEach(item => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'dashboard-trend-filter-btn';
+                    button.dataset.group = item.group;
+                    button.dataset.value = item.value;
+                    button.textContent = item.label;
+                    button.addEventListener('click', () => {
+                        if (item.group === 'mode') {
+                            modeSelect.value = item.value;
+                            this.renderTrendWidget(null, item.value, null);
+                        } else {
+                            viewSelect.value = item.value;
+                            this.renderTrendWidget(null, null, item.value);
+                        }
+                    });
+                    quickControls.appendChild(button);
+                });
+
+                controlsHost.appendChild(quickControls);
+            }
+
+            quickControls.querySelectorAll('.dashboard-trend-filter-btn').forEach(button => {
+                const active = button.dataset.group === 'mode'
+                    ? button.dataset.value === modeSelect.value
+                    : button.dataset.value === viewSelect.value;
+                button.classList.toggle('active', active);
+            });
+        }
+
+        const expandButtonHost = document.getElementById('dashboard-trend-quick-controls') || controlsHost || header;
+        if (expandButtonHost && !document.getElementById('dashboard-trend-expand-btn')) {
+            if (header) header.classList.add('dashboard-trend-header');
+            const button = document.createElement('button');
+            button.id = 'dashboard-trend-expand-btn';
+            button.type = 'button';
+            button.className = 'dashboard-trend-expand-btn';
+            button.title = '放大業務趨勢分析';
+            button.setAttribute('aria-label', '放大業務趨勢分析');
+            button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"></path><path d="M21 3l-7 7"></path><path d="M9 21H3v-6"></path><path d="M3 21l7-7"></path></svg>';
+            button.addEventListener('click', () => this.openTrendPreview());
+            expandButtonHost.appendChild(button);
+        } else if (expandButtonHost) {
+            const button = document.getElementById('dashboard-trend-expand-btn');
+            if (button && button.parentElement !== expandButtonHost) {
+                expandButtonHost.appendChild(button);
+            }
+        }
+
+        if (!document.getElementById('dashboard-trend-preview-modal')) {
+            const modal = document.createElement('div');
+            modal.id = 'dashboard-trend-preview-modal';
+            modal.setAttribute('role', 'dialog');
+            modal.setAttribute('aria-modal', 'true');
+            modal.setAttribute('aria-hidden', 'true');
+            modal.setAttribute('aria-labelledby', 'dashboard-trend-preview-title');
+            modal.innerHTML = `
+                <div class="dashboard-trend-preview-dialog">
+                    <div class="dashboard-trend-preview-header">
+                        <h2 id="dashboard-trend-preview-title">業務趨勢分析</h2>
+                        <button type="button" class="dashboard-trend-preview-close" title="關閉預覽" aria-label="關閉預覽">×</button>
+                    </div>
+                    <div id="dashboard-trend-preview-container"></div>
+                </div>
+            `;
+            modal.addEventListener('click', event => {
+                if (event.target === modal) this.closeTrendPreview();
+            });
+            modal.querySelector('.dashboard-trend-preview-close').addEventListener('click', () => this.closeTrendPreview());
+            document.body.appendChild(modal);
+        }
+    },
+
+    openTrendPreview() {
+        const modal = document.getElementById('dashboard-trend-preview-modal');
+        const chartEl = document.getElementById('dashboard-trend-preview-container');
+        const option = this._latestTrendChartOption;
+        if (!modal || !chartEl || !option || typeof createEChartsThemedChart !== 'function') return;
+
+        this.closeTrendPreview();
+        modal.classList.add('show');
+        modal.setAttribute('aria-hidden', 'false');
+
+        requestAnimationFrame(() => {
+            this._trendPreviewChart = createEChartsThemedChart('dashboard-trend-preview-container', option);
+            if (this._trendPreviewChart) this._trendPreviewChart.resize();
+        });
+    },
+
+    closeTrendPreview() {
+        const modal = document.getElementById('dashboard-trend-preview-modal');
+        const chartEl = document.getElementById('dashboard-trend-preview-container');
+
+        if (chartEl) {
+            if (chartEl._echartsResizeHandler) {
+                window.removeEventListener('resize', chartEl._echartsResizeHandler);
+                chartEl._echartsResizeHandler = null;
+            }
+            const existingChart = window.echarts && window.echarts.getInstanceByDom(chartEl);
+            if (existingChart) existingChart.dispose();
+            chartEl.innerHTML = '';
+        }
+
+        this._trendPreviewChart = null;
+        if (modal) {
+            modal.classList.remove('show');
+            modal.setAttribute('aria-hidden', 'true');
+        }
     },
 
     /**
@@ -404,6 +690,24 @@ const DashboardWidgets = {
             const style = document.createElement('style');
             style.id = 'dashboard-widget-styles';
             style.innerHTML = `
+                .dashboard-trend-header { display: flex; align-items: center; gap: 8px; }
+                .dashboard-trend-controls { display: flex !important; align-items: center; justify-content: flex-end; gap: 6px !important; flex-wrap: nowrap; min-width: 0; }
+                .dashboard-trend-quick-controls { display: inline-flex; align-items: center; gap: 4px; flex-wrap: nowrap; white-space: nowrap; }
+                .dashboard-trend-filter-btn { height: 28px; padding: 0 9px; border: 1px solid var(--border-color); border-radius: 6px; background: transparent; color: var(--text-muted); font-size: 12px; font-weight: 500; line-height: 1; cursor: pointer; }
+                .dashboard-trend-filter-btn:hover { color: var(--text-primary); background: var(--hover-bg, rgba(148, 163, 184, 0.08)); }
+                .dashboard-trend-filter-btn.active { color: var(--text-primary); border-color: color-mix(in srgb, var(--text-primary) 28%, var(--border-color)); background: color-mix(in srgb, var(--text-primary) 7%, transparent); font-weight: 600; }
+                .dashboard-trend-expand-btn { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-color); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; flex: 0 0 auto; margin-left: 2px; }
+                .dashboard-trend-expand-btn:hover { color: var(--text-primary); background: var(--hover-bg, rgba(148, 163, 184, 0.08)); }
+                .dashboard-trend-expand-btn svg { width: 14px; height: 14px; }
+                #dashboard-trend-preview-modal { position: fixed; inset: 0; z-index: 2000; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(15, 23, 42, 0.42); }
+                #dashboard-trend-preview-modal.show { display: flex; }
+                .dashboard-trend-preview-dialog { width: min(1080px, 96vw); background: var(--card-bg, #fff); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 20px 45px rgba(15, 23, 42, 0.18); overflow: hidden; }
+                .dashboard-trend-preview-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--border-color); }
+                #dashboard-trend-preview-title { margin: 0; font-size: 1rem; font-weight: 600; color: var(--text-primary); }
+                .dashboard-trend-preview-close { width: 30px; height: 30px; border: 1px solid var(--border-color); border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 18px; line-height: 1; }
+                .dashboard-trend-preview-close:hover { color: var(--text-primary); background: var(--hover-bg, rgba(148, 163, 184, 0.08)); }
+                #dashboard-trend-preview-container { height: min(560px, 70vh); padding: 8px 16px 18px; }
+
                 /* 浮動資訊卡片 Tooltip 樣式 */
                 .custom-tooltip {
                     display: none;
