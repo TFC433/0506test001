@@ -11,7 +11,7 @@ class MapManager {
         this.mapName = 'taiwan';
         this.geoJsonUrl = '/assets/maps/taiwan.json';
         this.excludedCounties = new Set(['澎湖縣', '金門縣', '連江縣']);
-        this.nullMapColor = 'rgba(251, 146, 60, 0.12)';
+        this.nullMapColor = 'rgba(148, 163, 184, 0.22)';
         this.controlsBound = false;
     }
 
@@ -96,7 +96,10 @@ class MapManager {
             this.chart.setOption({
                 legend: { show: false },
                 visualMap: this.buildVisualMap(seriesData),
-                series: [{ data: seriesData }]
+                series: [{
+                    data: seriesData,
+                    label: this.buildTopCountyLabel(seriesData)
+                }]
             });
 
             if (this.isPreviewOpen()) {
@@ -210,6 +213,7 @@ class MapManager {
         const cardBg = rootStyle.getPropertyValue('--card-bg').trim() || (isDark ? '#1e293b' : '#ffffff');
         const mapBorderColor = isDark ? 'rgba(226, 232, 240, 0.58)' : 'rgba(255, 255, 255, 0.92)';
         const isPreview = Boolean(options.preview);
+        const topCountyLabel = this.buildTopCountyLabel(seriesData, textColorPrimary);
 
         return {
             legend: { show: false },
@@ -231,14 +235,14 @@ class MapManager {
                 map: this.mapName,
                 roam: false,
                 data: seriesData,
-                layoutCenter: ['50%', isPreview ? '52%' : '54%'],
-                layoutSize: isPreview ? '94%' : '114%',
-                aspectScale: 0.9,
+                layoutCenter: ['50%', '50%'],
+                layoutSize: isPreview ? '96%' : '104%',
+                aspectScale: 0.95,
                 showLegendSymbol: false,
-                label: { show: false },
+                label: topCountyLabel,
                 emphasis: {
                     disabled: false,
-                    label: { show: false },
+                    label: topCountyLabel,
                     itemStyle: {
                         areaColor: '#f97316',
                         borderColor: mapBorderColor,
@@ -253,6 +257,29 @@ class MapManager {
                 }
             }]
         };
+    }
+
+    buildTopCountyLabel(seriesData, textColor = null) {
+        const topCountyNames = new Set(this.getTopCountyNames(seriesData));
+
+        return {
+            show: true,
+            formatter: params => topCountyNames.has(params.name) ? params.name : '',
+            color: textColor || this.getPrimaryTextColor(),
+            fontSize: 11,
+            fontWeight: 600,
+            textBorderColor: 'rgba(255, 255, 255, 0.72)',
+            textBorderWidth: 2
+        };
+    }
+
+    getTopCountyNames(seriesData) {
+        return seriesData
+            .filter(item => typeof item.value === 'number' && item.value > 0)
+            .slice()
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 3)
+            .map(item => item.name);
     }
 
     buildVisualMap(seriesData, textColor = null, isPreview = false) {
@@ -274,10 +301,10 @@ class MapManager {
             text: ['高', '低'],
             textStyle: {
                 color: textColor || this.getMutedTextColor(),
-                fontSize: 11
+                fontSize: 12
             },
             inRange: {
-                color: ['#ffedd5', '#fdba74', '#f97316', '#c2410c']
+                color: ['#ede9fe', '#c4b5fd', '#8b5cf6', '#5b21b6']
             },
             outOfRange: {
                 color: this.nullMapColor
@@ -442,10 +469,10 @@ class MapManager {
         style.innerHTML = `
             #map-widget .widget-header { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-2); flex-wrap: wrap; }
             #map-widget .widget-title { white-space: nowrap; flex-shrink: 0; }
-            #map-widget .map-filter { display: flex; align-items: center; justify-content: flex-start; gap: 4px; min-width: 0; flex: 0 0 100%; }
-            .map-tab-filter { display: inline-flex; align-items: center; justify-content: flex-start; gap: 4px; min-width: 0; flex: 1; }
+            #map-widget .map-filter { display: flex; align-items: center; justify-content: flex-end; gap: 4px; min-width: 0; flex: 1 1 auto; }
+            .map-tab-filter { display: inline-flex; align-items: center; justify-content: flex-end; gap: 4px; min-width: 0; flex: 0 1 auto; }
             .map-tab-label { color: var(--text-muted); font-size: 11px; line-height: 1.2; white-space: nowrap; }
-            .map-tab-list { display: inline-flex; align-items: center; justify-content: flex-start; gap: 3px; flex-wrap: wrap; max-height: 48px; overflow: hidden; }
+            .map-tab-list { display: inline-flex; align-items: center; justify-content: flex-end; gap: 3px; flex-wrap: wrap; max-height: 48px; overflow: hidden; }
             .map-filter-tab {
                 min-height: 22px;
                 padding: 2px 6px;
@@ -460,9 +487,9 @@ class MapManager {
             }
             .map-filter-tab:hover { background: var(--secondary-bg); color: var(--text-primary); }
             .map-filter-tab.is-active {
-                background: color-mix(in srgb, #f97316 12%, transparent);
-                border-color: color-mix(in srgb, #f97316 45%, var(--border-color));
-                color: #ea580c;
+                background: color-mix(in srgb, #8b5cf6 12%, transparent);
+                border-color: color-mix(in srgb, #8b5cf6 45%, var(--border-color));
+                color: #7c3aed;
                 font-weight: 600;
             }
             .map-preview-open-btn,
@@ -546,6 +573,12 @@ class MapManager {
         const rootStyle = getComputedStyle(document.documentElement);
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
         return rootStyle.getPropertyValue('--text-muted').trim() || (isDark ? '#94a3b8' : '#64748b');
+    }
+
+    getPrimaryTextColor() {
+        const rootStyle = getComputedStyle(document.documentElement);
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        return rootStyle.getPropertyValue('--text-primary').trim() || (isDark ? '#f8fafc' : '#0f172a');
     }
 
     escapeHtml(value) {
