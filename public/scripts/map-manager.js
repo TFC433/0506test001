@@ -3,28 +3,40 @@
 class MapManager {
     constructor() {
         this.chart = null;
+        this.previewChart = null;
         this.isInitialized = false;
         this.normalizedGeoJson = null;
+        this.latestSeriesData = [];
+        this.currentOpportunityType = '';
         this.mapName = 'taiwan';
         this.geoJsonUrl = '/assets/maps/taiwan.json';
         this.excludedCounties = new Set(['澎湖縣', '金門縣', '連江縣']);
-        this.nullMapColor = 'rgba(59, 130, 246, 0.18)';
+        this.nullMapColor = 'rgba(251, 146, 60, 0.12)';
+        this.controlsBound = false;
     }
 
     async initialize(opportunityType = '') {
         const mapContainer = document.getElementById('taiwan-map-container');
         if (!mapContainer) return;
 
+        this.currentOpportunityType = opportunityType || '';
+        this.ensureStyles();
+        this.renderFilterTabs();
+        this.bindControls();
+
         if (!this.canRenderEChartsMap(mapContainer)) return;
 
-        await this.fetchAndRender(opportunityType);
+        await this.fetchAndRender(this.currentOpportunityType);
     }
 
     async update(opportunityType = '') {
+        this.currentOpportunityType = opportunityType || '';
+        this.renderFilterTabs();
+
         if (!this.isInitialized) {
-            await this.initialize(opportunityType);
+            await this.initialize(this.currentOpportunityType);
         } else {
-            await this.fetchAndUpdateSeries(opportunityType);
+            await this.fetchAndUpdateSeries(this.currentOpportunityType);
         }
     }
 
@@ -82,9 +94,14 @@ class MapManager {
             }
 
             this.chart.setOption({
+                legend: { show: false },
                 visualMap: this.buildVisualMap(seriesData),
                 series: [{ data: seriesData }]
             });
+
+            if (this.isPreviewOpen()) {
+                this.renderPreviewChart();
+            }
         } catch (error) {
             console.error('[MapManager] Failed to update Taiwan opportunity map:', error);
             if (typeof showNotification === 'function') {
@@ -167,7 +184,7 @@ class MapManager {
             });
         }
 
-        return this.normalizedGeoJson.features.map(feature => {
+        this.latestSeriesData = this.normalizedGeoJson.features.map(feature => {
             const name = this.normalizeCountyName(feature.properties && feature.properties.name);
             const count = countyCountMap.get(name) || 0;
 
@@ -176,13 +193,15 @@ class MapManager {
                 value: count > 0 ? count : null
             };
         });
+
+        return this.latestSeriesData;
     }
 
     normalizeCountyName(name) {
         return String(name || '').trim().replace(/台/g, '臺');
     }
 
-    buildMapOption(seriesData) {
+    buildMapOption(seriesData, options = {}) {
         const rootStyle = getComputedStyle(document.documentElement);
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
         const textColorPrimary = rootStyle.getPropertyValue('--text-primary').trim() || (isDark ? '#f8fafc' : '#0f172a');
@@ -190,8 +209,10 @@ class MapManager {
         const borderColor = rootStyle.getPropertyValue('--border-color').trim() || (isDark ? '#334155' : '#cbd5e1');
         const cardBg = rootStyle.getPropertyValue('--card-bg').trim() || (isDark ? '#1e293b' : '#ffffff');
         const mapBorderColor = isDark ? 'rgba(226, 232, 240, 0.58)' : 'rgba(255, 255, 255, 0.92)';
+        const isPreview = Boolean(options.preview);
 
         return {
+            legend: { show: false },
             tooltip: {
                 trigger: 'item',
                 backgroundColor: cardBg,
@@ -203,19 +224,23 @@ class MapManager {
                     return `<b>${countyName}</b><br/>機會案件：<b>${value}</b> 件`;
                 }
             },
-            visualMap: this.buildVisualMap(seriesData, textColorMuted),
+            visualMap: this.buildVisualMap(seriesData, textColorMuted, isPreview),
             series: [{
                 name: '機會案件',
                 type: 'map',
                 map: this.mapName,
                 roam: false,
                 data: seriesData,
+                layoutCenter: ['50%', isPreview ? '52%' : '54%'],
+                layoutSize: isPreview ? '94%' : '114%',
+                aspectScale: 0.9,
+                showLegendSymbol: false,
                 label: { show: false },
                 emphasis: {
                     disabled: false,
                     label: { show: false },
                     itemStyle: {
-                        areaColor: '#f59e0b',
+                        areaColor: '#f97316',
                         borderColor: mapBorderColor,
                         borderWidth: 1
                     }
@@ -230,7 +255,7 @@ class MapManager {
         };
     }
 
-    buildVisualMap(seriesData, textColor = null) {
+    buildVisualMap(seriesData, textColor = null, isPreview = false) {
         const positiveValues = seriesData
             .map(item => item.value)
             .filter(value => typeof value === 'number' && value > 0);
@@ -242,17 +267,17 @@ class MapManager {
             max: maxValue,
             calculable: false,
             orient: 'vertical',
-            right: 8,
+            right: isPreview ? 24 : 8,
             top: 'middle',
             itemWidth: 10,
-            itemHeight: 96,
+            itemHeight: isPreview ? 132 : 96,
             text: ['高', '低'],
             textStyle: {
                 color: textColor || this.getMutedTextColor(),
                 fontSize: 11
             },
             inRange: {
-                color: ['#00008B', '#00FFFF', '#00FF00', '#FFFF00', '#FFA500', '#FF0000']
+                color: ['#ffedd5', '#fdba74', '#f97316', '#c2410c']
             },
             outOfRange: {
                 color: this.nullMapColor
@@ -260,10 +285,280 @@ class MapManager {
         };
     }
 
+    renderFilterTabs() {
+        const container = document.getElementById('map-filter-tabs-container');
+        if (!container) return;
+
+        const options = this.getFilterOptions();
+        container.innerHTML = `
+            <div class="map-tab-filter" role="group" aria-label="機會種類">
+                <span class="map-tab-label">機會種類</span>
+                <div class="map-tab-list">
+                    ${options.map(option => `
+                        <button type="button"
+                                class="map-filter-tab${option.value === this.currentOpportunityType ? ' is-active' : ''}"
+                                data-map-filter-value="${this.escapeAttribute(option.value)}"
+                                aria-pressed="${option.value === this.currentOpportunityType ? 'true' : 'false'}">
+                            ${this.escapeHtml(option.label)}
+                        </button>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    getFilterOptions() {
+        const configuredTypes = window.CRM_APP?.systemConfig?.['機會種類'];
+        const sourceTypes = Array.isArray(configuredTypes) && configuredTypes.length
+            ? configuredTypes
+            : [
+                { value: 'DT（數位雙生）', note: 'DT（數位雙生）' },
+                { value: 'IoT（物聯網）', note: 'IoT（物聯網）' },
+                { value: 'DT/IoT', note: 'DT/IoT' },
+                { value: 'DX', note: 'DX' }
+            ];
+
+        const sortedTypes = sourceTypes.slice().sort((a, b) => this.getDisplayOrder(a) - this.getDisplayOrder(b));
+        return [{ value: '', label: '全部' }].concat(sortedTypes.map(item => ({
+            value: item.value || '',
+            label: this.getCompactFilterLabel(item)
+        })));
+    }
+
+    getCompactFilterLabel(item) {
+        const originalLabel = item.note || item.label || item.value || '';
+        const searchable = `${item.value || ''} ${originalLabel}`;
+        if (!searchable.trim()) return '全部';
+        if (/DT\s*\/\s*IoT/i.test(searchable)) return 'DT/IoT';
+        if (/IoT|IOT|物聯網|物联网/.test(searchable)) return 'IoT';
+        if (/數位雙生|数位双生|DT/i.test(searchable)) return 'DT';
+        if (/DX/i.test(searchable)) return 'DX';
+        return originalLabel;
+    }
+
+    getDisplayOrder(option) {
+        const order = option?.displayOrder ?? option?.display_order;
+        const parsed = Number(order);
+        return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
+    }
+
+    bindControls() {
+        if (this.controlsBound) return;
+        this.controlsBound = true;
+
+        const tabsContainer = document.getElementById('map-filter-tabs-container');
+        if (tabsContainer) {
+            tabsContainer.addEventListener('click', event => {
+                const tab = event.target.closest('.map-filter-tab');
+                if (!tab) return;
+                this.update(tab.dataset.mapFilterValue || '');
+            });
+        }
+
+        const openButton = document.getElementById('map-preview-open');
+        if (openButton) {
+            openButton.title = '放大全台機會分布';
+            openButton.setAttribute('aria-label', '放大全台機會分布');
+            openButton.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 3h6v6"></path><path d="M21 3l-7 7"></path><path d="M9 21H3v-6"></path><path d="M3 21l7-7"></path></svg>';
+            openButton.addEventListener('click', () => this.openPreviewModal());
+        }
+
+        const modal = document.getElementById('map-preview-modal');
+        if (modal) {
+            modal.addEventListener('click', event => {
+                if (event.target.closest('[data-map-preview-close]')) {
+                    this.closePreviewModal();
+                }
+            });
+        }
+
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && this.isPreviewOpen()) {
+                this.closePreviewModal();
+            }
+        });
+    }
+
+    async openPreviewModal() {
+        const modal = document.getElementById('map-preview-modal');
+        if (!modal) return;
+
+        modal.hidden = false;
+        document.body.classList.add('map-preview-open');
+
+        if (!this.latestSeriesData.length) {
+            await this.fetchMapData(this.currentOpportunityType);
+        }
+
+        this.renderPreviewChart();
+    }
+
+    renderPreviewChart() {
+        const canvas = document.getElementById('map-preview-canvas');
+        if (!canvas || !this.latestSeriesData.length || typeof createEChartsThemedChart !== 'function') return;
+
+        this.disposePreviewChart();
+        this.previewChart = createEChartsThemedChart('map-preview-canvas', this.buildMapOption(this.latestSeriesData, { preview: true }));
+    }
+
+    closePreviewModal() {
+        const modal = document.getElementById('map-preview-modal');
+        if (!modal) return;
+
+        this.disposePreviewChart();
+        modal.hidden = true;
+        document.body.classList.remove('map-preview-open');
+    }
+
+    disposePreviewChart() {
+        const canvas = document.getElementById('map-preview-canvas');
+        if (canvas && canvas._echartsResizeHandler) {
+            window.removeEventListener('resize', canvas._echartsResizeHandler);
+            canvas._echartsResizeHandler = null;
+        }
+
+        if (this.previewChart && !this.previewChart.isDisposed?.()) {
+            this.previewChart.dispose();
+        } else if (window.echarts && canvas) {
+            const existingChart = window.echarts.getInstanceByDom(canvas);
+            if (existingChart) existingChart.dispose();
+        }
+
+        if (canvas) canvas.innerHTML = '';
+        this.previewChart = null;
+    }
+
+    isPreviewOpen() {
+        const modal = document.getElementById('map-preview-modal');
+        return Boolean(modal && !modal.hidden);
+    }
+
+    ensureStyles() {
+        const styleId = 'map-manager-refinement-styles';
+        if (document.getElementById(styleId)) return;
+
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.innerHTML = `
+            #map-widget .widget-header { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-2); flex-wrap: wrap; }
+            #map-widget .widget-title { white-space: nowrap; flex-shrink: 0; }
+            #map-widget .map-filter { display: flex; align-items: center; justify-content: flex-start; gap: 4px; min-width: 0; flex: 0 0 100%; }
+            .map-tab-filter { display: inline-flex; align-items: center; justify-content: flex-start; gap: 4px; min-width: 0; flex: 1; }
+            .map-tab-label { color: var(--text-muted); font-size: 11px; line-height: 1.2; white-space: nowrap; }
+            .map-tab-list { display: inline-flex; align-items: center; justify-content: flex-start; gap: 3px; flex-wrap: wrap; max-height: 48px; overflow: hidden; }
+            .map-filter-tab {
+                min-height: 22px;
+                padding: 2px 6px;
+                border: 1px solid var(--border-color);
+                border-radius: 2px;
+                background: var(--primary-bg);
+                color: var(--text-secondary);
+                font-size: 11px;
+                line-height: 1.2;
+                cursor: pointer;
+                white-space: nowrap;
+            }
+            .map-filter-tab:hover { background: var(--secondary-bg); color: var(--text-primary); }
+            .map-filter-tab.is-active {
+                background: color-mix(in srgb, #f97316 12%, transparent);
+                border-color: color-mix(in srgb, #f97316 45%, var(--border-color));
+                color: #ea580c;
+                font-weight: 600;
+            }
+            .map-preview-open-btn,
+            .map-preview-close {
+                border: 1px solid var(--border-color);
+                border-radius: 3px;
+                background: var(--primary-bg);
+                color: var(--text-secondary);
+                cursor: pointer;
+            }
+            .map-preview-open-btn {
+                width: 24px;
+                height: 24px;
+                min-height: 24px;
+                padding: 0;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                flex: 0 0 auto;
+            }
+            .map-preview-open-btn svg { width: 13px; height: 13px; }
+            .map-preview-open-btn:hover,
+            .map-preview-close:hover { background: var(--secondary-bg); color: var(--text-primary); }
+            .map-preview-modal[hidden] { display: none; }
+            .map-preview-modal {
+                position: fixed;
+                inset: 0;
+                z-index: 1200;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 28px;
+            }
+            .map-preview-backdrop {
+                position: absolute;
+                inset: 0;
+                background: rgba(15, 23, 42, 0.62);
+            }
+            .map-preview-panel {
+                position: relative;
+                width: min(820px, 92vw);
+                height: min(720px, 84vh);
+                display: flex;
+                flex-direction: column;
+                border: 1px solid var(--border-color);
+                border-radius: 8px;
+                background: var(--card-bg);
+                box-shadow: 0 18px 48px rgba(15, 23, 42, 0.32);
+                overflow: hidden;
+            }
+            .map-preview-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: var(--spacing-3);
+                padding: 12px 14px;
+                border-bottom: 1px solid var(--border-color);
+            }
+            .map-preview-title {
+                margin: 0;
+                color: var(--text-primary);
+                font-size: 16px;
+                font-weight: 600;
+            }
+            .map-preview-close {
+                width: 28px;
+                height: 28px;
+                font-size: 20px;
+                line-height: 1;
+            }
+            .map-preview-canvas {
+                flex: 1;
+                min-height: 0;
+            }
+            body.map-preview-open { overflow: hidden; }
+        `;
+        document.head.appendChild(style);
+    }
+
     getMutedTextColor() {
         const rootStyle = getComputedStyle(document.documentElement);
         const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
         return rootStyle.getPropertyValue('--text-muted').trim() || (isDark ? '#94a3b8' : '#64748b');
+    }
+
+    escapeHtml(value) {
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    escapeAttribute(value) {
+        return this.escapeHtml(value);
     }
 }
 

@@ -277,8 +277,8 @@
                              <div class="widget-header">
                                  <h2 id="map-title" class="widget-title">全台機會分布</h2>
                                  <div class="map-filter">
-                                     <select id="map-opportunity-filter" class="form-select-sm" onchange="window.mapManager.update(this.value)">
-                                     </select>
+                                     <div id="map-filter-tabs-container"></div>
+                                     <button type="button" id="map-preview-open" class="map-preview-open-btn" title="放大檢視">放大</button>
                                  </div>
                              </div>
                              <div class="map-container">
@@ -287,6 +287,17 @@
                                  </div>
                              </div>
                          </div>
+
+                        <div id="map-preview-modal" class="map-preview-modal" hidden>
+                            <div class="map-preview-backdrop" data-map-preview-close></div>
+                            <div class="map-preview-panel" role="dialog" aria-modal="true" aria-labelledby="map-preview-title">
+                                <div class="map-preview-header">
+                                    <h2 id="map-preview-title" class="map-preview-title">全台機會分布</h2>
+                                    <button type="button" class="map-preview-close" data-map-preview-close aria-label="關閉">×</button>
+                                </div>
+                                <div id="map-preview-canvas" class="map-preview-canvas"></div>
+                            </div>
+                        </div>
 
                         <div class="grid-col-12 dashboard-widget" id="kanban-widget">
                             <div class="widget-header">
