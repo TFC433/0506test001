@@ -210,31 +210,138 @@ const SalesAnalysisComponents = {
 
             if (typeof createEChartsThemedChart !== 'function') return;
 
-            const pieOpt = (name, data) => ({
-                tooltip: {
-                    formatter: params => {
-                        const safeName = String(params.name || '').replace(/[&<>"']/g, ch => ({
-                            '&': '&amp;',
-                            '<': '&lt;',
-                            '>': '&gt;',
-                            '"': '&quot;',
-                            "'": '&#39;'
-                        })[ch]);
-                        return `${params.marker || ''}${safeName}<br/><b>${params.percent.toFixed(1)}%</b> (${Number(params.value || 0).toLocaleString()})`;
-                    }
-                },
-                series: [{
-                    name,
-                    type: 'pie',
-                    data: (data || []).map(item => ({
-                        name: item.name,
-                        value: item.y || 0
-                    }))
-                }]
-            });
+            const escapeChartText = value => String(value || '').replace(/[&<>"']/g, ch => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            })[ch]);
+            const formatMoneyCompact = value => {
+                const amount = Number(value || 0);
+                if (Math.abs(amount) >= 100000000) return `${(amount / 100000000).toFixed(1).replace(/\.0$/, '')}億`;
+                if (Math.abs(amount) >= 10000) return `${(amount / 10000).toFixed(1).replace(/\.0$/, '')}萬`;
+                return amount.toLocaleString();
+            };
+            const sumValues = data => (data || []).reduce((sum, item) => sum + Number(item.y || 0), 0);
 
-            createEChartsThemedChart('chart-pie-type', pieOpt('類型', typeData));
-            createEChartsThemedChart('chart-pie-source', pieOpt('來源', sourceData));
+            const typeDonutOpt = (name, data) => {
+                const total = sumValues(data);
+                return {
+                    legend: { show: false },
+                    title: {
+                        text: '成交總額',
+                        subtext: formatMoneyCompact(total),
+                        left: 'center',
+                        top: '39%',
+                        textStyle: {
+                            fontSize: 11,
+                            fontWeight: 500
+                        },
+                        subtextStyle: {
+                            fontSize: 13,
+                            fontWeight: 600
+                        }
+                    },
+                    tooltip: {
+                        formatter: params => {
+                            const safeName = escapeChartText(params.name);
+                            return `${params.marker || ''}${safeName}<br/><b>${formatMoneyCompact(params.value)}</b><br/>${params.percent.toFixed(1)}%`;
+                        }
+                    },
+                    series: [{
+                        name,
+                        type: 'pie',
+                        radius: ['44%', '68%'],
+                        center: ['50%', '45%'],
+                        minShowLabelAngle: 8,
+                        label: {
+                            show: true,
+                            formatter: params => params.percent >= 3 ? `${params.name}\n${params.percent.toFixed(1)}%` : '',
+                            overflow: 'break',
+                            width: 86
+                        },
+                        labelLine: {
+                            show: true,
+                            minTurnAngle: 45
+                        },
+                        data: (data || []).map(item => ({
+                            name: item.name,
+                            value: item.y || 0
+                        }))
+                    }]
+                };
+            };
+
+            const sourceBarOpt = data => {
+                const sourceItems = (data || []).map(item => ({
+                    name: item.name,
+                    y: Number(item.y || 0)
+                })).sort((a, b) => b.y - a.y);
+                const total = sumValues(sourceItems);
+                const rankedItems = sourceItems.length > 7
+                    ? sourceItems.slice(0, 6).concat({
+                        name: '其他',
+                        y: sourceItems.slice(6).reduce((sum, item) => sum + item.y, 0)
+                    })
+                    : sourceItems;
+
+                return {
+                    legend: { show: false },
+                    grid: {
+                        top: 12,
+                        right: 18,
+                        bottom: 28,
+                        left: 8,
+                        containLabel: true
+                    },
+                    xAxis: {
+                        type: 'value',
+                        axisLabel: {
+                            formatter: value => formatMoneyCompact(value)
+                        },
+                        splitLine: {
+                            lineStyle: { type: 'dashed', opacity: 0.45 }
+                        }
+                    },
+                    yAxis: {
+                        type: 'category',
+                        inverse: true,
+                        data: rankedItems.map(item => item.name),
+                        axisTick: { show: false },
+                        axisLabel: {
+                            width: 86,
+                            overflow: 'truncate'
+                        }
+                    },
+                    tooltip: {
+                        trigger: 'item',
+                        formatter: params => {
+                            const value = Number(params.value || 0);
+                            const percent = total ? (value / total) * 100 : 0;
+                            return `${params.marker || ''}${escapeChartText(params.name)}<br/><b>${formatMoneyCompact(value)}</b><br/>${percent.toFixed(1)}%`;
+                        }
+                    },
+                    series: [{
+                        name: '來源',
+                        type: 'bar',
+                        data: rankedItems.map(item => item.y),
+                        barMaxWidth: 18,
+                        itemStyle: {
+                            borderRadius: [0, 4, 4, 0],
+                            color: '#60a5fa'
+                        },
+                        label: {
+                            show: true,
+                            position: 'right',
+                            formatter: params => formatMoneyCompact(params.value)
+                        }
+                    }]
+                };
+            };
+
+            createEChartsThemedChart('chart-pie-type', typeDonutOpt('類型', typeData));
+            createEChartsThemedChart('chart-pie-source', sourceBarOpt(sourceData));
         }, 50);
     },
 
