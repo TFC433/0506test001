@@ -68,7 +68,6 @@ class MapManager {
             const option = this.buildMapOption(seriesData);
 
             this.chart = createEChartsThemedChart('taiwan-map-container', option);
-            this.renderTopSummary(seriesData);
             this.isInitialized = Boolean(this.chart);
 
             if (!this.chart) {
@@ -102,7 +101,6 @@ class MapManager {
                     label: this.buildTopCountyLabel(seriesData)
                 }]
             });
-            this.renderTopSummary(seriesData);
 
             if (this.isPreviewOpen()) {
                 this.renderPreviewChart();
@@ -339,51 +337,6 @@ class MapManager {
         `;
     }
 
-    renderTopSummary(seriesData = this.latestSeriesData) {
-        const mapContainer = document.querySelector('#map-widget .map-container');
-        if (!mapContainer) return;
-
-        let summary = document.getElementById('map-top-summary');
-        if (!summary) {
-            summary = document.createElement('div');
-            summary.id = 'map-top-summary';
-            summary.className = 'map-top-summary';
-            mapContainer.appendChild(summary);
-        }
-
-        const topEntries = this.getTopCountyEntries(seriesData);
-        if (!topEntries.length) {
-            summary.innerHTML = `
-                <div class="map-top-summary-title">TOP 5</div>
-                <div class="map-top-summary-row">
-                    <span class="map-top-summary-empty">暫無機會資料</span>
-                </div>
-            `;
-            return;
-        }
-
-        const renderItem = (item, index) => `
-            <span class="map-top-summary-item">
-                <span class="map-top-summary-rank">Top${index + 1}</span>
-                <span class="map-top-summary-name">${this.escapeHtml(item.name)}</span>
-                <span class="map-top-summary-count">${Number(item.value).toLocaleString()}</span>
-            </span>
-        `;
-        const firstRow = topEntries.slice(0, 3);
-        const secondRow = topEntries.slice(3, 5);
-
-        summary.innerHTML = `
-            <div class="map-top-summary-title">TOP 5</div>
-            <div class="map-top-summary-row map-top-summary-row-primary">
-                ${firstRow.map(renderItem).join('')}
-            </div>
-            ${secondRow.length ? `
-                <div class="map-top-summary-row map-top-summary-row-secondary">
-                    ${secondRow.map((item, offset) => renderItem(item, offset + 3)).join('')}
-                </div>
-            ` : ''}
-        `;
-    }
 
     getFilterOptions() {
         const configuredTypes = window.CRM_APP?.systemConfig?.['機會種類'];
@@ -564,56 +517,6 @@ class MapManager {
             .map-preview-open-btn svg { width: 13px; height: 13px; }
             .map-preview-open-btn:hover,
             .map-preview-close:hover { background: var(--secondary-bg); color: var(--text-primary); }
-            .map-top-summary {
-                position: absolute;
-                left: 50%;
-                bottom: 16px;
-                transform: translateX(-50%);
-                z-index: 2;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 4px;
-                width: calc(100% - 24px);
-                max-width: 260px;
-                min-height: 54px;
-                padding: 5px 7px;
-                border: 1px solid color-mix(in srgb, var(--border-color) 82%, transparent);
-                border-radius: 4px;
-                background: color-mix(in srgb, var(--card-bg) 86%, transparent);
-                color: var(--text-secondary);
-                font-size: 10.5px;
-                line-height: 1.25;
-                pointer-events: none;
-                overflow: hidden;
-            }
-            .map-top-summary-title {
-                color: var(--text-muted);
-                font-weight: 700;
-                letter-spacing: 0;
-                white-space: nowrap;
-            }
-            .map-top-summary-row {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                gap: 8px;
-                width: 100%;
-                min-width: 0;
-                overflow: hidden;
-                white-space: nowrap;
-            }
-            .map-top-summary-item {
-                display: inline-flex;
-                align-items: baseline;
-                gap: 3px;
-                min-width: 0;
-                white-space: nowrap;
-            }
-            .map-top-summary-rank { color: var(--text-muted); font-weight: 600; }
-            .map-top-summary-name { color: var(--text-secondary); }
-            .map-top-summary-count { color: var(--text-primary); font-weight: 600; }
-            .map-top-summary-empty { color: var(--text-muted); white-space: nowrap; }
             .map-preview-modal[hidden] { display: none; }
             .map-preview-modal {
                 position: fixed;
