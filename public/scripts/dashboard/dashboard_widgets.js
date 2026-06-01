@@ -353,8 +353,8 @@ const DashboardWidgets = {
                 axisLine: { lineStyle: { color: borderColor } },
                 axisLabel: {
                     color: textColorMuted,
-                    interval: categories.length > 18 ? Math.ceil(categories.length / 12) - 1 : 0,
-                    rotate: categories.length > 18 ? 45 : 0
+                    interval: currentMode === 'all' ? 0 : (categories.length > 18 ? Math.ceil(categories.length / 12) - 1 : 0),
+                    rotate: currentMode === 'all' && categories.length > 18 ? 45 : 0
                 }
             },
             yAxis: [
