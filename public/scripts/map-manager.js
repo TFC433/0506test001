@@ -201,7 +201,11 @@ class MapManager {
     }
 
     normalizeCountyName(name) {
-        return String(name || '').trim().replace(/台/g, '臺');
+        const normalizedName = String(name || '').trim().replace(/台/g, '臺');
+        const countyAliases = {
+            '桃園縣': '桃園市'
+        };
+        return countyAliases[normalizedName] || normalizedName;
     }
 
     buildMapOption(seriesData, options = {}) {

@@ -252,8 +252,10 @@ const SalesAnalysisComponents = {
                         },
                         axisLabel: {
                             color: textColorMuted,
-                            rotate: rows.length > 12 ? 45 : 0,
-                            interval: rows.length > 18 ? Math.ceil(rows.length / 12) - 1 : 0
+                            rotate: 45,
+                            interval: 0,
+                            fontSize: 11,
+                            margin: 10
                         }
                     },
                     yAxis: {
@@ -268,11 +270,15 @@ const SalesAnalysisComponents = {
                         }
                     },
                     tooltip: {
-                        trigger: 'item',
+                        trigger: 'axis',
+                        axisPointer: { type: 'line' },
                         backgroundColor: cardBg,
                         borderColor,
                         textStyle: { color: textColorPrimary },
-                        formatter: params => `${escapeChartText(params.name)}<br/>成交件數：<b>${Number(params.value || 0)}</b> 件`
+                        formatter: params => {
+                            const item = Array.isArray(params) ? params[0] : params;
+                            return `${escapeChartText(item.name)}<br/>成交件數：<b>${Number(item.value || 0)}</b> 件`;
+                        }
                     },
                     series: [{
                         name: '成交件數',
