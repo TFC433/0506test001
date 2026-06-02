@@ -110,10 +110,10 @@ class ProductReader extends BaseReader {
             priceSi: row[F.PRICE_SI] || '',
             priceMtu: row[F.PRICE_MTU] || '',
             
-            supplier: row[F.SUPPLIER] || '',
-            series: row[F.SERIES] || '',
-            interface: row[F.INTERFACE] || '',
-            property: row[F.PROPERTY] || '',
+            oppSpecOption: row[F.OPP_SPEC_OPTION] || '',
+            oppDisplayCategory: row[F.OPP_DISPLAY_CATEGORY] || '',
+            oppDisplayOrder: row[F.OPP_DISPLAY_ORDER] || '',
+            oppBehaviorMode: row[F.OPP_BEHAVIOR_MODE] || '',
             aspect: row[F.ASPECT] || '',
             description: row[F.DESCRIPTION] || '',
             

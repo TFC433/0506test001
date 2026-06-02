@@ -495,6 +495,13 @@ const OpportunityInfoView = (() => {
         return null;
     }
 
+    function _getProductSpecOption(specName) {
+        if (typeof OpportunityInfoCard === 'undefined' || typeof OpportunityInfoCard.getOpportunitySpecOption !== 'function') {
+            return null;
+        }
+        return OpportunityInfoCard.getOpportunitySpecOption(specName);
+    }
+
     function render(opp) {
         _injectStyles();
 
@@ -572,16 +579,16 @@ const OpportunityInfoView = (() => {
         }
 
         if (parsed && typeof parsed === 'object') {
-            const entries = Object.entries(parsed).filter(([name]) => {
-                const configItem = _getSpecConfig(name);
-                return !(/^\d+$/.test(name) && !configItem);
-            });
+            const entries = Object.entries(parsed);
             if (entries.length > 0) {
                 specsContent = entries.map(([name, qty]) => {
+                    const productOption = _getProductSpecOption(name);
                     const configItem = _getSpecConfig(name);
-                    const isCountable = configItem && configItem.value3 === 'allow_quantity';
+                    const isCountable = productOption
+                        ? productOption.behaviorMode === 'allow_quantity'
+                        : configItem && configItem.value3 === 'allow_quantity';
                     
-                    let displayHtml = name;
+                    let displayHtml = productOption ? productOption.label : name;
                     if (isCountable && qty && qty > 0) {
                         displayHtml += `<span class="spec-qty-text">(${qty})</span>`;
                     }

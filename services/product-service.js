@@ -73,6 +73,46 @@ class ProductService {
     }
 
     /**
+     * Get lightweight product options for Opportunity possible order specifications.
+     */
+    async getOpportunitySpecs() {
+        const products = await this.getAllProducts();
+
+        return products
+            .filter(product => product.status === '上架' && this._isTruthyOppSpecOption(product.oppSpecOption))
+            .map(product => {
+                const displayOrder = this._toDisplayOrder(product.oppDisplayOrder);
+                const label = product.spec ? `${product.name} (${product.spec})` : product.name;
+
+                return {
+                    id: product.id,
+                    label,
+                    name: product.name,
+                    spec: product.spec,
+                    category: product.oppDisplayCategory || product.category || '未分類',
+                    displayOrder,
+                    behaviorMode: product.oppBehaviorMode || '',
+                    priceMtb: product.priceMtb,
+                    priceSi: product.priceSi,
+                    priceMtu: product.priceMtu,
+                    status: product.status
+                };
+            })
+            .sort((a, b) => {
+                if (a.displayOrder !== b.displayOrder) {
+                    return a.displayOrder - b.displayOrder;
+                }
+
+                const categoryCompare = String(a.category).localeCompare(String(b.category));
+                if (categoryCompare !== 0) {
+                    return categoryCompare;
+                }
+
+                return String(a.label).localeCompare(String(b.label));
+            });
+    }
+
+    /**
      * 建立新商品
      * @param {Object} productData 
      * @param {Object} user 
@@ -166,7 +206,7 @@ class ProductService {
         const fieldsToCheck = [
             'name', 'category', 'group', 'combination', 'unit', 'spec',
             'cost', 'priceMtb', 'priceSi', 'priceMtu',
-            'supplier', 'series', 'interface', 'property', 'aspect',
+            'oppSpecOption', 'oppDisplayCategory', 'oppDisplayOrder', 'oppBehaviorMode', 'aspect',
             'description', 'status'
         ];
 
@@ -194,6 +234,21 @@ class ProductService {
      */
     _delay(ms) {
         return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    _isTruthyOppSpecOption(value) {
+        if (value === true) return true;
+        if (value === undefined || value === null) return false;
+
+        const normalized = String(value).trim().toLowerCase();
+        return ['true', '是', 'y', 'yes', '1'].includes(normalized);
+    }
+
+    _toDisplayOrder(value) {
+        if (value === undefined || value === null || value === '') return 9999;
+
+        const numericValue = Number(value);
+        return Number.isFinite(numericValue) ? numericValue : 9999;
     }
 
     /**

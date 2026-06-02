@@ -52,10 +52,10 @@ class ProductWriter extends BaseWriter {
         newRow[F.PRICE_SI] = data.priceSi || '';
         newRow[F.PRICE_MTU] = data.priceMtu || '';
         
-        newRow[F.SUPPLIER] = data.supplier || '';
-        newRow[F.SERIES] = data.series || '';
-        newRow[F.INTERFACE] = data.interface || '';
-        newRow[F.PROPERTY] = data.property || '';
+        newRow[F.OPP_SPEC_OPTION] = data.oppSpecOption || '';
+        newRow[F.OPP_DISPLAY_CATEGORY] = data.oppDisplayCategory || '';
+        newRow[F.OPP_DISPLAY_ORDER] = data.oppDisplayOrder || '';
+        newRow[F.OPP_BEHAVIOR_MODE] = data.oppBehaviorMode || '';
         newRow[F.ASPECT] = data.aspect || '';
         newRow[F.DESCRIPTION] = data.description || '';
         
@@ -114,10 +114,10 @@ class ProductWriter extends BaseWriter {
         if (data.priceSi !== undefined) currentRow[F.PRICE_SI] = data.priceSi;
         if (data.priceMtu !== undefined) currentRow[F.PRICE_MTU] = data.priceMtu;
         
-        if (data.supplier !== undefined) currentRow[F.SUPPLIER] = data.supplier;
-        if (data.series !== undefined) currentRow[F.SERIES] = data.series;
-        if (data.interface !== undefined) currentRow[F.INTERFACE] = data.interface;
-        if (data.property !== undefined) currentRow[F.PROPERTY] = data.property;
+        if (data.oppSpecOption !== undefined) currentRow[F.OPP_SPEC_OPTION] = data.oppSpecOption;
+        if (data.oppDisplayCategory !== undefined) currentRow[F.OPP_DISPLAY_CATEGORY] = data.oppDisplayCategory;
+        if (data.oppDisplayOrder !== undefined) currentRow[F.OPP_DISPLAY_ORDER] = data.oppDisplayOrder;
+        if (data.oppBehaviorMode !== undefined) currentRow[F.OPP_BEHAVIOR_MODE] = data.oppBehaviorMode;
         if (data.aspect !== undefined) currentRow[F.ASPECT] = data.aspect;
         if (data.description !== undefined) currentRow[F.DESCRIPTION] = data.description;
         if (data.status !== undefined) currentRow[F.STATUS] = data.status;

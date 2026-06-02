@@ -264,6 +264,9 @@ function _injectStylesForOppInfoCard() {
 const OpportunityInfoCard = (() => {
     let _currentOpp = null;
     let _isCascadingInitialized = false; // [Phase 8.6A] Lazy Load Tracker
+    let _opportunitySpecOptions = null;
+    let _opportunitySpecOptionsPromise = null;
+    let _usesOpportunitySpecFallback = false;
 
     async function _getCompanyList() {
         if (window.CRM_APP && window.CRM_APP.companyList && window.CRM_APP.companyList.length > 0) return window.CRM_APP.companyList;
@@ -275,6 +278,57 @@ const OpportunityInfoCard = (() => {
             }
         } catch (e) { console.error('獲取公司列表失敗', e); }
         return [];
+    }
+
+    function _getLegacySpecsConfig() {
+        const systemConfig = window.CRM_APP ? window.CRM_APP.systemConfig : {};
+        return systemConfig['可能下單規格'] || [];
+    }
+
+    function _normalizeLegacySpecOption(spec) {
+        return {
+            id: spec.value,
+            label: spec.note || spec.value,
+            category: spec.category || '?嗡?',
+            displayOrder: Number.isFinite(Number(spec.sortOrder)) ? Number(spec.sortOrder) : 9999,
+            behaviorMode: spec.value3 || '',
+            legacyConfig: spec
+        };
+    }
+
+    function _getLegacySpecOptions() {
+        return _getLegacySpecsConfig().map(_normalizeLegacySpecOption);
+    }
+
+    async function _ensureOpportunitySpecOptions() {
+        if (_opportunitySpecOptions) return _opportunitySpecOptions;
+        if (_opportunitySpecOptionsPromise) return _opportunitySpecOptionsPromise;
+
+        _opportunitySpecOptionsPromise = authedFetch('/api/products/opportunity-specs')
+            .then(response => {
+                if (!response || !response.success || !Array.isArray(response.data)) {
+                    throw new Error('Invalid opportunity spec response');
+                }
+                _usesOpportunitySpecFallback = false;
+                _opportunitySpecOptions = response.data;
+                return _opportunitySpecOptions;
+            })
+            .catch(error => {
+                console.warn('[OpportunityInfoCard] opportunity-specs fallback:', error);
+                _usesOpportunitySpecFallback = true;
+                _opportunitySpecOptions = _getLegacySpecOptions();
+                return _opportunitySpecOptions;
+            });
+
+        return _opportunitySpecOptionsPromise;
+    }
+
+    function getOpportunitySpecOptionsSync() {
+        return _opportunitySpecOptions || (_usesOpportunitySpecFallback ? _getLegacySpecOptions() : []);
+    }
+
+    function getOpportunitySpecOption(specId) {
+        return getOpportunitySpecOptionsSync().find(spec => spec.id === specId) || null;
     }
 
     function render(opp) {
@@ -314,6 +368,12 @@ const OpportunityInfoCard = (() => {
                 editContainer.innerHTML = html;
                 // [Phase 8.6A PERF] Removed eager _initCascadingLogic(opp) to prevent duplicate companyList fetch.
             }
+        });
+
+        _ensureOpportunitySpecOptions().then(() => {
+            if (_currentOpp !== opp || !OpportunityInfoView) return;
+            const displayContainer = document.getElementById('opportunity-info-display-mode');
+            if (displayContainer) displayContainer.innerHTML = OpportunityInfoView.render(opp);
         });
     }
 
@@ -373,9 +433,8 @@ const OpportunityInfoCard = (() => {
         `;
     }
 
-    function _renderSpecsGroup(opp) {
-        const systemConfig = window.CRM_APP ? window.CRM_APP.systemConfig : {};
-        const specsConfig = systemConfig['可能下單規格'] || [];
+    async function _renderSpecsGroup(opp) {
+        const specsConfig = await _ensureOpportunitySpecOptions();
         
         let specQuantities = new Map();
         try {
@@ -384,7 +443,11 @@ const OpportunityInfoCard = (() => {
         } catch (e) {}
 
         const groups = new Map();
-        specsConfig.forEach(spec => {
+        specsConfig.slice().sort((a, b) => {
+            const orderA = Number.isFinite(Number(a.displayOrder)) ? Number(a.displayOrder) : 9999;
+            const orderB = Number.isFinite(Number(b.displayOrder)) ? Number(b.displayOrder) : 9999;
+            return orderA - orderB;
+        }).forEach(spec => {
             const cat = spec.category || '其他';
             if (!groups.has(cat)) groups.set(cat, []);
             groups.get(cat).push(spec);
@@ -394,17 +457,17 @@ const OpportunityInfoCard = (() => {
         groups.forEach((items, category) => {
             let pillsHtml = '';
             items.forEach(spec => {
-                const quantity = specQuantities.get(spec.value) || 0;
-                const isSelected = specQuantities.has(spec.value);
+                const quantity = specQuantities.get(spec.id) || 0;
+                const isSelected = specQuantities.has(spec.id);
                 let qtyHtml = '';
-                if (isSelected && spec.value3 === 'allow_quantity' && quantity > 0) {
-                    qtyHtml = `<span class="pill-quantity" data-spec-id="${spec.value}">(x${quantity})</span>`;
+                if (isSelected && spec.behaviorMode === 'allow_quantity' && quantity > 0) {
+                    qtyHtml = `<span class="pill-quantity" data-spec-id="${spec.id}">(x${quantity})</span>`;
                 }
                 pillsHtml += `
-                    <span class="info-option-pill ${isSelected ? 'selected' : ''}" 
-                          data-spec-id="${spec.value}" 
-                          title="${spec.note}">
-                        ${spec.note || spec.value}
+                    <span class="info-option-pill ${isSelected ? 'selected' : ''}"
+                          data-spec-id="${spec.id}"
+                          title="${spec.label}">
+                        ${spec.label}
                         ${qtyHtml}
                     </span>
                 `;
@@ -567,7 +630,7 @@ const OpportunityInfoCard = (() => {
                     <div class="op-edit-zone">
                         <div class="form-group">
                             <label class="form-label">可能下單規格 (複選)</label>
-                            ${_renderSpecsGroup(opp)}
+                            ${await _renderSpecsGroup(opp)}
                         </div>
                     </div>
                 </div>
@@ -672,7 +735,7 @@ const OpportunityInfoCard = (() => {
         }
     }
 
-    return { render, handleSalesModelChange, ensureCascadingLogic };
+    return { render, handleSalesModelChange, ensureCascadingLogic, getOpportunitySpecOption, getOpportunitySpecOptionsSync };
 })();
 
 // OpportunityAssociatedOpps 保持不變

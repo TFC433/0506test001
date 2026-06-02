@@ -42,6 +42,19 @@ class ProductController {
     }
 
     /**
+     * GET /api/products/opportunity-specs
+     */
+    async getOpportunitySpecs(req, res) {
+        try {
+            const data = await this.productService.getOpportunitySpecs();
+            res.json({ success: true, data, count: data.length });
+        } catch (error) {
+            console.error('[ProductController] getOpportunitySpecs Error:', error);
+            res.status(500).json({ success: false, error: config.ERROR_MESSAGES.NETWORK_ERROR });
+        }
+    }
+
+    /**
      * 強制重新整理快取
      * POST /api/products/refresh
      */

@@ -19,6 +19,9 @@ router.use(authMiddleware.verifyToken);
 // GET /api/products
 router.get('/', (req, res) => getController(req).getProducts(req, res));
 
+// GET /api/products/opportunity-specs
+router.get('/opportunity-specs', (req, res) => getController(req).getOpportunitySpecs(req, res));
+
 // POST /api/products/refresh
 router.post('/refresh', (req, res) => getController(req).refresh(req, res));
 

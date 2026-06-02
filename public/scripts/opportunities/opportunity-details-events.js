@@ -268,9 +268,9 @@ const OpportunityInfoCardEvents = (() => {
 
     function _handleSpecAccumulate(pill) {
         const specId = pill.dataset.specId;
-        const systemConfig = (window.CRM_APP && window.CRM_APP.systemConfig && window.CRM_APP.systemConfig['可能下單規格']) || [];
-        const config = systemConfig.find(s => s.value === specId);
-        const allowQuantity = config && config.value3 === 'allow_quantity';
+        const option = _getProductSpecOption(specId);
+        const config = _getLegacySpecConfig(specId);
+        const allowQuantity = option ? option.behaviorMode === 'allow_quantity' : config && config.value3 === 'allow_quantity';
 
         if (_specQuantities.has(specId)) {
             if (allowQuantity) {
@@ -331,15 +331,46 @@ const OpportunityInfoCardEvents = (() => {
         const input = document.getElementById('edit-opportunity-value');
         if (!input) return;
 
-        const systemConfig = (window.CRM_APP && window.CRM_APP.systemConfig && window.CRM_APP.systemConfig['可能下單規格']) || [];
+        const salesModel = document.getElementById('edit-sales-model')?.value || _currentOppForEditing?.salesModel || '';
         let total = 0;
         _specQuantities.forEach((qty, specId) => {
-            const config = systemConfig.find(s => s.value === specId);
+            const option = _getProductSpecOption(specId);
+            if (option) {
+                total += _getProductSpecPrice(option, salesModel) * qty;
+                return;
+            }
+
+            const config = _getLegacySpecConfig(specId);
             if (config && config.value2) total += (parseFloat(config.value2) || 0) * qty;
         });
 
         // NOTE: keep raw number (no commas) if your backend expects numeric string
         input.value = String(Math.round(total));
+    }
+
+    function _getProductSpecOption(specId) {
+        if (typeof OpportunityInfoCard === 'undefined' || typeof OpportunityInfoCard.getOpportunitySpecOption !== 'function') {
+            return null;
+        }
+        return OpportunityInfoCard.getOpportunitySpecOption(specId);
+    }
+
+    function _getLegacySpecConfig(specId) {
+        const systemConfig = (window.CRM_APP && window.CRM_APP.systemConfig && window.CRM_APP.systemConfig['可能下單規格']) || [];
+        return systemConfig.find(s => s.value === specId) || null;
+    }
+
+    function _getProductSpecPrice(option, salesModel) {
+        const model = String(salesModel || '').toUpperCase();
+        let rawPrice = option.priceMtu;
+
+        if (model.includes('MTB')) {
+            rawPrice = option.priceMtb;
+        } else if (model.includes('SI')) {
+            rawPrice = option.priceSi;
+        }
+
+        return parseFloat(rawPrice) || 0;
     }
 
     // ======= 핵심修補：避免「沒改的欄位」被空字串覆蓋 =======

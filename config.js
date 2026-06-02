@@ -228,10 +228,10 @@ module.exports = {
         PRICE_MTB: 8,       // MTB價格 (機敏)
         PRICE_SI: 9,        // SI價格 (機敏)
         PRICE_MTU: 10,      // MTU售價 (機敏)
-        SUPPLIER: 11,       // 供應商
-        SERIES: 12,         // 系列
-        INTERFACE: 13,      // 介面
-        PROPERTY: 14,       // 性質
+        OPP_SPEC_OPTION: 11,       // 機會規格選項
+        OPP_DISPLAY_CATEGORY: 12,  // 機會顯示分類
+        OPP_DISPLAY_ORDER: 13,     // 機會顯示順序
+        OPP_BEHAVIOR_MODE: 14,     // 機會行為模式
         ASPECT: 15,         // 面向
         DESCRIPTION: 16,    // 說明資料
         STATUS: 17,         // 狀態
