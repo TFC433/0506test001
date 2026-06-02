@@ -60,6 +60,9 @@
 // -------------------------------------------------------------------------
 
 const OpportunityInfoView = (() => {
+    let _productSpecOptions = null;
+    let _productSpecOptionsPromise = null;
+
 
     function _injectStyles() {
         const styleId = 'opportunity-info-view-styles';
@@ -496,10 +499,90 @@ const OpportunityInfoView = (() => {
     }
 
     function _getProductSpecOption(specName) {
-        if (typeof OpportunityInfoCard === 'undefined' || typeof OpportunityInfoCard.getOpportunitySpecOption !== 'function') {
-            return null;
+        if (typeof OpportunityInfoCard !== 'undefined' && typeof OpportunityInfoCard.getOpportunitySpecOptionsSync === 'function') {
+            const sharedOptions = OpportunityInfoCard.getOpportunitySpecOptionsSync();
+            if (Array.isArray(sharedOptions)) {
+                const sharedProductOption = sharedOptions.find(spec => spec.id === specName && !spec.legacyConfig);
+                if (sharedProductOption) return sharedProductOption;
+            }
         }
-        return OpportunityInfoCard.getOpportunitySpecOption(specName);
+        return _getLocalProductSpecOption(specName);
+    }
+
+    function _escapeAttribute(value) {
+        return String(value || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function _getLocalProductSpecOption(specName) {
+        if (!Array.isArray(_productSpecOptions)) return null;
+        return _productSpecOptions.find(spec => spec.id === specName) || null;
+    }
+
+    function _normalizeProductSpecOption(spec) {
+        if (!spec || !spec.id) return null;
+        const label = spec.label || (spec.spec ? `${spec.name || spec.id} (${spec.spec})` : (spec.name || spec.id));
+        return {
+            id: spec.id,
+            label,
+            behaviorMode: spec.behaviorMode || ''
+        };
+    }
+
+    function _ensureProductSpecOptions() {
+        if (Array.isArray(_productSpecOptions)) return Promise.resolve(_productSpecOptions);
+        if (_productSpecOptionsPromise) return _productSpecOptionsPromise;
+        if (typeof authedFetch !== 'function') {
+            _productSpecOptions = [];
+            return Promise.resolve(_productSpecOptions);
+        }
+
+        _productSpecOptionsPromise = Promise.resolve()
+            .then(() => authedFetch('/api/products/opportunity-specs'))
+            .then(response => {
+                if (!response || !response.success || !Array.isArray(response.data)) {
+                    throw new Error('Invalid opportunity spec response');
+                }
+                _productSpecOptions = response.data.map(_normalizeProductSpecOption).filter(Boolean);
+                return _productSpecOptions;
+            })
+            .catch(error => {
+                console.warn('[OpportunityInfoView] product spec label hydration skipped:', error);
+                _productSpecOptions = [];
+                return _productSpecOptions;
+            });
+
+        return _productSpecOptionsPromise;
+    }
+
+    function _scheduleSpecLabelHydration(entries) {
+        if (!Array.isArray(entries) || entries.length === 0) return;
+        if (entries.every(([name]) => _getProductSpecOption(name))) return;
+
+        setTimeout(() => {
+            _ensureProductSpecOptions().then(() => {
+                const container = document.querySelector('.specs-tags-container[data-spec-label-hydration="pending"]');
+                if (!container) return;
+
+                container.querySelectorAll('.spec-tag[data-spec-key]').forEach(tag => {
+                    const key = tag.dataset.specKey;
+                    const option = _getProductSpecOption(key);
+                    if (!option) return;
+
+                    const qty = parseInt(tag.dataset.specQty || '0', 10);
+                    tag.textContent = option.label || key;
+                    if (option.behaviorMode === 'allow_quantity' && qty > 0) {
+                        const qtySpan = document.createElement('span');
+                        qtySpan.className = 'spec-qty-text';
+                        qtySpan.textContent = `(${qty})`;
+                        tag.appendChild(qtySpan);
+                    }
+                });
+
+                container.removeAttribute('data-spec-label-hydration');
+            }).catch(error => {
+                console.warn('[OpportunityInfoView] product spec label hydration failed:', error);
+            });
+        }, 0);
     }
 
     function render(opp) {
@@ -593,8 +676,9 @@ const OpportunityInfoView = (() => {
                         displayHtml += `<span class="spec-qty-text">(${qty})</span>`;
                     }
                     
-                    return `<div class="spec-tag">${displayHtml}</div>`;
+                    return `<div class="spec-tag" data-spec-key="${_escapeAttribute(name)}" data-spec-qty="${_escapeAttribute(qty || 0)}">${displayHtml}</div>`;
                 }).join('');
+                _scheduleSpecLabelHydration(entries);
             }
         }
 
@@ -713,7 +797,7 @@ const OpportunityInfoView = (() => {
                             </div>
                         </div>
                         <div class="inner-card-title">可能下單規格</div>
-                        <div class="specs-tags-container">
+                        <div class="specs-tags-container" data-spec-label-hydration="pending">
                             ${specsContent}
                         </div>
                     </div>
