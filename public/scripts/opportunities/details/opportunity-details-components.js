@@ -300,17 +300,45 @@ const OpportunityInfoCard = (() => {
         return _getLegacySpecsConfig().map(_normalizeLegacySpecOption);
     }
 
-    async function _ensureOpportunitySpecOptions() {
-        if (_opportunitySpecOptions) return _opportunitySpecOptions;
-        if (_opportunitySpecOptionsPromise) return _opportunitySpecOptionsPromise;
+    function _normalizeProductSpecOption(spec) {
+        if (!spec || !spec.id) return null;
+        const label = spec.label || spec.name || spec.id;
+        return {
+            id: spec.id,
+            label,
+            category: spec.category || '未分類',
+            displayOrder: Number.isFinite(Number(spec.displayOrder)) ? Number(spec.displayOrder) : 9999,
+            behaviorMode: spec.behaviorMode || '',
+            priceMtb: spec.priceMtb,
+            priceSi: spec.priceSi,
+            priceMtu: spec.priceMtu,
+            status: spec.status
+        };
+    }
 
-        _opportunitySpecOptionsPromise = authedFetch('/api/products/opportunity-specs')
+    function _ensureOpportunitySpecOptions() {
+        if (_opportunitySpecOptions) return Promise.resolve(_opportunitySpecOptions);
+        if (_opportunitySpecOptionsPromise) return _opportunitySpecOptionsPromise;
+        if (typeof authedFetch !== 'function') {
+            _usesOpportunitySpecFallback = true;
+            _opportunitySpecOptions = _getLegacySpecOptions();
+            return Promise.resolve(_opportunitySpecOptions);
+        }
+
+        _opportunitySpecOptionsPromise = Promise.resolve()
+            .then(() => authedFetch('/api/products/opportunity-specs'))
             .then(response => {
                 if (!response || !response.success || !Array.isArray(response.data)) {
                     throw new Error('Invalid opportunity spec response');
                 }
+                const productOptions = response.data
+                    .map(_normalizeProductSpecOption)
+                    .filter(Boolean);
+                if (productOptions.length === 0) {
+                    throw new Error('Empty opportunity spec response');
+                }
                 _usesOpportunitySpecFallback = false;
-                _opportunitySpecOptions = response.data;
+                _opportunitySpecOptions = productOptions;
                 return _opportunitySpecOptions;
             })
             .catch(error => {
@@ -324,7 +352,9 @@ const OpportunityInfoCard = (() => {
     }
 
     function getOpportunitySpecOptionsSync() {
-        return _opportunitySpecOptions || (_usesOpportunitySpecFallback ? _getLegacySpecOptions() : []);
+        return (_opportunitySpecOptions && _opportunitySpecOptions.length > 0)
+            ? _opportunitySpecOptions
+            : _getLegacySpecOptions();
     }
 
     function getOpportunitySpecOption(specId) {
@@ -368,18 +398,23 @@ const OpportunityInfoCard = (() => {
                 editContainer.innerHTML = html;
                 // [Phase 8.6A PERF] Removed eager _initCascadingLogic(opp) to prevent duplicate companyList fetch.
             }
+        }).catch(error => {
+            console.error('[OpportunityInfoCard] edit form render failed:', error);
         });
 
-        _ensureOpportunitySpecOptions().then(() => {
-            if (_currentOpp !== opp || !OpportunityInfoView) return;
-            const displayContainer = document.getElementById('opportunity-info-display-mode');
-            if (displayContainer) displayContainer.innerHTML = OpportunityInfoView.render(opp);
+        _ensureOpportunitySpecOptions().catch(error => {
+            console.warn('[OpportunityInfoCard] opportunity spec preload skipped:', error);
         });
     }
 
     // [Phase 8.6A PERF] Lazy Initialization Entry Point
     async function ensureCascadingLogic(opp) {
         if (_isCascadingInitialized) return;
+        await _ensureOpportunitySpecOptions();
+        const editContainer = document.getElementById('opportunity-info-edit-mode');
+        if (editContainer) {
+            editContainer.innerHTML = await _generateEditFormHTML(opp);
+        }
         await _initCascadingLogic(opp);
         _isCascadingInitialized = true;
     }
@@ -433,8 +468,8 @@ const OpportunityInfoCard = (() => {
         `;
     }
 
-    async function _renderSpecsGroup(opp) {
-        const specsConfig = await _ensureOpportunitySpecOptions();
+    function _renderSpecsGroup(opp) {
+        const specsConfig = getOpportunitySpecOptionsSync();
         
         let specQuantities = new Map();
         try {
@@ -630,7 +665,7 @@ const OpportunityInfoCard = (() => {
                     <div class="op-edit-zone">
                         <div class="form-group">
                             <label class="form-label">可能下單規格 (複選)</label>
-                            ${await _renderSpecsGroup(opp)}
+                            ${_renderSpecsGroup(opp)}
                         </div>
                     </div>
                 </div>
