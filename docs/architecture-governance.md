@@ -1284,6 +1284,52 @@ Rules:
 
 ---
 
+# 28.1 Operational Prompt / Validation Governance Addendum (2026-06)
+
+This addendum records current operating rules for small patches, documentation consolidation, and AI-assisted repo work.
+
+Scope precision is more important than prompt length. Small patches require especially precise scope because their risk is usually hidden in selector ownership, runtime ownership, and nearby shared behavior.
+
+Micro / small patch prompts must define:
+
+* exact target
+* allowed file or files
+* exact symbols, selectors, functions, or records to change or remove when applicable
+* explicit preserve list
+* no unrelated inspection unless the prompt explicitly asks for forensics
+* no browser, server, login, session, or localhost tests by default
+* stop after static validation
+
+Default Codex validation boundary:
+
+* no browser UI tests unless explicitly requested
+* no local server start or restart
+* no localhost port occupation
+* no login, session, or localStorage workaround
+* user performs browser / UI visual validation manually
+* Codex runs static validation only unless explicitly requested
+
+Default static validation:
+
+* `node --check` for changed JavaScript files only
+* `git diff --check`
+* `git diff --name-only`
+* targeted grep only when useful to prove ownership, call sites, or cleanup readiness
+
+Role boundaries:
+
+* Gemini is read-only repo forensics when owner, data flow, or risk is unclear; Gemini must not patch unless explicitly authorized.
+* Codex is a precise repo patch executor; Codex is not the product judge and not the visual judge.
+* The user is the final product authority, performs local browser / UI visual validation, and provides screenshots when needed.
+* ChatGPT is the architecture governor, PASS / NG judge, scope strategist, and prompt strategist.
+
+Reference docs:
+
+* `docs/tfc-crm-ui-style-governance.md` defines current UI style governance and the Dashboard / Opportunity Detail dual baselines.
+* `docs/supabase-access-sop.md` defines current Supabase access posture and future table-access SOP.
+
+---
+
 # 29. Final Governance Principle
 
 If the UI starts feeling like:
