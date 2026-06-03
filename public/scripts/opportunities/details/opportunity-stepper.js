@@ -208,16 +208,16 @@ const OpportunityStepper = (() => {
             hintContainer = document.createElement('div');
             hintContainer.id = 'stepper-edit-hint';
             hintContainer.className = 'stepper-edit-hint';
-            hintContainer.innerHTML = `ℹ️ <strong>操作提示</strong>：點擊 [圓圈] 可在 ( ✓ / ✕ / 無 ) 三種狀態間切換，點擊 [階段名稱] 可設定為目前階段。`;
+            hintContainer.innerHTML = `操作提示：點擊狀態方塊切換狀態，點擊階段名稱設定目前階段。`;
             container.before(hintContainer);
         }
         hintContainer.style.display = 'block';
 
         header.innerHTML = `
             <h2 class="widget-title">機會進程 (編輯模式)</h2>
-            <div>
-                <button class="action-btn small" style="background: #6c757d;" id="cancel-stepper-btn">取消</button>
-                <button class="action-btn small primary" id="save-stepper-btn">💾 儲存</button>
+            <div class="stepper-edit-actions">
+                <button class="stepper-edit-action-btn" id="cancel-stepper-btn" type="button">取消</button>
+                <button class="stepper-edit-action-btn stepper-edit-action-btn-save" id="save-stepper-btn" type="button">儲存</button>
             </div>
         `;
         header.querySelector('#cancel-stepper-btn').addEventListener('click', () => {
@@ -264,10 +264,43 @@ const OpportunityStepper = (() => {
         style.id = styleId;
         style.innerHTML = `
             .stepper-edit-hint {
-                background-color: color-mix(in srgb, var(--accent-blue) 15%, var(--primary-bg));
-                border: 1px solid var(--accent-blue); color: var(--text-secondary);
-                padding: var(--spacing-3) var(--spacing-4); border-radius: var(--rounded-lg);
-                margin-bottom: var(--spacing-5); font-size: var(--font-size-sm);
+                color: var(--text-muted);
+                padding: 0 0 var(--spacing-2);
+                margin-bottom: var(--spacing-3);
+                font-size: 12px;
+                line-height: 1.45;
+            }
+            #opportunity-stage-stepper-container .stepper-edit-actions {
+                display: inline-flex;
+                align-items: center;
+                gap: var(--spacing-2);
+                margin-left: auto;
+            }
+            #opportunity-stage-stepper-container .stepper-edit-action-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 28px;
+                padding: 4px 10px;
+                border: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+                border-radius: 4px;
+                background: transparent;
+                color: var(--text-secondary);
+                box-shadow: none;
+                cursor: pointer;
+                font-size: 12px;
+                font-weight: 500;
+                line-height: 1.2;
+                transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+            }
+            #opportunity-stage-stepper-container .stepper-edit-action-btn:hover {
+                background: color-mix(in srgb, var(--border-color) 28%, transparent);
+                border-color: color-mix(in srgb, var(--border-color) 88%, transparent);
+                color: var(--text-primary);
+            }
+            #opportunity-stage-stepper-container .stepper-edit-action-btn-save {
+                color: var(--accent-blue);
+                border-color: color-mix(in srgb, var(--accent-blue) 36%, transparent);
             }
             .stage-step.skipped .step-circle {
                 background-color: var(--accent-red); border-color: var(--accent-red); color: white;
