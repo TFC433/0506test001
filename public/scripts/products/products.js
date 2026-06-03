@@ -12,7 +12,6 @@
 window.ProductManager = {
     allProducts: [],
     revealedCostIds: new Set(),
-    oppDisplayOrderBaseline: new Map(),
     categoryOrder: [], 
     isEditMode: false,
     hasBoundGlobalEvents: false,
@@ -53,7 +52,6 @@ window.ProductManager = {
             const res = await authedFetch('/api/products');
             if (!res.success) throw new Error(res.error);
             this.allProducts = res.data || [];
-            this.oppDisplayOrderBaseline = new Map();
             this.renderTable();
         } catch (error) {
             if (container) container.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
@@ -116,9 +114,6 @@ window.ProductManager = {
             const row = e.target.closest('.edit-row');
             const categoryInput = row?.querySelector('input[name="category"]');
             if (categoryInput) categoryInput.value = e.target.value;
-
-            const product = this.allProducts[Number(row?.dataset.index)];
-            if (product?._isNew) this.recalculateNewRowOppDisplayOrders();
         });
 
         if (this.hasBoundGlobalEvents) return;
@@ -176,6 +171,60 @@ window.ProductManager = {
                 (p.spec && p.spec.toLowerCase().includes(q))
             );
         }
+        const displayRows = data.map(item => ({
+            item,
+            originalIndex: this.allProducts.indexOf(item),
+            isNew: !!item._isNew,
+            category: String(item.oppDisplayCategory || '').trim(),
+            order: this.parseOppDisplayOrder(item.oppDisplayOrder)
+        }));
+        const categoryGroups = new Map();
+        displayRows.forEach(row => {
+            if (!row.category) return;
+            const group = categoryGroups.get(row.category) || {
+                minOrder: null,
+                firstIndex: row.originalIndex
+            };
+            group.firstIndex = Math.min(group.firstIndex, row.originalIndex);
+            if (row.order !== null) {
+                group.minOrder = group.minOrder === null ? row.order : Math.min(group.minOrder, row.order);
+            }
+            categoryGroups.set(row.category, group);
+        });
+
+        data = displayRows
+            .sort((a, b) => {
+                if (a.isNew !== b.isNew) return a.isNew ? -1 : 1;
+
+                const aHasCategory = a.category !== '';
+                const bHasCategory = b.category !== '';
+                if (aHasCategory !== bHasCategory) return aHasCategory ? -1 : 1;
+
+                if (a.category !== b.category) {
+                    const aGroup = categoryGroups.get(a.category);
+                    const bGroup = categoryGroups.get(b.category);
+                    const aHasGroupOrder = aGroup?.minOrder !== null && aGroup?.minOrder !== undefined;
+                    const bHasGroupOrder = bGroup?.minOrder !== null && bGroup?.minOrder !== undefined;
+                    if (aHasGroupOrder !== bHasGroupOrder) return aHasGroupOrder ? -1 : 1;
+                    if (aHasGroupOrder && bHasGroupOrder && aGroup.minOrder !== bGroup.minOrder) {
+                        return aGroup.minOrder - bGroup.minOrder;
+                    }
+
+                    const firstIndexCompare = (aGroup?.firstIndex ?? a.originalIndex) - (bGroup?.firstIndex ?? b.originalIndex);
+                    if (firstIndexCompare !== 0) return firstIndexCompare;
+                }
+
+                const aHasOrder = a.order !== null;
+                const bHasOrder = b.order !== null;
+                if (aHasOrder !== bHasOrder) return aHasOrder ? -1 : 1;
+                if (aHasOrder && bHasOrder) {
+                    const orderCompare = a.order - b.order;
+                    if (orderCompare !== 0) return orderCompare;
+                }
+
+                return a.originalIndex - b.originalIndex;
+            })
+            .map(row => row.item);
         if (wallArea) wallArea.style.display = 'none';
 
         if (data.length === 0) {
@@ -289,10 +338,6 @@ window.ProductManager = {
     },
 
     getNextOppDisplayOrder() {
-        const last = this.allProducts[this.allProducts.length - 1];
-        const lastOrder = last ? this.parseOppDisplayOrder(last.oppDisplayOrder) : null;
-        if (lastOrder !== null) return String(lastOrder + 1);
-
         const maxOrder = this.allProducts.reduce((max, product) => {
             const n = this.parseOppDisplayOrder(product.oppDisplayOrder);
             return n === null ? max : Math.max(max, n);
@@ -302,70 +347,11 @@ window.ProductManager = {
     },
 
     parseOppDisplayOrder(value) {
-        if (value === undefined || value === null || value === '') return null;
-        const n = Number(value);
+        if (value === undefined || value === null) return null;
+        const text = String(value).trim();
+        if (text === '') return null;
+        const n = Number(text);
         return Number.isFinite(n) ? n : null;
-    },
-
-    getProductDisplayCategory(product) {
-        return String(product?.oppDisplayCategory || product?.category || '').trim();
-    },
-
-    captureOppDisplayOrderBaseline() {
-        this.allProducts.forEach(product => {
-            if (!product._isNew && product.id && !this.oppDisplayOrderBaseline.has(product.id)) {
-                this.oppDisplayOrderBaseline.set(product.id, product.oppDisplayOrder ?? '');
-            }
-        });
-    },
-
-    recalculateNewRowOppDisplayOrders() {
-        const rows = Array.from(document.querySelectorAll('.edit-row'));
-        if (!rows.length) return;
-
-        const entries = rows.map(row => {
-            const index = Number(row.dataset.index);
-            const product = this.allProducts[index] || {};
-            return {
-                row,
-                index,
-                product,
-                isNew: !!product._isNew,
-                category: String(row.querySelector('input[name="oppDisplayCategory"]')?.value || '').trim(),
-                baseOrder: this.parseOppDisplayOrder(this.oppDisplayOrderBaseline.get(product.id) ?? product.oppDisplayOrder)
-            };
-        });
-
-        const assigned = entries
-            .filter(entry => !entry.isNew && entry.baseOrder !== null)
-            .map(entry => ({
-                ...entry,
-                category: this.getProductDisplayCategory(entry.product),
-                order: entry.baseOrder
-            }));
-
-        entries.filter(entry => entry.isNew).forEach(entry => {
-            const maxOrder = assigned.reduce((max, item) => Math.max(max, item.order), 0);
-            let insertOrder = maxOrder > 0 ? maxOrder + 1 : 1;
-
-            if (entry.category) {
-                const sameCategoryMax = assigned
-                    .filter(item => item.category === entry.category)
-                    .reduce((max, item) => Math.max(max, item.order), 0);
-                if (sameCategoryMax > 0) insertOrder = sameCategoryMax + 1;
-            }
-
-            assigned.forEach(item => {
-                if (item.order >= insertOrder) item.order += 1;
-            });
-            assigned.push({ ...entry, order: insertOrder });
-        });
-
-        assigned.forEach(entry => {
-            const input = entry.row.querySelector('input[name="oppDisplayOrder"]');
-            if (input) input.value = String(entry.order);
-            if (entry.isNew) entry.product.oppDisplayOrder = String(entry.order);
-        });
     },
 
     renderInlineStatusToggle(value) {
@@ -578,7 +564,6 @@ window.ProductManager = {
 
     addNewRow() {
         const autoId = 'P' + Date.now().toString().slice(-5);
-        this.captureOppDisplayOrderBaseline();
         const nextOppDisplayOrder = this.getNextOppDisplayOrder();
         this.allProducts.unshift({
             id: autoId,
