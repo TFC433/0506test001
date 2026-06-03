@@ -138,8 +138,10 @@ const OpportunityStepper = (() => {
         const allStages = (window.CRM_APP && window.CRM_APP.systemConfig && window.CRM_APP.systemConfig['機會階段']) || [];
 
         header.innerHTML = `
-            <h2 class="widget-title">機會進程</h2>
-            <button class="action-btn small secondary" id="edit-stepper-btn">✏️ 編輯歷程</button>
+            <div class="stepper-title-actions">
+                <h2 class="widget-title">機會進程</h2>
+                <button class="stepper-edit-icon-btn" id="edit-stepper-btn" type="button" title="編輯機會進程" aria-label="編輯機會進程">✎</button>
+            </div>
         `;
         
         header.querySelector('#edit-stepper-btn').addEventListener('click', () => _renderEditMode());
