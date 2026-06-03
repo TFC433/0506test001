@@ -37,6 +37,14 @@ Company / Contact / Opportunity list areas:
 * `public/scripts/opportunities/opportunity-modals.js`
 * Related routes and controllers exist under `routes/` and `controllers/`.
 
+Product Cost:
+
+* `public/views/product-list.html`
+* `public/scripts/products/products.js`
+* active UI is a compact flat table with inline global edit mode
+* `ProductDetailModal` may remain in the repo but is not the active Product Cost table edit path
+* category chip wall / category-order drag UI is legacy / inactive for the current table ordering model
+
 ## 3. Backend access summary
 
 The backend uses an Express API layer. Controllers expose `/api` endpoints, services hold business logic, and data readers/writers access Supabase-backed storage.
@@ -84,6 +92,8 @@ Known caution areas:
 * Future module UI migrations should be module-by-module.
 * Event charts still appear to rely on Highcharts.
 * Global CSS extraction is not yet authorized.
+* Product Cost visual ordering is frontend-only and must not be confused with Sheet row order or persistent category-order settings.
+* Opportunity Detail product-backed spec pricing must not use cost or `systemConfig` value2.
 
 ## 9. Recommended next actions ranked by safety
 
@@ -103,3 +113,50 @@ Do not:
 * install packages
 * start or restart local servers
 * occupy localhost ports
+
+## 11. Current Product Cost / Opportunity Spec baseline
+
+Product Cost opportunity-spec mapping:
+
+```text
+L = oppSpecOption
+M = oppDisplayCategory
+N = oppDisplayOrder
+O = oppBehaviorMode
+P/Q/R/S/T/U/V continue as aspect / description / status / creator / createTime / lastModifier / lastUpdateTime
+```
+
+Opportunity Detail possible spec options come from:
+
+```text
+GET /api/products/opportunity-specs
+```
+
+Endpoint and pricing rules:
+
+* endpoint is lightweight and does not return cost
+* endpoint filters active products with truthy `oppSpecOption`
+* product-id specs store product id keys in `potentialSpecification`
+* legacy raw keys remain display-safe and are not automatically migrated
+* product-id spec pricing uses sales-model price, falls back to `priceMtu`, then `0`
+* cost is never used
+* `systemConfig` value2 is not used for product-id spec price calculation
+
+Product Cost table behavior:
+
+* visible table is flat and compact
+* inline edit fields are `name`, `spec`, `priceMtb`, `priceSi`, `priceMtu`, `oppDisplayCategory`, and `status`
+* `oppDisplayCategory` syncs hidden `category`
+* status syncs hidden `oppSpecOption`
+* new rows default active and use `oppDisplayOrder = max valid oppDisplayOrder + 1`
+* existing rows preserve hidden `oppDisplayOrder`
+* `saveAll`, dirty-check, and payload shape remain the existing batch path
+
+Product Cost display ordering:
+
+* unsaved `_isNew` rows render first
+* saved rows visually group by `oppDisplayCategory`
+* group order follows each group's minimum valid numeric `oppDisplayOrder`
+* rows inside the group sort by their own numeric `oppDisplayOrder` ascending
+* missing/non-numeric order sorts after numeric order within the group
+* display sorting does not mutate `this.allProducts`, product objects, Sheet row order, or `oppDisplayOrder`

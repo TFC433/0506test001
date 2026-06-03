@@ -227,6 +227,37 @@ NG:
 
 Activity Hub is inline-first. Modal compatibility may remain, but it must not govern Activity Hub product behavior.
 
+## 10.1 Product Cost table baseline
+
+Product Cost management is a compact flat table management surface.
+
+Current active UI rules:
+
+* no active category grouped sections
+* no active category chip wall / drag ordering UI
+* no active popup/detail modal edit path
+* `ProductDetailModal` may remain in the repo for compatibility, but it is not the active table edit path
+* global edit mode turns visible editable cells into bordered inline inputs
+* add-new-product happens inline in the table
+* unsaved new rows render at the top until saved
+* main table does not show Product ID, cost, opportunity spec option badge, behavior mode, description, creator, modifier, or action columns
+* category badge uses `oppDisplayCategory` only
+* product name and spec remain single-line ellipsis
+* MTB / SI / MTU prices use restrained rectangular badges: blue, cyan-blue, and purple
+* status badges are rectangular: active green, inactive red, unknown gray
+* toolbar controls stay compact with icon + text labels
+
+Display ordering is visual only:
+
+* do not change Sheet row order
+* do not shift or rewrite `oppDisplayOrder`
+* unsaved `_isNew` rows first
+* saved rows visually group by `oppDisplayCategory`
+* group order follows the smallest valid numeric `oppDisplayOrder` in each group
+* rows inside a group follow their own numeric `oppDisplayOrder` ascending
+
+Do not document or treat the old chip wall / category-order flow as the current Product Cost ordering model unless it is explicitly labeled legacy / inactive.
+
 ## 11. Anti-patterns
 
 The following are NG unless explicitly justified by approved forensic findings:

@@ -1330,6 +1330,129 @@ Reference docs:
 
 ---
 
+# 28.2 Product Cost / Opportunity Spec Governance Addendum (2026-06)
+
+This addendum records the accepted Product Cost and Opportunity Detail specification behavior after the Product Cost migration.
+
+## 28.2.1 Product Cost sheet mapping
+
+The active Product Cost opportunity-spec fields are:
+
+```text
+L = oppSpecOption
+M = oppDisplayCategory
+N = oppDisplayOrder
+O = oppBehaviorMode
+P/Q/R/S/T/U/V continue as aspect / description / status / creator / createTime / lastModifier / lastUpdateTime
+```
+
+Old supplier / series / interface / property fields are no longer the active L/M/N/O mapping.
+
+## 28.2.2 Opportunity specs endpoint
+
+Opportunity Detail edit mode uses:
+
+```text
+GET /api/products/opportunity-specs
+```
+
+This is a lightweight Product Cost endpoint for possible-spec options. It returns opportunity spec data only, filters active products by status and truthy `oppSpecOption`, and must not return or expose cost.
+
+## 28.2.3 Opportunity Detail possible specs
+
+Accepted behavior:
+
+* edit mode loads possible-spec options from `/api/products/opportunity-specs`
+* selected product-backed specs are stored by product id in `potentialSpecification`
+* legacy raw keys may remain display-safe and are not automatically migrated
+* view mode hydrates product ids into product label / name / spec
+* view hydration updates only the small specs tag area
+* do not perform unsafe post-fetch full DOM rewrites
+* do not call a post-fetch full-page `OpportunityInfoView.render(opp)` rewrite for this hydration
+
+Legacy `systemConfig` fallback is allowed only for option availability safety. It is not the pricing source for product-id specs.
+
+## 28.2.4 Opportunity spec price rule
+
+Product-id possible specs use sales-model pricing:
+
+```text
+MTB / via MTB -> priceMtb
+SI / via SI -> priceSi
+direct / direct sale / MTU / fallback -> priceMtu
+```
+
+If the selected sales-model price is missing, blank, null, undefined, NaN, or non-numeric, fallback to `priceMtu`.
+
+If `priceMtu` is also missing or non-numeric, fallback to `0`.
+
+Rules:
+
+* never use cost
+* never fallback to `systemConfig['possible spec'] value2` for product-id specs
+* legacy unknown keys calculate as `0`
+
+## 28.2.5 Product Cost management page baseline
+
+The active Product Cost management UI is a compact flat table.
+
+Accepted current behavior:
+
+* no active category grouped sections
+* no active category chip wall / drag UI
+* no active popup/detail modal edit path
+* `ProductDetailModal` may remain in the repo but is not the active table edit path
+* inline edit uses global edit mode and batch save
+* Product ID, cost, opportunity spec option badge, and action column are not shown in the main table
+* category badge uses `oppDisplayCategory` only
+* product name and spec are single-line ellipsis
+* MTB / SI / MTU prices use restrained colored badges
+* status badges distinguish active, inactive, and unknown states
+
+Editable inline fields:
+
+```text
+name
+spec
+priceMtb
+priceSi
+priceMtu
+oppDisplayCategory
+status
+```
+
+Linked hidden behavior:
+
+* `oppDisplayCategory` syncs into hidden `category`
+* active status syncs hidden `oppSpecOption` to `TRUE`
+* inactive status syncs hidden `oppSpecOption` to `FALSE`
+* new rows default active and `oppSpecOption = TRUE`
+* new rows use `oppDisplayOrder = max valid oppDisplayOrder + 1`
+* existing rows preserve hidden `oppDisplayOrder`
+* `saveAll`, dirty-check, and payload shape remain on the existing batch path
+
+## 28.2.6 Product Cost display ordering
+
+Product Cost visual ordering is frontend-only.
+
+Rules:
+
+* do not change Sheet row order
+* do not shift other rows' `oppDisplayOrder`
+* do not persist visual ordering
+* unsaved `_isNew` rows render at the top
+* saved products are visually grouped by `oppDisplayCategory`
+* category group order is determined by the smallest valid numeric `oppDisplayOrder` in that group
+* within a group, products sort by their own numeric `oppDisplayOrder` ascending
+* missing or non-numeric `oppDisplayOrder` sorts after numeric values within the group
+* `this.allProducts` must not be mutated for display sorting
+* product objects must not be mutated for display sorting
+* `saveAll` remains `data-index` compatible
+
+Previous category-order backend and chip-wall drag behavior may remain in code, but it is legacy / inactive for the current Product Cost table ordering model.
+
+---
+
 # 29. Final Governance Principle
 
 If the UI starts feeling like:
