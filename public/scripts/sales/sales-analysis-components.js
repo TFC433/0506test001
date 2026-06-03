@@ -366,12 +366,7 @@ const SalesAnalysisComponents = {
                         radius: ['26%', '76%'],
                         center: ['50%', '52%'],
                         minShowLabelAngle: 8,
-                        padAngle: 2,
-                        itemStyle: {
-                            borderRadius: 12,
-                            borderColor: 'transparent',
-                            borderWidth: 3
-                        },
+                        padAngle: 1,
                         label: {
                             show: true,
                             formatter: params => `${params.name}\n${params.data && params.data.percentLabel ? params.data.percentLabel : `${params.percent.toFixed(1)}%`}`,
