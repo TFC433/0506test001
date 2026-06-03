@@ -27,20 +27,30 @@
 
     /* --- 控制面板 --- */
     .control-panel-card {
-        background: var(--secondary-bg); padding: 0.75rem 1rem; border-radius: var(--rounded-sm);
-        box-shadow: none; margin-bottom: 1.5rem; border: 1px solid var(--border-color);
-        display: flex; align-items: center; gap: 1rem;
+        background: transparent; padding: 0; border-radius: 0;
+        box-shadow: none; margin-bottom: 0.75rem; border: none;
+        display: flex; align-items: center; gap: 0.75rem;
     }
-    .panel-title { font-size: 1.1rem; font-weight: 700; color: var(--text-primary); white-space: nowrap; margin-right: auto; }
-    .panel-actions { display: flex; align-items: center; gap: 1rem; flex: 1; justify-content: flex-end; }
-    .search-box-wrapper { flex: 0 0 300px; }
-    .search-box { width: 100%; border-radius: 99px; }
+    .panel-title { display: none; }
+    .panel-actions { display: flex; align-items: center; gap: 0.75rem; flex: 1; justify-content: space-between; }
+    .search-box-wrapper { flex: 0 0 320px; max-width: 100%; }
+    .search-box {
+        width: 100%; min-height: 32px; border-radius: var(--rounded-sm);
+        border: 1px solid var(--border-color); background: var(--secondary-bg);
+        padding: 0.35rem 0.6rem; font-size: 0.78rem;
+    }
+    .product-actions-group { display: flex; gap: 6px; justify-content: flex-end; }
+    .product-actions-group .action-btn {
+        min-width: 32px; height: 32px; padding: 0 0.55rem;
+        border-radius: var(--rounded-sm); border: 1px solid var(--border-color);
+        box-shadow: none; font-size: 0.78rem; line-height: 1;
+    }
 
     /* --- Chip Wall (順序條) --- */
     .chip-wall-container {
-        background: var(--secondary-bg); padding: 1rem 1.5rem;
+        background: var(--secondary-bg); padding: 0.85rem 1rem;
         border-radius: var(--rounded-sm); border: 1px solid var(--border-color);
-        margin-bottom: 1.5rem; box-shadow: none;
+        margin-bottom: 1rem; box-shadow: none;
         transition: opacity 0.3s, filter 0.3s;
     }
     .chip-wall-container.disabled {
@@ -90,34 +100,47 @@
 
     /* --- 表格樣式 --- */
     .category-group-widget {
-        margin-bottom: 2rem; border: 1px solid var(--border-color); border-radius: var(--rounded-sm);
+        margin-bottom: 1rem; border: 1px solid var(--border-color); border-radius: var(--rounded-sm);
         background: var(--secondary-bg); box-shadow: none; scroll-margin-top: 100px;
         overflow-x: auto;
     }
     .category-header {
-        background-color: var(--primary-bg); padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--border-color);
+        background-color: var(--primary-bg); padding: 0.6rem 1rem; border-bottom: 1px solid var(--border-color);
         display: flex; justify-content: space-between; align-items: center;
         position: sticky; left: 0; min-width: 1000px; z-index: 5;
     }
-    .category-title { font-size: 1rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem; }
-    .category-count-badge { font-size:0.8rem; color:var(--text-secondary); background:var(--glass-bg); padding:1px 8px; border-radius:10px; margin-left:8px; }
+    .category-title { font-size: 0.95rem; font-weight: 700; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem; }
+    .category-count-badge { font-size:0.75rem; color:var(--text-secondary); background:var(--glass-bg); padding:1px 7px; border-radius:10px; margin-left:6px; }
     .category-new-badge { font-size:0.75rem; color:white; background:var(--accent-blue); padding:1px 6px; border-radius:4px; margin-left:8px; }
 
-    .product-table { border-collapse: collapse; table-layout: fixed; width: max-content; min-width: 100%; }
+    .product-table-wrap {
+        border: 1px solid var(--border-color);
+        border-radius: var(--rounded-sm);
+        background: var(--secondary-bg);
+        overflow-x: hidden;
+    }
+
+    .product-table { border-collapse: collapse; table-layout: fixed; width: 100%; min-width: 0; }
     
     .product-table th, .product-table td {
-        padding: 0.6rem 1rem;
+        padding: 0.34rem 0.5rem;
         border-bottom: 1px solid var(--border-color);
         white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        font-size: 0.9rem; vertical-align: middle;
+        font-size: 0.78rem; vertical-align: middle;
         text-align: left;
         color: var(--text-primary);
     }
 
     .product-table th { 
-        background-color: var(--primary-bg); color: var(--text-secondary); font-weight: 600; font-size: 0.8rem;
-        position: relative; user-select: none;
+        background-color: var(--primary-bg); color: var(--text-secondary); font-weight: 700; font-size: 0.74rem;
+        position: relative; user-select: none; text-transform: uppercase; letter-spacing: 0;
     }
+    .product-table .col-index { text-align: center; }
+    .product-table .col-id { font-family: monospace; color: var(--text-secondary); }
+    .product-table .col-number { text-align: right; }
+    .product-table .col-number .form-control.seamless { text-align: right; }
+    .product-table .cell-wrap { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.25; }
+    .product-table input.cell-wrap { display: block; }
 
     .resizer {
         position: absolute; top: 0; right: 0; width: 8px; height: 100%; cursor: col-resize; z-index: 10;
@@ -125,7 +148,7 @@
     }
     .resizer:hover, .resizer.resizing { background: rgba(59, 130, 246, 0.5); }
 
-    .product-table tbody tr { cursor: pointer; transition: background 0.1s; }
+    .product-table tbody tr { cursor: default; transition: background 0.1s; }
     .product-table tbody tr:not(.locked):hover { background-color: var(--glass-bg); }
 
     .product-table tr.locked { background-color: var(--bg-locked); color: var(--text-locked); }
@@ -134,9 +157,9 @@
     /* Tag 樣式 */
     .tag-pill {
         display: inline-block;
-        padding: 2px 10px;
-        border-radius: 99px;
-        font-size: 0.85rem;
+        padding: 1px 6px;
+        border-radius: 4px;
+        font-size: 0.74rem;
         font-weight: 500;
         max-width: 100%;
         overflow: hidden;
@@ -145,7 +168,30 @@
     }
     
     .tag-spec { background-color: color-mix(in srgb, var(--accent-blue) 14%, var(--secondary-bg)); color: var(--accent-blue); border: 1px solid color-mix(in srgb, var(--accent-blue) 22%, transparent); }
-    .tag-price { background-color: color-mix(in srgb, var(--accent-green) 14%, var(--secondary-bg)); color: var(--accent-green); border: 1px solid color-mix(in srgb, var(--accent-green) 22%, transparent); font-family: monospace; }
+    .tag-price,
+    .tag-price-empty { font-family: monospace; }
+    .tag-price-mtb { background-color: color-mix(in srgb, #2563eb 10%, var(--secondary-bg)); color: #2563eb; border: 1px solid color-mix(in srgb, #2563eb 24%, var(--border-color)); }
+    .tag-price-si { background-color: color-mix(in srgb, #0891b2 10%, var(--secondary-bg)); color: #0891b2; border: 1px solid color-mix(in srgb, #0891b2 24%, var(--border-color)); }
+    .tag-price-mtu { background-color: color-mix(in srgb, #7c3aed 10%, var(--secondary-bg)); color: #7c3aed; border: 1px solid color-mix(in srgb, #7c3aed 24%, var(--border-color)); }
+    .tag-price-empty { background-color: var(--glass-bg); color: var(--text-secondary); border: 1px solid var(--border-color); }
+    .tag-muted { background-color: var(--glass-bg); color: var(--text-secondary); border: 1px solid var(--border-color); }
+    .tag-status-active { background-color: color-mix(in srgb, var(--accent-green) 10%, var(--secondary-bg)); color: var(--accent-green); border: 1px solid color-mix(in srgb, var(--accent-green) 20%, var(--border-color)); }
+    .tag-status-inactive { background-color: color-mix(in srgb, var(--accent-red) 10%, var(--secondary-bg)); color: var(--accent-red); border: 1px solid color-mix(in srgb, var(--accent-red) 22%, var(--border-color)); }
+    .tag-opp-active { background-color: color-mix(in srgb, var(--accent-blue) 10%, var(--secondary-bg)); color: var(--accent-blue); border: 1px solid color-mix(in srgb, var(--accent-blue) 20%, var(--border-color)); }
+    .category-badge { border-radius: 4px; }
+    .cat-palette-empty { background-color: var(--glass-bg); color: var(--text-secondary); border: 1px solid var(--border-color); }
+    .cat-palette-0 { background-color: color-mix(in srgb, #2563eb 9%, var(--secondary-bg)); color: #2563eb; border: 1px solid color-mix(in srgb, #2563eb 24%, var(--border-color)); }
+    .cat-palette-1 { background-color: color-mix(in srgb, #0891b2 9%, var(--secondary-bg)); color: #0891b2; border: 1px solid color-mix(in srgb, #0891b2 24%, var(--border-color)); }
+    .cat-palette-2 { background-color: color-mix(in srgb, #7c3aed 9%, var(--secondary-bg)); color: #7c3aed; border: 1px solid color-mix(in srgb, #7c3aed 24%, var(--border-color)); }
+    .cat-palette-3 { background-color: color-mix(in srgb, #16a34a 9%, var(--secondary-bg)); color: #15803d; border: 1px solid color-mix(in srgb, #16a34a 24%, var(--border-color)); }
+    .cat-palette-4 { background-color: color-mix(in srgb, #dc2626 8%, var(--secondary-bg)); color: #dc2626; border: 1px solid color-mix(in srgb, #dc2626 22%, var(--border-color)); }
+    .cat-palette-5 { background-color: color-mix(in srgb, #9333ea 8%, var(--secondary-bg)); color: #9333ea; border: 1px solid color-mix(in srgb, #9333ea 22%, var(--border-color)); }
+    .cat-palette-6 { background-color: color-mix(in srgb, #0f766e 9%, var(--secondary-bg)); color: #0f766e; border: 1px solid color-mix(in srgb, #0f766e 24%, var(--border-color)); }
+    .cat-palette-7 { background-color: color-mix(in srgb, #4f46e5 9%, var(--secondary-bg)); color: #4f46e5; border: 1px solid color-mix(in srgb, #4f46e5 24%, var(--border-color)); }
+    .cat-palette-8 { background-color: color-mix(in srgb, #0369a1 9%, var(--secondary-bg)); color: #0369a1; border: 1px solid color-mix(in srgb, #0369a1 24%, var(--border-color)); }
+    .cat-palette-9 { background-color: color-mix(in srgb, #65a30d 9%, var(--secondary-bg)); color: #4d7c0f; border: 1px solid color-mix(in srgb, #65a30d 24%, var(--border-color)); }
+    .cat-palette-10 { background-color: color-mix(in srgb, #be123c 8%, var(--secondary-bg)); color: #be123c; border: 1px solid color-mix(in srgb, #be123c 22%, var(--border-color)); }
+    .cat-palette-11 { background-color: color-mix(in srgb, #475569 10%, var(--secondary-bg)); color: #64748b; border: 1px solid color-mix(in srgb, #64748b 24%, var(--border-color)); }
     
     .sensitive-value { 
         font-family: monospace; font-weight: 600; cursor: pointer; 
@@ -162,6 +208,34 @@
     }
     .form-control.seamless:focus { outline: none; border-bottom: 2px solid var(--accent-blue); background-color: color-mix(in srgb, var(--accent-blue) 10%, var(--secondary-bg)); }
     .form-control.seamless[type="number"] { text-align: left; }
+    .inline-edit-input {
+        width: 100%;
+        min-height: 28px;
+        border: 1px solid var(--border-color);
+        border-radius: 4px;
+        background: var(--secondary-bg);
+        color: var(--text-primary);
+        font-size: 0.78rem;
+        padding: 0.25rem 0.4rem;
+        box-shadow: none;
+    }
+    .inline-edit-input.cell-wrap {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .inline-edit-input:focus {
+        outline: none;
+        border-color: var(--accent-blue);
+        background: color-mix(in srgb, var(--accent-blue) 8%, var(--secondary-bg));
+    }
+    .inline-status-toggle {
+        border-radius: 4px;
+        cursor: pointer;
+        min-width: 44px;
+        border-width: 1px;
+        box-shadow: none;
+    }
     
     /* Loading Overlay */
     .overlay-loading {
@@ -350,7 +424,7 @@
         </div>
     </div>
 
-    <div class="grid-col-12" id="chip-wall-area">
+    <div class="grid-col-12" id="chip-wall-area" style="display:none;">
         <div class="chip-wall-container">
             <div class="chip-wall-title">
                 <span>分類排序 (拖曳調整)</span>

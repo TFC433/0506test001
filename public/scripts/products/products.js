@@ -12,6 +12,7 @@
 window.ProductManager = {
     allProducts: [],
     revealedCostIds: new Set(),
+    oppDisplayOrderBaseline: new Map(),
     categoryOrder: [], 
     isEditMode: false,
     hasBoundGlobalEvents: false,
@@ -52,6 +53,7 @@ window.ProductManager = {
             const res = await authedFetch('/api/products');
             if (!res.success) throw new Error(res.error);
             this.allProducts = res.data || [];
+            this.oppDisplayOrderBaseline = new Map();
             this.renderTable();
         } catch (error) {
             if (container) container.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
@@ -89,14 +91,12 @@ window.ProductManager = {
 
         const btnGroup = document.createElement('div');
         btnGroup.className = 'product-actions-group';
-        btnGroup.style.display = 'flex';
-        btnGroup.style.gap = '8px';
 
         btnGroup.innerHTML = `
-            <button id="btn-add-row" class="action-btn secondary" style="display:none; white-space:nowrap;">＋ 新增</button>
-            <button id="btn-toggle-edit" class="action-btn secondary" style="white-space:nowrap;">✏️ 列表編輯</button>
-            <button id="btn-save-batch" class="action-btn primary" style="display:none; white-space:nowrap;">💾 儲存列表</button>
-            <button id="btn-refresh-products" class="action-btn secondary" title="同步" style="white-space:nowrap;">⟳</button>
+            <button id="btn-add-row" class="action-btn secondary" style="display:none;">＋ 新增</button>
+            <button id="btn-toggle-edit" class="action-btn secondary">✎ 編輯</button>
+            <button id="btn-save-batch" class="action-btn primary" style="display:none;">✓ 儲存</button>
+            <button id="btn-refresh-products" class="action-btn secondary" title="同步">↻ 同步</button>
         `;
         panelActions.appendChild(btnGroup);
     },
@@ -111,9 +111,27 @@ window.ProductManager = {
             });
         }
 
+        document.addEventListener('input', (e) => {
+            if (e.target?.name !== 'oppDisplayCategory') return;
+            const row = e.target.closest('.edit-row');
+            const categoryInput = row?.querySelector('input[name="category"]');
+            if (categoryInput) categoryInput.value = e.target.value;
+
+            const product = this.allProducts[Number(row?.dataset.index)];
+            if (product?._isNew) this.recalculateNewRowOppDisplayOrders();
+        });
+
         if (this.hasBoundGlobalEvents) return;
 
         document.addEventListener('click', (e) => {
+            const statusToggle = e.target.closest('.inline-status-toggle');
+            if (statusToggle) {
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleInlineStatus(statusToggle);
+                return;
+            }
+
             const target = e.target.closest('button');
             if (!target) return;
             if (target.closest('.modal')) return;
@@ -157,130 +175,243 @@ window.ProductManager = {
                 (p.category && p.category.toLowerCase().includes(q)) ||
                 (p.spec && p.spec.toLowerCase().includes(q))
             );
-            if (wallArea) wallArea.style.display = 'none';
-        } else {
-            if (wallArea) wallArea.style.display = 'block';
-            const wallContainer = document.querySelector('.chip-wall-container');
-            if (wallContainer) {
-                if (this.isEditMode) wallContainer.classList.add('disabled');
-                else wallContainer.classList.remove('disabled');
-            }
         }
+        if (wallArea) wallArea.style.display = 'none';
 
         if (data.length === 0) {
             container.innerHTML = `<div style="text-align:center; padding:2rem; color:var(--text-muted);">無資料</div>`;
             return;
         }
 
-        const groups = {};
-        data.forEach(item => {
-            if(!item) return; 
-            const cat = item.category ? item.category.trim() : '未分類';
-            if (!groups[cat]) groups[cat] = [];
-            groups[cat].push(item);
-        });
-
-        let displayCats = [];
-        this.categoryOrder.forEach(c => { if (groups[c]) displayCats.push(c); });
-        Object.keys(groups).forEach(c => { if (!displayCats.includes(c)) displayCats.push(c); });
-
-        const newGroup = displayCats.find(cat => groups[cat].some(i => i._isNew));
-        if (newGroup) {
-            displayCats = displayCats.filter(c => c !== newGroup);
-            displayCats.unshift(newGroup);
-        }
-
-        if (!this.isEditMode && !query) {
-            this.initChipWall(displayCats, groups);
-        }
-
-        let html = '';
-        const thWithResizer = (text, width) => `
-            <th style="width: ${width};">
+        const fmtMoney = (v) => v ? `$ ${Number(v).toLocaleString()}` : '-';
+        const fmtText = (v) => v || '-';
+        const priceBadgeClass = (value, type) => value ? `tag-price tag-price-${type}` : 'tag-price-empty';
+        const fmtYearMonthTaiwan = (v) => {
+            if (!v) return '-';
+            const date = new Date(v);
+            if (Number.isNaN(date.getTime())) return '-';
+            const parts = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Taipei',
+                year: 'numeric',
+                month: '2-digit'
+            }).formatToParts(date);
+            const year = parts.find(p => p.type === 'year')?.value;
+            const month = parts.find(p => p.type === 'month')?.value;
+            return year && month ? `${year}-${month}` : '-';
+        };
+        const thWithResizer = (text, width, className = '') => `
+            <th class="${className}" style="width: ${width};">
                 ${text}
                 <div class="resizer"></div>
             </th>
         `;
 
-        displayCats.forEach(cat => {
-            const items = groups[cat];
-            const isNewGroup = items.some(i => i._isNew);
-            const titleStyle = isNewGroup ? 'color:var(--accent-blue);' : '';
-
-            html += `
-                <div class="category-group-widget" id="group-${cat}">
-                    <div class="category-header">
-                        <div class="category-title" style="${titleStyle}">
-                            ${cat} 
-                            <span class="category-count-badge">${items.length}</span>
-                            ${isNewGroup ? '<span class="category-new-badge">New</span>' : ''}
-                        </div>
-                    </div>
-                    <table class="product-table">
-                        <thead>
-                            <tr>
-                                ${thWithResizer('#', '50px')}
-                                ${thWithResizer('商品名稱', '220px')}
-                                ${thWithResizer('規格', '320px')}
-                                ${thWithResizer('成本', '110px')}
-                                ${thWithResizer('MTB', '110px')}
-                                ${thWithResizer('SI', '110px')}
-                                ${thWithResizer('MTU', '110px')}
-                            </tr>
-                        </thead>
-                        <tbody>
-            `;
-
-            items.forEach((item, index) => {
-                const originalIndex = this.allProducts.indexOf(item);
-                const itemNum = index + 1;
-                const fmtMoney = (v) => v ? `$ ${Number(v).toLocaleString()}` : '-';
-
-                if (this.isEditMode) {
-                    html += `
-                        <tr class="edit-row" data-index="${originalIndex}">
-                            <td class="text-muted">${itemNum}</td>
-                            <input type="hidden" name="id" value="${item.id}"> 
-                            <input type="hidden" name="category" value="${item.category}">
-                            
-                            <td><input type="text" name="name" class="form-control seamless" value="${item.name||''}" placeholder="名稱"></td>
-                            <td><input type="text" name="spec" class="form-control seamless" value="${item.spec||''}" placeholder="規格"></td>
-                            <td><input type="number" name="cost" class="form-control seamless" value="${item.cost||''}" placeholder="$"></td>
-                            <td><input type="number" name="priceMtb" class="form-control seamless" value="${item.priceMtb||''}" placeholder="$"></td>
-                            <td><input type="number" name="priceSi" class="form-control seamless" value="${item.priceSi ||''}" placeholder="$"></td>
-                            <td><input type="number" name="priceMtu" class="form-control seamless" value="${item.priceMtu||''}" placeholder="$"></td>
+        let html = `
+            <div class="product-table-wrap">
+                <table class="product-table">
+                    <thead>
+                        <tr>
+                            ${thWithResizer('#', '4%')}
+                            ${thWithResizer('分類', '10%')}
+                            ${thWithResizer('商品名稱', '33%')}
+                            ${thWithResizer('規格', '17%')}
+                            ${thWithResizer('MTB價格', '8%', 'col-number')}
+                            ${thWithResizer('SI價格', '8%', 'col-number')}
+                            ${thWithResizer('MTU價格', '8%', 'col-number')}
+                            ${thWithResizer('狀態', '6%')}
+                            ${thWithResizer('更新', '6%')}
                         </tr>
-                    `;
-                } else {
-                    const costKey = `${item.id}_cost`;
-                    const isRevealed = this.revealedCostIds.has(costKey);
-                    const costDisplay = isRevealed ? fmtMoney(item.cost) : '$ $$$';
-                    const costClass = isRevealed ? 'sensitive-value revealed' : 'sensitive-value masked';
+                    </thead>
+                    <tbody>
+        `;
 
-                    html += `
-                        <tr onclick="ProductManager.openDetailModal('${item.id}')">
-                            <td class="text-muted font-mono">${itemNum}</td>
-                            <td title="${item.name}">${item.name}</td>
-                            <td title="${item.spec||''}"><span class="tag-pill tag-spec">${item.spec||'-'}</span></td>
-                            
-                            <td onclick="event.stopPropagation(); ProductManager.toggleCost('${item.id}')">
-                                <span class="${costClass}">${costDisplay}</span>
-                            </td>
-                            
-                            <td><span class="tag-pill tag-price">${fmtMoney(item.priceMtb)}</span></td>
-                            <td><span class="tag-pill tag-price">${fmtMoney(item.priceSi)}</span></td>
-                            <td><span class="tag-pill tag-price">${fmtMoney(item.priceMtu)}</span></td>
-                        </tr>
-                    `;
-                }
-            });
-            html += `</tbody></table></div>`;
+        data.forEach((item, index) => {
+            const originalIndex = this.allProducts.indexOf(item);
+            const displayCategory = fmtText(item.oppDisplayCategory);
+            const updatedMonth = fmtYearMonthTaiwan(item.lastUpdateTime || item.createTime);
+            const statusValue = this.normalizeProductStatus(item.status);
+            const categoryValue = item.oppDisplayCategory || item.category || '';
+            const oppSpecOptionValue = this.statusToOppSpecOption(statusValue);
+
+            if (this.isEditMode) {
+                html += `
+                    <tr class="edit-row" data-index="${originalIndex}">
+                        <td class="col-index">${index + 1}</td>
+                        <input type="hidden" name="id" value="${item.id || ''}">
+                        <input type="hidden" name="category" value="${categoryValue}">
+                        <input type="hidden" name="oppSpecOption" value="${oppSpecOptionValue}">
+                        <input type="hidden" name="oppDisplayOrder" value="${item.oppDisplayOrder || ''}">
+                        <td><input type="text" name="oppDisplayCategory" class="form-control inline-edit-input" value="${item.oppDisplayCategory || ''}" placeholder="-"></td>
+                        <td><input type="text" name="name" class="form-control inline-edit-input cell-wrap" value="${item.name || ''}" placeholder="名稱"></td>
+                        <td><input type="text" name="spec" class="form-control inline-edit-input cell-wrap" value="${item.spec || ''}" placeholder="規格"></td>
+                        <td class="col-number"><input type="number" name="priceMtb" class="form-control inline-edit-input" value="${item.priceMtb || ''}" placeholder="$"></td>
+                        <td class="col-number"><input type="number" name="priceSi" class="form-control inline-edit-input" value="${item.priceSi || ''}" placeholder="$"></td>
+                        <td class="col-number"><input type="number" name="priceMtu" class="form-control inline-edit-input" value="${item.priceMtu || ''}" placeholder="$"></td>
+                        <td>
+                            <input type="hidden" name="status" value="${statusValue}">
+                            ${this.renderInlineStatusToggle(statusValue)}
+                        </td>
+                        <td title="${updatedMonth}">${updatedMonth}</td>
+                    </tr>
+                `;
+            } else {
+                html += `
+                    <tr>
+                        <td class="col-index">${index + 1}</td>
+                        <td title="${displayCategory}">${this.renderCategoryBadge(displayCategory)}</td>
+                        <td class="cell-wrap" title="${item.name || ''}">${fmtText(item.name)}</td>
+                        <td class="cell-wrap" title="${item.spec || ''}">${fmtText(item.spec)}</td>
+                        <td class="col-number"><span class="tag-pill ${priceBadgeClass(item.priceMtb, 'mtb')}">${fmtMoney(item.priceMtb)}</span></td>
+                        <td class="col-number"><span class="tag-pill ${priceBadgeClass(item.priceSi, 'si')}">${fmtMoney(item.priceSi)}</span></td>
+                        <td class="col-number"><span class="tag-pill ${priceBadgeClass(item.priceMtu, 'mtu')}">${fmtMoney(item.priceMtu)}</span></td>
+                        <td>${this.renderStatusBadge(item)}</td>
+                        <td title="${updatedMonth}">${updatedMonth}</td>
+                    </tr>
+                `;
+            }
         });
-        container.innerHTML = html;
 
-        if (!this.isEditMode) {
-            this.enableColumnResizing();
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        container.innerHTML = html;
+    },
+
+    normalizeProductStatus(value) {
+        return String(value || '').trim() === '下架' ? '下架' : '上架';
+    },
+
+    statusToOppSpecOption(value) {
+        return this.normalizeProductStatus(value) === '上架' ? 'TRUE' : 'FALSE';
+    },
+
+    getNextOppDisplayOrder() {
+        const last = this.allProducts[this.allProducts.length - 1];
+        const lastOrder = last ? this.parseOppDisplayOrder(last.oppDisplayOrder) : null;
+        if (lastOrder !== null) return String(lastOrder + 1);
+
+        const maxOrder = this.allProducts.reduce((max, product) => {
+            const n = this.parseOppDisplayOrder(product.oppDisplayOrder);
+            return n === null ? max : Math.max(max, n);
+        }, 0);
+
+        return String(maxOrder > 0 ? maxOrder + 1 : 1);
+    },
+
+    parseOppDisplayOrder(value) {
+        if (value === undefined || value === null || value === '') return null;
+        const n = Number(value);
+        return Number.isFinite(n) ? n : null;
+    },
+
+    getProductDisplayCategory(product) {
+        return String(product?.oppDisplayCategory || product?.category || '').trim();
+    },
+
+    captureOppDisplayOrderBaseline() {
+        this.allProducts.forEach(product => {
+            if (!product._isNew && product.id && !this.oppDisplayOrderBaseline.has(product.id)) {
+                this.oppDisplayOrderBaseline.set(product.id, product.oppDisplayOrder ?? '');
+            }
+        });
+    },
+
+    recalculateNewRowOppDisplayOrders() {
+        const rows = Array.from(document.querySelectorAll('.edit-row'));
+        if (!rows.length) return;
+
+        const entries = rows.map(row => {
+            const index = Number(row.dataset.index);
+            const product = this.allProducts[index] || {};
+            return {
+                row,
+                index,
+                product,
+                isNew: !!product._isNew,
+                category: String(row.querySelector('input[name="oppDisplayCategory"]')?.value || '').trim(),
+                baseOrder: this.parseOppDisplayOrder(this.oppDisplayOrderBaseline.get(product.id) ?? product.oppDisplayOrder)
+            };
+        });
+
+        const assigned = entries
+            .filter(entry => !entry.isNew && entry.baseOrder !== null)
+            .map(entry => ({
+                ...entry,
+                category: this.getProductDisplayCategory(entry.product),
+                order: entry.baseOrder
+            }));
+
+        entries.filter(entry => entry.isNew).forEach(entry => {
+            const maxOrder = assigned.reduce((max, item) => Math.max(max, item.order), 0);
+            let insertOrder = maxOrder > 0 ? maxOrder + 1 : 1;
+
+            if (entry.category) {
+                const sameCategoryMax = assigned
+                    .filter(item => item.category === entry.category)
+                    .reduce((max, item) => Math.max(max, item.order), 0);
+                if (sameCategoryMax > 0) insertOrder = sameCategoryMax + 1;
+            }
+
+            assigned.forEach(item => {
+                if (item.order >= insertOrder) item.order += 1;
+            });
+            assigned.push({ ...entry, order: insertOrder });
+        });
+
+        assigned.forEach(entry => {
+            const input = entry.row.querySelector('input[name="oppDisplayOrder"]');
+            if (input) input.value = String(entry.order);
+            if (entry.isNew) entry.product.oppDisplayOrder = String(entry.order);
+        });
+    },
+
+    renderInlineStatusToggle(value) {
+        const status = this.normalizeProductStatus(value);
+        const cls = status === '下架' ? 'tag-status-inactive' : 'tag-status-active';
+        return `<button type="button" class="tag-pill inline-status-toggle ${cls}" data-status="${status}">${status}</button>`;
+    },
+
+    toggleInlineStatus(button) {
+        const row = button.closest('.edit-row');
+        if (!row) return;
+
+        const input = row.querySelector('input[name="status"]');
+        if (!input) return;
+        const oppSpecInput = row.querySelector('input[name="oppSpecOption"]');
+
+        const next = this.normalizeProductStatus(input.value) === '上架' ? '下架' : '上架';
+        input.value = next;
+        if (oppSpecInput) oppSpecInput.value = this.statusToOppSpecOption(next);
+        button.dataset.status = next;
+        button.textContent = next;
+        button.classList.toggle('tag-status-active', next === '上架');
+        button.classList.toggle('tag-status-inactive', next === '下架');
+    },
+
+    renderStatusBadge(item) {
+        const rawStatus = String(item.status ?? item.productStatus ?? item.enabledStatus ?? '').trim();
+        const text = rawStatus === '上架' || rawStatus === '下架' ? rawStatus : '-';
+        const cls = text === '上架' ? 'tag-status-active' : text === '下架' ? 'tag-status-inactive' : 'tag-muted';
+        return `<span class="tag-pill ${cls}">${text}</span>`;
+    },
+
+    renderCategoryBadge(value) {
+        const text = String(value || '').trim() || '-';
+        return `<span class="tag-pill category-badge ${this.getCategoryPaletteClass(text)}">${text}</span>`;
+    },
+
+    getCategoryPaletteClass(value) {
+        const text = String(value || '').trim();
+        if (!text || text === '-') return 'cat-palette-empty';
+
+        let hash = 0;
+        for (let i = 0; i < text.length; i += 1) {
+            hash = ((hash * 31) + text.charCodeAt(i)) >>> 0;
         }
+        return `cat-palette-${hash % 12}`;
     },
 
     enableColumnResizing() {
@@ -423,7 +554,7 @@ window.ProductManager = {
         if (this.isEditMode) {
             // 只有當元素存在時才操作
             if (btnEdit) {
-                btnEdit.textContent = '❌ 取消';
+                btnEdit.textContent = '× 取消';
                 btnEdit.classList.add('danger');
             }
             if (btnSave) btnSave.style.display = 'inline-block';
@@ -431,7 +562,7 @@ window.ProductManager = {
             this.renderTable(); 
         } else {
             if (btnEdit) {
-                btnEdit.textContent = '✏️ 列表編輯';
+                btnEdit.textContent = '✎ 編輯';
                 btnEdit.classList.remove('danger');
             }
             if (btnSave) btnSave.style.display = 'none';
@@ -447,7 +578,22 @@ window.ProductManager = {
 
     addNewRow() {
         const autoId = 'P' + Date.now().toString().slice(-5);
-        this.allProducts.unshift({ id: autoId, name: '', category: '未分類', _isNew: true });
+        this.captureOppDisplayOrderBaseline();
+        const nextOppDisplayOrder = this.getNextOppDisplayOrder();
+        this.allProducts.unshift({
+            id: autoId,
+            name: '',
+            spec: '',
+            category: '未分類',
+            priceMtb: '',
+            priceSi: '',
+            priceMtu: '',
+            oppDisplayCategory: '',
+            oppSpecOption: 'TRUE',
+            oppDisplayOrder: nextOppDisplayOrder,
+            status: '上架',
+            _isNew: true
+        });
         this.renderTable();
     },
 

@@ -280,7 +280,8 @@ class ProductService {
             
             // 讀取 SystemPref 中的 PRODUCT_CATEGORY_ORDER
             if (systemConfig && systemConfig['SystemPref']) {
-                const pref = systemConfig['SystemPref'].find(p => p.value === 'PRODUCT_CATEGORY_ORDER');
+                const prefs = systemConfig['SystemPref'].filter(p => p.value === 'PRODUCT_CATEGORY_ORDER');
+                const pref = prefs[prefs.length - 1];
                 if (pref && pref.note) {
                     return JSON.parse(pref.note);
                 }

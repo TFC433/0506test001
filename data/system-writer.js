@@ -68,6 +68,11 @@ class SystemWriter extends BaseWriter {
      * 更新系統偏好設定
      */
     async updateSystemPref(item, note, modifier = 'System') {
+        if (item === 'PRODUCT_CATEGORY_ORDER') {
+            const updated = await this._updateLatestSystemPrefNote(item, note);
+            if (updated) return { success: true };
+        }
+
         return this.updateSystemConfig({
             type: 'SystemPref',
             value: item,
@@ -75,6 +80,34 @@ class SystemWriter extends BaseWriter {
             order: 0,
             color: ''
         }, modifier);
+    }
+
+    async _updateLatestSystemPrefNote(item, note) {
+        const sheetName = this.config.SHEETS.SYSTEM_CONFIG;
+        const response = await this.sheets.spreadsheets.values.get({
+            spreadsheetId: this.targetSpreadsheetId,
+            range: `${sheetName}!A:I`
+        });
+
+        const rows = response.data.values || [];
+        let rowIndex = -1;
+
+        rows.forEach((row, index) => {
+            if (row[0] === 'SystemPref' && row[1] === item) {
+                rowIndex = index + 1;
+            }
+        });
+
+        if (rowIndex < 1) return false;
+
+        await this.sheets.spreadsheets.values.update({
+            spreadsheetId: this.targetSpreadsheetId,
+            range: `${sheetName}!E${rowIndex}`,
+            valueInputOption: 'USER_ENTERED',
+            resource: { values: [[note || '']] }
+        });
+
+        return true;
     }
 
     /**

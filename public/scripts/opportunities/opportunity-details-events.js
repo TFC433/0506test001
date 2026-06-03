@@ -337,11 +337,7 @@ const OpportunityInfoCardEvents = (() => {
             const option = _getProductSpecOption(specId);
             if (option) {
                 total += _getProductSpecPrice(option, salesModel) * qty;
-                return;
             }
-
-            const config = _getLegacySpecConfig(specId);
-            if (config && config.value2) total += (parseFloat(config.value2) || 0) * qty;
         });
 
         // NOTE: keep raw number (no commas) if your backend expects numeric string
@@ -362,15 +358,27 @@ const OpportunityInfoCardEvents = (() => {
 
     function _getProductSpecPrice(option, salesModel) {
         const model = String(salesModel || '').toUpperCase();
-        let rawPrice = option.priceMtu;
+        let modelPrice = option.priceMtu;
 
         if (model.includes('MTB')) {
-            rawPrice = option.priceMtb;
+            modelPrice = option.priceMtb;
         } else if (model.includes('SI')) {
-            rawPrice = option.priceSi;
+            modelPrice = option.priceSi;
         }
 
-        return parseFloat(rawPrice) || 0;
+        const parsedModelPrice = _parseSpecPrice(modelPrice);
+        if (parsedModelPrice !== null) return parsedModelPrice;
+
+        const parsedMtuPrice = _parseSpecPrice(option.priceMtu);
+        return parsedMtuPrice !== null ? parsedMtuPrice : 0;
+    }
+
+    function _parseSpecPrice(value) {
+        if (value === null || value === undefined) return null;
+        if (typeof value === 'string' && value.trim() === '') return null;
+
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
     }
 
     // ======= 핵심修補：避免「沒改的欄位」被空字串覆蓋 =======
