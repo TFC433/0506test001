@@ -65,23 +65,6 @@ window.ProductManager = {
         } catch (e) { console.warn('排序設定讀取失敗', e); }
     },
 
-    async saveCategoryOrder(newOrder) {
-        const statusEl = document.getElementById('order-save-status');
-        if(statusEl) statusEl.textContent = '儲存中...';
-        try {
-            await authedFetch('/api/products/category-order', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ order: newOrder })
-            });
-            this.categoryOrder = newOrder;
-            if(statusEl) statusEl.textContent = '✓ 已儲存';
-            this.renderTable(); 
-        } catch (e) {
-            if(statusEl) statusEl.textContent = '✕ 失敗';
-        }
-    },
-
     injectToolbarControls() {
         const panelActions = document.querySelector('.panel-actions');
         // 確保不會重複注入
@@ -158,7 +141,6 @@ window.ProductManager = {
 
     renderTable(query = '') {
         const container = document.getElementById('product-groups-container');
-        const wallArea = document.getElementById('chip-wall-area');
         if (!container) return;
 
         let data = this.allProducts;
@@ -424,66 +406,6 @@ window.ProductManager = {
                 document.addEventListener('mouseup', onMouseUp);
             });
         });
-    },
-
-    initChipWall(categories, groups) {
-        const listContainer = document.getElementById('category-chip-list');
-        if (!listContainer) return;
-        listContainer.innerHTML = '';
-
-        categories.forEach(cat => {
-            const count = groups[cat] ? groups[cat].length : 0;
-            const chip = document.createElement('div');
-            chip.className = 'chip-item';
-            chip.draggable = true;
-            chip.dataset.category = cat;
-            chip.innerHTML = `<span>${cat}</span><span class="chip-count">${count}</span>`;
-
-            chip.addEventListener('click', () => {
-                const target = document.getElementById(`group-${cat}`);
-                if (target) {
-                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    target.style.transition = 'box-shadow 0.3s';
-                    target.style.boxShadow = '0 0 0 3px color-mix(in srgb, var(--accent-blue) 30%, transparent)';
-                    setTimeout(() => target.style.boxShadow = 'none', 800);
-                }
-            });
-
-            chip.addEventListener('dragstart', () => chip.classList.add('dragging'));
-            chip.addEventListener('dragend', () => {
-                chip.classList.remove('dragging');
-                this.checkAndSaveOrder();
-            });
-            listContainer.appendChild(chip);
-        });
-
-        listContainer.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            const afterElement = this.getDragAfterElement(listContainer, e.clientX);
-            const draggable = document.querySelector('.dragging');
-            if (draggable) {
-                if (afterElement == null) listContainer.appendChild(draggable);
-                else listContainer.insertBefore(draggable, afterElement);
-            }
-        });
-    },
-
-    getDragAfterElement(container, x) {
-        const draggableElements = [...container.querySelectorAll('.chip-item:not(.dragging)')];
-        return draggableElements.reduce((closest, child) => {
-            const box = child.getBoundingClientRect();
-            const offset = x - box.left - box.width / 2;
-            if (offset < 0 && offset > closest.offset) return { offset: offset, element: child };
-            else return closest;
-        }, { offset: Number.NEGATIVE_INFINITY }).element;
-    },
-
-    checkAndSaveOrder() {
-        const chips = document.querySelectorAll('#category-chip-list .chip-item');
-        const newOrder = Array.from(chips).map(c => c.dataset.category);
-        if (JSON.stringify(this.categoryOrder) !== JSON.stringify(newOrder)) {
-            this.saveCategoryOrder(newOrder);
-        }
     },
 
     openDetailModal(id) {

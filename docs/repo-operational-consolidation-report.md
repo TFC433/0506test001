@@ -61,6 +61,7 @@ Current governance docs:
 * `docs/architecture-governance.md`
 * `docs/tfc-crm-ui-style-governance.md`
 * `docs/supabase-access-sop.md`
+* `docs/non-breaking-cleanup-roadmap.md`
 
 ## 5. Current UI baseline docs list
 
@@ -68,10 +69,13 @@ Current UI baseline documentation:
 
 * `docs/tfc-crm-ui-style-governance.md`
 * `docs/echarts-migration-record.md`
+* `docs/non-breaking-cleanup-roadmap.md`
 
 ## 6. Current chart migration status
 
 Sales Analysis, Dashboard trend, and Taiwan map have accepted ECharts baselines. ECharts local vendor asset exists under `public/assets/vendor/echarts/echarts.min.js`.
+
+Sales Analysis `成交類型` uses the accepted standard donut style: no rounded slice corners, no thick artificial transparent gaps, and subtle separation through `padAngle: 1`. Do not describe it as fully gapless and do not revert Sales Analysis to Highcharts.
 
 Highcharts / Highmaps are not removed yet. Remaining references are documented in:
 
@@ -94,6 +98,8 @@ Known caution areas:
 * Global CSS extraction is not yet authorized.
 * Product Cost visual ordering is frontend-only and must not be confused with Sheet row order or persistent category-order settings.
 * Opportunity Detail product-backed spec pricing must not use cost or `systemConfig` value2.
+* Non-breaking cleanup planning is governed by `docs/non-breaking-cleanup-roadmap.md`.
+* `repomix-packs/**` files are generated snapshots and must not be hand-edited.
 
 ## 9. Recommended next actions ranked by safety
 
@@ -160,3 +166,47 @@ Product Cost display ordering:
 * rows inside the group sort by their own numeric `oppDisplayOrder` ascending
 * missing/non-numeric order sorts after numeric order within the group
 * display sorting does not mutate `this.allProducts`, product objects, Sheet row order, or `oppDisplayOrder`
+
+## 12. 2026-06 Cleanup Checkpoint
+
+Completed non-breaking cleanup:
+
+* Service container unused Sheet DI cleanup completed in `services/service-container.js`.
+  Removed unused active DI imports / objects for announcement Sheet reader/writer and weekly Sheet writer, including the `weeklyBusinessWriter` export.
+* Follow-up orphan SPA page module cleanup completed in `public/scripts/opportunities/opportunities.js`.
+  Removed unreachable `loadFollowUpPage()` and the orphan `follow-up` page module registration.
+* Product Cost hidden chip-wall frontend cleanup completed in `public/scripts/products/products.js` and `public/views/product-list.html`.
+  Removed the hidden chip-wall container and unreachable drag/reorder helpers.
+
+Protection notes:
+
+* No data adapter files were deleted during the DI cleanup.
+* No backend routes, controllers, services, Product Cost backend category-order route, or `SystemPref` compatibility paths were removed.
+* Product Cost flat table rendering, inline edit, `addNewRow()`, `saveAll()`, Sheet L/M/N/O mapping, and `/api/products/opportunity-specs` remain the accepted baseline.
+* `ProductDetailModal`, `openDetailModal()`, `loadCategoryOrder()`, and `this.categoryOrder` remain intentionally protected pending separate approval.
+* Dashboard follow-up logic, `/api/dashboard`, `followUpList`, `followUpCount`, `DashboardService._getFollowUpOpportunities`, `config.FOLLOW_UP`, Opportunity List, Opportunity Detail, Activity Hub, and backend were not touched by the follow-up cleanup.
+
+Remaining cleanup targets are pending forensic and approval:
+
+* `ProductDetailModal` reachability / removal-readiness.
+* Final Product Cost `loadCategoryOrder()` / `categoryOrder` / `openDetailModal()` dependency review.
+* Backend `/api/products/category-order` cleanup only after frontend no longer calls it.
+* Meeting / Calendar hidden workflow ownership decision.
+* LINE leads standalone page ownership decision.
+* System status modal / API trigger audit.
+* Event charts Highcharts to ECharts migration forensic.
+* `services/index.js` retired factory audit.
+* `data/index.js` legacy export audit.
+* Google Sheet fallback domain-by-domain SQL replacement roadmap.
+
+Explicit no-touch reminders:
+
+* Do not remove Google Sheet fallback broadly.
+* Product Cost Sheet remains active.
+* RAW contacts and LINE leads still depend on Sheet-backed RAW flow.
+* System Config / Auth still depends on Sheet-backed system config and users.
+* Weekly Business read fallback remains protected.
+* Internal Ops remains Sheet-backed.
+* Highcharts remnants must not be deleted until event charts are migrated.
+* `ProductDetailModal` must not be deleted until separately approved.
+* `repomix-packs/**` are generated and must not be hand-edited.

@@ -1209,6 +1209,20 @@ They must not be larger, bolder, or more visually dominant than the benchmark.
 
 Do NOT confuse this with the large opportunity name value/title.
 
+## 26.1.7 Opportunity Detail Stepper UI Baseline
+
+The current Opportunity Detail stepper UI is accepted and must be preserved unless a separate approved forensic authorizes a change.
+
+Accepted behavior and style:
+
+* view mode edit action is a lightweight pencil icon next to the stepper title
+* edit mode Save / Cancel actions are lightweight and may remain right-aligned
+* edit-mode hint text stays low-noise
+* edit-mode hint text refers to square / box / status icons, not circles
+* no behavior, data, or API changes are implied by stepper visual adjustments
+
+Do not replace the current stepper with a heavier modal-first, card-heavy, or behavior-changing workflow.
+
 ---
 
 # 27. Current Workspace Productization Status (2026-05)
@@ -1450,6 +1464,76 @@ Rules:
 * `saveAll` remains `data-index` compatible
 
 Previous category-order backend and chip-wall drag behavior may remain in code, but it is legacy / inactive for the current Product Cost table ordering model.
+
+---
+
+# 28.3 Cleanup Checkpoint And Compatibility Governance Addendum (2026-06)
+
+This addendum records completed non-breaking cleanup and the mandatory order for future cleanup work.
+
+Completed cleanup:
+
+* Service container unused Sheet DI cleanup removed unused active DI imports / objects from `services/service-container.js`: `AnnouncementReader`, `AnnouncementWriter`, `WeeklyBusinessWriter`, `announcementReader`, `announcementWriter`, `weeklyWriter`, and `weeklyBusinessWriter`.
+* Follow-up orphan SPA page module cleanup removed unreachable `loadFollowUpPage()` and `window.CRM_APP.pageModules['follow-up']` from `public/scripts/opportunities/opportunities.js`.
+* Product Cost hidden chip-wall frontend cleanup removed hidden chip-wall markup and unreachable drag/reorder helpers from `public/scripts/products/products.js` and `public/views/product-list.html`.
+
+The cleanup above did not authorize broader deletion. Protected areas remain protected:
+
+* data adapter files
+* routes / controllers / backend services
+* Product Cost Sheet dependency and L/M/N/O mapping
+* `/api/products/opportunity-specs`
+* backend `/api/products/category-order`
+* `SystemPref`
+* `ProductDetailModal`
+* `openDetailModal()`
+* `loadCategoryOrder()`
+* `this.categoryOrder`
+* Dashboard follow-up logic and `/api/dashboard`
+* Opportunity List, Opportunity Detail, and Activity Hub
+* compatibility aliases such as `eventLogReader` and `contactCoreReader`
+
+Future cleanup must follow this order:
+
+```text
+read-only forensic
+PASS / NG review
+exact minimal patch boundary
+no broad deletion
+runtime validation by static checks first
+user / ChatGPT approval before removing compatibility or fallback paths
+```
+
+Do not remove Google Sheet fallback broadly.
+
+Current Sheet-backed / compatibility domains that must remain protected:
+
+* Product Cost Sheet
+* RAW contacts
+* LINE leads RAW flow
+* System Config / Auth system config and users
+* Weekly Business read fallback
+* Internal Ops
+* event-log legacy adapters unless separately proven removable
+
+Highcharts remnants must not be deleted until event charts are migrated and all Highcharts callers are proven removed.
+
+`ProductDetailModal` must not be deleted until separately approved.
+
+`repomix-packs/**` are generated snapshots and must not be hand-edited.
+
+Pending cleanup targets:
+
+* `ProductDetailModal` reachability / removal-readiness
+* final Product Cost `loadCategoryOrder()` / `categoryOrder` / `openDetailModal()` dependency review
+* backend `/api/products/category-order` cleanup only after frontend no longer calls it
+* Meeting / Calendar hidden workflow ownership decision
+* LINE leads standalone page ownership decision
+* System status modal / API trigger audit
+* Event charts Highcharts to ECharts migration forensic
+* `services/index.js` retired factory audit
+* `data/index.js` legacy export audit
+* Google Sheet fallback domain-by-domain SQL replacement roadmap
 
 ---
 

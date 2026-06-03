@@ -193,6 +193,7 @@ PASS:
 * preview modal pattern may be used for accepted chart enlargement workflows
 * gray no-data states for empty chart/map regions
 * system-aligned color scales instead of decorative palettes
+* Sales Analysis `成交類型` uses a standard professional donut with subtle `padAngle: 1` separation
 
 NG:
 
@@ -203,6 +204,10 @@ NG:
 * broad dashboard range or filter UI changes without forensic validation
 * rainbow charts unless the business meaning is explicitly justified
 * CDN chart dependencies
+* rounded/petal-style Sales Analysis `成交類型` donut slices
+* thick artificial transparent gaps in the Sales Analysis `成交類型` donut
+* claims that the accepted Sales Analysis `成交類型` donut is fully gapless
+* reverting Sales Analysis charts to Highcharts
 
 Analytics work must preserve Dashboard stability and stale-refresh assumptions.
 

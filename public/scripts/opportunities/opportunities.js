@@ -531,32 +531,7 @@ async function confirmDeleteOpportunity(oppId, opportunityName) {
     });
 }
 
-async function loadFollowUpPage() {
-    const container = document.getElementById('page-follow-up');
-    if (!container) return;
-    
-    container.innerHTML = '<div class="loading show"><div class="spinner"></div><p>載入待追蹤清單中...</p></div>';
-    
-    container.removeEventListener('click', handleOpportunitiesClick);
-    container.addEventListener('click', handleOpportunitiesClick);
-
-    try {
-        const result = await authedFetch('/api/dashboard');
-        if (!result.success || !result.data) throw new Error(result.error || '無法獲取資料');
-        const followUpFullList = (result.data.followUpList || []).sort((a, b) => (a.effectiveLastActivity || 0) - (b.effectiveLastActivity || 0));
-        if (followUpFullList.length === 0) {
-            container.innerHTML = '<div class="alert alert-success" style="padding: 2rem; text-align: center;">🎉 太棒了！目前沒有需要追蹤的機會案件。</div>';
-        } else {
-            const thresholdDays = window.CRM_APP?.systemConfig?.FOLLOW_UP?.DAYS_THRESHOLD || 7;
-            container.innerHTML = `<div class="dashboard-widget"><div class="widget-header"><h2 class="widget-title">待追蹤案件 (${followUpFullList.length})</h2></div><div class="widget-content"><div class="alert alert-warning">⚠️ 已超過 ${thresholdDays} 天未有新活動。</div>${renderOpportunitiesTable(followUpFullList)}</div></div>`;
-        }
-    } catch (error) {
-        if (error.message !== 'Unauthorized') container.innerHTML = '<div class="alert alert-error">載入待追蹤清單失敗。</div>';
-    }
-}
-
 if (window.CRM_APP) {
     if (!window.CRM_APP.pageModules) window.CRM_APP.pageModules = {};
     window.CRM_APP.pageModules.opportunities = loadOpportunities;
-    window.CRM_APP.pageModules['follow-up'] = loadFollowUpPage;
 }

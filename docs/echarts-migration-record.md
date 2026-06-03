@@ -13,7 +13,11 @@ Current accepted Sales Analysis baseline:
 * x-axis labels rotated 45 degrees
 * axis hover tooltip with axis pointer
 * preview modal support for each chart
-* type chart as rounded donut / petal-style pie
+* `成交類型` type chart as a standard professional donut
+* no rounded slice corners on the `成交類型` donut
+* no thick transparent border gaps on the `成交類型` donut
+* subtle slice separation is accepted through `padAngle: 1`
+* do not document the `成交類型` donut as fully gapless
 * source chart as percentage horizontal bar
 
 Source evidence:
@@ -88,3 +92,4 @@ Future chart work must follow these rules:
 * preview modal pattern is allowed where already accepted
 * no browser smoke test by default
 * user visual validation is required for final PASS / NG
+* do not revert Sales Analysis charts to Highcharts

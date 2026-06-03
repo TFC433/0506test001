@@ -34,7 +34,6 @@ const EventLogSqlReader = require('../data/event-log-sql-reader');
 const SystemReader = require('../data/system-reader');
 const WeeklyBusinessReader = require('../data/weekly-business-reader');
 const WeeklyBusinessSqlReader = require('../data/weekly-business-sql-reader');
-const AnnouncementReader = require('../data/announcement-reader');
 const AnnouncementSqlReader = require('../data/announcement-sql-reader');
 const ProductReader = require('../data/product-reader');
 const InternalOpsReader = require('../data/internal-ops-reader');
@@ -47,9 +46,7 @@ const OpportunitySqlWriter = require('../data/opportunity-sql-writer');
 const InteractionSqlWriter = require('../data/interaction-sql-writer');
 const EventLogSqlWriter = require('../data/event-log-sql-writer');
 const SystemWriter = require('../data/system-writer');
-const WeeklyBusinessWriter = require('../data/weekly-business-writer');
 const WeeklyBusinessSqlWriter = require('../data/weekly-business-sql-writer');
-const AnnouncementWriter = require('../data/announcement-writer');
 const AnnouncementSqlWriter = require('../data/announcement-sql-writer');
 const ProductWriter = require('../data/product-writer');
 const InternalOpsWriter = require('../data/internal-ops-writer');
@@ -111,7 +108,6 @@ async function initializeServices() {
         // SYSTEM Keep
         const weeklyReader = new WeeklyBusinessReader(sheets, config.IDS.CORE);
         const weeklySqlReader = new WeeklyBusinessSqlReader();
-        const announcementReader = new AnnouncementReader(sheets, config.IDS.CORE);
         const announcementSqlReader = new AnnouncementSqlReader();
         const systemReader = new SystemReader(sheets, config.IDS.SYSTEM);
         const productReader = new ProductReader(sheets, config.IDS.PRODUCT);
@@ -129,9 +125,7 @@ async function initializeServices() {
         const eventLogSqlWriter = new EventLogSqlWriter();
 
         // SYSTEM Keep
-        const weeklyWriter = new WeeklyBusinessWriter(sheets, config.IDS.CORE, weeklyReader);
         const weeklySqlWriter = new WeeklyBusinessSqlWriter();
-        const announcementWriter = new AnnouncementWriter(sheets, config.IDS.CORE, announcementReader);
         const announcementSqlWriter = new AnnouncementSqlWriter();
         const systemWriter = new SystemWriter(sheets, config.IDS.SYSTEM, systemReader);
         const productWriter = new ProductWriter(sheets, config.IDS.PRODUCT, productReader);
@@ -321,7 +315,6 @@ async function initializeServices() {
             contactRawReader,
             contactCoreReader: contactSqlReader, // Expose explicitly mapped SQL core
             weeklyBusinessReader: weeklyReader,
-            weeklyBusinessWriter: weeklyWriter,
             systemReader, systemWriter,
             eventLogReader: eventLogSqlReader,
             internalOpsReader,
