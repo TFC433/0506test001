@@ -121,7 +121,7 @@ window.renderDevProjects = function(data) {
 
     function getBadgeHtml(text, colorSet) {
         if (!text || text === '-') return '-';
-        return `<span style="display:inline-block; padding:2px 8px; border-radius:10px; font-size:0.75rem; font-weight:600; background:${colorSet.bgLight}; color:${colorSet.text}; border: 1px solid ${colorSet.border}; white-space: nowrap;">${text}</span>`;
+        return `<span style="display:inline-block; padding:2px 7px; border-radius:5px; font-size:0.75rem; font-weight:600; background:${colorSet.bgLight}; color:${colorSet.text}; border: 1px solid ${colorSet.border}; white-space: nowrap;">${text}</span>`;
     }
 
     function getStatusBadge(status) {
@@ -269,11 +269,11 @@ window.renderDevProjects = function(data) {
             </div>
         ` : '';
 
-        let oppHtml = '-';
+        let oppHtml = '<span class="internal-ops-muted-badge">-</span>';
         if (item.assigneeCode && item.projectName) {
             oppHtml = `<a href="#" title="${item.projectName || ''}" style="color: var(--accent-blue); text-decoration: none; font-weight: 600;" onclick="event.preventDefault(); window.CRM_APP.navigateTo('opportunity-details', {opportunityId: '${item.assigneeCode}'})">${item.projectName}</a>`;
         } else if (item.projectName) {
-            oppHtml = `<strong title="${item.projectName || ''}">${item.projectName}</strong>`;
+            oppHtml = `<strong title="${item.projectName || ''}" style="font-weight:600; color:var(--text-secondary);">${item.projectName}</strong>`;
         }
 
         let personnelHtml = `<div style="display:flex; flex-direction:column; gap:4px; min-width:120px;">`;
@@ -325,9 +325,9 @@ window.renderDevProjects = function(data) {
     };
 
     return `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding: 0 4px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 8px 12px 0;">
             <div style="font-size: 0.9rem; color: var(--text-secondary); font-weight: 500;">共 ${data.length} 筆</div>
-            <button onclick="window.toggleDevTableActions()" class="internal-ops-btn" style="padding: 4px 10px; font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-secondary); font-weight: 500; border-radius: var(--rounded-sm);">
+            <button onclick="window.toggleDevTableActions()" class="internal-ops-btn">
                 ${window.__isDevActionMode ? '結束操作' : '操作模式'}
             </button>
         </div>

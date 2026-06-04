@@ -133,7 +133,6 @@ class InternalOpsService {
 
     async createDevProject(data) {
         if (!data.productName) throw new Error('productName required');
-        if (!data.projectName) throw new Error('projectName required');
 
         const allData = await this.reader.getDevProjects();
         const newId = this._generateId('DEV', allData, 'devId');

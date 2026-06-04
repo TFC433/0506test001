@@ -57,7 +57,7 @@ window.loadInternalOpsPage = async function(params) {
 
     if (!pageContainer.querySelector('.internal-ops-container')) {
         pageContainer.innerHTML = `
-            <div class="internal-ops-container dashboard-grid-flexible" style="display: flex; flex-direction: column; gap: 24px;">
+            <div class="internal-ops-container dashboard-grid-flexible" style="display: flex; flex-direction: column; gap: 16px;">
                 
                 <div class="dashboard-widget internal-ops-widget" style="width: 100%;">
                     <div class="widget-header internal-ops-header">
@@ -94,31 +94,33 @@ window.loadInternalOpsPage = async function(params) {
         
         const style = document.createElement('style');
         style.textContent = `
-            .internal-ops-widget { background: var(--card-bg); border-radius: var(--rounded-sm); border: 1px solid var(--border-color); box-shadow: none; overflow: hidden; }
-            .internal-ops-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border-color); background: var(--secondary-bg); }
-            .internal-ops-header h2 { margin: 0; font-size: 1.1rem; color: var(--text-primary); font-weight: 600; }
+            .internal-ops-widget { background: var(--card-bg); border-radius: 6px; border: 1px solid var(--border-color); box-shadow: none; overflow: hidden; }
+            .internal-ops-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 44px; padding: 10px 14px; border-bottom: 1px solid var(--border-color); background: var(--card-bg); }
+            .internal-ops-header h2 { margin: 0; font-size: 0.95rem; line-height: 1.3; color: var(--text-primary); font-weight: 600; }
             .internal-ops-content.no-pad { padding: 0; }
-            .internal-ops-content.with-pad { padding: 20px; }
+            .internal-ops-content.with-pad { padding: 14px; }
             
             .internal-ops-table { width: 100%; border-collapse: collapse; min-width: 900px; }
-            .internal-ops-table th { background-color: var(--primary-bg); font-weight: 600; color: var(--text-secondary); padding: 12px 20px; border-bottom: 1px solid var(--border-color); text-align: left; font-size: 0.85rem; letter-spacing: 0.02em; }
-            .internal-ops-table td { padding: 12px 20px; border-bottom: 1px solid var(--border-color); text-align: left; font-size: 0.9rem; color: var(--text-primary); vertical-align: middle; }
+            .internal-ops-table th { background-color: var(--secondary-bg); font-weight: 600; color: var(--text-secondary); padding: 9px 12px; border-bottom: 1px solid var(--border-color); text-align: left; font-size: 0.8rem; letter-spacing: 0; }
+            .internal-ops-table td { padding: 9px 12px; border-bottom: 1px solid var(--border-color); text-align: left; font-size: 0.85rem; color: var(--text-primary); vertical-align: middle; }
             .internal-ops-table tr:last-child td { border-bottom: none; }
             .internal-ops-table tr:hover { background-color: var(--glass-bg); }
             
-            .member-workload-card { border: 1px solid var(--border-color); border-radius: var(--rounded-sm); overflow: hidden; background: var(--card-bg); box-shadow: none; }
-            .member-workload-header { background: var(--secondary-bg); padding: 14px 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; transition: background-color 0.2s; }
+            .member-workload-card { border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden; background: var(--card-bg); box-shadow: none; }
+            .member-workload-header { background: var(--card-bg); padding: 10px 14px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; transition: background-color 0.2s; }
             .member-workload-header:hover { background: var(--glass-bg); }
-            .member-workload-header h3 { margin: 0; font-size: 1.05rem; color: var(--text-primary); display: flex; align-items: center; font-weight: 600; }
+            .member-workload-header h3 { margin: 0; font-size: 0.95rem; color: var(--text-primary); display: flex; align-items: center; font-weight: 600; }
             .toggle-icon { transition: transform 0.2s ease-in-out; margin-right: 8px; flex-shrink: 0; color: var(--text-muted); }
             
-            .internal-ops-actions { display: flex; gap: 8px; }
-            .internal-ops-btn { padding: 4px 10px; border-radius: var(--rounded-sm); font-size: 0.8rem; cursor: pointer; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-secondary); font-weight: 500; transition: background-color 0.2s, border-color 0.2s, color 0.2s; }
+            .internal-ops-actions { display: flex; gap: 6px; }
+            .internal-ops-btn { padding: 5px 10px; border-radius: 5px; font-size: 0.8rem; line-height: 1.2; cursor: pointer; border: 1px solid var(--border-color); background: var(--card-bg); color: var(--text-secondary); font-weight: 500; transition: background-color 0.2s, border-color 0.2s, color 0.2s; }
             .internal-ops-btn:hover { background: var(--glass-bg); color: var(--text-primary); }
-            .progress-badge { padding: 3px 8px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; }
+            .progress-badge { padding: 2px 7px; border-radius: 5px; font-size: 0.78rem; font-weight: 600; }
+            .internal-ops-muted-badge { display: inline-block; padding: 2px 7px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--secondary-bg); color: var(--text-muted); font-size: 0.78rem; font-weight: 500; white-space: nowrap; }
+            .internal-ops-modal-panel { background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); padding: 18px; border-radius: 6px; width: 600px; max-width: 90%; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12); }
 
             .collab-checkbox-group { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0; max-height: 80px; overflow-y: auto; }
-            .collab-label { font-size: 0.85rem; display: flex; align-items: center; gap: 4px; cursor: pointer; background: var(--glass-bg); border: 1px solid var(--border-color); padding: 4px 8px; border-radius: var(--rounded-sm); }
+            .collab-label { font-size: 0.8rem; display: flex; align-items: center; gap: 4px; cursor: pointer; background: var(--card-bg); border: 1px solid var(--border-color); padding: 3px 7px; border-radius: 5px; }
             .collab-label:hover { background: var(--secondary-bg); }
         `;
         pageContainer.appendChild(style);
@@ -182,7 +184,7 @@ window.loadInternalOpsPage = async function(params) {
 
         const devProjectModalHtml = `
             <div id="internal-ops-dev-project-modal" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; justify-content: center; align-items: center;">
-                <div style="background: var(--card-bg); color: var(--text-primary); border: 1px solid var(--border-color); padding: 24px; border-radius: 6px; width: 600px; max-width: 90%;">
+                <div class="internal-ops-modal-panel">
                     <h3 id="dp-modal-title" style="margin-top: 0; margin-bottom: 16px;">新增開發案件</h3>
                     <form id="dp-modal-form" onsubmit="submitDevProject(event)">
                         <input type="hidden" id="dp-devId" />
