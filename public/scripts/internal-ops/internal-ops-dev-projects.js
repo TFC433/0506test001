@@ -877,25 +877,12 @@ window.renderDevProjects = function(data) {
     }
 
     function getStatusBadge(status) {
-        let fallbackHex = '#616161';
-        switch(status) {
-            case '進行中': fallbackHex = '#1976d2'; break;
-            case '卡關': fallbackHex = '#c62828'; break;
-            case '已完成': fallbackHex = '#2e7d32'; break;
-            case '暫停': fallbackHex = '#f9a825'; break;
-        }
-        const colorSet = getConfigColor('開發狀態', status, fallbackHex);
+        const colorSet = getConfigColor('開發狀態', status, '#616161');
         return getBadgeHtml(status, colorSet);
     }
 
     function getStageBadge(stage) {
-        let fallbackHex = '#616161';
-        switch(stage) {
-            case '開發中': fallbackHex = '#1976d2'; break;
-            case '測試中': fallbackHex = '#6a1b9a'; break;
-            case '已上線': fallbackHex = '#2e7d32'; break;
-        }
-        const colorSet = getConfigColor('開發階段', stage, fallbackHex);
+        const colorSet = getConfigColor('開發階段', stage, '#616161');
         return getBadgeHtml(stage, colorSet);
     }
 
@@ -1000,19 +987,16 @@ window.renderDevProjects = function(data) {
         `;
     }
 
-    function renderQuietBadge(text, className = '') {
-        if (!text) return '';
-        return `<span class="dev-case-quiet-badge ${className}">${escapeHtml(text)}</span>`;
-    }
-
     function renderCategoryBadge(item) {
-        return renderQuietBadge(item.productCode || item.caseCategory || '未分類', 'dev-case-category-badge');
+        const text = item.productCode || item.caseCategory || '未分類';
+        return getBadgeHtml(text, getConfigColor('進度案件分類', text, '#616161'));
     }
 
     function renderRelationBadge(item) {
-        if (item.__isOrphan) return renderQuietBadge('主案件遺失', 'dev-case-warning-badge');
+        if (item.__isOrphan) return getBadgeHtml('主案件遺失', window.buildColorSet('#c62828'));
         if (!item.__isChild) return '';
-        return renderQuietBadge(item.caseRelationType || '未指定關係', 'dev-case-relation-badge');
+        const text = item.caseRelationType || '未指定關係';
+        return getBadgeHtml(text, getConfigColor('進度案件關係', text, '#616161'));
     }
 
     const createRow = window.__devProjectsCreateOpen ? renderCreateEditorRow() : '';
@@ -1082,11 +1066,11 @@ window.renderDevProjects = function(data) {
                 </div>
             </td>
             <td class="dev-category-cell">${renderCategoryBadge(item)}</td>
-            <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; min-width: 180px; font-size: 0.85rem;">${oppHtml}</td>
+            <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.85rem;">${oppHtml}</td>
             <td style="font-size: 0.85rem;">${item.featureName || item.relatedFeature || '-'}</td>
             <td>${personnelHtml}</td>
-            <td style="width: 100px;">${getStageBadge(item.devStage || item.caseStage || '-')}</td>
-            <td style="width: 90px;">${getStatusBadge(item.status || item.caseStatus || '-')}</td>
+            <td>${getStageBadge(item.devStage || item.caseStage || '-')}</td>
+            <td>${getStatusBadge(item.status || item.caseStatus || '-')}</td>
             <td>${scheduleHtml}</td>
             <td>${getCombinedProgressHtml(item.progress, item.startDate, item.estCompletionDate)}</td>
         </tr>
@@ -1317,21 +1301,19 @@ window.renderDevProjects = function(data) {
                 padding-left: 22px;
             }
             .dev-case-name-table-cell {
-                max-width: 260px;
-                min-width: 180px;
                 font-size: 0.85rem;
-                white-space: normal;
-                overflow: visible;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
             }
             .dev-case-name-primary {
-                overflow: visible;
-                text-overflow: clip;
-                white-space: normal;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
                 min-width: 0;
                 font-weight: 600;
                 color: var(--text-primary);
                 line-height: 1.35;
-                word-break: break-word;
             }
             .dev-child-marker {
                 color: var(--text-muted);
@@ -1345,41 +1327,10 @@ window.renderDevProjects = function(data) {
                 text-decoration-color: color-mix(in srgb, var(--text-muted) 45%, transparent);
                 text-underline-offset: 2px;
             }
-            .dev-case-quiet-badge {
-                display: inline-flex;
-                align-items: center;
-                flex-shrink: 0;
-                max-width: 96px;
-                padding: 1px 5px;
-                border: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
-                border-radius: 4px;
-                color: var(--text-muted);
-                background: color-mix(in srgb, var(--primary-bg) 70%, transparent);
-                font-size: 0.68rem;
-                font-weight: 500;
-                line-height: 1.25;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
-            .dev-case-category-badge {
-                padding: 2px 7px;
-                border-radius: 5px;
-                font-size: 0.75rem;
-                font-weight: 600;
-                line-height: 1.25;
-                max-width: 104px;
-            }
-            .dev-case-relation-badge {
-                max-width: 112px;
-            }
-            .dev-case-warning-badge,
             .dev-expanded-btn.danger {
                 color: var(--accent-red);
             }
             .dev-category-cell {
-                width: 76px;
-                max-width: 90px;
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
@@ -1438,6 +1389,17 @@ window.renderDevProjects = function(data) {
                 color: var(--text-primary);
                 background: color-mix(in srgb, var(--primary-bg) 68%, transparent);
             }
+            #internal-ops-dev-projects-content {
+                overflow-x: auto;
+            }
+            #internal-ops-dev-projects-content .internal-ops-table {
+                min-width: 1120px;
+                table-layout: fixed;
+            }
+            #internal-ops-dev-projects-content .internal-ops-table th {
+                white-space: nowrap;
+                width: auto !important;
+            }
             @media (max-width: 1100px) {
                 .dev-expanded-sections,
                 .dev-expanded-section-basic,
@@ -1462,16 +1424,28 @@ window.renderDevProjects = function(data) {
             </div>
         </div>
         <table class="internal-ops-table">
+            <colgroup>
+                <col style="width: 3%;">
+                <col style="width: 23%;">
+                <col style="width: 7%;">
+                <col style="width: 13%;">
+                <col style="width: 7%;">
+                <col style="width: 10%;">
+                <col style="width: 8%;">
+                <col style="width: 8%;">
+                <col style="width: 10%;">
+                <col style="width: 11%;">
+            </colgroup>
             <thead>
                 <tr>
-                    <th style="width: 50px;">#</th>
+                    <th>#</th>
                     <th>案件名稱</th>
-                    <th style="width: 76px;">案件分類</th>
-                    <th style="min-width: 180px;">關聯機會</th>
+                    <th>案件分類</th>
+                    <th>關聯機會</th>
                     <th>關聯功能</th>
                     <th>人員</th>
-                    <th onclick="window.handleDevProjectSort('devStage', event)" style="width: 100px; cursor:pointer; user-select:none;" title="點擊依案件階段排序">案件階段<span style="color:var(--accent-blue);">${getSortIcon('devStage')}</span></th>
-                    <th onclick="window.handleDevProjectSort('status', event)" style="width: 90px; cursor:pointer; user-select:none;" title="點擊依案件狀態排序">案件狀態<span style="color:var(--accent-blue);">${getSortIcon('status')}</span></th>
+                    <th onclick="window.handleDevProjectSort('devStage', event)" style="cursor:pointer; user-select:none;" title="點擊依案件階段排序">案件階段<span style="color:var(--accent-blue);">${getSortIcon('devStage')}</span></th>
+                    <th onclick="window.handleDevProjectSort('status', event)" style="cursor:pointer; user-select:none;" title="點擊依案件狀態排序">案件狀態<span style="color:var(--accent-blue);">${getSortIcon('status')}</span></th>
                     <th>開發時程</th>
                     <th>進度</th>
                 </tr>
