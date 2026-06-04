@@ -36,6 +36,10 @@ if (typeof window.__devProjectsExpandedEditId === 'undefined') {
     window.__devProjectsExpandedEditId = null;
 }
 
+if (typeof window.__devProjectsExpandedNoteId === 'undefined') {
+    window.__devProjectsExpandedNoteId = null;
+}
+
 if (typeof window.__devProjectsCreateOpen === 'undefined') {
     window.__devProjectsCreateOpen = false;
 }
@@ -65,6 +69,7 @@ async function ensureDevProjectOpportunitiesLoaded(container) {
 window.openDevProjectCreateInline = async function() {
     window.__devProjectsCreateOpen = true;
     window.__devProjectsExpandedEditId = null;
+    window.__devProjectsExpandedNoteId = null;
     const container = rerenderDevProjectsInline();
     await ensureDevProjectOpportunitiesLoaded(container);
 };
@@ -172,7 +177,8 @@ window.saveCreateDevProjectInline = async function() {
         startDate: getValue('create-startDate'),
         estCompletionDate: getValue('create-estCompletionDate'),
         dependencies: selectedParentId,
-        caseRelationType: getValue('create-caseRelationType')
+        caseRelationType: getValue('create-caseRelationType'),
+        notes: getValue('create-notes')
     };
 
     try {
@@ -217,6 +223,7 @@ window.saveCreateDevProjectInline = async function() {
 
 window.toggleExpandedDevProject = async function(devId) {
     window.__devProjectsExpandedEditId = window.__devProjectsExpandedEditId === devId ? null : devId;
+    window.__devProjectsExpandedNoteId = null;
     const container = document.getElementById('internal-ops-dev-projects-content');
     if (container && window.__internalOpsDevProjectsData) {
         container.innerHTML = window.renderDevProjects(window.__internalOpsDevProjectsData);
@@ -237,6 +244,20 @@ window.toggleExpandedDevProject = async function(devId) {
 };
 
 window.cancelExpandedDevProject = function() {
+    window.__devProjectsExpandedEditId = null;
+    const container = document.getElementById('internal-ops-dev-projects-content');
+    if (container && window.__internalOpsDevProjectsData) {
+        container.innerHTML = window.renderDevProjects(window.__internalOpsDevProjectsData);
+    }
+};
+
+window.toggleDevProjectNote = function(devId) {
+    if (window.__isDevActionMode) {
+        window.toggleExpandedDevProject(devId);
+        return;
+    }
+
+    window.__devProjectsExpandedNoteId = window.__devProjectsExpandedNoteId === devId ? null : devId;
     window.__devProjectsExpandedEditId = null;
     const container = document.getElementById('internal-ops-dev-projects-content');
     if (container && window.__internalOpsDevProjectsData) {
@@ -312,7 +333,8 @@ window.saveExpandedDevProject = async function(devId) {
         startDate: getValue('exp-startDate'),
         estCompletionDate: getValue('exp-estCompletionDate'),
         dependencies: selectedParentId,
-        caseRelationType: getValue('exp-caseRelationType')
+        caseRelationType: getValue('exp-caseRelationType'),
+        notes: getValue('exp-notes')
     };
 
     try {
@@ -376,6 +398,8 @@ window.handleDevProjectSort = function(field, event) {
 
 window.toggleDevTableActions = function() {
     window.__isDevActionMode = !window.__isDevActionMode;
+    window.__devProjectsExpandedEditId = null;
+    window.__devProjectsExpandedNoteId = null;
     const container = document.getElementById('internal-ops-dev-projects-content');
     if (container && window.__internalOpsDevProjectsData) {
         container.innerHTML = window.renderDevProjects(window.__internalOpsDevProjectsData);
@@ -428,8 +452,16 @@ window.renderDevProjects = function(data) {
         return `<input id="exp-${field}-${devId}" class="dev-expanded-input" type="${type}" value="${escapeHtml(value || '')}">`;
     }
 
+    function renderExpandedTextarea(devId, field, value) {
+        return `<textarea id="exp-${field}-${devId}" class="dev-expanded-input dev-expanded-textarea">${escapeHtml(value || '')}</textarea>`;
+    }
+
     function renderCreateInput(field, value = '', type = 'text') {
         return `<input id="create-${field}" class="dev-expanded-input" type="${type}" value="${escapeHtml(value || '')}">`;
+    }
+
+    function renderCreateTextarea(field, value = '') {
+        return `<textarea id="create-${field}" class="dev-expanded-input dev-expanded-textarea">${escapeHtml(value || '')}</textarea>`;
     }
 
     function renderConfigSelect(devId, field, configKey, currentValue = '', emptyLabel = '') {
@@ -595,6 +627,7 @@ window.renderDevProjects = function(data) {
         const caseStatusValue = item.status || item.caseStatus || '';
         const parentDevIdValue = item.dependencies || item.parentDevId || '';
         const caseRelationTypeValue = item.caseRelationType || '';
+        const notesValue = item.notes || '';
         const hasChildCases = devProjectHasChildren(devId);
 
         return `
@@ -684,6 +717,13 @@ window.renderDevProjects = function(data) {
                                         ${renderExpandedInput(devId, 'estCompletionDate', item.estCompletionDate, 'date')}
                                     </label>
                                 </div>
+                            </div>
+                            <div class="dev-expanded-section dev-expanded-section-notes">
+                                <div class="dev-expanded-section-title">備註</div>
+                                <label class="dev-expanded-field dev-expanded-notes-field">
+                                    <span>備註</span>
+                                    ${renderExpandedTextarea(devId, 'notes', notesValue)}
+                                </label>
                             </div>
                         </div>
                     </div>
@@ -781,7 +821,32 @@ window.renderDevProjects = function(data) {
                                     </label>
                                 </div>
                             </div>
+                            <div class="dev-expanded-section dev-expanded-section-notes">
+                                <div class="dev-expanded-section-title">備註</div>
+                                <label class="dev-expanded-field dev-expanded-notes-field">
+                                    <span>備註</span>
+                                    ${renderCreateTextarea('notes')}
+                                </label>
+                            </div>
                         </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
+
+    function renderNoteViewerRow(item) {
+        const notesText = (item.notes || '').trim();
+        const bodyHtml = notesText
+            ? `<div class="dev-note-viewer-body">${escapeHtml(notesText).replace(/\n/g, '<br>')}</div>`
+            : '<div class="dev-note-viewer-empty">暫無備註</div>';
+
+        return `
+            <tr class="dev-project-note-viewer-row">
+                <td colspan="${visibleColumnCount}">
+                    <div class="dev-project-note-viewer">
+                        <div class="dev-note-viewer-label">備註</div>
+                        ${bodyHtml}
                     </div>
                 </td>
             </tr>
@@ -1002,6 +1067,7 @@ window.renderDevProjects = function(data) {
     const createRow = window.__devProjectsCreateOpen ? renderCreateEditorRow() : '';
     const rows = groupedRows.map((item, index) => {
         const isExpanded = window.__devProjectsExpandedEditId === item.devId;
+        const isNoteExpanded = !window.__isDevActionMode && window.__devProjectsExpandedNoteId === item.devId;
         const scheduleHtml = `
             <div style="display: flex; flex-direction: column; gap: 4px; min-width: 110px;">
                 <div class="dev-secondary-meta-row" style="display: flex; justify-content: space-between; gap: 8px;">
@@ -1059,7 +1125,7 @@ window.renderDevProjects = function(data) {
         <tr class="${childClass}">
             <td>${rowIndexText}</td>
             <td class="dev-case-name-table-cell" title="${caseNameText}">
-                <div class="dev-case-name-cell ${item.__isChild ? 'is-child' : ''} ${window.__isDevActionMode ? 'is-editable' : ''}" ${window.__isDevActionMode ? `onclick="window.toggleExpandedDevProject('${item.devId}')"` : ''}>
+                <div class="dev-case-name-cell ${item.__isChild ? 'is-child' : ''} ${window.__isDevActionMode ? 'is-editable' : 'is-viewable'}" onclick="${window.__isDevActionMode ? `window.toggleExpandedDevProject('${item.devId}')` : `window.toggleDevProjectNote('${item.devId}')`}">
                     ${childMarker}
                     ${renderRelationBadge(item)}
                     <span class="dev-case-name-primary">${caseNameText}</span>
@@ -1075,7 +1141,9 @@ window.renderDevProjects = function(data) {
             <td>${getCombinedProgressHtml(item.progress, item.startDate, item.estCompletionDate)}</td>
         </tr>
     `;
-        return isExpanded ? displayRow + renderExpandedEditorRow(item) : displayRow;
+        if (isExpanded) return displayRow + renderExpandedEditorRow(item);
+        if (isNoteExpanded) return displayRow + renderNoteViewerRow(item);
+        return displayRow;
     }).join('');
 
     const getSortIcon = (field) => {
@@ -1091,6 +1159,35 @@ window.renderDevProjects = function(data) {
             .dev-project-expanded-editor-row td {
                 background: var(--card-bg);
                 padding: 8px 12px 12px;
+            }
+            .dev-project-note-viewer-row td {
+                background: var(--card-bg);
+                padding: 4px 12px 10px;
+            }
+            .dev-project-note-viewer {
+                border: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+                border-radius: 4px;
+                background: color-mix(in srgb, var(--primary-bg) 62%, transparent);
+                padding: 7px 9px;
+            }
+            .dev-note-viewer-label {
+                color: var(--text-muted);
+                font-size: 0.7rem;
+                font-weight: 600;
+                line-height: 1;
+                margin-bottom: 5px;
+            }
+            .dev-note-viewer-body {
+                color: var(--text-secondary);
+                font-size: 0.8rem;
+                line-height: 1.45;
+                white-space: normal;
+                word-break: break-word;
+            }
+            .dev-note-viewer-empty {
+                color: var(--text-muted);
+                font-size: 0.76rem;
+                line-height: 1.3;
             }
             .dev-project-expanded-editor {
                 background: rgba(59, 130, 246, 0.07);
@@ -1139,6 +1236,9 @@ window.renderDevProjects = function(data) {
                 min-width: 0;
             }
             .dev-expanded-section-basic {
+                grid-column: span 2;
+            }
+            .dev-expanded-section-notes {
                 grid-column: span 2;
             }
             .dev-expanded-section-title {
@@ -1213,6 +1313,14 @@ window.renderDevProjects = function(data) {
                 background: #f3f4f6;
                 color: var(--text-muted);
                 cursor: not-allowed;
+            }
+            .dev-expanded-textarea {
+                min-height: 70px;
+                resize: vertical;
+                line-height: 1.4;
+            }
+            .dev-expanded-notes-field {
+                width: 100%;
             }
             .dev-expanded-helper {
                 color: var(--text-muted);
@@ -1294,7 +1402,8 @@ window.renderDevProjects = function(data) {
                 gap: 5px;
                 min-width: 0;
             }
-            .dev-case-name-cell.is-editable {
+            .dev-case-name-cell.is-editable,
+            .dev-case-name-cell.is-viewable {
                 cursor: pointer;
             }
             .dev-case-name-cell.is-child {
@@ -1321,7 +1430,8 @@ window.renderDevProjects = function(data) {
                 line-height: 1;
                 flex-shrink: 0;
             }
-            .dev-case-name-cell.is-editable:hover .dev-case-name-primary {
+            .dev-case-name-cell.is-editable:hover .dev-case-name-primary,
+            .dev-case-name-cell.is-viewable:hover .dev-case-name-primary {
                 color: var(--text-secondary);
                 text-decoration: underline;
                 text-decoration-color: color-mix(in srgb, var(--text-muted) 45%, transparent);
