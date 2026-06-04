@@ -61,7 +61,13 @@ window.loadInternalOpsPage = async function(params) {
                 
                 <div class="dashboard-widget internal-ops-widget" style="width: 100%;">
                     <div class="widget-header internal-ops-header">
-                        <h2 class="widget-title">各種類型案件追蹤</h2>
+                        <h2 class="widget-title" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                            <span>各種類型案件追蹤</span>
+                            <span class="dev-project-view-tabs" role="tablist" aria-label="Dev Projects view mode">
+                                <button type="button" data-dev-project-view-tab="case" class="dev-project-view-tab is-active" onclick="window.toggleDevProjectsViewMode && window.toggleDevProjectsViewMode('case')">案件導向</button>
+                                <button type="button" data-dev-project-view-tab="member" class="dev-project-view-tab" onclick="window.toggleDevProjectsViewMode && window.toggleDevProjectsViewMode('member')">人員導向</button>
+                            </span>
+                        </h2>
                         <button class="action-btn primary btn-sm" onclick="window.openDevProjectCreateInline()">
                             <span class="btn-text">新增</span>
                         </button>

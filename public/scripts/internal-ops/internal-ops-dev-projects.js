@@ -44,6 +44,17 @@ if (typeof window.__devProjectsCreateOpen === 'undefined') {
     window.__devProjectsCreateOpen = false;
 }
 
+if (typeof window.__devProjectsViewMode === 'undefined') {
+    window.__devProjectsViewMode = 'case';
+}
+
+function updateDevProjectsViewTabs() {
+    const activeMode = window.__devProjectsViewMode === 'member' ? 'member' : 'case';
+    document.querySelectorAll('[data-dev-project-view-tab]').forEach(btn => {
+        btn.classList.toggle('is-active', btn.getAttribute('data-dev-project-view-tab') === activeMode);
+    });
+}
+
 function rerenderDevProjectsInline() {
     const container = document.getElementById('internal-ops-dev-projects-content');
     if (container && window.__internalOpsDevProjectsData) {
@@ -406,8 +417,21 @@ window.toggleDevTableActions = function() {
     }
 };
 
+window.toggleDevProjectsViewMode = function(mode) {
+    if (!['case', 'member'].includes(mode)) return;
+    window.__devProjectsViewMode = mode;
+    window.__devProjectsExpandedEditId = null;
+    window.__devProjectsExpandedNoteId = null;
+    updateDevProjectsViewTabs();
+    const container = document.getElementById('internal-ops-dev-projects-content');
+    if (container && window.__internalOpsDevProjectsData) {
+        container.innerHTML = window.renderDevProjects(window.__internalOpsDevProjectsData);
+    }
+};
+
 window.renderDevProjects = function(data) {
     window.__internalOpsDevProjectsData = data; 
+    updateDevProjectsViewTabs();
 
     // config-driven sort order helper
     const sysConfig = window.__systemConfig || {};
@@ -1064,6 +1088,242 @@ window.renderDevProjects = function(data) {
         return getBadgeHtml(text, getConfigColor('進度案件關係', text, '#616161'));
     }
 
+    function parseCollaborators(text = '') {
+        return String(text || '')
+            .split(/[｜|、,，]/)
+            .map(name => name.trim())
+            .filter(Boolean);
+    }
+
+    function getConfigNumber(configKeys, valueCandidates, fallback) {
+        for (const key of configKeys) {
+            const list = Array.isArray(sysConfig[key]) ? sysConfig[key] : [];
+            for (const item of list) {
+                if (valueCandidates.length && !valueCandidates.includes(item.value) && !valueCandidates.includes(item.note)) continue;
+                const numeric = parseFloat(item.note || item.value);
+                if (!isNaN(numeric)) return numeric;
+            }
+        }
+        return fallback;
+    }
+
+    function getLoadConfigList(configKeys) {
+        for (const key of configKeys) {
+            if (Array.isArray(sysConfig[key]) && sysConfig[key].length > 0) return sysConfig[key];
+        }
+        return [];
+    }
+
+    function getDevTaskSortValue(item) {
+        const dueTime = new Date(item.estCompletionDate || '').getTime();
+        if (Number.isFinite(dueTime)) return { hasDue: true, value: dueTime };
+        return { hasDue: false, value: -getUpdatedTimeValue(item) };
+    }
+
+    function compareDevMemberTasks(a, b) {
+        const aSort = getDevTaskSortValue(a);
+        const bSort = getDevTaskSortValue(b);
+        if (aSort.hasDue !== bSort.hasDue) return aSort.hasDue ? -1 : 1;
+        return aSort.value - bSort.value;
+    }
+
+    function isDevTaskBehind(item) {
+        const theoretical = calculateTheoreticalProgress(item.startDate, item.estCompletionDate);
+        if (theoretical === null) return false;
+        const actual = parseInt(String(item.progress || '').replace('%', ''), 10) || 0;
+        return actual - theoretical <= -10;
+    }
+
+    function getDevProgressCueHtml(item) {
+        const theoretical = calculateTheoreticalProgress(item.startDate, item.estCompletionDate);
+        if (theoretical === null) return '';
+        const actual = parseInt(String(item.progress || '').replace('%', ''), 10) || 0;
+        const diff = actual - theoretical;
+        if (diff <= -10) return '<span class="dev-member-progress-cue is-behind">落後</span>';
+        if (diff >= 10) return '<span class="dev-member-progress-cue is-ahead">超前</span>';
+        return '';
+    }
+
+    function getDevMemberWorkloadConfig() {
+        const maxLoad = getConfigNumber(['負荷設定', '工作負荷設定'], ['最大負荷案件數', '最大負荷數', 'maxLoad'], 6);
+        const mainWeight = getConfigNumber(['負荷權重', '工作負荷權重'], ['主負責權重', '主負責', 'main'], 1);
+        const collabWeight = getConfigNumber(['負荷權重', '工作負荷權重'], ['協作權重', '協作', 'collab'], 0.5);
+        const statusWeights = {};
+        getLoadConfigList(['狀態負荷權重', '案件狀態負荷權重']).forEach(item => {
+            const numeric = parseFloat(item.note);
+            if (item.value && !isNaN(numeric)) statusWeights[item.value] = numeric;
+        });
+        const parsedLevels = getLoadConfigList(['負荷等級', '工作負荷等級'])
+            .map(item => ({
+                label: item.value || item.note || '',
+                threshold: parseFloat(item.note),
+                color: item.style || '#616161'
+            }))
+            .filter(item => !isNaN(item.threshold))
+            .sort((a, b) => a.threshold - b.threshold);
+        const loadLevels = parsedLevels.length
+            ? parsedLevels
+            : [
+                { label: '負荷低', threshold: 50, color: '#616161' },
+                { label: '負荷中', threshold: 83, color: '#616161' },
+                { label: '負荷高', threshold: 100, color: '#616161' }
+            ];
+
+        return { maxLoad, mainWeight, collabWeight, statusWeights, loadLevels };
+    }
+
+    function getDevMemberOrder() {
+        const list = Array.isArray(sysConfig['團隊成員']) ? sysConfig['團隊成員'] : [];
+        const order = new Map();
+        list.forEach((item, index) => {
+            const name = item.value || item.note || '';
+            if (name) order.set(name, item.order ?? index);
+        });
+        return order;
+    }
+
+    function buildDevMemberGroups(items) {
+        const groups = new Map();
+        const ensureGroup = (member) => {
+            const name = member || '未指定';
+            if (!groups.has(name)) groups.set(name, { member: name, mainTasks: [], collabTasks: [], loadScore: 0, behindCount: 0 });
+            return groups.get(name);
+        };
+
+        items.forEach(item => {
+            const owner = (item.assigneeName || item.ownerName || '未指定').trim();
+            ensureGroup(owner).mainTasks.push(item);
+            parseCollaborators(item.collaborators).forEach(member => {
+                if (!member || member === owner) return;
+                ensureGroup(member).collabTasks.push(item);
+            });
+        });
+
+        const config = getDevMemberWorkloadConfig();
+        const memberOrder = getDevMemberOrder();
+        const rows = Array.from(groups.values()).map(group => {
+            group.mainTasks.sort(compareDevMemberTasks);
+            group.collabTasks.sort(compareDevMemberTasks);
+            group.behindCount = [...group.mainTasks, ...group.collabTasks].filter(isDevTaskBehind).length;
+            group.loadScore = group.mainTasks.reduce((sum, item) => sum + (config.mainWeight * (config.statusWeights[item.status || item.caseStatus] ?? 1)), 0)
+                + group.collabTasks.reduce((sum, item) => sum + (config.collabWeight * (config.statusWeights[item.status || item.caseStatus] ?? 1)), 0);
+            group.percentageRaw = config.maxLoad > 0 ? (group.loadScore / config.maxLoad) * 100 : 0;
+            const loadLevel = config.loadLevels.find(level => group.percentageRaw <= level.threshold) || config.loadLevels[config.loadLevels.length - 1];
+            group.loadLevel = loadLevel || { label: '負荷', color: '#616161' };
+            group.memberOrder = memberOrder.has(group.member) ? memberOrder.get(group.member) : 9999;
+            return group;
+        });
+
+        rows.sort((a, b) => {
+            if (b.percentageRaw !== a.percentageRaw) return b.percentageRaw - a.percentageRaw;
+            if (b.mainTasks.length !== a.mainTasks.length) return b.mainTasks.length - a.mainTasks.length;
+            if (b.collabTasks.length !== a.collabTasks.length) return b.collabTasks.length - a.collabTasks.length;
+            if (a.memberOrder !== b.memberOrder) return a.memberOrder - b.memberOrder;
+            return a.member.localeCompare(b.member, 'zh-Hant');
+        });
+        return rows;
+    }
+
+    function renderMemberRoleBadge(role) {
+        const label = role === 'main' ? '主負責' : '協作';
+        const colorSet = window.buildColorSet('#616161');
+        return `<span style="display:inline-block; padding:2px 7px; border-radius:5px; font-size:0.75rem; font-weight:600; background:${colorSet.bgLight}; color:${colorSet.text}; border:1px solid ${colorSet.border}; white-space:nowrap;">${label}</span>`;
+    }
+
+    function renderMemberModeRow(item, role) {
+        const progressText = item.progress || '0%';
+        const progressCueHtml = getDevProgressCueHtml(item);
+        const scheduleText = [item.startDate, item.estCompletionDate].filter(Boolean).join(' → ') || '-';
+        const rowClass = role === 'collab' ? ' dev-member-row-collab' : '';
+        const rowOpportunityId = item.assigneeCode || item.opportunityId || '';
+        const rowOpportunityName = item.projectName || item.opportunityName || '';
+        let opportunityHtml = '<span class="internal-ops-muted-badge">-</span>';
+        if (rowOpportunityId && rowOpportunityName) {
+            opportunityHtml = `<a href="#" title="${escapeHtml(rowOpportunityName)}" class="dev-opportunity-subtle" onclick="event.preventDefault(); window.CRM_APP.navigateTo('opportunity-details', {opportunityId: '${escapeHtml(rowOpportunityId)}'})">${escapeHtml(rowOpportunityName)}</a>`;
+        } else if (rowOpportunityName) {
+            opportunityHtml = `<span title="${escapeHtml(rowOpportunityName)}" class="dev-opportunity-subtle">${escapeHtml(rowOpportunityName)}</span>`;
+        }
+
+        return `
+            <tr class="dev-member-row${rowClass}">
+                <td></td>
+                <td class="dev-case-name-table-cell" title="${escapeHtml(item.productName || item.caseName || '-')}">
+                    <div class="dev-member-case-name">
+                        <span class="dev-child-marker">↳</span>
+                        ${renderMemberRoleBadge(role)}
+                        <span class="dev-case-name-primary">${escapeHtml(item.productName || item.caseName || '-')}</span>
+                    </div>
+                </td>
+                <td class="dev-category-cell">${renderCategoryBadge(item)}</td>
+                <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.85rem;">${opportunityHtml}</td>
+                <td style="font-size: 0.85rem;">${escapeHtml(item.featureName || item.relatedFeature || '-')}</td>
+                <td>${getStageBadge(item.devStage || item.caseStage || '-')}</td>
+                <td>${getStatusBadge(item.status || item.caseStatus || '-')}</td>
+                <td><span class="dev-member-schedule">${escapeHtml(scheduleText)}</span></td>
+                <td><span class="dev-member-progress">${escapeHtml(progressText)}</span>${progressCueHtml}</td>
+            </tr>
+        `;
+    }
+
+    function renderMemberView(items) {
+        const memberGroups = buildDevMemberGroups(items);
+        if (!memberGroups.length) {
+            return '<div class="dev-member-empty">目前沒有可顯示的成員案件</div>';
+        }
+
+        return `
+            <div class="dev-member-view">
+                ${memberGroups.map(group => {
+                    const percentText = group.percentageRaw.toFixed(0);
+                    const colorSet = window.buildColorSet(group.loadLevel.color || '#616161') || window.buildColorSet('#616161');
+                    return `
+                        <section class="dev-member-section">
+                            <div class="dev-member-header">
+                                <div class="dev-member-title-line">
+                                    <span class="dev-member-name">${escapeHtml(group.member)}</span>
+                                    <span style="display:inline-block; padding:2px 7px; border-radius:5px; font-size:0.75rem; font-weight:600; background:${colorSet.bgLight}; color:${colorSet.text}; border:1px solid ${colorSet.border}; white-space:nowrap;">負荷 ${percentText}%</span>
+                                    <span class="dev-member-summary">主負責 ${group.mainTasks.length}</span>
+                                    <span class="dev-member-summary">協作 ${group.collabTasks.length}</span>
+                                    <span class="dev-member-summary">落後 ${group.behindCount}</span>
+                                </div>
+                            </div>
+                            <table class="internal-ops-table dev-member-table">
+                                <colgroup>
+                                    <col style="width: 1%;">
+                                    <col style="width: 23%;">
+                                    <col style="width: 8%;">
+                                    <col style="width: 13%;">
+                                    <col style="width: 10%;">
+                                    <col style="width: 10%;">
+                                    <col style="width: 10%;">
+                                    <col style="width: 14%;">
+                                    <col style="width: 11%;">
+                                </colgroup>
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>案件名稱</th>
+                                        <th>案件分類</th>
+                                        <th>關聯機會</th>
+                                        <th>關聯功能</th>
+                                        <th>案件階段</th>
+                                        <th>案件狀態</th>
+                                        <th>開發時程</th>
+                                        <th>進度</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${group.mainTasks.length ? group.mainTasks.map(item => renderMemberModeRow(item, 'main')).join('') : `<tr class="dev-member-empty-row"><td colspan="9">暫無主負責案件</td></tr>`}
+                                    ${group.collabTasks.length ? group.collabTasks.map(item => renderMemberModeRow(item, 'collab')).join('') : `<tr class="dev-member-empty-row"><td colspan="9">暫無協作案件</td></tr>`}
+                                </tbody>
+                            </table>
+                        </section>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    }
+
     const createRow = window.__devProjectsCreateOpen ? renderCreateEditorRow() : '';
     const rows = groupedRows.map((item, index) => {
         const isExpanded = window.__devProjectsExpandedEditId === item.devId;
@@ -1150,6 +1410,45 @@ window.renderDevProjects = function(data) {
         if (window.__devProjectsSortState.field !== field) return ' ↕';
         return window.__devProjectsSortState.direction === 'asc' ? ' ↑' : ' ↓';
     };
+
+    const activeViewMode = window.__devProjectsViewMode === 'member' ? 'member' : 'case';
+    const createTableHtml = createRow
+        ? `<table class="internal-ops-table dev-create-table"><tbody>${createRow}</tbody></table>`
+        : '';
+    const caseTableHtml = `
+        <table class="internal-ops-table">
+            <colgroup>
+                <col style="width: 1%;">
+                <col style="width: 20%;">
+                <col style="width: 7%;">
+                <col style="width: 10%;">
+                <col style="width: 8%;">
+                <col style="width: 11%;">
+                <col style="width: 9%;">
+                <col style="width: 9%;">
+                <col style="width: 12%;">
+                <col style="width: 13%;">
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>案件名稱</th>
+                    <th>案件分類</th>
+                    <th>關聯機會</th>
+                    <th>關聯功能</th>
+                    <th>人員</th>
+                    <th onclick="window.handleDevProjectSort('devStage', event)" style="cursor:pointer; user-select:none;" title="點擊依案件階段排序">案件階段<span style="color:var(--accent-blue);">${getSortIcon('devStage')}</span></th>
+                    <th onclick="window.handleDevProjectSort('status', event)" style="cursor:pointer; user-select:none;" title="點擊依案件狀態排序">案件狀態<span style="color:var(--accent-blue);">${getSortIcon('status')}</span></th>
+                    <th>開發時程</th>
+                    <th>進度</th>
+                </tr>
+            </thead>
+            <tbody>${createRow}${rows}</tbody>
+        </table>
+    `;
+    const viewHtml = activeViewMode === 'member'
+        ? `${createTableHtml}${renderMemberView(groupedRows)}`
+        : caseTableHtml;
 
     return `
         <style>
@@ -1499,6 +1798,131 @@ window.renderDevProjects = function(data) {
                 color: var(--text-primary);
                 background: color-mix(in srgb, var(--primary-bg) 68%, transparent);
             }
+            .dev-project-view-tabs {
+                display: inline-flex;
+                align-items: center;
+                border: 1px solid var(--border-color);
+                border-radius: 5px;
+                overflow: hidden;
+                background: color-mix(in srgb, var(--primary-bg) 62%, transparent);
+            }
+            .dev-project-view-tab {
+                border: 0;
+                border-right: 1px solid var(--border-color);
+                background: transparent;
+                color: var(--text-muted);
+                padding: 4px 9px;
+                font-size: 0.76rem;
+                line-height: 1;
+                cursor: pointer;
+            }
+            .dev-project-view-tab:last-child {
+                border-right: 0;
+            }
+            .dev-project-view-tab.is-active {
+                background: color-mix(in srgb, var(--accent-blue) 12%, var(--card-bg));
+                color: var(--accent-blue);
+                font-weight: 600;
+                box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-blue) 38%, transparent);
+            }
+            .dev-member-view {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                padding: 0 12px 12px;
+            }
+            .dev-member-section {
+                width: 100%;
+                border-top: 1px solid var(--border-color);
+                background: transparent;
+                padding: 0;
+                min-width: 0;
+            }
+            .dev-member-header {
+                display: flex;
+                align-items: center;
+                justify-content: flex-start;
+                gap: 10px;
+                padding: 8px 0;
+                border-bottom: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+                background: transparent;
+            }
+            .dev-member-title-line {
+                display: flex;
+                align-items: center;
+                gap: 7px;
+                flex-wrap: wrap;
+                min-width: 0;
+            }
+            .dev-member-name {
+                color: var(--text-primary);
+                font-size: 0.92rem;
+                font-weight: 700;
+                line-height: 1.2;
+            }
+            .dev-member-summary {
+                color: var(--text-muted);
+                font-size: 0.74rem;
+                line-height: 1.2;
+                white-space: nowrap;
+            }
+            .dev-member-table {
+                min-width: 1040px;
+                table-layout: fixed;
+            }
+            .dev-member-table th {
+                white-space: nowrap;
+            }
+            .dev-member-row-collab td {
+                color: var(--text-secondary);
+                background: color-mix(in srgb, var(--primary-bg) 38%, transparent);
+            }
+            .dev-member-row-collab .dev-case-name-primary {
+                color: var(--text-secondary);
+                font-weight: 500;
+            }
+            .dev-member-case-name {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                min-width: 0;
+            }
+            .dev-member-progress {
+                color: var(--text-secondary);
+                font-weight: 600;
+                white-space: nowrap;
+            }
+            .dev-member-progress-cue {
+                display: inline-block;
+                margin-left: 5px;
+                font-size: 0.72rem;
+                font-weight: 600;
+                white-space: nowrap;
+            }
+            .dev-member-progress-cue.is-behind {
+                color: var(--accent-red);
+            }
+            .dev-member-progress-cue.is-ahead {
+                color: var(--accent-green);
+            }
+            .dev-member-schedule {
+                color: var(--text-muted);
+                white-space: nowrap;
+            }
+            .dev-member-empty-row td {
+                color: var(--text-muted);
+                font-size: 0.78rem;
+                padding: 7px 12px;
+            }
+            .dev-member-muted,
+            .dev-member-empty {
+                color: var(--text-muted);
+                font-size: 0.78rem;
+            }
+            .dev-member-empty {
+                padding: 16px 12px;
+                text-align: center;
+            }
             #internal-ops-dev-projects-content {
                 overflow-x: auto;
             }
@@ -1523,44 +1947,18 @@ window.renderDevProjects = function(data) {
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 8px 12px 0;">
             <div style="font-size: 0.9rem; color: var(--text-secondary); font-weight: 500;">共 ${data.length} 筆</div>
             <div class="dev-project-toolbar">
-                ${window.__isDevActionMode ? '<span class="dev-maintenance-indicator">維護模式中</span>' : ''}
-                ${window.__isDevActionMode ? '<span class="dev-maintenance-help">點選案件名稱進入編輯</span>' : ''}
-                <button onclick="window.openDevProjectCreateInline()" class="internal-ops-btn">
-                    新增
-                </button>
-                <button onclick="window.toggleDevTableActions()" class="internal-ops-btn">
-                    ${window.__isDevActionMode ? '結束操作' : '操作模式'}
-                </button>
+                ${activeViewMode === 'case' && window.__isDevActionMode ? '<span class="dev-maintenance-indicator">維護模式中</span>' : ''}
+                ${activeViewMode === 'case' && window.__isDevActionMode ? '<span class="dev-maintenance-help">點選案件名稱進入編輯</span>' : ''}
+                ${activeViewMode === 'case' ? `
+                    <button onclick="window.openDevProjectCreateInline()" class="internal-ops-btn">
+                        新增
+                    </button>
+                    <button onclick="window.toggleDevTableActions()" class="internal-ops-btn">
+                        ${window.__isDevActionMode ? '結束操作' : '操作模式'}
+                    </button>
+                ` : ''}
             </div>
         </div>
-        <table class="internal-ops-table">
-            <colgroup>
-                <col style="width: 1%;">
-                <col style="width: 20%;">
-                <col style="width: 7%;">
-                <col style="width: 10%;">
-                <col style="width: 8%;">
-                <col style="width: 11%;">
-                <col style="width: 9%;">
-                <col style="width: 9%;">
-                <col style="width: 12%;">
-                <col style="width: 13%;">
-            </colgroup>
-            <thead>
-                <tr>
-                    <th>#</th>
-                    <th>案件名稱</th>
-                    <th>案件分類</th>
-                    <th>關聯機會</th>
-                    <th>關聯功能</th>
-                    <th>人員</th>
-                    <th onclick="window.handleDevProjectSort('devStage', event)" style="cursor:pointer; user-select:none;" title="點擊依案件階段排序">案件階段<span style="color:var(--accent-blue);">${getSortIcon('devStage')}</span></th>
-                    <th onclick="window.handleDevProjectSort('status', event)" style="cursor:pointer; user-select:none;" title="點擊依案件狀態排序">案件狀態<span style="color:var(--accent-blue);">${getSortIcon('status')}</span></th>
-                    <th>開發時程</th>
-                    <th>進度</th>
-                </tr>
-            </thead>
-            <tbody>${createRow}${rows}</tbody>
-        </table>
+        ${viewHtml}
     `;
 };
