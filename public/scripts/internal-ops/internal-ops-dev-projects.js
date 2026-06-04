@@ -108,6 +108,39 @@ window.syncCreateDevProgress = function(source) {
     input.value = value;
 };
 
+function getDevParentId(item) {
+    return item?.dependencies || item?.parentDevId || '';
+}
+
+function getDevProjectById(devId) {
+    return (window.__internalOpsDevProjectsData || []).find(item => item.devId === devId);
+}
+
+function devProjectHasChildren(devId) {
+    return (window.__internalOpsDevProjectsData || []).some(item => getDevParentId(item) === devId);
+}
+
+function validateDevParentSelection(devId, selectedParentId) {
+    if (!selectedParentId) return true;
+    if (devId && selectedParentId === devId) {
+        alert('案件不可選自己作為主案件');
+        return false;
+    }
+
+    const selectedParent = getDevProjectById(selectedParentId);
+    if (selectedParent && getDevParentId(selectedParent)) {
+        alert('子案件不可作為其他案件的主案件');
+        return false;
+    }
+
+    if (devId && devProjectHasChildren(devId)) {
+        alert('已有子案件的案件不可改為子案件');
+        return false;
+    }
+
+    return true;
+}
+
 window.saveCreateDevProjectInline = async function() {
     const getValue = (id) => document.getElementById(id)?.value || '';
     const progressRaw = parseInt(getValue('create-progress'), 10);
@@ -121,6 +154,9 @@ window.saveCreateDevProjectInline = async function() {
     const collabsJoined = Array.from(document.querySelectorAll('input[data-create-collab]:checked'))
         .map(input => input.value)
         .join('｜');
+    const selectedParentId = getValue('create-dependencies');
+
+    if (!validateDevParentSelection(null, selectedParentId)) return;
 
     const payload = {
         productCode: getValue('create-productCode'),
@@ -135,7 +171,7 @@ window.saveCreateDevProjectInline = async function() {
         progress: `${progressValue}%`,
         startDate: getValue('create-startDate'),
         estCompletionDate: getValue('create-estCompletionDate'),
-        dependencies: getValue('create-dependencies'),
+        dependencies: selectedParentId,
         caseRelationType: getValue('create-caseRelationType')
     };
 
@@ -255,6 +291,12 @@ window.saveExpandedDevProject = async function(devId) {
     const collabsJoined = Array.from(document.querySelectorAll(`input[data-exp-collab="${devId}"]:checked`))
         .map(input => input.value)
         .join('｜');
+    const parentSelect = document.getElementById(`exp-dependencies-${devId}`);
+    const selectedParentId = parentSelect && parentSelect.disabled
+        ? (getDevParentId(getDevProjectById(devId)) || '')
+        : getValue('exp-dependencies');
+
+    if (!validateDevParentSelection(devId, selectedParentId)) return;
 
     const payload = {
         productCode: getValue('exp-productCode'),
@@ -269,7 +311,7 @@ window.saveExpandedDevProject = async function(devId) {
         progress: `${progressValue}%`,
         startDate: getValue('exp-startDate'),
         estCompletionDate: getValue('exp-estCompletionDate'),
-        dependencies: getValue('exp-dependencies'),
+        dependencies: selectedParentId,
         caseRelationType: getValue('exp-caseRelationType')
     };
 
@@ -345,8 +387,7 @@ window.renderDevProjects = function(data) {
 
     // config-driven sort order helper
     const sysConfig = window.__systemConfig || {};
-    const hasActionColumn = window.__isDevActionMode || window.__devProjectsExpandedEditId || window.__devProjectsCreateOpen;
-    const visibleColumnCount = hasActionColumn ? 10 : 9;
+    const visibleColumnCount = 10;
 
     function escapeHtml(value) {
         return String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -468,9 +509,11 @@ window.renderDevProjects = function(data) {
 
     function renderParentDevProjectSelect(devId, currentValue = '') {
         const projects = Array.isArray(window.__internalOpsDevProjectsData) ? window.__internalOpsDevProjectsData : [];
+        const hasChildren = devProjectHasChildren(devId);
         const optionParts = ['<option value="">-- 無主案件 --</option>'];
         projects.forEach(project => {
             if (!project.devId || project.devId === devId) return;
+            if (getDevParentId(project)) return;
             const caseName = project.productName || project.caseName || '未命名案件';
             const category = project.productCode || project.caseCategory || '';
             const relatedFeature = project.featureName || project.relatedFeature || '';
@@ -483,7 +526,7 @@ window.renderDevProjects = function(data) {
             optionParts.push(`<option value="${escapeHtml(currentValue)}" selected>已選主案件</option>`);
         }
 
-        return `<select id="exp-dependencies-${devId}" class="dev-expanded-input">${optionParts.join('')}</select>`;
+        return `<select id="exp-dependencies-${devId}" class="dev-expanded-input" ${hasChildren ? 'disabled' : ''}>${optionParts.join('')}</select>`;
     }
 
     function renderCreateParentDevProjectSelect(currentValue = '') {
@@ -491,6 +534,7 @@ window.renderDevProjects = function(data) {
         const optionParts = ['<option value="">-- 無主案件 --</option>'];
         projects.forEach(project => {
             if (!project.devId) return;
+            if (getDevParentId(project)) return;
             const caseName = project.productName || project.caseName || '未命名案件';
             const category = project.productCode || project.caseCategory || '';
             const relatedFeature = project.featureName || project.relatedFeature || '';
@@ -551,6 +595,7 @@ window.renderDevProjects = function(data) {
         const caseStatusValue = item.status || item.caseStatus || '';
         const parentDevIdValue = item.dependencies || item.parentDevId || '';
         const caseRelationTypeValue = item.caseRelationType || '';
+        const hasChildCases = devProjectHasChildren(devId);
 
         return `
             <tr class="dev-project-expanded-editor-row">
@@ -558,9 +603,12 @@ window.renderDevProjects = function(data) {
                     <div class="dev-project-expanded-editor">
                         <div class="dev-expanded-header">
                             <div class="dev-expanded-title">編輯開發案件</div>
-                            <div class="dev-expanded-actions">
-                                <button type="button" class="dev-expanded-btn primary" onclick="window.saveExpandedDevProject('${devId}')">儲存</button>
-                                <button type="button" class="dev-expanded-btn" onclick="window.cancelExpandedDevProject()">取消</button>
+                            <div class="dev-expanded-header-actions">
+                                ${window.__isDevActionMode ? `<button type="button" class="dev-expanded-btn danger" onclick="window.deleteDevProject('${devId}')">刪除</button>` : '<span></span>'}
+                                <div class="dev-expanded-actions">
+                                    <button type="button" class="dev-expanded-btn primary" onclick="window.saveExpandedDevProject('${devId}')">儲存</button>
+                                    <button type="button" class="dev-expanded-btn" onclick="window.cancelExpandedDevProject()">取消</button>
+                                </div>
                             </div>
                         </div>
                         <div class="dev-expanded-sections">
@@ -586,6 +634,7 @@ window.renderDevProjects = function(data) {
                                     <label class="dev-expanded-field">
                                         <span>主案件ID</span>
                                         ${renderParentDevProjectSelect(devId, parentDevIdValue)}
+                                        ${hasChildCases ? '<span class="dev-expanded-helper">已有子案件的案件不可改為子案件</span>' : ''}
                                     </label>
                                     <label class="dev-expanded-field">
                                         <span>案件關係</span>
@@ -747,30 +796,58 @@ window.renderDevProjects = function(data) {
         return match?.order ?? 9999;
     }
 
-    // single active sort mode, no backend changes
-    const sortedData = [...data];
+    function getParentDevId(item) {
+        return item.dependencies || item.parentDevId || '';
+    }
 
-    if (window.__devProjectsSortState.field) {
-        sortedData.sort((a, b) => {
-            let orderA = 9999;
-            let orderB = 9999;
+    function getUpdatedTimeValue(item) {
+        const time = new Date(item.updateTime || '').getTime();
+        return Number.isFinite(time) ? time : 0;
+    }
 
-            if (window.__devProjectsSortState.field === 'devStage') {
-                orderA = getSortOrder('開發階段', a.devStage);
-                orderB = getSortOrder('開發階段', b.devStage);
+    function buildGroupedDevProjectRows(items) {
+        const byId = new Map();
+        const groups = [];
+        const pendingChildren = [];
+
+        items.forEach(item => {
+            if (item.devId) byId.set(item.devId, item);
+        });
+
+        items.forEach(item => {
+            const parentId = getParentDevId(item);
+            if (!parentId) {
+                groups.push({ main: item, children: [], sortTime: getUpdatedTimeValue(item), orphan: false });
+                return;
             }
+            pendingChildren.push({ item, parentId });
+        });
 
-            if (window.__devProjectsSortState.field === 'status') {
-                orderA = getSortOrder('開發狀態', a.status);
-                orderB = getSortOrder('開發狀態', b.status);
+        const groupByMainId = new Map(groups.map(group => [group.main.devId, group]));
+        pendingChildren.forEach(({ item, parentId }) => {
+            const parent = byId.get(parentId);
+            const group = parent ? groupByMainId.get(parent.devId) : null;
+            if (!group) {
+                groups.push({ main: item, children: [], sortTime: getUpdatedTimeValue(item), orphan: true });
+                return;
             }
+            group.children.push(item);
+            group.sortTime = Math.max(group.sortTime, getUpdatedTimeValue(item));
+        });
 
-            if (orderA === orderB) return 0;
-            
-            const diff = orderA - orderB;
-            return window.__devProjectsSortState.direction === 'asc' ? diff : -diff;
+        groups.forEach(group => {
+            group.children.sort((a, b) => getUpdatedTimeValue(b) - getUpdatedTimeValue(a));
+        });
+        groups.sort((a, b) => b.sortTime - a.sortTime);
+
+        return groups.flatMap((group, index) => {
+            const rows = [{ ...group.main, __isChild: false, __isOrphan: group.orphan, __groupIndex: index + 1 }];
+            group.children.forEach(child => rows.push({ ...child, __isChild: true, __isOrphan: false, __groupIndex: index + 1 }));
+            return rows;
         });
     }
+
+    const groupedRows = buildGroupedDevProjectRows(data);
 
     // [Logic Preserved] Config mapping and trace logs
     function getConfigColor(type, text, fallbackHex) {
@@ -904,64 +981,69 @@ window.renderDevProjects = function(data) {
         return `
             <div style="display: flex; flex-direction: column; gap: 6px; width: 100%; min-width: 200px;">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 0.8rem; color: var(--text-muted); width: 28px; flex-shrink: 0; text-align: right; white-space: nowrap;">實際</span>
+                    <span class="dev-secondary-meta-label" style="color: var(--text-muted); width: 28px; flex-shrink: 0; text-align: right; white-space: nowrap;">實際</span>
                     <div style="width: 70px; height: 6px; background: var(--glass-bg); border-radius: 3px; overflow: hidden; flex-shrink: 0;">
                         <div style="width: ${clampedAVal}%; height: 100%; background: ${aColor.text};"></div>
                     </div>
-                    <span style="color:${aColor.text}; font-size: 0.8rem; font-weight: 600; width: 36px; text-align: right; flex-shrink: 0;">${actualProgressText}</span>
+                    <span class="dev-secondary-meta-value" style="color:${aColor.text}; font-weight: 600; width: 36px; text-align: right; flex-shrink: 0;">${actualProgressText}</span>
                     <span style="width: 30px; flex-shrink: 0;"></span>
                 </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 0.8rem; color: var(--text-muted); width: 28px; flex-shrink: 0; text-align: right; white-space: nowrap;">理論</span>
+                    <span class="dev-secondary-meta-label" style="color: var(--text-muted); width: 28px; flex-shrink: 0; text-align: right; white-space: nowrap;">理論</span>
                     <div style="width: 70px; height: 6px; background: ${tProgText === '-' ? 'transparent' : 'var(--glass-bg)'}; border: ${tProgText === '-' ? 'none' : '1px dashed var(--border-color)'}; border-radius: 3px; overflow: hidden; flex-shrink: 0;">
                         <div style="width: ${clampedTVal}%; height: 100%; background: var(--text-muted);"></div>
                     </div>
-                    <span style="color: ${tProgText === '-' ? 'var(--text-muted)' : 'var(--text-secondary)'}; font-size: 0.8rem; font-weight: 600; width: 36px; text-align: right; flex-shrink: 0;">${tProgText}</span>
+                    <span class="dev-secondary-meta-value" style="color: ${tProgText === '-' ? 'var(--text-muted)' : 'var(--text-secondary)'}; font-weight: 600; width: 36px; text-align: right; flex-shrink: 0;">${tProgText}</span>
                     <span style="width: 30px; flex-shrink: 0; text-align: left;">${cueHtml}</span>
                 </div>
             </div>
         `;
     }
 
+    function renderQuietBadge(text, className = '') {
+        if (!text) return '';
+        return `<span class="dev-case-quiet-badge ${className}">${escapeHtml(text)}</span>`;
+    }
+
+    function renderCategoryBadge(item) {
+        return renderQuietBadge(item.productCode || item.caseCategory || '未分類', 'dev-case-category-badge');
+    }
+
+    function renderRelationBadge(item) {
+        if (item.__isOrphan) return renderQuietBadge('主案件遺失', 'dev-case-warning-badge');
+        if (!item.__isChild) return '';
+        return renderQuietBadge(item.caseRelationType || '未指定關係', 'dev-case-relation-badge');
+    }
+
     const createRow = window.__devProjectsCreateOpen ? renderCreateEditorRow() : '';
-    const rows = sortedData.map((item, index) => {
+    const rows = groupedRows.map((item, index) => {
         const isExpanded = window.__devProjectsExpandedEditId === item.devId;
         const scheduleHtml = `
             <div style="display: flex; flex-direction: column; gap: 4px; min-width: 110px;">
-                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; gap: 8px;">
+                <div class="dev-secondary-meta-row" style="display: flex; justify-content: space-between; gap: 8px;">
                     <span style="color: var(--text-muted); white-space: nowrap;">開始</span>
                     <span style="color: var(--text-secondary); white-space: nowrap;">${item.startDate || '-'}</span>
                 </div>
-                <div style="display: flex; justify-content: space-between; font-size: 0.8rem; gap: 8px;">
+                <div class="dev-secondary-meta-row" style="display: flex; justify-content: space-between; gap: 8px;">
                     <span style="color: var(--text-muted); white-space: nowrap;">預計完成</span>
                     <span style="color: var(--text-secondary); white-space: nowrap;">${item.estCompletionDate || '-'}</span>
                 </div>
             </div>
         `;
 
-        let actionHtml = '';
-        if (window.__isDevActionMode) {
-            actionHtml = `
-                <div style="display: flex; gap: 6px; justify-content: center;">
-                    <button type="button" class="dev-expanded-btn" onclick="window.toggleExpandedDevProject('${item.devId}')">${isExpanded ? '收合' : '編輯'}</button>
-                    <button type="button" class="dev-expanded-btn danger" onclick="window.deleteDevProject('${item.devId}')">刪除</button>
-                </div>
-            `;
-        }
-
         let oppHtml = '<span class="internal-ops-muted-badge">-</span>';
         const rowOpportunityId = item.assigneeCode || item.opportunityId || '';
         const rowOpportunityName = item.projectName || item.opportunityName || '';
         if (rowOpportunityId && rowOpportunityName) {
-            oppHtml = `<a href="#" title="${rowOpportunityName || ''}" style="color: var(--accent-blue); text-decoration: none; font-weight: 600;" onclick="event.preventDefault(); window.CRM_APP.navigateTo('opportunity-details', {opportunityId: '${rowOpportunityId}'})">${rowOpportunityName}</a>`;
+            oppHtml = `<a href="#" title="${rowOpportunityName || ''}" class="dev-opportunity-subtle" onclick="event.preventDefault(); window.CRM_APP.navigateTo('opportunity-details', {opportunityId: '${rowOpportunityId}'})">${rowOpportunityName}</a>`;
         } else if (rowOpportunityName) {
-            oppHtml = `<strong title="${rowOpportunityName || ''}" style="font-weight:600; color:var(--text-secondary);">${rowOpportunityName}</strong>`;
+            oppHtml = `<span title="${rowOpportunityName || ''}" class="dev-opportunity-subtle">${rowOpportunityName}</span>`;
         }
 
         let personnelHtml = `<div style="display:flex; flex-direction:column; gap:4px; min-width:120px;">`;
         const assigneeText = item.assigneeName || item.ownerName || '-';
         personnelHtml += `
-            <div style="display:grid; grid-template-columns:64px 1fr; column-gap:8px; font-size:0.8rem;">
+            <div class="dev-secondary-meta-row" style="display:grid; grid-template-columns:64px 1fr; column-gap:8px;">
                 <span style="color:var(--text-muted); white-space:nowrap;">負責人</span>
                 <span style="color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${assigneeText}">${assigneeText}</span>
             </div>
@@ -976,7 +1058,7 @@ window.renderDevProjects = function(data) {
                     displayNames = names.slice(0, 2).join('、') + ` +${names.length - 2}`;
                 }
                 personnelHtml += `
-                    <div style="display:grid; grid-template-columns:64px 1fr; column-gap:8px; font-size:0.8rem;">
+                    <div class="dev-secondary-meta-row" style="display:grid; grid-template-columns:64px 1fr; column-gap:8px;">
                         <span style="color:var(--text-muted); white-space:nowrap;">協作成員</span>
                         <span style="color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${fullJoinedNames}">${displayNames}</span>
                     </div>
@@ -985,18 +1067,28 @@ window.renderDevProjects = function(data) {
         }
         personnelHtml += `</div>`;
 
+        const caseNameText = item.productName || item.caseName || '-';
+        const rowIndexText = item.__isChild ? '' : item.__groupIndex;
+        const childMarker = item.__isChild ? '<span class="dev-child-marker">↳</span>' : '';
+        const childClass = item.__isChild ? ' dev-project-child-row' : '';
         const displayRow = `
-        <tr>
-            <td>${index + 1}</td>
-            <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; font-size: 0.85rem;" title="${item.productName || item.caseName || ''}">${item.productName || item.caseName || '-'}</td>
-            <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; font-size: 0.85rem;">${oppHtml}</td>
+        <tr class="${childClass}">
+            <td>${rowIndexText}</td>
+            <td class="dev-case-name-table-cell" title="${caseNameText}">
+                <div class="dev-case-name-cell ${item.__isChild ? 'is-child' : ''} ${window.__isDevActionMode ? 'is-editable' : ''}" ${window.__isDevActionMode ? `onclick="window.toggleExpandedDevProject('${item.devId}')"` : ''}>
+                    ${childMarker}
+                    ${renderRelationBadge(item)}
+                    <span class="dev-case-name-primary">${caseNameText}</span>
+                </div>
+            </td>
+            <td class="dev-category-cell">${renderCategoryBadge(item)}</td>
+            <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; min-width: 180px; font-size: 0.85rem;">${oppHtml}</td>
             <td style="font-size: 0.85rem;">${item.featureName || item.relatedFeature || '-'}</td>
             <td>${personnelHtml}</td>
             <td style="width: 100px;">${getStageBadge(item.devStage || item.caseStage || '-')}</td>
             <td style="width: 90px;">${getStatusBadge(item.status || item.caseStatus || '-')}</td>
             <td>${scheduleHtml}</td>
             <td>${getCombinedProgressHtml(item.progress, item.startDate, item.estCompletionDate)}</td>
-            ${hasActionColumn ? `<td style="vertical-align: middle; text-align: center;">${actionHtml}</td>` : ''}
         </tr>
     `;
         return isExpanded ? displayRow + renderExpandedEditorRow(item) : displayRow;
@@ -1009,6 +1101,9 @@ window.renderDevProjects = function(data) {
 
     return `
         <style>
+            .internal-ops-widget:has(#internal-ops-dev-projects-content) > .internal-ops-header .action-btn {
+                display: none;
+            }
             .dev-project-expanded-editor-row td {
                 background: var(--card-bg);
                 padding: 8px 12px 12px;
@@ -1029,6 +1124,13 @@ window.renderDevProjects = function(data) {
                 padding-bottom: 7px;
                 margin-bottom: 8px;
                 border-bottom: 1px solid var(--border-color);
+            }
+            .dev-expanded-header-actions {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                gap: 12px;
+                flex: 1;
             }
             .dev-expanded-title {
                 font-size: 0.82rem;
@@ -1123,6 +1225,16 @@ window.renderDevProjects = function(data) {
                 border-color: #9ca3af;
                 box-shadow: 0 0 0 1px rgba(156, 163, 175, 0.25);
             }
+            .dev-expanded-input:disabled {
+                background: #f3f4f6;
+                color: var(--text-muted);
+                cursor: not-allowed;
+            }
+            .dev-expanded-helper {
+                color: var(--text-muted);
+                font-size: 0.68rem;
+                line-height: 1.25;
+            }
             .dev-expanded-number {
                 width: 50px;
                 text-align: right;
@@ -1189,6 +1301,143 @@ window.renderDevProjects = function(data) {
             .dev-expanded-btn.danger:hover {
                 color: var(--accent-red);
             }
+            .dev-project-child-row td {
+                background: color-mix(in srgb, var(--card-bg) 92%, var(--primary-bg));
+            }
+            .dev-case-name-cell {
+                display: flex;
+                align-items: center;
+                gap: 5px;
+                min-width: 0;
+            }
+            .dev-case-name-cell.is-editable {
+                cursor: pointer;
+            }
+            .dev-case-name-cell.is-child {
+                padding-left: 22px;
+            }
+            .dev-case-name-table-cell {
+                max-width: 260px;
+                min-width: 180px;
+                font-size: 0.85rem;
+                white-space: normal;
+                overflow: visible;
+            }
+            .dev-case-name-primary {
+                overflow: visible;
+                text-overflow: clip;
+                white-space: normal;
+                min-width: 0;
+                font-weight: 600;
+                color: var(--text-primary);
+                line-height: 1.35;
+                word-break: break-word;
+            }
+            .dev-child-marker {
+                color: var(--text-muted);
+                font-size: 0.8rem;
+                line-height: 1;
+                flex-shrink: 0;
+            }
+            .dev-case-name-cell.is-editable:hover .dev-case-name-primary {
+                color: var(--text-secondary);
+                text-decoration: underline;
+                text-decoration-color: color-mix(in srgb, var(--text-muted) 45%, transparent);
+                text-underline-offset: 2px;
+            }
+            .dev-case-quiet-badge {
+                display: inline-flex;
+                align-items: center;
+                flex-shrink: 0;
+                max-width: 96px;
+                padding: 1px 5px;
+                border: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+                border-radius: 4px;
+                color: var(--text-muted);
+                background: color-mix(in srgb, var(--primary-bg) 70%, transparent);
+                font-size: 0.68rem;
+                font-weight: 500;
+                line-height: 1.25;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .dev-case-category-badge {
+                padding: 2px 7px;
+                border-radius: 5px;
+                font-size: 0.75rem;
+                font-weight: 600;
+                line-height: 1.25;
+                max-width: 104px;
+            }
+            .dev-case-relation-badge {
+                max-width: 112px;
+            }
+            .dev-case-warning-badge,
+            .dev-expanded-btn.danger {
+                color: var(--accent-red);
+            }
+            .dev-category-cell {
+                width: 76px;
+                max-width: 90px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                vertical-align: middle;
+            }
+            .dev-opportunity-subtle {
+                display: inline-block;
+                max-width: 100%;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                color: var(--text-muted);
+                text-decoration: none;
+                font-size: 0.76rem;
+                font-weight: 400;
+            }
+            .dev-opportunity-subtle:hover {
+                color: var(--accent-blue);
+            }
+            .dev-secondary-meta-row,
+            .dev-secondary-meta-label,
+            .dev-secondary-meta-value {
+                font-size: 0.76rem;
+            }
+            .dev-maintenance-indicator {
+                color: var(--accent-red);
+                font-size: 0.76rem;
+                font-weight: 600;
+                margin-right: 8px;
+                white-space: nowrap;
+            }
+            .dev-maintenance-help {
+                color: var(--text-muted);
+                font-size: 0.76rem;
+                font-weight: 400;
+                white-space: nowrap;
+            }
+            .dev-project-toolbar {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                flex-wrap: wrap;
+                justify-content: flex-end;
+            }
+            .dev-project-toolbar .internal-ops-btn {
+                padding: 3px 8px;
+                min-height: 24px;
+                border: 1px solid var(--border-color);
+                background: transparent;
+                color: var(--text-secondary);
+                font-size: 0.76rem;
+                font-weight: 500;
+                line-height: 1;
+            }
+            .dev-project-toolbar .internal-ops-btn:hover {
+                color: var(--text-primary);
+                background: color-mix(in srgb, var(--primary-bg) 68%, transparent);
+            }
             @media (max-width: 1100px) {
                 .dev-expanded-sections,
                 .dev-expanded-section-basic,
@@ -1201,23 +1450,30 @@ window.renderDevProjects = function(data) {
         </style>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 8px 12px 0;">
             <div style="font-size: 0.9rem; color: var(--text-secondary); font-weight: 500;">共 ${data.length} 筆</div>
-            <button onclick="window.toggleDevTableActions()" class="internal-ops-btn">
-                ${window.__isDevActionMode ? '結束操作' : '操作模式'}
-            </button>
+            <div class="dev-project-toolbar">
+                ${window.__isDevActionMode ? '<span class="dev-maintenance-indicator">維護模式中</span>' : ''}
+                ${window.__isDevActionMode ? '<span class="dev-maintenance-help">點選案件名稱進入編輯</span>' : ''}
+                <button onclick="window.openDevProjectCreateInline()" class="internal-ops-btn">
+                    新增
+                </button>
+                <button onclick="window.toggleDevTableActions()" class="internal-ops-btn">
+                    ${window.__isDevActionMode ? '結束操作' : '操作模式'}
+                </button>
+            </div>
         </div>
         <table class="internal-ops-table">
             <thead>
                 <tr>
                     <th style="width: 50px;">#</th>
                     <th>案件名稱</th>
-                    <th>關聯機會</th>
+                    <th style="width: 76px;">案件分類</th>
+                    <th style="min-width: 180px;">關聯機會</th>
                     <th>關聯功能</th>
                     <th>人員</th>
                     <th onclick="window.handleDevProjectSort('devStage', event)" style="width: 100px; cursor:pointer; user-select:none;" title="點擊依案件階段排序">案件階段<span style="color:var(--accent-blue);">${getSortIcon('devStage')}</span></th>
                     <th onclick="window.handleDevProjectSort('status', event)" style="width: 90px; cursor:pointer; user-select:none;" title="點擊依案件狀態排序">案件狀態<span style="color:var(--accent-blue);">${getSortIcon('status')}</span></th>
                     <th>開發時程</th>
                     <th>進度</th>
-                    ${hasActionColumn ? '<th style="width: 100px; text-align: center;">操作</th>' : ''}
                 </tr>
             </thead>
             <tbody>${createRow}${rows}</tbody>
