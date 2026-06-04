@@ -32,6 +32,84 @@ if (typeof window.__devProjectsSortState === 'undefined') {
     };
 }
 
+if (typeof window.__devProjectsEditId === 'undefined') {
+    window.__devProjectsEditId = null;
+}
+
+window.editInlineDevProject = function(devId) {
+    window.__devProjectsEditId = devId;
+    const container = document.getElementById('internal-ops-dev-projects-content');
+    if (container && window.__internalOpsDevProjectsData) {
+        container.innerHTML = window.renderDevProjects(window.__internalOpsDevProjectsData);
+    }
+};
+
+window.cancelInlineDevProject = function() {
+    window.__devProjectsEditId = null;
+    const container = document.getElementById('internal-ops-dev-projects-content');
+    if (container && window.__internalOpsDevProjectsData) {
+        container.innerHTML = window.renderDevProjects(window.__internalOpsDevProjectsData);
+    }
+};
+
+window.saveInlineDevProject = async function(devId) {
+    const getFieldValue = (field) => {
+        const input = document.getElementById(`dev-inline-${field}-${devId}`);
+        return input ? input.value : '';
+    };
+
+    const progressRaw = parseInt(getFieldValue('progress'), 10);
+    const progressValue = isNaN(progressRaw) ? 0 : Math.min(Math.max(progressRaw, 0), 100);
+    const payload = {
+        productName: getFieldValue('productName'),
+        featureName: getFieldValue('featureName'),
+        devStage: getFieldValue('devStage'),
+        status: getFieldValue('status'),
+        progress: `${progressValue}%`,
+        startDate: getFieldValue('startDate'),
+        estCompletionDate: getFieldValue('estCompletionDate')
+    };
+
+    try {
+        const url = `/api/internal-ops/dev-projects/${devId}`;
+        let res;
+        if (typeof authedFetch === 'function') {
+            res = await authedFetch(url, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        } else {
+            res = await fetch(url, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(r => r.json());
+        }
+
+        if (!res || res.success === false) {
+            throw new Error(res?.error || 'save failed');
+        }
+
+        window.__devProjectsEditId = null;
+        if (typeof window.fetchAndRenderSection === 'function') {
+            window.fetchAndRenderSection('/api/internal-ops/dev-projects', window.renderDevProjects, 'internal-ops-dev-projects-content');
+        } else {
+            const container = document.getElementById('internal-ops-dev-projects-content');
+            if (container) {
+                const refreshed = await (typeof authedFetch === 'function'
+                    ? authedFetch('/api/internal-ops/dev-projects')
+                    : fetch('/api/internal-ops/dev-projects').then(r => r.json()));
+                const dataArray = Array.isArray(refreshed) ? refreshed : (refreshed && refreshed.success ? refreshed.data : null);
+                if (dataArray) container.innerHTML = window.renderDevProjects(dataArray);
+            }
+        }
+    } catch (err) {
+        console.error('[DevProjects] Inline save failed:', err);
+        alert('儲存失敗: ' + err.message);
+    }
+};
+
 window.handleDevProjectSort = function(field, event) {
     if (event) {
         event.preventDefault();
@@ -64,6 +142,57 @@ window.renderDevProjects = function(data) {
 
     // config-driven sort order helper
     const sysConfig = window.__systemConfig || {};
+    const hasActionColumn = window.__isDevActionMode || window.__devProjectsEditId;
+
+    function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        }[char]));
+    }
+
+    function renderInlineTextInput(devId, field, value) {
+        return `<input id="dev-inline-${field}-${devId}" class="dev-inline-input" type="text" value="${escapeHtml(value || '')}">`;
+    }
+
+    function renderInlineDateInput(devId, field, value) {
+        return `<input id="dev-inline-${field}-${devId}" class="dev-inline-input" type="date" value="${escapeHtml(value || '')}">`;
+    }
+
+    function renderInlineProgressInput(devId, value) {
+        const numericValue = parseInt(String(value || '').replace('%', ''), 10);
+        const safeValue = isNaN(numericValue) ? 0 : Math.min(Math.max(numericValue, 0), 100);
+        return `<input id="dev-inline-progress-${devId}" class="dev-inline-input dev-inline-number" type="number" min="0" max="100" value="${safeValue}">`;
+    }
+
+    function renderInlineSelect(devId, field, value, configKey) {
+        const configList = Array.isArray(sysConfig[configKey]) ? sysConfig[configKey] : [];
+        const options = [];
+        const seen = new Set();
+
+        if (value) {
+            options.push({ value, label: value });
+            seen.add(value);
+        }
+
+        configList.forEach(item => {
+            const optionValue = item.value || item.note || '';
+            const optionLabel = item.note || item.value || '';
+            if (!optionValue || seen.has(optionValue)) return;
+            options.push({ value: optionValue, label: optionLabel });
+            seen.add(optionValue);
+        });
+
+        return `
+            <select id="dev-inline-${field}-${devId}" class="dev-inline-input">
+                ${options.map(option => `<option value="${escapeHtml(option.value)}" ${option.value === value ? 'selected' : ''}>${escapeHtml(option.label)}</option>`).join('')}
+            </select>
+        `;
+    }
+
     function getSortOrder(type, val) {
         if (!val) return 9999;
         const list = sysConfig[type] || [];
@@ -249,6 +378,7 @@ window.renderDevProjects = function(data) {
     }
 
     const rows = sortedData.map((item, index) => {
+        const isEditing = window.__devProjectsEditId === item.devId;
         const scheduleHtml = `
             <div style="display: flex; flex-direction: column; gap: 4px; min-width: 110px;">
                 <div style="display: flex; justify-content: space-between; font-size: 0.8rem; gap: 8px;">
@@ -262,12 +392,29 @@ window.renderDevProjects = function(data) {
             </div>
         `;
 
-        const actionHtml = window.__isDevActionMode ? `
-            <div style="display: flex; gap: 12px; justify-content: center;">
-                <span style="cursor:pointer;" onclick="window.openDevProjectModal('${item.devId}')" title="編輯">✏️</span>
-                <span style="cursor:pointer;" onclick="window.deleteDevProject('${item.devId}')" title="刪除">🗑️</span>
+        const editScheduleHtml = `
+            <div style="display: flex; flex-direction: column; gap: 6px; min-width: 110px;">
+                ${renderInlineDateInput(item.devId, 'startDate', item.startDate)}
+                ${renderInlineDateInput(item.devId, 'estCompletionDate', item.estCompletionDate)}
             </div>
-        ` : '';
+        `;
+
+        let actionHtml = '';
+        if (isEditing) {
+            actionHtml = `
+                <div style="display: flex; gap: 6px; justify-content: center;">
+                    <button type="button" class="dev-inline-action primary" onclick="window.saveInlineDevProject('${item.devId}')">儲存</button>
+                    <button type="button" class="dev-inline-action" onclick="window.cancelInlineDevProject()">取消</button>
+                </div>
+            `;
+        } else if (window.__isDevActionMode) {
+            actionHtml = `
+                <div style="display: flex; gap: 6px; justify-content: center;">
+                    <button type="button" class="dev-inline-action" onclick="window.editInlineDevProject('${item.devId}')">編輯</button>
+                    <button type="button" class="dev-inline-action danger" onclick="window.deleteDevProject('${item.devId}')">刪除</button>
+                </div>
+            `;
+        }
 
         let oppHtml = '<span class="internal-ops-muted-badge">-</span>';
         if (item.assigneeCode && item.projectName) {
@@ -307,15 +454,15 @@ window.renderDevProjects = function(data) {
         return `
         <tr>
             <td>${index + 1}</td>
-            <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; font-size: 0.85rem;" title="${item.productName || ''}">${item.productName || '-'}</td>
+            <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; font-size: 0.85rem;" title="${item.productName || ''}">${isEditing ? renderInlineTextInput(item.devId, 'productName', item.productName) : (item.productName || '-')}</td>
             <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; font-size: 0.85rem;">${oppHtml}</td>
-            <td style="font-size: 0.85rem;">${item.featureName || '-'}</td>
+            <td style="font-size: 0.85rem;">${isEditing ? renderInlineTextInput(item.devId, 'featureName', item.featureName) : (item.featureName || '-')}</td>
             <td>${personnelHtml}</td>
-            <td style="width: 100px;">${getStageBadge(item.devStage || '-')}</td>
-            <td style="width: 90px;">${getStatusBadge(item.status || '-')}</td>
-            <td>${scheduleHtml}</td>
-            <td>${getCombinedProgressHtml(item.progress, item.startDate, item.estCompletionDate)}</td>
-            ${window.__isDevActionMode ? `<td style="vertical-align: middle; text-align: center;">${actionHtml}</td>` : ''}
+            <td style="width: 100px;">${isEditing ? renderInlineSelect(item.devId, 'devStage', item.devStage || '', '開發階段') : getStageBadge(item.devStage || '-')}</td>
+            <td style="width: 90px;">${isEditing ? renderInlineSelect(item.devId, 'status', item.status || '', '開發狀態') : getStatusBadge(item.status || '-')}</td>
+            <td>${isEditing ? editScheduleHtml : scheduleHtml}</td>
+            <td>${isEditing ? renderInlineProgressInput(item.devId, item.progress) : getCombinedProgressHtml(item.progress, item.startDate, item.estCompletionDate)}</td>
+            ${hasActionColumn ? `<td style="vertical-align: middle; text-align: center;">${actionHtml}</td>` : ''}
         </tr>
     `}).join('');
 
@@ -325,6 +472,42 @@ window.renderDevProjects = function(data) {
     };
 
     return `
+        <style>
+            .dev-inline-input {
+                width: 100%;
+                min-width: 0;
+                box-sizing: border-box;
+                padding: 4px 6px;
+                border: 1px solid var(--border-color);
+                border-radius: 5px;
+                background: var(--card-bg);
+                color: var(--text-primary);
+                font-size: 0.8rem;
+                line-height: 1.2;
+            }
+            .dev-inline-number {
+                width: 58px;
+                text-align: right;
+            }
+            .dev-inline-action {
+                padding: 4px 8px;
+                border: 1px solid var(--border-color);
+                border-radius: 5px;
+                background: var(--card-bg);
+                color: var(--text-secondary);
+                font-size: 0.78rem;
+                line-height: 1.2;
+                cursor: pointer;
+            }
+            .dev-inline-action.primary {
+                border-color: var(--accent-blue);
+                background: var(--accent-blue);
+                color: #fff;
+            }
+            .dev-inline-action.danger {
+                color: var(--accent-red);
+            }
+        </style>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 8px 12px 0;">
             <div style="font-size: 0.9rem; color: var(--text-secondary); font-weight: 500;">共 ${data.length} 筆</div>
             <button onclick="window.toggleDevTableActions()" class="internal-ops-btn">
@@ -343,7 +526,7 @@ window.renderDevProjects = function(data) {
                     <th onclick="window.handleDevProjectSort('status', event)" style="width: 90px; cursor:pointer; user-select:none;" title="點擊依狀態排序">狀態<span style="color:var(--accent-blue);">${getSortIcon('status')}</span></th>
                     <th>開發時程</th>
                     <th>進度</th>
-                    ${window.__isDevActionMode ? '<th style="width: 70px; text-align: center;">操作</th>' : ''}
+                    ${hasActionColumn ? '<th style="width: 100px; text-align: center;">操作</th>' : ''}
                 </tr>
             </thead>
             <tbody>${rows}</tbody>
