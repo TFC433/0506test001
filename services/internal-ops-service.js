@@ -144,7 +144,8 @@ class InternalOpsService {
             data.collaborators || '', data.devStage || '', data.status || '',
             data.progress || '', data.priority || '', data.startDate || '',
             data.estCompletionDate || '', data.actualCompletionDate || '',
-            data.dependencies || '', data.notes || '', now, 'TRUE', data.sortOrder || 999
+            data.dependencies || '', data.notes || '', now, 'TRUE', data.sortOrder || 999,
+            data.caseRelationType || ''
         ];
         
         await this.writer.appendRow(this.config.SHEETS.DEV_PROJECTS, newRow);
@@ -178,10 +179,11 @@ class InternalOpsService {
             data.notes !== undefined ? data.notes : existing.notes,
             now,
             existing.isActive ? 'TRUE' : 'FALSE',
-            data.sortOrder !== undefined ? data.sortOrder : existing.sortOrder
+            data.sortOrder !== undefined ? data.sortOrder : existing.sortOrder,
+            data.caseRelationType !== undefined ? data.caseRelationType : existing.caseRelationType
         ];
 
-        await this.writer.updateRow(this.config.SHEETS.DEV_PROJECTS, existing.rowIndex, updatedRow, 'T');
+        await this.writer.updateRow(this.config.SHEETS.DEV_PROJECTS, existing.rowIndex, updatedRow, 'U');
         this.reader.invalidateCache('devProjects');
         return { success: true };
     }
@@ -198,10 +200,11 @@ class InternalOpsService {
             existing.collaborators, existing.devStage, existing.status,
             existing.progress, existing.priority, existing.startDate,
             existing.estCompletionDate, existing.actualCompletionDate,
-            existing.dependencies, existing.notes, now, 'FALSE', existing.sortOrder
+            existing.dependencies, existing.notes, now, 'FALSE', existing.sortOrder,
+            existing.caseRelationType
         ];
 
-        await this.writer.updateRow(this.config.SHEETS.DEV_PROJECTS, existing.rowIndex, updatedRow, 'T');
+        await this.writer.updateRow(this.config.SHEETS.DEV_PROJECTS, existing.rowIndex, updatedRow, 'U');
         this.reader.invalidateCache('devProjects');
         return { success: true };
     }

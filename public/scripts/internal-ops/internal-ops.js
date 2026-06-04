@@ -62,7 +62,7 @@ window.loadInternalOpsPage = async function(params) {
                 <div class="dashboard-widget internal-ops-widget" style="width: 100%;">
                     <div class="widget-header internal-ops-header">
                         <h2 class="widget-title">開發 / 支援案件追蹤</h2>
-                        <button class="action-btn primary btn-sm" onclick="openDevProjectModal()">
+                        <button class="action-btn primary btn-sm" onclick="window.openDevProjectCreateInline()">
                             <span class="btn-text">新增</span>
                         </button>
                     </div>

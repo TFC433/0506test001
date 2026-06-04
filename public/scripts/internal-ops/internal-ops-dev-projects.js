@@ -36,6 +36,149 @@ if (typeof window.__devProjectsExpandedEditId === 'undefined') {
     window.__devProjectsExpandedEditId = null;
 }
 
+if (typeof window.__devProjectsCreateOpen === 'undefined') {
+    window.__devProjectsCreateOpen = false;
+}
+
+function rerenderDevProjectsInline() {
+    const container = document.getElementById('internal-ops-dev-projects-content');
+    if (container && window.__internalOpsDevProjectsData) {
+        container.innerHTML = window.renderDevProjects(window.__internalOpsDevProjectsData);
+    }
+    return container;
+}
+
+async function ensureDevProjectOpportunitiesLoaded(container) {
+    if ((window.__internalOpsOpportunities || []).length) return;
+    try {
+        const oppRes = await (typeof authedFetch === 'function' ? authedFetch('/api/opportunities') : fetch('/api/opportunities').then(r => r.json()));
+        window.__internalOpsOpportunities = Array.isArray(oppRes) ? oppRes : (oppRes && oppRes.data ? oppRes.data : []);
+        if (container && window.__internalOpsDevProjectsData) {
+            container.innerHTML = window.renderDevProjects(window.__internalOpsDevProjectsData);
+        }
+    } catch (err) {
+        console.error('[DevProjects] Opportunity list load failed:', err);
+        window.__internalOpsOpportunities = [];
+    }
+}
+
+window.openDevProjectCreateInline = async function() {
+    window.__devProjectsCreateOpen = true;
+    window.__devProjectsExpandedEditId = null;
+    const container = rerenderDevProjectsInline();
+    await ensureDevProjectOpportunitiesLoaded(container);
+};
+
+window.cancelCreateDevProjectInline = function() {
+    window.__devProjectsCreateOpen = false;
+    rerenderDevProjectsInline();
+};
+
+window.filterCreateDevProjectOpportunities = function() {
+    const searchInput = document.getElementById('create-projectSearch');
+    const select = document.getElementById('create-projectName');
+    if (!searchInput || !select) return;
+
+    const keyword = (searchInput.value || '').toLowerCase();
+    const opportunities = window.__internalOpsOpportunities || [];
+    const filtered = keyword
+        ? opportunities.filter(o => {
+            const name = (o.opportunityName || '').toLowerCase();
+            const company = (o.customerCompany || '').toLowerCase();
+            return name.includes(keyword) || company.includes(keyword);
+        })
+        : opportunities;
+    const currentValue = select.value;
+
+    select.innerHTML = window.renderExpandedOpportunityOptions(filtered);
+    if (currentValue && Array.from(select.options).some(opt => opt.value === currentValue)) {
+        select.value = currentValue;
+    }
+};
+
+window.syncCreateDevProgress = function(source) {
+    const slider = document.getElementById('create-progress-slider');
+    const input = document.getElementById('create-progress');
+    if (!slider || !input) return;
+
+    const rawValue = source === 'slider' ? slider.value : input.value;
+    const parsed = parseInt(rawValue, 10);
+    const value = isNaN(parsed) ? 0 : Math.min(Math.max(parsed, 0), 100);
+    slider.value = value;
+    input.value = value;
+};
+
+window.saveCreateDevProjectInline = async function() {
+    const getValue = (id) => document.getElementById(id)?.value || '';
+    const progressRaw = parseInt(getValue('create-progress'), 10);
+    const progressValue = isNaN(progressRaw) ? 0 : Math.min(Math.max(progressRaw, 0), 100);
+    const oppSelect = document.getElementById('create-projectName');
+    const selectedOption = oppSelect ? oppSelect.options[oppSelect.selectedIndex] : null;
+    const selectedOpportunityId = oppSelect ? oppSelect.value : '';
+    const selectedOpportunityName = selectedOption && selectedOption.value !== ''
+        ? (selectedOption.getAttribute('data-name') || selectedOption.text)
+        : '';
+    const collabsJoined = Array.from(document.querySelectorAll('input[data-create-collab]:checked'))
+        .map(input => input.value)
+        .join('｜');
+
+    const payload = {
+        productCode: getValue('create-productCode'),
+        productName: getValue('create-productName'),
+        projectName: selectedOpportunityName,
+        assigneeCode: selectedOpportunityId,
+        featureName: getValue('create-featureName'),
+        assigneeName: getValue('create-assigneeName'),
+        collaborators: collabsJoined,
+        devStage: getValue('create-devStage'),
+        status: getValue('create-status'),
+        progress: `${progressValue}%`,
+        startDate: getValue('create-startDate'),
+        estCompletionDate: getValue('create-estCompletionDate'),
+        dependencies: getValue('create-dependencies'),
+        caseRelationType: getValue('create-caseRelationType')
+    };
+
+    try {
+        const url = '/api/internal-ops/dev-projects';
+        let res;
+        if (typeof authedFetch === 'function') {
+            res = await authedFetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+        } else {
+            res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            }).then(r => r.json());
+        }
+
+        if (!res || res.success === false) {
+            throw new Error(res?.error || 'create failed');
+        }
+
+        window.__devProjectsCreateOpen = false;
+        if (typeof window.fetchAndRenderSection === 'function') {
+            window.fetchAndRenderSection('/api/internal-ops/dev-projects', window.renderDevProjects, 'internal-ops-dev-projects-content');
+        } else {
+            const container = document.getElementById('internal-ops-dev-projects-content');
+            if (container) {
+                const refreshed = await (typeof authedFetch === 'function'
+                    ? authedFetch('/api/internal-ops/dev-projects')
+                    : fetch('/api/internal-ops/dev-projects').then(r => r.json()));
+                const dataArray = Array.isArray(refreshed) ? refreshed : (refreshed && refreshed.success ? refreshed.data : null);
+                if (dataArray) container.innerHTML = window.renderDevProjects(dataArray);
+            }
+        }
+    } catch (err) {
+        console.error('[DevProjects] Inline create failed:', err);
+        alert('新增失敗: ' + err.message);
+    }
+};
+
 window.toggleExpandedDevProject = async function(devId) {
     window.__devProjectsExpandedEditId = window.__devProjectsExpandedEditId === devId ? null : devId;
     const container = document.getElementById('internal-ops-dev-projects-content');
@@ -114,6 +257,7 @@ window.saveExpandedDevProject = async function(devId) {
         .join('｜');
 
     const payload = {
+        productCode: getValue('exp-productCode'),
         productName: getValue('exp-productName'),
         projectName: selectedOpportunityName,
         assigneeCode: selectedOpportunityId,
@@ -124,7 +268,9 @@ window.saveExpandedDevProject = async function(devId) {
         status: getValue('exp-status'),
         progress: `${progressValue}%`,
         startDate: getValue('exp-startDate'),
-        estCompletionDate: getValue('exp-estCompletionDate')
+        estCompletionDate: getValue('exp-estCompletionDate'),
+        dependencies: getValue('exp-dependencies'),
+        caseRelationType: getValue('exp-caseRelationType')
     };
 
     try {
@@ -199,7 +345,7 @@ window.renderDevProjects = function(data) {
 
     // config-driven sort order helper
     const sysConfig = window.__systemConfig || {};
-    const hasActionColumn = window.__isDevActionMode || window.__devProjectsExpandedEditId;
+    const hasActionColumn = window.__isDevActionMode || window.__devProjectsExpandedEditId || window.__devProjectsCreateOpen;
     const visibleColumnCount = hasActionColumn ? 10 : 9;
 
     function escapeHtml(value) {
@@ -241,6 +387,28 @@ window.renderDevProjects = function(data) {
         return `<input id="exp-${field}-${devId}" class="dev-expanded-input" type="${type}" value="${escapeHtml(value || '')}">`;
     }
 
+    function renderCreateInput(field, value = '', type = 'text') {
+        return `<input id="create-${field}" class="dev-expanded-input" type="${type}" value="${escapeHtml(value || '')}">`;
+    }
+
+    function renderConfigSelect(devId, field, configKey, currentValue = '', emptyLabel = '') {
+        return `
+            <select id="exp-${field}-${devId}" class="dev-expanded-input">
+                <option value="">${escapeHtml(emptyLabel)}</option>
+                ${renderConfigOptions(configKey, currentValue)}
+            </select>
+        `;
+    }
+
+    function renderCreateConfigSelect(field, configKey, currentValue = '', emptyLabel = '') {
+        return `
+            <select id="create-${field}" class="dev-expanded-input">
+                <option value="">${escapeHtml(emptyLabel)}</option>
+                ${renderConfigOptions(configKey, currentValue)}
+            </select>
+        `;
+    }
+
     function renderExpandedProgress(devId, value) {
         const numericValue = parseInt(String(value || '').replace('%', ''), 10);
         const safeValue = isNaN(numericValue) ? 0 : Math.min(Math.max(numericValue, 0), 100);
@@ -267,15 +435,17 @@ window.renderDevProjects = function(data) {
 
     function renderOpportunitySelect(devId, item) {
         const opportunities = window.__internalOpsOpportunities || [];
+        const currentOpportunityId = item.assigneeCode || item.opportunityId || '';
+        const currentOpportunityName = item.projectName || item.opportunityName || '';
         const optionParts = ['<option value="" data-name="">-- 不連結機會 --</option>'];
         opportunities.forEach(o => {
             const name = o.opportunityName || '未命名機會';
             const company = o.customerCompany ? ` (${o.customerCompany})` : '';
-            const selected = o.opportunityId === item.assigneeCode ? 'selected' : '';
+            const selected = o.opportunityId === currentOpportunityId ? 'selected' : '';
             optionParts.push(`<option value="${escapeHtml(o.opportunityId || '')}" data-name="${escapeHtml(name)}" ${selected}>${escapeHtml(name + company)}</option>`);
         });
-        if (item.assigneeCode && item.projectName && !opportunities.some(o => o.opportunityId === item.assigneeCode)) {
-            optionParts.push(`<option value="${escapeHtml(item.assigneeCode)}" data-name="${escapeHtml(item.projectName)}" selected>${escapeHtml(item.projectName)}</option>`);
+        if (currentOpportunityId && currentOpportunityName && !opportunities.some(o => o.opportunityId === currentOpportunityId)) {
+            optionParts.push(`<option value="${escapeHtml(currentOpportunityId)}" data-name="${escapeHtml(currentOpportunityName)}" selected>${escapeHtml(currentOpportunityName)}</option>`);
         }
 
         return `
@@ -284,6 +454,53 @@ window.renderDevProjects = function(data) {
                 ${optionParts.join('')}
             </select>
         `;
+    }
+
+    function renderCreateOpportunitySelect() {
+        const opportunities = window.__internalOpsOpportunities || [];
+        return `
+            <input id="create-projectSearch" class="dev-expanded-input" type="text" placeholder="搜尋機會名稱或客戶..." oninput="window.filterCreateDevProjectOpportunities()">
+            <select id="create-projectName" class="dev-expanded-input">
+                ${window.renderExpandedOpportunityOptions(opportunities)}
+            </select>
+        `;
+    }
+
+    function renderParentDevProjectSelect(devId, currentValue = '') {
+        const projects = Array.isArray(window.__internalOpsDevProjectsData) ? window.__internalOpsDevProjectsData : [];
+        const optionParts = ['<option value="">-- 無主案件 --</option>'];
+        projects.forEach(project => {
+            if (!project.devId || project.devId === devId) return;
+            const caseName = project.productName || project.caseName || '未命名案件';
+            const category = project.productCode || project.caseCategory || '';
+            const relatedFeature = project.featureName || project.relatedFeature || '';
+            const detailParts = [category, relatedFeature].filter(Boolean);
+            const label = detailParts.length ? `${caseName}（${detailParts.join(' / ')}）` : caseName;
+            const selected = project.devId === currentValue ? 'selected' : '';
+            optionParts.push(`<option value="${escapeHtml(project.devId)}" ${selected}>${escapeHtml(label)}</option>`);
+        });
+        if (currentValue && !projects.some(project => project.devId === currentValue)) {
+            optionParts.push(`<option value="${escapeHtml(currentValue)}" selected>已選主案件</option>`);
+        }
+
+        return `<select id="exp-dependencies-${devId}" class="dev-expanded-input">${optionParts.join('')}</select>`;
+    }
+
+    function renderCreateParentDevProjectSelect(currentValue = '') {
+        const projects = Array.isArray(window.__internalOpsDevProjectsData) ? window.__internalOpsDevProjectsData : [];
+        const optionParts = ['<option value="">-- 無主案件 --</option>'];
+        projects.forEach(project => {
+            if (!project.devId) return;
+            const caseName = project.productName || project.caseName || '未命名案件';
+            const category = project.productCode || project.caseCategory || '';
+            const relatedFeature = project.featureName || project.relatedFeature || '';
+            const detailParts = [category, relatedFeature].filter(Boolean);
+            const label = detailParts.length ? `${caseName}（${detailParts.join(' / ')}）` : caseName;
+            const selected = project.devId === currentValue ? 'selected' : '';
+            optionParts.push(`<option value="${escapeHtml(project.devId)}" ${selected}>${escapeHtml(label)}</option>`);
+        });
+
+        return `<select id="create-dependencies" class="dev-expanded-input">${optionParts.join('')}</select>`;
     }
 
     function renderCollaboratorOptions(devId, selectedText = '') {
@@ -305,9 +522,35 @@ window.renderDevProjects = function(data) {
         }).join('');
     }
 
+    function renderCreateCollaboratorOptions() {
+        const members = Array.isArray(sysConfig['團隊成員']) ? sysConfig['團隊成員'] : [];
+        if (members.length === 0) {
+            return '<span class="dev-expanded-muted">無可用成員</span>';
+        }
+
+        return members.map((member, index) => {
+            const value = member.value || member.note || '';
+            const label = member.value || member.note || '';
+            return `
+                <label class="dev-expanded-check">
+                    <input id="create-collab-${index}" type="checkbox" value="${escapeHtml(value)}" data-create-collab>
+                    ${escapeHtml(label)}
+                </label>
+            `;
+        }).join('');
+    }
+
     function renderExpandedEditorRow(item) {
         const devId = item.devId;
         const progressValue = parseInt(String(item.progress || '').replace('%', ''), 10) || 0;
+        const caseCategoryValue = item.productCode || item.caseCategory || '';
+        const caseNameValue = item.productName || item.caseName || '';
+        const relatedFeatureValue = item.featureName || item.relatedFeature || '';
+        const ownerNameValue = item.assigneeName || item.ownerName || '';
+        const caseStageValue = item.devStage || item.caseStage || '';
+        const caseStatusValue = item.status || item.caseStatus || '';
+        const parentDevIdValue = item.dependencies || item.parentDevId || '';
+        const caseRelationTypeValue = item.caseRelationType || '';
 
         return `
             <tr class="dev-project-expanded-editor-row">
@@ -325,16 +568,28 @@ window.renderDevProjects = function(data) {
                                 <div class="dev-expanded-section-title">基本資訊</div>
                                 <div class="dev-expanded-section-grid">
                                     <label class="dev-expanded-field">
-                                        <span>開發案件名稱</span>
-                                        ${renderExpandedInput(devId, 'productName', item.productName)}
+                                        <span>案件分類</span>
+                                        ${renderConfigSelect(devId, 'productCode', '進度案件分類', caseCategoryValue)}
+                                    </label>
+                                    <label class="dev-expanded-field">
+                                        <span>案件名稱</span>
+                                        ${renderExpandedInput(devId, 'productName', caseNameValue)}
                                     </label>
                                     <label class="dev-expanded-field">
                                         <span>關聯功能</span>
-                                        ${renderExpandedInput(devId, 'featureName', item.featureName)}
+                                        ${renderExpandedInput(devId, 'featureName', relatedFeatureValue)}
                                     </label>
                                     <label class="dev-expanded-field dev-expanded-opportunity">
                                         <span>關聯機會</span>
                                         <div class="dev-expanded-stack">${renderOpportunitySelect(devId, item)}</div>
+                                    </label>
+                                    <label class="dev-expanded-field">
+                                        <span>主案件ID</span>
+                                        ${renderParentDevProjectSelect(devId, parentDevIdValue)}
+                                    </label>
+                                    <label class="dev-expanded-field">
+                                        <span>案件關係</span>
+                                        ${renderConfigSelect(devId, 'caseRelationType', '進度案件關係', caseRelationTypeValue, '無相關案件')}
                                     </label>
                                 </div>
                             </div>
@@ -343,7 +598,7 @@ window.renderDevProjects = function(data) {
                                 <div class="dev-expanded-section-grid">
                                     <label class="dev-expanded-field">
                                         <span>負責人</span>
-                                        <select id="exp-assigneeName-${devId}" class="dev-expanded-input">${renderMemberOptions(item.assigneeName || '')}</select>
+                                        <select id="exp-assigneeName-${devId}" class="dev-expanded-input">${renderMemberOptions(ownerNameValue)}</select>
                                     </label>
                                     <label class="dev-expanded-field dev-expanded-collab-field">
                                         <span>協作成員</span>
@@ -355,12 +610,12 @@ window.renderDevProjects = function(data) {
                                 <div class="dev-expanded-section-title">狀態 / 進度</div>
                                 <div class="dev-expanded-section-grid">
                                     <label class="dev-expanded-field">
-                                        <span>開發階段</span>
-                                        <select id="exp-devStage-${devId}" class="dev-expanded-input">${renderConfigOptions('開發階段', item.devStage || '')}</select>
+                                        <span>案件階段</span>
+                                        <select id="exp-devStage-${devId}" class="dev-expanded-input">${renderConfigOptions('開發階段', caseStageValue)}</select>
                                     </label>
                                     <label class="dev-expanded-field">
-                                        <span>狀態</span>
-                                        <select id="exp-status-${devId}" class="dev-expanded-input">${renderConfigOptions('開發狀態', item.status || '')}</select>
+                                        <span>案件狀態</span>
+                                        <select id="exp-status-${devId}" class="dev-expanded-input">${renderConfigOptions('開發狀態', caseStatusValue)}</select>
                                     </label>
                                     <label class="dev-expanded-field dev-expanded-progress-field">
                                         <span>進度</span>
@@ -378,6 +633,102 @@ window.renderDevProjects = function(data) {
                                     <label class="dev-expanded-field">
                                         <span>預計完成</span>
                                         ${renderExpandedInput(devId, 'estCompletionDate', item.estCompletionDate, 'date')}
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
+
+    function renderCreateEditorRow() {
+        return `
+            <tr class="dev-project-expanded-editor-row">
+                <td colspan="${visibleColumnCount}">
+                    <div class="dev-project-expanded-editor">
+                        <div class="dev-expanded-header">
+                            <div class="dev-expanded-title">新增開發案件</div>
+                            <div class="dev-expanded-actions">
+                                <button type="button" class="dev-expanded-btn primary" onclick="window.saveCreateDevProjectInline()">儲存</button>
+                                <button type="button" class="dev-expanded-btn" onclick="window.cancelCreateDevProjectInline()">取消</button>
+                            </div>
+                        </div>
+                        <div class="dev-expanded-sections">
+                            <div class="dev-expanded-section dev-expanded-section-basic">
+                                <div class="dev-expanded-section-title">基本資訊</div>
+                                <div class="dev-expanded-section-grid">
+                                    <label class="dev-expanded-field">
+                                        <span>案件分類</span>
+                                        ${renderCreateConfigSelect('productCode', '進度案件分類')}
+                                    </label>
+                                    <label class="dev-expanded-field">
+                                        <span>案件名稱</span>
+                                        ${renderCreateInput('productName')}
+                                    </label>
+                                    <label class="dev-expanded-field">
+                                        <span>關聯功能</span>
+                                        ${renderCreateInput('featureName')}
+                                    </label>
+                                    <label class="dev-expanded-field dev-expanded-opportunity">
+                                        <span>關聯機會</span>
+                                        <div class="dev-expanded-stack">${renderCreateOpportunitySelect()}</div>
+                                    </label>
+                                    <label class="dev-expanded-field">
+                                        <span>主案件ID</span>
+                                        ${renderCreateParentDevProjectSelect()}
+                                    </label>
+                                    <label class="dev-expanded-field">
+                                        <span>案件關係</span>
+                                        ${renderCreateConfigSelect('caseRelationType', '進度案件關係', '', '無相關案件')}
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="dev-expanded-section dev-expanded-section-people">
+                                <div class="dev-expanded-section-title">人員</div>
+                                <div class="dev-expanded-section-grid">
+                                    <label class="dev-expanded-field">
+                                        <span>負責人</span>
+                                        <select id="create-assigneeName" class="dev-expanded-input">${renderMemberOptions('')}</select>
+                                    </label>
+                                    <label class="dev-expanded-field dev-expanded-collab-field">
+                                        <span>協作成員</span>
+                                        <div class="dev-expanded-checks">${renderCreateCollaboratorOptions()}</div>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="dev-expanded-section dev-expanded-section-status">
+                                <div class="dev-expanded-section-title">狀態 / 進度</div>
+                                <div class="dev-expanded-section-grid">
+                                    <label class="dev-expanded-field">
+                                        <span>案件階段</span>
+                                        <select id="create-devStage" class="dev-expanded-input">${renderConfigOptions('開發階段', '')}</select>
+                                    </label>
+                                    <label class="dev-expanded-field">
+                                        <span>案件狀態</span>
+                                        <select id="create-status" class="dev-expanded-input">${renderConfigOptions('開發狀態', '')}</select>
+                                    </label>
+                                    <label class="dev-expanded-field dev-expanded-progress-field">
+                                        <span>進度</span>
+                                        <div class="dev-expanded-progress">
+                                            <input id="create-progress-slider" type="range" min="0" max="100" step="1" value="0" oninput="window.syncCreateDevProgress('slider')">
+                                            <input id="create-progress" class="dev-expanded-input dev-expanded-number" type="number" min="0" max="100" value="0" oninput="window.syncCreateDevProgress('number')">
+                                            <span>%</span>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="dev-expanded-section dev-expanded-section-schedule">
+                                <div class="dev-expanded-section-title">時程</div>
+                                <div class="dev-expanded-section-grid">
+                                    <label class="dev-expanded-field">
+                                        <span>開始日期</span>
+                                        ${renderCreateInput('startDate', '', 'date')}
+                                    </label>
+                                    <label class="dev-expanded-field">
+                                        <span>預計完成日</span>
+                                        ${renderCreateInput('estCompletionDate', '', 'date')}
                                     </label>
                                 </div>
                             </div>
@@ -572,6 +923,7 @@ window.renderDevProjects = function(data) {
         `;
     }
 
+    const createRow = window.__devProjectsCreateOpen ? renderCreateEditorRow() : '';
     const rows = sortedData.map((item, index) => {
         const isExpanded = window.__devProjectsExpandedEditId === item.devId;
         const scheduleHtml = `
@@ -598,14 +950,16 @@ window.renderDevProjects = function(data) {
         }
 
         let oppHtml = '<span class="internal-ops-muted-badge">-</span>';
-        if (item.assigneeCode && item.projectName) {
-            oppHtml = `<a href="#" title="${item.projectName || ''}" style="color: var(--accent-blue); text-decoration: none; font-weight: 600;" onclick="event.preventDefault(); window.CRM_APP.navigateTo('opportunity-details', {opportunityId: '${item.assigneeCode}'})">${item.projectName}</a>`;
-        } else if (item.projectName) {
-            oppHtml = `<strong title="${item.projectName || ''}" style="font-weight:600; color:var(--text-secondary);">${item.projectName}</strong>`;
+        const rowOpportunityId = item.assigneeCode || item.opportunityId || '';
+        const rowOpportunityName = item.projectName || item.opportunityName || '';
+        if (rowOpportunityId && rowOpportunityName) {
+            oppHtml = `<a href="#" title="${rowOpportunityName || ''}" style="color: var(--accent-blue); text-decoration: none; font-weight: 600;" onclick="event.preventDefault(); window.CRM_APP.navigateTo('opportunity-details', {opportunityId: '${rowOpportunityId}'})">${rowOpportunityName}</a>`;
+        } else if (rowOpportunityName) {
+            oppHtml = `<strong title="${rowOpportunityName || ''}" style="font-weight:600; color:var(--text-secondary);">${rowOpportunityName}</strong>`;
         }
 
         let personnelHtml = `<div style="display:flex; flex-direction:column; gap:4px; min-width:120px;">`;
-        const assigneeText = item.assigneeName || '-';
+        const assigneeText = item.assigneeName || item.ownerName || '-';
         personnelHtml += `
             <div style="display:grid; grid-template-columns:64px 1fr; column-gap:8px; font-size:0.8rem;">
                 <span style="color:var(--text-muted); white-space:nowrap;">負責人</span>
@@ -634,12 +988,12 @@ window.renderDevProjects = function(data) {
         const displayRow = `
         <tr>
             <td>${index + 1}</td>
-            <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; font-size: 0.85rem;" title="${item.productName || ''}">${item.productName || '-'}</td>
+            <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; font-size: 0.85rem;" title="${item.productName || item.caseName || ''}">${item.productName || item.caseName || '-'}</td>
             <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px; font-size: 0.85rem;">${oppHtml}</td>
-            <td style="font-size: 0.85rem;">${item.featureName || '-'}</td>
+            <td style="font-size: 0.85rem;">${item.featureName || item.relatedFeature || '-'}</td>
             <td>${personnelHtml}</td>
-            <td style="width: 100px;">${getStageBadge(item.devStage || '-')}</td>
-            <td style="width: 90px;">${getStatusBadge(item.status || '-')}</td>
+            <td style="width: 100px;">${getStageBadge(item.devStage || item.caseStage || '-')}</td>
+            <td style="width: 90px;">${getStatusBadge(item.status || item.caseStatus || '-')}</td>
             <td>${scheduleHtml}</td>
             <td>${getCombinedProgressHtml(item.progress, item.startDate, item.estCompletionDate)}</td>
             ${hasActionColumn ? `<td style="vertical-align: middle; text-align: center;">${actionHtml}</td>` : ''}
@@ -751,12 +1105,23 @@ window.renderDevProjects = function(data) {
                 min-width: 0;
                 box-sizing: border-box;
                 padding: 5px 7px;
-                border: 1px solid var(--border-color);
-                border-radius: 3px;
-                background: var(--primary-bg);
-                color: var(--text-primary);
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                background: #fff;
+                color: #111827;
                 font-size: 0.82rem;
                 line-height: 1.2;
+            }
+            .dev-project-expanded-editor textarea.dev-expanded-input,
+            .dev-project-expanded-editor select.dev-expanded-input,
+            .dev-project-expanded-editor input.dev-expanded-input {
+                background: #fff;
+                border-color: #d1d5db;
+            }
+            .dev-expanded-input:focus {
+                outline: none;
+                border-color: #9ca3af;
+                box-shadow: 0 0 0 1px rgba(156, 163, 175, 0.25);
             }
             .dev-expanded-number {
                 width: 50px;
@@ -770,6 +1135,12 @@ window.renderDevProjects = function(data) {
             .dev-expanded-progress input[type="range"] {
                 flex: 1;
                 min-width: 80px;
+                height: 24px;
+                box-sizing: border-box;
+                border: 1px solid #d1d5db;
+                border-radius: 4px;
+                background: #fff;
+                accent-color: var(--accent-blue);
             }
             .dev-expanded-checks {
                 display: flex;
@@ -842,14 +1213,14 @@ window.renderDevProjects = function(data) {
                     <th>關聯機會</th>
                     <th>關聯功能</th>
                     <th>人員</th>
-                    <th onclick="window.handleDevProjectSort('devStage', event)" style="width: 100px; cursor:pointer; user-select:none;" title="點擊依開發階段排序">開發階段<span style="color:var(--accent-blue);">${getSortIcon('devStage')}</span></th>
-                    <th onclick="window.handleDevProjectSort('status', event)" style="width: 90px; cursor:pointer; user-select:none;" title="點擊依狀態排序">狀態<span style="color:var(--accent-blue);">${getSortIcon('status')}</span></th>
+                    <th onclick="window.handleDevProjectSort('devStage', event)" style="width: 100px; cursor:pointer; user-select:none;" title="點擊依案件階段排序">案件階段<span style="color:var(--accent-blue);">${getSortIcon('devStage')}</span></th>
+                    <th onclick="window.handleDevProjectSort('status', event)" style="width: 90px; cursor:pointer; user-select:none;" title="點擊依案件狀態排序">案件狀態<span style="color:var(--accent-blue);">${getSortIcon('status')}</span></th>
                     <th>開發時程</th>
                     <th>進度</th>
                     ${hasActionColumn ? '<th style="width: 100px; text-align: center;">操作</th>' : ''}
                 </tr>
             </thead>
-            <tbody>${rows}</tbody>
+            <tbody>${createRow}${rows}</tbody>
         </table>
     `;
 };

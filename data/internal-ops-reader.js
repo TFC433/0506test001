@@ -23,7 +23,7 @@ const DEV_PROJECTS_FIELDS = {
     ASSIGNEE_CODE: 5, ASSIGNEE_NAME: 6, COLLABORATORS: 7, DEV_STAGE: 8, STATUS: 9,
     PROGRESS: 10, PRIORITY: 11, START_DATE: 12, EST_COMPLETION_DATE: 13,
     ACTUAL_COMPLETION_DATE: 14, DEPENDENCIES: 15, NOTES: 16, UPDATE_TIME: 17,
-    IS_ACTIVE: 18, SORT_ORDER: 19
+    IS_ACTIVE: 18, SORT_ORDER: 19, CASE_RELATION_TYPE: 20
 };
 
 const SUBSCRIPTION_OPS_FIELDS = {
@@ -70,30 +70,49 @@ class InternalOpsReader extends BaseReader {
     async getDevProjects() {
         return this._fetchAndCache(
             'devProjects',
-            `${this.config.SHEETS.DEV_PROJECTS}!A:T`,
+            `${this.config.SHEETS.DEV_PROJECTS}!A:U`,
             (row, index) => {
+                const productCode = row[DEV_PROJECTS_FIELDS.PRODUCT_CODE] || '';
+                const productName = row[DEV_PROJECTS_FIELDS.PRODUCT_NAME] || '';
+                const projectName = row[DEV_PROJECTS_FIELDS.PROJECT_NAME] || '';
+                const featureName = row[DEV_PROJECTS_FIELDS.FEATURE_NAME] || '';
+                const assigneeCode = row[DEV_PROJECTS_FIELDS.ASSIGNEE_CODE] || '';
+                const assigneeName = row[DEV_PROJECTS_FIELDS.ASSIGNEE_NAME] || '';
+                const devStage = row[DEV_PROJECTS_FIELDS.DEV_STAGE] || '';
+                const status = row[DEV_PROJECTS_FIELDS.STATUS] || '';
+                const dependencies = row[DEV_PROJECTS_FIELDS.DEPENDENCIES] || '';
                 return {
                     rowIndex: index + 2,
                     devId: row[DEV_PROJECTS_FIELDS.DEV_ID] || '',
-                    productCode: row[DEV_PROJECTS_FIELDS.PRODUCT_CODE] || '',
-                    productName: row[DEV_PROJECTS_FIELDS.PRODUCT_NAME] || '',
-                    projectName: row[DEV_PROJECTS_FIELDS.PROJECT_NAME] || '',
-                    featureName: row[DEV_PROJECTS_FIELDS.FEATURE_NAME] || '',
-                    assigneeCode: row[DEV_PROJECTS_FIELDS.ASSIGNEE_CODE] || '',
-                    assigneeName: row[DEV_PROJECTS_FIELDS.ASSIGNEE_NAME] || '',
+                    productCode,
+                    caseCategory: productCode,
+                    productName,
+                    caseName: productName,
+                    projectName,
+                    opportunityName: projectName,
+                    featureName,
+                    relatedFeature: featureName,
+                    assigneeCode,
+                    opportunityId: assigneeCode,
+                    assigneeName,
+                    ownerName: assigneeName,
                     collaborators: row[DEV_PROJECTS_FIELDS.COLLABORATORS] || '',
-                    devStage: row[DEV_PROJECTS_FIELDS.DEV_STAGE] || '',
-                    status: row[DEV_PROJECTS_FIELDS.STATUS] || '',
+                    devStage,
+                    caseStage: devStage,
+                    status,
+                    caseStatus: status,
                     progress: row[DEV_PROJECTS_FIELDS.PROGRESS] || '',
                     priority: row[DEV_PROJECTS_FIELDS.PRIORITY] || '',
                     startDate: row[DEV_PROJECTS_FIELDS.START_DATE] || '',
                     estCompletionDate: row[DEV_PROJECTS_FIELDS.EST_COMPLETION_DATE] || '',
                     actualCompletionDate: row[DEV_PROJECTS_FIELDS.ACTUAL_COMPLETION_DATE] || '',
-                    dependencies: row[DEV_PROJECTS_FIELDS.DEPENDENCIES] || '',
+                    dependencies,
+                    parentDevId: dependencies,
                     notes: row[DEV_PROJECTS_FIELDS.NOTES] || '',
                     updateTime: row[DEV_PROJECTS_FIELDS.UPDATE_TIME] || '',
                     isActive: (row[DEV_PROJECTS_FIELDS.IS_ACTIVE] || 'TRUE').toUpperCase() === 'TRUE',
-                    sortOrder: parseInt(row[DEV_PROJECTS_FIELDS.SORT_ORDER], 10) || 999
+                    sortOrder: parseInt(row[DEV_PROJECTS_FIELDS.SORT_ORDER], 10) || 999,
+                    caseRelationType: row[DEV_PROJECTS_FIELDS.CASE_RELATION_TYPE] || ''
                 };
             }
         );
