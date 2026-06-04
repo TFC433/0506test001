@@ -210,3 +210,5 @@ Explicit no-touch reminders:
 * Highcharts remnants must not be deleted until event charts are migrated.
 * `ProductDetailModal` must not be deleted until separately approved.
 * `repomix-packs/**` are generated and must not be hand-edited.
+
+Internal Ops Dev Projects remains Sheet-backed. The accepted Dev Projects sheet range is `A:U`, with `U = 案件關係`. Existing legacy keys are intentionally preserved for compatibility, while semantic aliases support current UI/product language. The accepted Dev Projects views are `案件導向` and `人員導向`. This module is not part of Supabase migration scope unless separately planned.

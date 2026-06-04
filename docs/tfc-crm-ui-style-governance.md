@@ -377,4 +377,55 @@ Opportunity Detail is the operational workflow / high-density CRM / Activity Hub
 
 The current operational SaaS visual direction is low-noise, high-density, restrained enterprise CRM tone, compact surfaces, subtle borders, small radius, and minimal decorative effects.
 
+## 15.1 Internal Ops Dev Projects UI Baseline
+
+Internal Ops / Dev Projects uses the accepted operational table/list language for `各種類型案件追蹤`.
+
+The title-level tabs are part of the section title area:
+
+```text
+各種類型案件追蹤 [案件導向] [人員導向]
+```
+
+View tabs are navigation state controls. They are not action buttons and must not be mixed visually with `新增` or `操作模式`.
+
+`案件導向` uses stable table/list language with this column language:
+
+```text
+# | 案件名稱 | 案件分類 | 關聯機會 | 關聯功能 | 人員 | 案件階段 | 案件狀態 | 開發時程 | 進度
+```
+
+`人員導向` uses the same list language, without the `人員` column because the person is the group header:
+
+```text
+# | 案件名稱 | 案件分類 | 關聯機會 | 關聯功能 | 案件階段 | 案件狀態 | 開發時程 | 進度
+```
+
+Relationship and role badges belong inside the `案件名稱` cell:
+
+* case view: `↳ [案件關係] case name`
+* member view: `↳ [主負責] case name` or `↳ [協作] case name`
+
+Avoid these Dev Projects regressions:
+
+* no card grid for member view
+* no standalone `案件關係` column
+* no chip-wall collaboration summary
+* no popup-modal-first editing for Dev Projects
+
+Badge color governance:
+
+* system settings `樣式` contains only a base hex color
+* frontend generates background, border, text color, padding, radius, and font rhythm
+* blank or invalid style falls back to `#616161`
+* `案件階段` maps to `開發階段`
+* `案件狀態` maps to `開發狀態`
+* `案件分類` maps to `進度案件分類`
+* `案件關係` maps to `進度案件關係`
+* workload badge maps to `負荷量表`
+
+Progress may show `超前` or `落後` beside progress when applicable. Normal progress status shows no extra tag.
+
+Dev Projects should remain compact, low-noise, operational SaaS UI: sharp table/list surfaces, restrained badges, readable primary case names, and muted secondary metadata.
+
 Do not perform global CSS extraction yet. Governance is by convention first, followed by module-by-module migration and user visual PASS / NG.

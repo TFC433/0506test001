@@ -146,6 +146,15 @@ Do not delete or modify these without separate approval:
 - Legacy event reader paths that preserve historical event visibility.
 - `repomix-packs/**` by hand.
 
+Internal Ops Dev Projects compatibility is protected during cleanup:
+
+- Do not treat Dev Projects legacy keys as dead code.
+- Do not remove legacy popup/modal code paths unless separately audited and approved.
+- Do not remove Sheet-backed `A:U` compatibility.
+- Do not rename payload keys for semantic cleanliness.
+- Do not collapse accepted `案件導向` or `人員導向` behaviors during cleanup.
+- Do not remove notes support.
+
 ## 9. Approval Gates For Future Cleanup Patches
 
 Every future cleanup patch must include:

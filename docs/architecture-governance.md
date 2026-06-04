@@ -1537,7 +1537,62 @@ Pending cleanup targets:
 
 ---
 
-# 29. Final Governance Principle
+# 29. Internal Ops Dev Projects Governance Baseline
+
+Internal Ops / Dev Projects / 進度追蹤 BETA is governed as an accepted Sheet-backed operational module.
+
+Current visible section title:
+
+```text
+各種類型案件追蹤
+```
+
+Dev Projects remains Google Sheet-backed. The accepted Dev Projects range is `A:U`, where column `U` is `案件關係`. The semantic field for `案件關係` is `caseRelationType`.
+
+Compatibility keys remain part of the active contract and must not be removed or renamed without separate migration approval:
+
+```text
+productCode
+productName
+projectName
+featureName
+assigneeCode
+assigneeName
+devStage
+status
+dependencies
+notes
+```
+
+Semantic aliases exist for current UI language and new reasoning where applicable:
+
+```text
+caseCategory
+caseName
+opportunityName
+relatedFeature
+opportunityId
+ownerName
+caseStage
+caseStatus
+parentDevId
+```
+
+Case-oriented view (`案件導向`) is grouped by `parentDevId` / `dependencies`. Only a two-level hierarchy is accepted. Child cases show `↳` and the relation badge inside the `案件名稱` cell. In normal mode, clicking the case name expands read-only notes. In maintenance mode, clicking the case name opens inline edit.
+
+Dev Projects create/edit is inline. Popup modal behavior is no longer the governing Dev Projects UX, even if compatibility code remains elsewhere. Notes are included in create/edit payloads and must not be removed during UI cleanup.
+
+Maintenance boundary:
+
+* normal mode is read-only except note expansion
+* maintenance/action mode enables editing
+* delete appears only inside the expanded editor in maintenance mode
+
+Member-oriented view (`人員導向`) is a title-level tab beside `案件導向`. It is grouped by person, uses the same list language as `案件導向`, and is read-only. Member rows use `↳ [主負責] case name` or `↳ [協作] case name`. All tasks are listed directly; do not replace the accepted view with collapse chips or summary-only cards. Workload score uses the existing workload config logic.
+
+---
+
+# 30. Final Governance Principle
 
 If the UI starts feeling like:
 
