@@ -124,8 +124,7 @@ window.saveExpandedDevProject = async function(devId) {
         status: getValue('exp-status'),
         progress: `${progressValue}%`,
         startDate: getValue('exp-startDate'),
-        estCompletionDate: getValue('exp-estCompletionDate'),
-        notes: getValue('exp-notes')
+        estCompletionDate: getValue('exp-estCompletionDate')
     };
 
     try {
@@ -321,51 +320,67 @@ window.renderDevProjects = function(data) {
                                 <button type="button" class="dev-expanded-btn" onclick="window.cancelExpandedDevProject()">取消</button>
                             </div>
                         </div>
-                        <div class="dev-expanded-grid">
-                            <label class="dev-expanded-field">
-                                <span>開發案件名稱</span>
-                                ${renderExpandedInput(devId, 'productName', item.productName)}
-                            </label>
-                            <label class="dev-expanded-field">
-                                <span>關聯機會</span>
-                                <div class="dev-expanded-stack">${renderOpportunitySelect(devId, item)}</div>
-                            </label>
-                            <label class="dev-expanded-field">
-                                <span>開發項目</span>
-                                ${renderExpandedInput(devId, 'featureName', item.featureName)}
-                            </label>
-                            <label class="dev-expanded-field">
-                                <span>負責人</span>
-                                <select id="exp-assigneeName-${devId}" class="dev-expanded-input">${renderMemberOptions(item.assigneeName || '')}</select>
-                            </label>
-                            <label class="dev-expanded-field">
-                                <span>開發階段</span>
-                                <select id="exp-devStage-${devId}" class="dev-expanded-input">${renderConfigOptions('開發階段', item.devStage || '')}</select>
-                            </label>
-                            <label class="dev-expanded-field">
-                                <span>狀態</span>
-                                <select id="exp-status-${devId}" class="dev-expanded-input">${renderConfigOptions('開發狀態', item.status || '')}</select>
-                            </label>
-                            <label class="dev-expanded-field">
-                                <span>進度</span>
-                                ${renderExpandedProgress(devId, progressValue)}
-                            </label>
-                            <label class="dev-expanded-field">
-                                <span>開始日期</span>
-                                ${renderExpandedInput(devId, 'startDate', item.startDate, 'date')}
-                            </label>
-                            <label class="dev-expanded-field">
-                                <span>預計完成</span>
-                                ${renderExpandedInput(devId, 'estCompletionDate', item.estCompletionDate, 'date')}
-                            </label>
-                            <label class="dev-expanded-field dev-expanded-wide">
-                                <span>協作成員</span>
-                                <div class="dev-expanded-checks">${renderCollaboratorOptions(devId, item.collaborators || '')}</div>
-                            </label>
-                            <label class="dev-expanded-field dev-expanded-full">
-                                <span>備註</span>
-                                <textarea id="exp-notes-${devId}" class="dev-expanded-input" rows="2">${escapeHtml(item.notes || '')}</textarea>
-                            </label>
+                        <div class="dev-expanded-sections">
+                            <div class="dev-expanded-section dev-expanded-section-basic">
+                                <div class="dev-expanded-section-title">基本資訊</div>
+                                <div class="dev-expanded-section-grid">
+                                    <label class="dev-expanded-field">
+                                        <span>開發案件名稱</span>
+                                        ${renderExpandedInput(devId, 'productName', item.productName)}
+                                    </label>
+                                    <label class="dev-expanded-field">
+                                        <span>關聯功能</span>
+                                        ${renderExpandedInput(devId, 'featureName', item.featureName)}
+                                    </label>
+                                    <label class="dev-expanded-field dev-expanded-opportunity">
+                                        <span>關聯機會</span>
+                                        <div class="dev-expanded-stack">${renderOpportunitySelect(devId, item)}</div>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="dev-expanded-section dev-expanded-section-people">
+                                <div class="dev-expanded-section-title">人員</div>
+                                <div class="dev-expanded-section-grid">
+                                    <label class="dev-expanded-field">
+                                        <span>負責人</span>
+                                        <select id="exp-assigneeName-${devId}" class="dev-expanded-input">${renderMemberOptions(item.assigneeName || '')}</select>
+                                    </label>
+                                    <label class="dev-expanded-field dev-expanded-collab-field">
+                                        <span>協作成員</span>
+                                        <div class="dev-expanded-checks">${renderCollaboratorOptions(devId, item.collaborators || '')}</div>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="dev-expanded-section dev-expanded-section-status">
+                                <div class="dev-expanded-section-title">狀態 / 進度</div>
+                                <div class="dev-expanded-section-grid">
+                                    <label class="dev-expanded-field">
+                                        <span>開發階段</span>
+                                        <select id="exp-devStage-${devId}" class="dev-expanded-input">${renderConfigOptions('開發階段', item.devStage || '')}</select>
+                                    </label>
+                                    <label class="dev-expanded-field">
+                                        <span>狀態</span>
+                                        <select id="exp-status-${devId}" class="dev-expanded-input">${renderConfigOptions('開發狀態', item.status || '')}</select>
+                                    </label>
+                                    <label class="dev-expanded-field dev-expanded-progress-field">
+                                        <span>進度</span>
+                                        ${renderExpandedProgress(devId, progressValue)}
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="dev-expanded-section dev-expanded-section-schedule">
+                                <div class="dev-expanded-section-title">時程</div>
+                                <div class="dev-expanded-section-grid">
+                                    <label class="dev-expanded-field">
+                                        <span>開始日期</span>
+                                        ${renderExpandedInput(devId, 'startDate', item.startDate, 'date')}
+                                    </label>
+                                    <label class="dev-expanded-field">
+                                        <span>預計完成</span>
+                                        ${renderExpandedInput(devId, 'estCompletionDate', item.estCompletionDate, 'date')}
+                                    </label>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </td>
@@ -641,50 +656,84 @@ window.renderDevProjects = function(data) {
     return `
         <style>
             .dev-project-expanded-editor-row td {
-                background: var(--secondary-bg);
-                padding: 10px 12px 14px;
+                background: var(--card-bg);
+                padding: 8px 12px 12px;
             }
             .dev-project-expanded-editor {
+                background: rgba(59, 130, 246, 0.07);
                 border: 1px solid var(--border-color);
-                border-radius: 6px;
-                background: var(--card-bg);
-                padding: 12px;
+                border-radius: 5px;
+                box-sizing: border-box;
+                padding: 8px 10px;
                 box-shadow: none;
             }
             .dev-expanded-header {
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
-                gap: 12px;
-                padding-bottom: 10px;
-                margin-bottom: 10px;
+                gap: 10px;
+                padding-bottom: 7px;
+                margin-bottom: 8px;
                 border-bottom: 1px solid var(--border-color);
             }
             .dev-expanded-title {
-                font-size: 0.9rem;
+                font-size: 0.82rem;
                 font-weight: 600;
                 color: var(--text-primary);
             }
             .dev-expanded-actions {
                 display: flex;
-                gap: 6px;
+                gap: 10px;
                 align-items: center;
             }
-            .dev-expanded-grid {
+            .dev-expanded-sections {
                 display: grid;
-                grid-template-columns: repeat(4, minmax(130px, 1fr));
-                gap: 10px 12px;
+                grid-template-columns: minmax(260px, 1.2fr) minmax(220px, 0.95fr);
+                gap: 8px 10px;
+            }
+            .dev-expanded-section {
+                border: 1px solid color-mix(in srgb, var(--border-color) 62%, transparent);
+                border-radius: 4px;
+                padding: 7px 8px;
+                background: color-mix(in srgb, var(--primary-bg) 54%, transparent);
+                min-width: 0;
+            }
+            .dev-expanded-section-basic {
+                grid-column: span 2;
+            }
+            .dev-expanded-section-title {
+                color: var(--text-secondary);
+                font-size: 0.74rem;
+                font-weight: 600;
+                line-height: 1;
+                margin-bottom: 6px;
+            }
+            .dev-expanded-section-grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(120px, 1fr));
+                gap: 6px 8px;
+            }
+            .dev-expanded-section-basic .dev-expanded-section-grid {
+                grid-template-columns: minmax(140px, 0.9fr) minmax(130px, 0.85fr) minmax(220px, 1.25fr);
+            }
+            .dev-expanded-section-status .dev-expanded-section-grid {
+                grid-template-columns: minmax(110px, 0.8fr) minmax(100px, 0.75fr) minmax(180px, 1.1fr);
             }
             .dev-expanded-field {
                 display: flex;
                 flex-direction: column;
-                gap: 4px;
+                gap: 3px;
                 min-width: 0;
+                color: var(--text-muted);
+                font-size: 0.7rem;
+                line-height: 1.25;
             }
             .dev-expanded-field > span {
+                display: block;
                 color: var(--text-muted);
-                font-size: 0.75rem;
-                font-weight: 600;
+                font-size: 0.7rem;
+                font-weight: 500;
+                margin-bottom: 1px;
             }
             .dev-expanded-wide {
                 grid-column: span 2;
@@ -695,76 +744,87 @@ window.renderDevProjects = function(data) {
             .dev-expanded-stack {
                 display: flex;
                 flex-direction: column;
-                gap: 6px;
+                gap: 5px;
             }
             .dev-expanded-input {
                 width: 100%;
                 min-width: 0;
                 box-sizing: border-box;
-                padding: 6px 8px;
+                padding: 5px 7px;
                 border: 1px solid var(--border-color);
-                border-radius: 5px;
-                background: var(--card-bg);
+                border-radius: 3px;
+                background: var(--primary-bg);
                 color: var(--text-primary);
-                font-size: 0.8rem;
+                font-size: 0.82rem;
                 line-height: 1.2;
             }
             .dev-expanded-number {
-                width: 54px;
+                width: 50px;
                 text-align: right;
             }
             .dev-expanded-progress {
                 display: flex;
                 align-items: center;
-                gap: 8px;
+                gap: 7px;
             }
             .dev-expanded-progress input[type="range"] {
                 flex: 1;
-                min-width: 90px;
+                min-width: 80px;
             }
             .dev-expanded-checks {
                 display: flex;
                 flex-wrap: wrap;
-                gap: 6px;
-                max-height: 72px;
+                gap: 4px;
+                max-height: 66px;
                 overflow-y: auto;
             }
             .dev-expanded-check {
                 display: inline-flex;
                 align-items: center;
-                gap: 4px;
-                padding: 3px 7px;
+                gap: 3px;
+                padding: 2px 5px;
                 border: 1px solid var(--border-color);
-                border-radius: 5px;
-                background: var(--card-bg);
+                border-radius: 3px;
+                background: transparent;
                 color: var(--text-secondary);
                 font-size: 0.78rem;
+                font-weight: 400;
+                line-height: 1;
             }
             .dev-expanded-muted {
                 color: var(--text-muted);
                 font-size: 0.8rem;
             }
             .dev-expanded-btn {
-                padding: 4px 8px;
-                border: 1px solid var(--border-color);
-                border-radius: 5px;
-                background: var(--card-bg);
-                color: var(--text-secondary);
-                font-size: 0.78rem;
-                line-height: 1.2;
+                padding: 1px 2px;
+                border: 0;
+                border-radius: 0;
+                background: transparent;
+                color: var(--text-muted);
+                font-size: 0.73rem;
+                line-height: 1;
                 cursor: pointer;
             }
+            .dev-expanded-btn:hover {
+                color: var(--text-primary);
+            }
             .dev-expanded-btn.primary {
-                border-color: var(--accent-blue);
-                background: var(--accent-blue);
-                color: #fff;
+                color: var(--accent-blue);
+                font-weight: 600;
             }
             .dev-expanded-btn.danger {
+                color: var(--text-muted);
+            }
+            .dev-expanded-btn.danger:hover {
                 color: var(--accent-red);
             }
             @media (max-width: 1100px) {
-                .dev-expanded-grid {
+                .dev-expanded-sections,
+                .dev-expanded-section-basic,
+                .dev-expanded-section-basic .dev-expanded-section-grid,
+                .dev-expanded-section-status .dev-expanded-section-grid {
                     grid-template-columns: repeat(2, minmax(140px, 1fr));
+                    grid-column: span 2;
                 }
             }
         </style>
