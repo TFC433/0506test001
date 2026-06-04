@@ -7,7 +7,7 @@
  * @changelog
  * - [1.8.10] UI Patch: Tokenized Internal Ops widgets, tables, buttons, and modal surfaces for operational SaaS contrast and radius alignment.
  * - [1.8.9] UI Fix Patch: Removed extra inline padding from internal-ops-container to fix double padding issue and align page width with other modules.
- * - [1.8.8] UI Polish Patch: Renamed Dev Projects section title to "開發 / 支援案件追蹤".
+ * - [1.8.8] UI Polish Patch: Renamed Dev Projects section title to "各種類型案件追蹤".
  * - [1.8.7] Debug Patch: Injected focused trace logs for dp-status to monitor data flow consistency from config to submit payload.
  * - [1.8.6] Debug Patch: Hardened dp-status restore logic with string trimming.
  * - [1.8.5] Logic Patch: Aligned dp-status modal population strictly with dp-devStage, removing all fallback and legacy "(保留)" logic.
@@ -61,7 +61,7 @@ window.loadInternalOpsPage = async function(params) {
                 
                 <div class="dashboard-widget internal-ops-widget" style="width: 100%;">
                     <div class="widget-header internal-ops-header">
-                        <h2 class="widget-title">開發 / 支援案件追蹤</h2>
+                        <h2 class="widget-title">各種類型案件追蹤</h2>
                         <button class="action-btn primary btn-sm" onclick="window.openDevProjectCreateInline()">
                             <span class="btn-text">新增</span>
                         </button>
