@@ -48,12 +48,22 @@ if (typeof window.__devProjectsViewMode === 'undefined') {
     window.__devProjectsViewMode = 'case';
 }
 
+if (typeof window.__devProjectsCaseGroupMode === 'undefined') {
+    window.__devProjectsCaseGroupMode = 'none';
+}
+
 const DEV_PROJECT_COMPLETED_STATUS = '\u5df2\u5b8c\u6210';
 const DEV_PROJECT_ARCHIVED_STATUS = '\u5c01\u5b58';
 const DEV_PROJECT_ARCHIVED_GROUP_LABEL = '\u5c01\u5b58\u6848\u4ef6';
 const DEV_PROJECT_ARCHIVE_HELPER_NOTE = '\u5c01\u5b58\u5f8c\uff0c\u6848\u4ef6\u6703\u79fb\u81f3\u5e95\u90e8\u300c\u5c01\u5b58\u6848\u4ef6\u300d\u7fa4\u7d44\uff1b\u518d\u6b21\u53d6\u6d88\u52fe\u9078\u53ef\u56de\u5230\u4e3b\u5217\u8868\u3002';
 const DEV_PROJECT_COMPLETED_LOCK_NOTE = '\u9032\u5ea6\u9054 100% \u6642\uff0c\u7cfb\u7d71\u6703\u81ea\u52d5\u5c07\u958b\u767c\u72c0\u614b\u9396\u5b9a\u70ba\u300c\u5df2\u5b8c\u6210\u300d\u3002\u82e5\u9700\u6062\u5fa9\u9032\u884c\u4e2d\uff0c\u8acb\u5148\u5c07\u9032\u5ea6\u8abf\u6574\u70ba 99% \u4ee5\u4e0b\u3002';
 const DEV_PROJECT_CREATE_OWNER_PLACEHOLDER = '\u8acb\u9078\u64c7';
+const DEV_PROJECT_DISPLAY_MODE_LABEL = '\u986f\u793a\u65b9\u5f0f';
+const DEV_PROJECT_GROUP_LABEL = '\u5206\u7d44';
+const DEV_PROJECT_GROUP_NONE_LABEL = '\u4e0d\u5206\u7d44';
+const DEV_PROJECT_GROUP_CATEGORY_LABEL = '\u6848\u4ef6\u5206\u985e';
+const DEV_PROJECT_GROUP_STATUS_LABEL = '\u6848\u4ef6\u72c0\u614b';
+const DEV_PROJECT_UNGROUPED_LABEL = '\u672a\u5206\u985e';
 
 function getDevClampedProgress(rawValue) {
     const parsed = parseInt(rawValue, 10);
@@ -99,12 +109,33 @@ function isExpandedDevArchiveAvailable(devId) {
     return !!archiveWrap && archiveWrap.style.display !== 'none';
 }
 
+window.setDevProjectsCaseGroupMode = function(mode) {
+    if (!['none', 'category', 'status'].includes(mode)) return;
+    window.__devProjectsCaseGroupMode = mode;
+    rerenderDevProjectsInline();
+};
+
 
 function updateDevProjectsViewTabs() {
     const activeMode = window.__devProjectsViewMode === 'member' ? 'member' : 'case';
     document.querySelectorAll('[data-dev-project-view-tab]').forEach(btn => {
         btn.classList.toggle('is-active', btn.getAttribute('data-dev-project-view-tab') === activeMode);
     });
+    const groupHost = document.getElementById('dev-project-case-group-controls-host');
+    if (groupHost) {
+        groupHost.innerHTML = activeMode === 'case' ? renderDevProjectsCaseGroupControls() : '';
+    }
+}
+
+function renderDevProjectsCaseGroupControls() {
+    return `
+        <span class="dev-case-group-controls">
+            <span class="dev-case-group-label">${DEV_PROJECT_GROUP_LABEL}</span>
+            <button type="button" onclick="window.setDevProjectsCaseGroupMode('none')" class="internal-ops-btn dev-case-group-btn ${window.__devProjectsCaseGroupMode === 'none' ? 'is-active' : ''}">${DEV_PROJECT_GROUP_NONE_LABEL}</button>
+            <button type="button" onclick="window.setDevProjectsCaseGroupMode('category')" class="internal-ops-btn dev-case-group-btn ${window.__devProjectsCaseGroupMode === 'category' ? 'is-active' : ''}">${DEV_PROJECT_GROUP_CATEGORY_LABEL}</button>
+            <button type="button" onclick="window.setDevProjectsCaseGroupMode('status')" class="internal-ops-btn dev-case-group-btn ${window.__devProjectsCaseGroupMode === 'status' ? 'is-active' : ''}">${DEV_PROJECT_GROUP_STATUS_LABEL}</button>
+        </span>
+    `;
 }
 
 function rerenderDevProjectsInline() {
@@ -1029,7 +1060,46 @@ window.renderDevProjects = function(data) {
             };
         });
     }
-    const activeCaseRows = normalizeSameSectionHierarchyRows(buildGroupedDevProjectRows(activeItems), activeItems);
+
+    function getCaseGroupValue(item, mode) {
+        if (mode === 'category') return item.productCode || item.caseCategory || DEV_PROJECT_UNGROUPED_LABEL;
+        if (mode === 'status') return item.status || item.caseStatus || DEV_PROJECT_UNGROUPED_LABEL;
+        return DEV_PROJECT_UNGROUPED_LABEL;
+    }
+
+    function getCaseGroupSortType(mode) {
+        if (mode === 'category') return '\u9032\u5ea6\u6848\u4ef6\u5206\u985e';
+        if (mode === 'status') return '\u958b\u767c\u72c0\u614b';
+        return '';
+    }
+
+    function buildCaseGroupedDisplayRows(items, mode) {
+        if (mode === 'none') {
+            return normalizeSameSectionHierarchyRows(buildGroupedDevProjectRows(items), items);
+        }
+
+        const grouped = new Map();
+        items.forEach(item => {
+            const groupValue = getCaseGroupValue(item, mode);
+            if (!grouped.has(groupValue)) grouped.set(groupValue, []);
+            grouped.get(groupValue).push(item);
+        });
+
+        const sortType = getCaseGroupSortType(mode);
+        const groups = Array.from(grouped.entries()).sort(([a], [b]) => {
+            const aOrder = sortType ? getSortOrder(sortType, a) : 9999;
+            const bOrder = sortType ? getSortOrder(sortType, b) : 9999;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return a.localeCompare(b, 'zh-Hant');
+        });
+
+        return groups.flatMap(([label, groupItems]) => [
+            { __caseGroupSeparator: true, __caseGroupLabel: label },
+            ...normalizeSameSectionHierarchyRows(buildGroupedDevProjectRows(groupItems), groupItems)
+        ]);
+    }
+
+    const activeCaseRows = buildCaseGroupedDisplayRows(activeItems, window.__devProjectsCaseGroupMode || 'none');
     const archivedCaseRows = normalizeSameSectionHierarchyRows(buildGroupedDevProjectRows(archivedItems), archivedItems);
 
     // [Logic Preserved] Config mapping and trace logs
@@ -1077,6 +1147,14 @@ window.renderDevProjects = function(data) {
         return `
             <tr class="dev-archived-separator-row">
                 <td colspan="${colspan}"><span>${DEV_PROJECT_ARCHIVED_GROUP_LABEL}</span></td>
+            </tr>
+        `;
+    }
+
+    function renderCaseGroupSeparatorRow(colspan, label) {
+        return `
+            <tr class="dev-case-group-separator-row">
+                <td colspan="${colspan}"><span>${escapeHtml(label)}</span></td>
             </tr>
         `;
     }
@@ -1445,6 +1523,7 @@ window.renderDevProjects = function(data) {
         ? [...activeCaseRows, { __archivedSeparator: true }, ...archivedCaseRows]
         : activeCaseRows;
     const rows = caseRows.map((item) => {
+        if (item.__caseGroupSeparator) return renderCaseGroupSeparatorRow(visibleColumnCount, item.__caseGroupLabel);
         if (item.__archivedSeparator) return renderArchivedSeparatorRow(visibleColumnCount);
         const isExpanded = window.__devProjectsExpandedEditId === item.devId;
         const isNoteExpanded = !window.__isDevActionMode && window.__devProjectsExpandedNoteId === item.devId;
@@ -1855,6 +1934,18 @@ window.renderDevProjects = function(data) {
                 border-left: 2px solid var(--border-color);
                 padding-left: 8px;
             }
+            .dev-case-group-separator-row td {
+                background: color-mix(in srgb, var(--primary-bg) 44%, transparent);
+                color: var(--text-muted);
+                font-size: 0.76rem;
+                font-weight: 600;
+                padding: 6px 12px;
+            }
+            .dev-case-group-separator-row span {
+                display: inline-block;
+                border-left: 2px solid var(--border-color);
+                padding-left: 8px;
+            }
             .dev-case-name-cell {
                 display: flex;
                 align-items: center;
@@ -1958,32 +2049,55 @@ window.renderDevProjects = function(data) {
                 color: var(--text-primary);
                 background: color-mix(in srgb, var(--primary-bg) 68%, transparent);
             }
+            .dev-case-group-controls {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                margin-left: 4px;
+                padding-left: 10px;
+                border-left: 1px solid var(--border-color);
+            }
+            .dev-case-group-label {
+                color: var(--text-muted);
+                font-size: 0.74rem;
+                font-weight: 500;
+                white-space: nowrap;
+            }
+            .dev-header-control-label {
+                color: var(--text-muted);
+                font-size: 0.74rem;
+                font-weight: 500;
+                white-space: nowrap;
+            }
             .dev-project-view-tabs {
                 display: inline-flex;
                 align-items: center;
+                gap: 5px;
+            }
+            .dev-project-view-tab,
+            .dev-case-group-btn {
+                min-height: 24px;
+                padding: 3px 8px;
                 border: 1px solid var(--border-color);
                 border-radius: 5px;
-                overflow: hidden;
-                background: color-mix(in srgb, var(--primary-bg) 62%, transparent);
-            }
-            .dev-project-view-tab {
-                border: 0;
-                border-right: 1px solid var(--border-color);
                 background: transparent;
                 color: var(--text-muted);
-                padding: 4px 9px;
                 font-size: 0.76rem;
+                font-weight: 500;
                 line-height: 1;
                 cursor: pointer;
             }
-            .dev-project-view-tab:last-child {
-                border-right: 0;
+            .dev-project-view-tab:hover,
+            .dev-case-group-btn:hover {
+                color: var(--text-primary);
+                background: color-mix(in srgb, var(--primary-bg) 68%, transparent);
             }
-            .dev-project-view-tab.is-active {
-                background: color-mix(in srgb, var(--accent-blue) 12%, var(--card-bg));
+            .dev-project-view-tab.is-active,
+            .dev-case-group-btn.is-active {
+                background: color-mix(in srgb, var(--accent-blue) 10%, transparent);
                 color: var(--accent-blue);
                 font-weight: 600;
-                box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-blue) 38%, transparent);
+                border-color: color-mix(in srgb, var(--accent-blue) 45%, var(--border-color));
             }
             .dev-member-view {
                 display: flex;

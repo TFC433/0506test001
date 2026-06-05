@@ -63,10 +63,12 @@ window.loadInternalOpsPage = async function(params) {
                     <div class="widget-header internal-ops-header">
                         <h2 class="widget-title" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                             <span>各種類型案件追蹤</span>
+                            <span class="dev-header-control-label">\u986f\u793a\u65b9\u5f0f</span>
                             <span class="dev-project-view-tabs" role="tablist" aria-label="Dev Projects view mode">
-                                <button type="button" data-dev-project-view-tab="case" class="dev-project-view-tab is-active" onclick="window.toggleDevProjectsViewMode && window.toggleDevProjectsViewMode('case')">案件導向</button>
-                                <button type="button" data-dev-project-view-tab="member" class="dev-project-view-tab" onclick="window.toggleDevProjectsViewMode && window.toggleDevProjectsViewMode('member')">人員導向</button>
+                                <button type="button" data-dev-project-view-tab="case" class="dev-project-view-tab is-active" onclick="window.toggleDevProjectsViewMode && window.toggleDevProjectsViewMode('case')">\u6848\u4ef6\u5c0e\u5411</button>
+                                <button type="button" data-dev-project-view-tab="member" class="dev-project-view-tab" onclick="window.toggleDevProjectsViewMode && window.toggleDevProjectsViewMode('member')">\u4eba\u54e1\u5c0e\u5411</button>
                             </span>
+                            <span id="dev-project-case-group-controls-host"></span>
                         </h2>
                         <button class="action-btn primary btn-sm" onclick="window.openDevProjectCreateInline()">
                             <span class="btn-text">新增</span>
