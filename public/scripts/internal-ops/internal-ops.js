@@ -80,14 +80,6 @@ window.loadInternalOpsPage = async function(params) {
 
                 <div class="dashboard-widget internal-ops-widget" style="width: 100%;">
                     <div class="widget-header internal-ops-header">
-                        <h2 class="widget-title">團隊成員負荷</h2>
-                    </div>
-                    <div class="widget-content internal-ops-content with-pad" id="internal-ops-team-workload-content" style="overflow-x: auto;">
-                    </div>
-                </div>
-
-                <div class="dashboard-widget internal-ops-widget" style="width: 100%;">
-                    <div class="widget-header internal-ops-header">
                         <h2 class="widget-title">訂閱制管理</h2>
                         <button class="action-btn primary btn-sm" onclick="alert('TODO: 新增訂閱紀錄 開發中')">
                             <span class="btn-text">新增</span>
@@ -277,7 +269,6 @@ window.loadInternalOpsPage = async function(params) {
     }
 
     await Promise.all([
-        fetchAndRenderSection('/api/internal-ops/dev-projects', window.renderTeamWorkload, 'internal-ops-team-workload-content'),
         fetchAndRenderSection('/api/internal-ops/dev-projects', window.renderDevProjects, 'internal-ops-dev-projects-content'),
         fetchAndRenderSection('/api/internal-ops/subscription-ops', window.renderSubscriptions, 'internal-ops-subscriptions-content')
     ]);
@@ -579,7 +570,6 @@ window.submitDevProject = async function(event) {
         if (res && res.success !== false && !res.error) {
             closeDevProjectModal();
             fetchAndRenderSection('/api/internal-ops/dev-projects', window.renderDevProjects, 'internal-ops-dev-projects-content');
-            fetchAndRenderSection('/api/internal-ops/dev-projects', window.renderTeamWorkload, 'internal-ops-team-workload-content');
         } else {
             alert('儲存失敗: ' + (res.error || '未知錯誤'));
         }
@@ -604,7 +594,6 @@ window.deleteDevProject = async function(devId) {
         
         if (res && res.success !== false && !res.error) {
             fetchAndRenderSection('/api/internal-ops/dev-projects', window.renderDevProjects, 'internal-ops-dev-projects-content');
-            fetchAndRenderSection('/api/internal-ops/dev-projects', window.renderTeamWorkload, 'internal-ops-team-workload-content');
         } else {
             alert('刪除失敗: ' + (res.error || '未知錯誤'));
         }
