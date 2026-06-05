@@ -48,6 +48,58 @@ if (typeof window.__devProjectsViewMode === 'undefined') {
     window.__devProjectsViewMode = 'case';
 }
 
+const DEV_PROJECT_COMPLETED_STATUS = '\u5df2\u5b8c\u6210';
+const DEV_PROJECT_ARCHIVED_STATUS = '\u5c01\u5b58';
+const DEV_PROJECT_ARCHIVED_GROUP_LABEL = '\u5c01\u5b58\u6848\u4ef6';
+const DEV_PROJECT_ARCHIVE_HELPER_NOTE = '\u5c01\u5b58\u5f8c\uff0c\u6848\u4ef6\u6703\u79fb\u81f3\u5e95\u90e8\u300c\u5c01\u5b58\u6848\u4ef6\u300d\u7fa4\u7d44\uff1b\u518d\u6b21\u53d6\u6d88\u52fe\u9078\u53ef\u56de\u5230\u4e3b\u5217\u8868\u3002';
+const DEV_PROJECT_COMPLETED_LOCK_NOTE = '\u9032\u5ea6\u9054 100% \u6642\uff0c\u7cfb\u7d71\u6703\u81ea\u52d5\u5c07\u958b\u767c\u72c0\u614b\u9396\u5b9a\u70ba\u300c\u5df2\u5b8c\u6210\u300d\u3002\u82e5\u9700\u6062\u5fa9\u9032\u884c\u4e2d\uff0c\u8acb\u5148\u5c07\u9032\u5ea6\u8abf\u6574\u70ba 99% \u4ee5\u4e0b\u3002';
+const DEV_PROJECT_CREATE_OWNER_PLACEHOLDER = '\u8acb\u9078\u64c7';
+
+function getDevClampedProgress(rawValue) {
+    const parsed = parseInt(rawValue, 10);
+    return isNaN(parsed) ? 0 : Math.min(Math.max(parsed, 0), 100);
+}
+
+function syncDevProgressCompletionLock(progressValue, statusId, noteId) {
+    const statusSelect = document.getElementById(statusId);
+    const note = document.getElementById(noteId);
+    const isCompleted = progressValue >= 100;
+
+    if (statusSelect) {
+        if (isCompleted) {
+            if (!Array.from(statusSelect.options).some(option => option.value === DEV_PROJECT_COMPLETED_STATUS)) {
+                statusSelect.add(new Option(DEV_PROJECT_COMPLETED_STATUS, DEV_PROJECT_COMPLETED_STATUS));
+            }
+            statusSelect.value = DEV_PROJECT_COMPLETED_STATUS;
+        }
+        statusSelect.disabled = isCompleted;
+    }
+    if (note) note.style.display = isCompleted ? 'block' : 'none';
+}
+
+function syncExpandedDevArchiveState(devId, progressValue) {
+    const archiveWrap = document.getElementById(`exp-archive-wrap-${devId}`);
+    const archiveInput = document.getElementById(`exp-archive-${devId}`);
+    if (!archiveWrap || !archiveInput) return;
+
+    const wasArchived = archiveInput.getAttribute('data-original-archived') === 'true';
+    const shouldShow = progressValue >= 100 || wasArchived;
+    archiveWrap.style.display = shouldShow ? 'flex' : 'none';
+    if (!shouldShow) {
+        archiveInput.checked = false;
+    }
+}
+
+function isExpandedDevArchiveEnabled(devId) {
+    return document.getElementById(`exp-archive-${devId}`)?.checked === true;
+}
+
+function isExpandedDevArchiveAvailable(devId) {
+    const archiveWrap = document.getElementById(`exp-archive-wrap-${devId}`);
+    return !!archiveWrap && archiveWrap.style.display !== 'none';
+}
+
+
 function updateDevProjectsViewTabs() {
     const activeMode = window.__devProjectsViewMode === 'member' ? 'member' : 'case';
     document.querySelectorAll('[data-dev-project-view-tab]').forEach(btn => {
@@ -110,6 +162,7 @@ window.filterCreateDevProjectOpportunities = function() {
     if (currentValue && Array.from(select.options).some(opt => opt.value === currentValue)) {
         select.value = currentValue;
     }
+    expandDevOpportunitySelect(select, !!keyword);
 };
 
 window.syncCreateDevProgress = function(source) {
@@ -118,10 +171,10 @@ window.syncCreateDevProgress = function(source) {
     if (!slider || !input) return;
 
     const rawValue = source === 'slider' ? slider.value : input.value;
-    const parsed = parseInt(rawValue, 10);
-    const value = isNaN(parsed) ? 0 : Math.min(Math.max(parsed, 0), 100);
+    const value = getDevClampedProgress(rawValue);
     slider.value = value;
     input.value = value;
+    syncDevProgressCompletionLock(value, 'create-status', 'create-status-note');
 };
 
 function getDevParentId(item) {
@@ -183,7 +236,7 @@ window.saveCreateDevProjectInline = async function() {
         assigneeName: getValue('create-assigneeName'),
         collaborators: collabsJoined,
         devStage: getValue('create-devStage'),
-        status: getValue('create-status'),
+        status: progressValue >= 100 ? DEV_PROJECT_COMPLETED_STATUS : getValue('create-status'),
         progress: `${progressValue}%`,
         startDate: getValue('create-startDate'),
         estCompletionDate: getValue('create-estCompletionDate'),
@@ -296,7 +349,14 @@ window.filterExpandedDevProjectOpportunities = function(devId) {
     if (currentValue && Array.from(select.options).some(opt => opt.value === currentValue)) {
         select.value = currentValue;
     }
+    expandDevOpportunitySelect(select, !!keyword);
 };
+
+function expandDevOpportunitySelect(select, shouldExpand) {
+    if (!select) return;
+    const optionCount = Array.from(select.options).filter(option => option.value).length;
+    select.size = shouldExpand && optionCount ? Math.min(optionCount + 1, 6) : 0;
+}
 
 window.syncExpandedDevProgress = function(devId, source) {
     const slider = document.getElementById(`exp-progress-slider-${devId}`);
@@ -304,10 +364,11 @@ window.syncExpandedDevProgress = function(devId, source) {
     if (!slider || !input) return;
 
     const rawValue = source === 'slider' ? slider.value : input.value;
-    const parsed = parseInt(rawValue, 10);
-    const value = isNaN(parsed) ? 0 : Math.min(Math.max(parsed, 0), 100);
+    const value = getDevClampedProgress(rawValue);
     slider.value = value;
     input.value = value;
+    syncDevProgressCompletionLock(value, `exp-status-${devId}`, `exp-status-note-${devId}`);
+    syncExpandedDevArchiveState(devId, value);
 };
 
 window.saveExpandedDevProject = async function(devId) {
@@ -339,7 +400,7 @@ window.saveExpandedDevProject = async function(devId) {
         assigneeName: getValue('exp-assigneeName'),
         collaborators: collabsJoined,
         devStage: getValue('exp-devStage'),
-        status: getValue('exp-status'),
+        status: isExpandedDevArchiveEnabled(devId) ? DEV_PROJECT_ARCHIVED_STATUS : ((progressValue >= 100 || isExpandedDevArchiveAvailable(devId)) ? DEV_PROJECT_COMPLETED_STATUS : getValue('exp-status')),
         progress: `${progressValue}%`,
         startDate: getValue('exp-startDate'),
         estCompletionDate: getValue('exp-estCompletionDate'),
@@ -472,6 +533,10 @@ window.renderDevProjects = function(data) {
         return renderConfigOptions('團隊成員', currentValue);
     }
 
+    function renderCreateMemberOptions() {
+        return `<option value="" selected>${DEV_PROJECT_CREATE_OWNER_PLACEHOLDER}</option>${renderConfigOptions('團隊成員', '')}`;
+    }
+
     function renderExpandedInput(devId, field, value, type = 'text') {
         return `<input id="exp-${field}-${devId}" class="dev-expanded-input" type="${type}" value="${escapeHtml(value || '')}">`;
     }
@@ -515,6 +580,7 @@ window.renderDevProjects = function(data) {
                 <input id="exp-progress-${devId}" class="dev-expanded-input dev-expanded-number" type="number" min="0" max="100" value="${safeValue}" oninput="window.syncExpandedDevProgress('${devId}', 'number')">
                 <span>%</span>
             </div>
+            <span id="exp-status-note-${devId}" class="dev-progress-lock-note" style="display:${safeValue >= 100 ? 'block' : 'none'};">${DEV_PROJECT_COMPLETED_LOCK_NOTE}</span>
         `;
     }
 
@@ -547,7 +613,7 @@ window.renderDevProjects = function(data) {
 
         return `
             <input id="exp-projectSearch-${devId}" class="dev-expanded-input" type="text" placeholder="搜尋機會名稱或客戶..." oninput="window.filterExpandedDevProjectOpportunities('${devId}')">
-            <select id="exp-projectName-${devId}" class="dev-expanded-input">
+            <select id="exp-projectName-${devId}" class="dev-expanded-input" onchange="this.size=0" onblur="this.size=0">
                 ${optionParts.join('')}
             </select>
         `;
@@ -557,7 +623,7 @@ window.renderDevProjects = function(data) {
         const opportunities = window.__internalOpsOpportunities || [];
         return `
             <input id="create-projectSearch" class="dev-expanded-input" type="text" placeholder="搜尋機會名稱或客戶..." oninput="window.filterCreateDevProjectOpportunities()">
-            <select id="create-projectName" class="dev-expanded-input">
+            <select id="create-projectName" class="dev-expanded-input" onchange="this.size=0" onblur="this.size=0">
                 ${window.renderExpandedOpportunityOptions(opportunities)}
             </select>
         `;
@@ -648,7 +714,10 @@ window.renderDevProjects = function(data) {
         const relatedFeatureValue = item.featureName || item.relatedFeature || '';
         const ownerNameValue = item.assigneeName || item.ownerName || '';
         const caseStageValue = item.devStage || item.caseStage || '';
-        const caseStatusValue = item.status || item.caseStatus || '';
+        const caseStatusValue = progressValue >= 100 ? DEV_PROJECT_COMPLETED_STATUS : (item.status || item.caseStatus || '');
+        const isProgressCompleted = progressValue >= 100;
+        const isArchived = (item.status || item.caseStatus || '') === DEV_PROJECT_ARCHIVED_STATUS;
+        const showArchiveToggle = isProgressCompleted || isArchived;
         const parentDevIdValue = item.dependencies || item.parentDevId || '';
         const caseRelationTypeValue = item.caseRelationType || '';
         const notesValue = item.notes || '';
@@ -718,10 +787,17 @@ window.renderDevProjects = function(data) {
                                     <label class="dev-expanded-field">
                                         <span>案件階段</span>
                                         <select id="exp-devStage-${devId}" class="dev-expanded-input">${renderConfigOptions('開發階段', caseStageValue)}</select>
+                                        <div id="exp-archive-wrap-${devId}" class="dev-expanded-archive-wrap" style="display:${showArchiveToggle ? 'flex' : 'none'};">
+                                            <label class="dev-archive-check">
+                                                <input id="exp-archive-${devId}" type="checkbox" ${isArchived ? 'checked' : ''} data-original-archived="${isArchived ? 'true' : 'false'}">
+                                                <span>${DEV_PROJECT_ARCHIVED_GROUP_LABEL}</span>
+                                            </label>
+                                            <span class="dev-expanded-helper">${DEV_PROJECT_ARCHIVE_HELPER_NOTE}</span>
+                                        </div>
                                     </label>
                                     <label class="dev-expanded-field">
                                         <span>案件狀態</span>
-                                        <select id="exp-status-${devId}" class="dev-expanded-input">${renderConfigOptions('開發狀態', caseStatusValue)}</select>
+                                        <select id="exp-status-${devId}" class="dev-expanded-input" ${isProgressCompleted ? 'disabled' : ''}>${renderConfigOptions('開發狀態', caseStatusValue)}</select>
                                     </label>
                                     <label class="dev-expanded-field dev-expanded-progress-field">
                                         <span>進度</span>
@@ -803,7 +879,7 @@ window.renderDevProjects = function(data) {
                                 <div class="dev-expanded-section-grid">
                                     <label class="dev-expanded-field">
                                         <span>負責人</span>
-                                        <select id="create-assigneeName" class="dev-expanded-input">${renderMemberOptions('')}</select>
+                                        <select id="create-assigneeName" class="dev-expanded-input">${renderCreateMemberOptions()}</select>
                                     </label>
                                     <label class="dev-expanded-field dev-expanded-collab-field">
                                         <span>協作成員</span>
@@ -829,6 +905,7 @@ window.renderDevProjects = function(data) {
                                             <input id="create-progress" class="dev-expanded-input dev-expanded-number" type="number" min="0" max="100" value="0" oninput="window.syncCreateDevProgress('number')">
                                             <span>%</span>
                                         </div>
+                                        <span id="create-status-note" class="dev-progress-lock-note" style="display:none;">${DEV_PROJECT_COMPLETED_LOCK_NOTE}</span>
                                     </label>
                                 </div>
                             </div>
@@ -937,6 +1014,23 @@ window.renderDevProjects = function(data) {
     }
 
     const groupedRows = buildGroupedDevProjectRows(data);
+    const activeItems = data.filter(item => !isDevProjectArchived(item));
+    const archivedItems = data.filter(isDevProjectArchived);
+    function normalizeSameSectionHierarchyRows(groupedSectionRows, sectionItems) {
+        const sectionItemIds = new Set(sectionItems.map(item => item.devId).filter(Boolean));
+        return groupedSectionRows.map((item, index) => {
+            const parentId = getParentDevId(item);
+            const hasSameSectionParent = parentId && sectionItemIds.has(parentId);
+            return {
+                ...item,
+                __displayIndex: index + 1,
+                __isChild: hasSameSectionParent ? item.__isChild : false,
+                __isOrphan: hasSameSectionParent ? item.__isOrphan : false
+            };
+        });
+    }
+    const activeCaseRows = normalizeSameSectionHierarchyRows(buildGroupedDevProjectRows(activeItems), activeItems);
+    const archivedCaseRows = normalizeSameSectionHierarchyRows(buildGroupedDevProjectRows(archivedItems), archivedItems);
 
     // [Logic Preserved] Config mapping and trace logs
     function getConfigColor(type, text, fallbackHex) {
@@ -973,6 +1067,18 @@ window.renderDevProjects = function(data) {
     function getStageBadge(stage) {
         const colorSet = getConfigColor('開發階段', stage, '#616161');
         return getBadgeHtml(stage, colorSet);
+    }
+
+    function isDevProjectArchived(item) {
+        return (item.status || item.caseStatus || '') === DEV_PROJECT_ARCHIVED_STATUS;
+    }
+
+    function renderArchivedSeparatorRow(colspan) {
+        return `
+            <tr class="dev-archived-separator-row">
+                <td colspan="${colspan}"><span>${DEV_PROJECT_ARCHIVED_GROUP_LABEL}</span></td>
+            </tr>
+        `;
     }
 
     // [Logic Preserved] Working days calculation
@@ -1276,6 +1382,19 @@ window.renderDevProjects = function(data) {
                 ${memberGroups.map(group => {
                     const percentText = group.percentageRaw.toFixed(0);
                     const colorSet = window.buildColorSet(group.loadLevel.color || '#616161') || window.buildColorSet('#616161');
+                    const activeMainTasks = group.mainTasks.filter(item => !isDevProjectArchived(item));
+                    const archivedMainTasks = group.mainTasks.filter(isDevProjectArchived);
+                    const activeCollabTasks = group.collabTasks.filter(item => !isDevProjectArchived(item));
+                    const archivedCollabTasks = group.collabTasks.filter(isDevProjectArchived);
+                    const archivedRows = [
+                        ...archivedMainTasks.map(item => renderMemberModeRow(item, 'main')),
+                        ...archivedCollabTasks.map(item => renderMemberModeRow(item, 'collab'))
+                    ].join('');
+                    const memberRows = [
+                        ...activeMainTasks.map(item => renderMemberModeRow(item, 'main')),
+                        ...activeCollabTasks.map(item => renderMemberModeRow(item, 'collab')),
+                        archivedRows ? renderArchivedSeparatorRow(9) + archivedRows : ''
+                    ].join('') || `<tr class="dev-member-empty-row"><td colspan="9">暫無成員案件</td></tr>`;
                     return `
                         <section class="dev-member-section">
                             <div class="dev-member-header">
@@ -1312,10 +1431,7 @@ window.renderDevProjects = function(data) {
                                         <th>進度</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    ${group.mainTasks.length ? group.mainTasks.map(item => renderMemberModeRow(item, 'main')).join('') : `<tr class="dev-member-empty-row"><td colspan="9">暫無主負責案件</td></tr>`}
-                                    ${group.collabTasks.length ? group.collabTasks.map(item => renderMemberModeRow(item, 'collab')).join('') : `<tr class="dev-member-empty-row"><td colspan="9">暫無協作案件</td></tr>`}
-                                </tbody>
+                                <tbody>${memberRows}</tbody>
                             </table>
                         </section>
                     `;
@@ -1325,7 +1441,11 @@ window.renderDevProjects = function(data) {
     }
 
     const createRow = window.__devProjectsCreateOpen ? renderCreateEditorRow() : '';
-    const rows = groupedRows.map((item, index) => {
+    const caseRows = archivedCaseRows.length
+        ? [...activeCaseRows, { __archivedSeparator: true }, ...archivedCaseRows]
+        : activeCaseRows;
+    const rows = caseRows.map((item) => {
+        if (item.__archivedSeparator) return renderArchivedSeparatorRow(visibleColumnCount);
         const isExpanded = window.__devProjectsExpandedEditId === item.devId;
         const isNoteExpanded = !window.__isDevActionMode && window.__devProjectsExpandedNoteId === item.devId;
         const scheduleHtml = `
@@ -1378,7 +1498,7 @@ window.renderDevProjects = function(data) {
         personnelHtml += `</div>`;
 
         const caseNameText = item.productName || item.caseName || '-';
-        const rowIndexText = item.__isChild ? '' : item.__groupIndex;
+        const rowIndexText = item.__displayIndex || (item.__isChild ? '' : item.__groupIndex);
         const childMarker = item.__isChild ? '<span class="dev-child-marker">↳</span>' : '';
         const childClass = item.__isChild ? ' dev-project-child-row' : '';
         const displayRow = `
@@ -1626,8 +1746,15 @@ window.renderDevProjects = function(data) {
                 font-size: 0.68rem;
                 line-height: 1.25;
             }
+            .dev-progress-lock-note {
+                color: var(--text-muted);
+                font-size: 0.68rem;
+                line-height: 1.35;
+                margin-top: 2px;
+            }
             .dev-expanded-number {
-                width: 50px;
+                width: 72px;
+                min-width: 72px;
                 text-align: right;
             }
             .dev-expanded-progress {
@@ -1643,6 +1770,27 @@ window.renderDevProjects = function(data) {
                 border: 1px solid #d1d5db;
                 border-radius: 4px;
                 background: #fff;
+                accent-color: var(--accent-blue);
+            }
+            .dev-expanded-archive-wrap {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 7px;
+                margin-top: 5px;
+            }
+            .dev-archive-check {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                color: var(--text-secondary);
+                font-size: 0.78rem;
+                font-weight: 600;
+                line-height: 1.2;
+                cursor: pointer;
+            }
+            .dev-archive-check input {
+                width: 14px;
+                height: 14px;
                 accent-color: var(--accent-blue);
             }
             .dev-expanded-checks {
@@ -1694,6 +1842,18 @@ window.renderDevProjects = function(data) {
             }
             .dev-project-child-row td {
                 background: color-mix(in srgb, var(--card-bg) 92%, var(--primary-bg));
+            }
+            .dev-archived-separator-row td {
+                background: var(--glass-bg);
+                color: var(--text-muted);
+                font-size: 0.76rem;
+                font-weight: 600;
+                padding: 6px 12px;
+            }
+            .dev-archived-separator-row span {
+                display: inline-block;
+                border-left: 2px solid var(--border-color);
+                padding-left: 8px;
             }
             .dev-case-name-cell {
                 display: flex;
