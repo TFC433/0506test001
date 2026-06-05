@@ -1145,15 +1145,15 @@ window.renderDevProjects = function(data) {
     }
 
     function getDevMemberWorkloadConfig() {
-        const maxLoad = getConfigNumber(['負荷設定', '工作負荷設定'], ['最大負荷案件數', '最大負荷數', 'maxLoad'], 6);
-        const mainWeight = getConfigNumber(['負荷權重', '工作負荷權重'], ['主負責權重', '主負責', 'main'], 1);
-        const collabWeight = getConfigNumber(['負荷權重', '工作負荷權重'], ['協作權重', '協作', 'collab'], 0.5);
+        const maxLoad = getConfigNumber(['負荷設定', '工作負荷設定'], ['最大負荷件數', '最大負荷案件數', '最大負荷數', 'maxLoad'], 6);
+        const mainWeight = getConfigNumber(['負荷計分', '負荷權重', '工作負荷權重'], ['主負責佔分', '主負責權重', '主負責', 'main'], 1);
+        const collabWeight = getConfigNumber(['負荷計分', '負荷權重', '工作負荷權重'], ['協作佔分', '協作權重', '協作', 'collab'], 0.5);
         const statusWeights = {};
         getLoadConfigList(['狀態負荷權重', '案件狀態負荷權重']).forEach(item => {
             const numeric = parseFloat(item.note);
             if (item.value && !isNaN(numeric)) statusWeights[item.value] = numeric;
         });
-        const parsedLevels = getLoadConfigList(['負荷等級', '工作負荷等級'])
+        const parsedLevels = getLoadConfigList(['負荷量表', '負荷等級', '工作負荷等級'])
             .map(item => ({
                 label: item.value || item.note || '',
                 threshold: parseFloat(item.note),
