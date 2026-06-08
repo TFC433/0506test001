@@ -123,6 +123,16 @@ class InternalOpsController {
         }
     }
 
+    static async getWonOpportunityOptions(req, res, next) {
+        try {
+            const { subscriptionOpsService } = req.app.get('services');
+            const data = await subscriptionOpsService.getWonOpportunityOptions();
+            res.status(200).json({ success: true, data });
+        } catch (error) {
+            next(error);
+        }
+    }
+
     static async createSubscription(req, res, next) {
         try {
             const { subscriptionOpsService } = req.app.get('services');

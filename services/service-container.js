@@ -279,7 +279,9 @@ async function initializeServices() {
         const internalOpsService = new InternalOpsService(internalOpsReader, internalOpsWriter, config);
         const subscriptionOpsService = new SubscriptionOpsService({
             subscriptionOpsSqlReader,
-            subscriptionOpsSqlWriter
+            subscriptionOpsSqlWriter,
+            opportunitySqlReader,
+            productService
         });
 
         // 5. Controllers

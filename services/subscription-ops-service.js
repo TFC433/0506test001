@@ -26,14 +26,47 @@ const ALERT_EXCLUDED_STATUSES = [
     '\u5df2\u5c01\u5b58'
 ];
 
+const OPTIONAL_NULLABLE_FIELDS = [
+    'productId',
+    'reminderOwnerName',
+    'reminderOwnerEmail'
+];
+
 class SubscriptionOpsService {
-    constructor({ subscriptionOpsSqlReader, subscriptionOpsSqlWriter }) {
+    constructor({ subscriptionOpsSqlReader, subscriptionOpsSqlWriter, opportunitySqlReader, productService }) {
         this.subscriptionOpsSqlReader = subscriptionOpsSqlReader;
         this.subscriptionOpsSqlWriter = subscriptionOpsSqlWriter;
+        this.opportunitySqlReader = opportunitySqlReader;
+        this.productService = productService;
     }
 
     async getSubscriptionOps() {
         return this.subscriptionOpsSqlReader.getSubscriptionOps();
+    }
+
+    async getWonOpportunityOptions() {
+        if (!this.opportunitySqlReader) {
+            throw new Error('opportunitySqlReader required');
+        }
+
+        const [opportunities, productOptions] = await Promise.all([
+            this._fetchWonOpportunities(),
+            this._fetchOpportunityProductOptions()
+        ]);
+        const productOptionMap = new Map(productOptions.map(option => [String(option.id), option]));
+
+        return opportunities.map(opportunity => ({
+            opportunityId: opportunity.opportunityId,
+            opportunityName: opportunity.opportunityName,
+            opportunityType: opportunity.opportunityType,
+            customerCompany: opportunity.customerCompany,
+            expectedCloseDate: opportunity.expectedCloseDate,
+            lastUpdateTime: opportunity.lastUpdateTime,
+            assignee: opportunity.assignee,
+            currentStage: opportunity.currentStage,
+            currentStatus: opportunity.currentStatus,
+            products: this._extractSelectedProducts(opportunity.potentialSpecification, productOptionMap)
+        }));
     }
 
     async getUpcomingRenewalAlerts({ limit = 10 } = {}) {
@@ -103,6 +136,107 @@ class SubscriptionOpsService {
         };
     }
 
+    async _fetchWonOpportunities() {
+        if (typeof this.opportunitySqlReader.getSalesAnalysisBaseDeals !== 'function') {
+            return [];
+        }
+
+        const opportunities = await this.opportunitySqlReader.getSalesAnalysisBaseDeals(null, null);
+        return (Array.isArray(opportunities) ? opportunities : [])
+            .sort((a, b) => {
+                const timeA = new Date((a && (a.expectedCloseDate || a.lastUpdateTime)) || 0).getTime();
+                const timeB = new Date((b && (b.expectedCloseDate || b.lastUpdateTime)) || 0).getTime();
+                return timeB - timeA;
+            });
+    }
+
+    async _fetchOpportunityProductOptions() {
+        if (!this.productService || typeof this.productService.getOpportunitySpecs !== 'function') {
+            return [];
+        }
+
+        try {
+            const options = await this.productService.getOpportunitySpecs();
+            return Array.isArray(options) ? options : [];
+        } catch (error) {
+            console.warn('[SubscriptionOpsService] Product option label mapping skipped:', error.message);
+            return [];
+        }
+    }
+
+    _extractSelectedProducts(rawSpec, productOptionMap) {
+        const entries = this._parseSelectedProductEntries(rawSpec);
+
+        return entries.map(([productId, quantity]) => {
+            const productKey = String(productId);
+            const option = productOptionMap.get(productKey);
+
+            if (!option) {
+                return {
+                    productId: productKey,
+                    productName: productKey,
+                    label: productKey,
+                    quantity,
+                    behaviorMode: '',
+                    isResolved: false
+                };
+            }
+
+            return {
+                productId: productKey,
+                productName: option.name || option.label || productKey,
+                label: option.label || option.name || productKey,
+                quantity,
+                behaviorMode: option.behaviorMode || '',
+                isResolved: true
+            };
+        });
+    }
+
+    _parseSelectedProductEntries(rawSpec) {
+        const parsed = this._parsePotentialSpecification(rawSpec);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+
+        return Object.entries(parsed)
+            .map(([key, value]) => [key, this._normalizeSelectedProductQuantity(value)])
+            .filter(([key, quantity]) => key && quantity > 0);
+    }
+
+    _parsePotentialSpecification(rawSpec) {
+        if (!rawSpec) return {};
+        if (typeof rawSpec === 'object') return rawSpec;
+
+        if (typeof rawSpec === 'string') {
+            const trimmed = rawSpec.trim();
+            if (!trimmed) return {};
+
+            try {
+                return JSON.parse(trimmed);
+            } catch (error) {
+                return trimmed.split(',').reduce((acc, item) => {
+                    const key = item.trim();
+                    if (key) acc[key] = 1;
+                    return acc;
+                }, {});
+            }
+        }
+
+        return {};
+    }
+
+    _normalizeSelectedProductQuantity(value) {
+        if (value === true) return 1;
+        if (value === false || value === null || value === undefined) return 0;
+        if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+
+        const normalized = String(value).trim().toLowerCase();
+        if (!normalized) return 0;
+        if (['true', 'yes', 'y'].includes(normalized)) return 1;
+
+        const numericValue = Number(normalized);
+        return Number.isFinite(numericValue) ? numericValue : 0;
+    }
+
     _sanitizePayload(data = {}, options = {}) {
         const normalized = {
             ...data
@@ -126,6 +260,12 @@ class SubscriptionOpsService {
             normalized.sourceType = 'manual';
         }
 
+        OPTIONAL_NULLABLE_FIELDS.forEach(field => {
+            if (normalized[field] === '') {
+                normalized[field] = null;
+            }
+        });
+
         return ALLOWED_FIELDS.reduce((payload, field) => {
             if (normalized[field] !== undefined) {
                 payload[field] = normalized[field];
@@ -137,7 +277,7 @@ class SubscriptionOpsService {
     _validateRequired(payload) {
         const sourceType = payload.sourceType || 'manual';
         const required = sourceType === 'opportunity'
-            ? ['opportunityId', 'productId', 'subscriptionEndDate', 'reminderOwnerName']
+            ? ['opportunityId', 'subscriptionEndDate']
             : ['manualCustomerName', 'manualItemName', 'subscriptionEndDate', 'reminderOwnerName'];
 
         required.forEach(field => {
