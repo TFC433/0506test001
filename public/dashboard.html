@@ -97,6 +97,12 @@
                         <h1 class="page-title" id="page-title">儀表板</h1>
                         <p class="page-subtitle" id="page-subtitle">以機會為核心的客戶關係管理平台</p>
                     </div>
+                    <button type="button" id="subscription-alerts-marquee" class="subscription-alerts-marquee" onclick="if (window.CRM_APP && typeof window.CRM_APP.navigateTo === 'function') window.CRM_APP.navigateTo('internal-ops');">
+                        <span class="subscription-alerts-marquee-label">訂閱提醒</span>
+                        <span class="subscription-alerts-marquee-viewport">
+                            <span class="subscription-alerts-marquee-track">載入提醒中...</span>
+                        </span>
+                    </button>
                 </div>
                 
                 <div class="header-actions">

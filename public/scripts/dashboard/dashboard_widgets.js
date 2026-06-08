@@ -654,6 +654,61 @@ const DashboardWidgets = {
         }
     },
 
+    renderSubscriptionAlerts(alerts = [], state = {}) {
+        const marquee = document.getElementById('subscription-alerts-marquee');
+        const track = marquee ? marquee.querySelector('.subscription-alerts-marquee-track') : null;
+        if (!marquee || !track) return;
+
+        this._ensureStyles();
+
+        if (state.loading) {
+            marquee.classList.add('is-empty');
+            track.textContent = '載入提醒中...';
+            return;
+        }
+
+        if (state.error) {
+            marquee.classList.add('is-empty');
+            track.textContent = '續約提醒暫時無法載入';
+            return;
+        }
+
+        if (!Array.isArray(alerts) || alerts.length === 0) {
+            marquee.classList.add('is-empty');
+            track.textContent = '\u76ee\u524d\u7121\u8a02\u95b1\u5230\u671f\u63d0\u9192';
+            return;
+        }
+
+        marquee.classList.remove('is-empty');
+
+        const severityLabels = {
+            overdue: '已逾期',
+            within30: '30 天內',
+            within90: '90 天內'
+        };
+
+        const getDaysText = daysRemaining => {
+            const days = Number(daysRemaining);
+            if (Number.isNaN(days)) return '-';
+            if (days < 0) return `逾期 ${Math.abs(days)} 天`;
+            if (days === 0) return '今天到期';
+            return `剩 ${days} 天`;
+        };
+
+        const text = alerts.map(item => {
+            const urgency = item.urgency || 'within90';
+            const severity = severityLabels[urgency] || severityLabels.within90;
+            const endDate = item.endDate || '-';
+            const customerName = item.customerName || '-';
+            const itemName = item.subscriptionItemName || '-';
+            const ownerName = item.ownerName || '-';
+            const daysText = getDaysText(item.daysRemaining);
+            return `[${severity}] ${endDate} ${customerName} - ${itemName}，負責人：${ownerName}，${daysText}`;
+        }).join('  ·  ');
+
+        track.textContent = text;
+    },
+
     /**
      * 渲染最新動態列表
      * @param {Array} feedData - 動態資料列表
@@ -713,6 +768,35 @@ const DashboardWidgets = {
             const style = document.createElement('style');
             style.id = 'dashboard-widget-styles';
             style.innerHTML = `
+                .subscription-alerts-marquee {
+                    display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 260px; max-width: none;
+                    height: 30px; padding: 4px 10px; border: 1px solid rgba(244, 63, 94, 0.34); border-radius: 4px;
+                    background: rgba(244, 63, 94, 0.08); color: #9f1239; cursor: pointer; overflow: hidden;
+                }
+                .page-header .header-content { flex: 1 1 auto; min-width: 0; }
+                .page-header .header-content > div { flex: 0 1 auto; min-width: 0; }
+                .page-header .header-actions { flex: 0 0 auto; }
+                .subscription-alerts-marquee:hover { background: rgba(244, 63, 94, 0.12); border-color: rgba(225, 29, 72, 0.42); color: #881337; }
+                .subscription-alerts-marquee-label {
+                    flex: 0 0 auto; color: #9f1239; font-size: 0.78rem; font-weight: 700; white-space: nowrap;
+                }
+                .subscription-alerts-marquee-viewport { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; }
+                .subscription-alerts-marquee-track {
+                    display: inline-block; min-width: 100%; padding-left: 100%; color: #9f1239;
+                    font-size: 0.82rem; line-height: 1.2; white-space: nowrap; animation: subscriptionMarquee 18s linear infinite;
+                }
+                .subscription-alerts-marquee:hover .subscription-alerts-marquee-track { animation-play-state: paused; }
+                .subscription-alerts-marquee.is-empty .subscription-alerts-marquee-track {
+                    padding-left: 0; animation: none; color: rgba(159, 18, 57, 0.72);
+                }
+                @keyframes subscriptionMarquee {
+                    from { transform: translateX(0); }
+                    to { transform: translateX(-100%); }
+                }
+                @media (max-width: 900px) {
+                    .page-header .header-content { flex-wrap: wrap; }
+                    .subscription-alerts-marquee { max-width: 100%; width: 100%; }
+                }
                 .dashboard-trend-header { display: flex; align-items: center; gap: 8px; }
                 .dashboard-trend-controls { display: flex !important; align-items: center; justify-content: flex-end; gap: 6px !important; flex-wrap: nowrap; min-width: 0; }
                 .trend-tab-filter { display: inline-flex; align-items: center; gap: var(--spacing-2, 6px); flex-wrap: nowrap; white-space: nowrap; }

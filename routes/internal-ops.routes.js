@@ -23,6 +23,7 @@ router.delete('/dev-projects/:devId', InternalOpsController.deleteDevProject);
 
 // 訂閱制管理
 router.get('/subscription-ops', InternalOpsController.getSubscriptions);
+router.get('/subscription-ops/alerts', InternalOpsController.getSubscriptionAlerts);
 router.post('/subscription-ops', InternalOpsController.createSubscription);
 router.put('/subscription-ops/:subId', InternalOpsController.updateSubscription);
 router.patch('/subscription-ops/:subId/archive', InternalOpsController.archiveSubscription);

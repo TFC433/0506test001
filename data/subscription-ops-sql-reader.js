@@ -24,6 +24,26 @@ class SubscriptionOpsSqlReader {
         return (data || []).map(row => this._mapRowToDto(row));
     }
 
+    async getUpcomingRenewalAlerts({ cutoffDate, fetchLimit = 100 } = {}) {
+        if (!cutoffDate) throw new Error('SubscriptionOpsSqlReader: cutoffDate is required');
+
+        const { data, error } = await supabase
+            .from(this.tableName)
+            .select('*')
+            .eq('is_archived', false)
+            .eq('is_active', true)
+            .not('end_date', 'is', null)
+            .lte('end_date', cutoffDate)
+            .order('end_date', { ascending: true })
+            .limit(fetchLimit);
+
+        if (error) {
+            throw new Error(`[SubscriptionOpsSqlReader] DB Alert Error: ${error.message}`);
+        }
+
+        return (data || []).map(row => this._mapRowToDto(row));
+    }
+
     async getSubscriptionOpById(id) {
         if (!id) throw new Error('SubscriptionOpsSqlReader: id is required');
 

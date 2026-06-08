@@ -44,6 +44,22 @@ const dashboardManager = {
         }
     },
 
+    loadSubscriptionAlerts() {
+        if (!window.DashboardWidgets || typeof DashboardWidgets.renderSubscriptionAlerts !== 'function') return;
+
+        DashboardWidgets.renderSubscriptionAlerts([], { loading: true });
+
+        authedFetch('/api/internal-ops/subscription-ops/alerts')
+            .then(res => {
+                const data = res && res.success !== false && Array.isArray(res.data) ? res.data : [];
+                DashboardWidgets.renderSubscriptionAlerts(data);
+            })
+            .catch(error => {
+                console.warn('[Dashboard] Subscription alerts load failed:', error);
+                DashboardWidgets.renderSubscriptionAlerts([], { error: true });
+            });
+    },
+
     /**
      * 初始化與刷新儀表板資料
      * @param {boolean} force - 是否強制從後端刷新 (忽略快取)
@@ -102,6 +118,8 @@ const dashboardManager = {
                 if (activityWidget) {
                     activityWidget.innerHTML = DashboardWidgets.renderActivityFeed(data.recentActivity || []);
                 }
+
+                this.loadSubscriptionAlerts();
             }
 
             // B. 週間業務 (Weekly)

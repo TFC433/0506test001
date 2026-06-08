@@ -111,6 +111,18 @@ class InternalOpsController {
         }
     }
 
+    static async getSubscriptionAlerts(req, res, next) {
+        try {
+            const { subscriptionOpsService } = req.app.get('services');
+            const data = await subscriptionOpsService.getUpcomingRenewalAlerts({
+                limit: req.query.limit
+            });
+            res.status(200).json({ success: true, data });
+        } catch (error) {
+            next(error);
+        }
+    }
+
     static async createSubscription(req, res, next) {
         try {
             const { subscriptionOpsService } = req.app.get('services');
