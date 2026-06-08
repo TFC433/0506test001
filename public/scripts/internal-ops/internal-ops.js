@@ -81,7 +81,7 @@ window.loadInternalOpsPage = async function(params) {
                 <div class="dashboard-widget internal-ops-widget" style="width: 100%;">
                     <div class="widget-header internal-ops-header">
                         <h2 class="widget-title">訂閱制管理</h2>
-                        <button class="action-btn primary btn-sm" onclick="alert('TODO: 新增訂閱紀錄 開發中')">
+                        <button class="action-btn primary btn-sm" onclick="window.openSubscriptionCreateInline()">
                             <span class="btn-text">新增</span>
                         </button>
                     </div>
@@ -285,7 +285,7 @@ async function fetchAndRenderSection(endpoint, renderFn, containerId) {
         const dataArray = Array.isArray(res) ? res : (res && res.success ? res.data : null);
         
         if (dataArray) {
-            if (dataArray.length > 0 && typeof renderFn === 'function') {
+            if ((dataArray.length > 0 || containerId === 'internal-ops-subscriptions-content') && typeof renderFn === 'function') {
                 container.innerHTML = renderFn(dataArray);
             } else if (dataArray.length === 0) {
                 container.innerHTML = '<p style="padding: 30px; color: #888; text-align: center;">目前沒有資料</p>';

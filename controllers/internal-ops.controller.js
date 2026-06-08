@@ -103,8 +103,8 @@ class InternalOpsController {
     // ==========================================
     static async getSubscriptions(req, res, next) {
         try {
-            const { internalOpsService } = req.app.get('services');
-            const data = await internalOpsService.getSubscriptions();
+            const { subscriptionOpsService } = req.app.get('services');
+            const data = await subscriptionOpsService.getSubscriptionOps();
             res.status(200).json({ success: true, data });
         } catch (error) {
             next(error);
@@ -113,8 +113,8 @@ class InternalOpsController {
 
     static async createSubscription(req, res, next) {
         try {
-            const { internalOpsService } = req.app.get('services');
-            const result = await internalOpsService.createSubscription(req.body);
+            const { subscriptionOpsService } = req.app.get('services');
+            const result = await subscriptionOpsService.createSubscriptionOp(req.body);
             res.status(201).json(result);
         } catch (error) {
             next(error);
@@ -123,20 +123,20 @@ class InternalOpsController {
 
     static async updateSubscription(req, res, next) {
         try {
-            const { internalOpsService } = req.app.get('services');
+            const { subscriptionOpsService } = req.app.get('services');
             const { subId } = req.params;
-            const result = await internalOpsService.updateSubscription(subId, req.body);
+            const result = await subscriptionOpsService.updateSubscriptionOp(subId, req.body);
             res.status(200).json(result);
         } catch (error) {
             next(error);
         }
     }
 
-    static async deleteSubscription(req, res, next) {
+    static async archiveSubscription(req, res, next) {
         try {
-            const { internalOpsService } = req.app.get('services');
+            const { subscriptionOpsService } = req.app.get('services');
             const { subId } = req.params;
-            const result = await internalOpsService.deleteSubscription(subId);
+            const result = await subscriptionOpsService.archiveSubscriptionOp(subId);
             res.status(200).json(result);
         } catch (error) {
             next(error);

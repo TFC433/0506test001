@@ -37,6 +37,7 @@ const WeeklyBusinessSqlReader = require('../data/weekly-business-sql-reader');
 const AnnouncementSqlReader = require('../data/announcement-sql-reader');
 const ProductReader = require('../data/product-reader');
 const InternalOpsReader = require('../data/internal-ops-reader');
+const SubscriptionOpsSqlReader = require('../data/subscription-ops-sql-reader');
 
 // --- Import Writers ---
 const ContactWriter = require('../data/contact-writer'); // EXCLUSIVELY FOR RAW
@@ -50,6 +51,7 @@ const WeeklyBusinessSqlWriter = require('../data/weekly-business-sql-writer');
 const AnnouncementSqlWriter = require('../data/announcement-sql-writer');
 const ProductWriter = require('../data/product-writer');
 const InternalOpsWriter = require('../data/internal-ops-writer');
+const SubscriptionOpsSqlWriter = require('../data/subscription-ops-sql-writer');
 
 // --- Import Domain Services ---
 const AuthService = require('./auth-service');
@@ -68,6 +70,7 @@ const AnnouncementService = require('./announcement-service');
 const EventService = require('./event-service');
 const SystemService = require('./system-service');
 const InternalOpsService = require('./internal-ops-service');
+const SubscriptionOpsService = require('./subscription-ops-service');
 
 // --- Import Controllers ---
 const AuthController = require('../controllers/auth.controller');
@@ -112,6 +115,7 @@ async function initializeServices() {
         const systemReader = new SystemReader(sheets, config.IDS.SYSTEM);
         const productReader = new ProductReader(sheets, config.IDS.PRODUCT);
         const internalOpsReader = new InternalOpsReader(sheets, config.IDS.INTERNAL_OPS);
+        const subscriptionOpsSqlReader = new SubscriptionOpsSqlReader();
 
         // 3. Writers
         // RAW Keep
@@ -130,6 +134,7 @@ async function initializeServices() {
         const systemWriter = new SystemWriter(sheets, config.IDS.SYSTEM, systemReader);
         const productWriter = new ProductWriter(sheets, config.IDS.PRODUCT, productReader);
         const internalOpsWriter = new InternalOpsWriter(sheets, config.IDS.INTERNAL_OPS, internalOpsReader);
+        const subscriptionOpsSqlWriter = new SubscriptionOpsSqlWriter();
 
         // 4. Domain Services
         const calendarService = new CalendarService(calendar);
@@ -272,6 +277,10 @@ async function initializeServices() {
         );
 
         const internalOpsService = new InternalOpsService(internalOpsReader, internalOpsWriter, config);
+        const subscriptionOpsService = new SubscriptionOpsService({
+            subscriptionOpsSqlReader,
+            subscriptionOpsSqlWriter
+        });
 
         // 5. Controllers
         const authController = new AuthController(authService);
@@ -302,6 +311,7 @@ async function initializeServices() {
             eventService,
             systemService,
             internalOpsService,
+            subscriptionOpsService,
             authController,
             systemController,
             announcementController,
@@ -318,7 +328,9 @@ async function initializeServices() {
             systemReader, systemWriter,
             eventLogReader: eventLogSqlReader,
             internalOpsReader,
-            internalOpsWriter
+            internalOpsWriter,
+            subscriptionOpsSqlReader,
+            subscriptionOpsSqlWriter
         };
 
         return services;

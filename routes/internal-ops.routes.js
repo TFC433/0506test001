@@ -25,6 +25,6 @@ router.delete('/dev-projects/:devId', InternalOpsController.deleteDevProject);
 router.get('/subscription-ops', InternalOpsController.getSubscriptions);
 router.post('/subscription-ops', InternalOpsController.createSubscription);
 router.put('/subscription-ops/:subId', InternalOpsController.updateSubscription);
-router.delete('/subscription-ops/:subId', InternalOpsController.deleteSubscription);
+router.patch('/subscription-ops/:subId/archive', InternalOpsController.archiveSubscription);
 
 module.exports = router;
