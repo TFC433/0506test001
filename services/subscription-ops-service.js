@@ -3,38 +3,19 @@
  * Backend API service for Subscription Ops.
  */
 
-const REQUIRED_FIELDS = [
-    'customerName',
-    'subscriptionItemName',
-    'endDate',
-    'status',
-    'ownerName'
-];
-
 const ALLOWED_FIELDS = [
     'sourceType',
-    'customerName',
-    'subscriptionItemName',
-    'companyId',
-    'companyNameSnapshot',
     'opportunityId',
-    'opportunityNameSnapshot',
     'productId',
-    'productNameSnapshot',
-    'contractName',
-    'subscriptionType',
-    'renewalCycle',
-    'customPeriodLabel',
-    'startDate',
-    'endDate',
-    'amount',
-    'currency',
-    'ownerName',
+    'manualCustomerName',
+    'manualItemName',
+    'subscriptionStartDate',
+    'subscriptionEndDate',
+    'reminderOwnerName',
+    'reminderOwnerEmail',
+    'reminderStages',
     'status',
     'notes',
-    'reminderStages',
-    'lastRemindedAt',
-    'nextReminderAt',
     'isActive',
     'isArchived'
 ];
@@ -78,12 +59,13 @@ class SubscriptionOpsService {
     }
 
     async createSubscriptionOp(data) {
-        const payload = this._sanitizePayload(data);
+        const payload = this._sanitizePayload(data, { applyDefaults: true });
         this._validateRequired(payload);
 
         const created = await this.subscriptionOpsSqlWriter.createSubscriptionOp({
             sourceType: 'manual',
-            currency: 'TWD',
+            status: '\u9032\u884c\u4e2d',
+            reminderStages: '180,90,30',
             isActive: true,
             isArchived: false,
             ...payload
@@ -121,17 +103,44 @@ class SubscriptionOpsService {
         };
     }
 
-    _sanitizePayload(data = {}) {
+    _sanitizePayload(data = {}, options = {}) {
+        const normalized = {
+            ...data
+        };
+
+        // Compatibility input aliases for existing Phase 1A frontend clients.
+        if (normalized.manualCustomerName === undefined && normalized.customerName !== undefined) {
+            normalized.manualCustomerName = normalized.customerName;
+        }
+        if (normalized.manualItemName === undefined && normalized.subscriptionItemName !== undefined) {
+            normalized.manualItemName = normalized.subscriptionItemName;
+        }
+        if (normalized.subscriptionEndDate === undefined && normalized.endDate !== undefined) {
+            normalized.subscriptionEndDate = normalized.endDate;
+        }
+        if (normalized.reminderOwnerName === undefined && normalized.ownerName !== undefined) {
+            normalized.reminderOwnerName = normalized.ownerName;
+        }
+
+        if (options.applyDefaults && normalized.sourceType === undefined) {
+            normalized.sourceType = 'manual';
+        }
+
         return ALLOWED_FIELDS.reduce((payload, field) => {
-            if (data[field] !== undefined) {
-                payload[field] = data[field];
+            if (normalized[field] !== undefined) {
+                payload[field] = normalized[field];
             }
             return payload;
         }, {});
     }
 
     _validateRequired(payload) {
-        REQUIRED_FIELDS.forEach(field => {
+        const sourceType = payload.sourceType || 'manual';
+        const required = sourceType === 'opportunity'
+            ? ['opportunityId', 'productId', 'subscriptionEndDate', 'reminderOwnerName']
+            : ['manualCustomerName', 'manualItemName', 'subscriptionEndDate', 'reminderOwnerName'];
+
+        required.forEach(field => {
             if (payload[field] === undefined || payload[field] === null || payload[field] === '') {
                 throw new Error(`${field} required`);
             }
@@ -139,16 +148,16 @@ class SubscriptionOpsService {
     }
 
     _mapAlertDto(record, today) {
-        const endDate = this._parseDateOnly(record.endDate);
+        const endDate = this._parseDateOnly(record.subscriptionEndDate);
         const daysRemaining = this._diffDateOnlyDays(today, endDate);
 
         return {
             id: record.id,
-            customerName: record.customerName,
-            subscriptionItemName: record.subscriptionItemName,
-            endDate: record.endDate,
+            customerName: record.manualCustomerName || '',
+            subscriptionItemName: record.manualItemName || '',
+            endDate: record.subscriptionEndDate,
             status: record.status,
-            ownerName: record.ownerName,
+            ownerName: record.reminderOwnerName,
             sourceType: record.sourceType,
             isActive: record.isActive,
             isArchived: record.isArchived,

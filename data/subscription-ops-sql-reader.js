@@ -14,7 +14,7 @@ class SubscriptionOpsSqlReader {
         const { data, error } = await supabase
             .from(this.tableName)
             .select('*')
-            .order('end_date', { ascending: true })
+            .order('subscription_end_date', { ascending: true })
             .order('updated_at', { ascending: false });
 
         if (error) {
@@ -32,9 +32,9 @@ class SubscriptionOpsSqlReader {
             .select('*')
             .eq('is_archived', false)
             .eq('is_active', true)
-            .not('end_date', 'is', null)
-            .lte('end_date', cutoffDate)
-            .order('end_date', { ascending: true })
+            .not('subscription_end_date', 'is', null)
+            .lte('subscription_end_date', cutoffDate)
+            .order('subscription_end_date', { ascending: true })
             .limit(fetchLimit);
 
         if (error) {
@@ -67,34 +67,29 @@ class SubscriptionOpsSqlReader {
         return {
             id: row.id,
             sourceType: row.source_type,
-            customerName: row.customer_name,
-            subscriptionItemName: row.subscription_item_name,
-            companyId: row.company_id,
-            companyNameSnapshot: row.company_name_snapshot,
             opportunityId: row.opportunity_id,
-            opportunityNameSnapshot: row.opportunity_name_snapshot,
             productId: row.product_id,
-            productNameSnapshot: row.product_name_snapshot,
-            contractName: row.contract_name,
-            subscriptionType: row.subscription_type,
-            renewalCycle: row.renewal_cycle,
-            customPeriodLabel: row.custom_period_label,
-            startDate: row.start_date,
-            endDate: row.end_date,
-            amount: row.amount,
-            currency: row.currency,
-            ownerName: row.owner_name,
+            manualCustomerName: row.manual_customer_name,
+            manualItemName: row.manual_item_name,
+            subscriptionStartDate: row.subscription_start_date,
+            subscriptionEndDate: row.subscription_end_date,
+            reminderOwnerName: row.reminder_owner_name,
+            reminderOwnerEmail: row.reminder_owner_email,
+            reminderStages: row.reminder_stages,
             status: row.status,
             notes: row.notes,
-            reminderStages: row.reminder_stages,
-            lastRemindedAt: row.last_reminded_at,
-            nextReminderAt: row.next_reminder_at,
             isActive: row.is_active,
             isArchived: row.is_archived,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
             createdBy: row.created_by,
-            updatedBy: row.updated_by
+            updatedBy: row.updated_by,
+
+            // Compatibility aliases for existing Phase 1A frontend and Dashboard consumers.
+            customerName: row.manual_customer_name,
+            subscriptionItemName: row.manual_item_name,
+            endDate: row.subscription_end_date,
+            ownerName: row.reminder_owner_name
         };
     }
 }
