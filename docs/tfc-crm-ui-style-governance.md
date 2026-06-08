@@ -384,10 +384,19 @@ Internal Ops / Dev Projects uses the accepted operational table/list language fo
 The title-level tabs are part of the section title area:
 
 ```text
-各種類型案件追蹤 [案件導向] [人員導向]
+各種類型案件追蹤 顯示方式 [案件導向] [人員導向]
 ```
 
 View tabs are navigation state controls. They are not action buttons and must not be mixed visually with `新增` or `操作模式`.
+
+The accepted header control patterns are:
+
+```text
+案件導向: 顯示方式 [案件導向] [人員導向] 分組 [不分組] [案件分類] [案件狀態]
+人員導向: 顯示方式 [案件導向] [人員導向] 明細 [收合明細] / [展開明細]
+```
+
+Header controls use the same compact chip / segmented button language. `分組` controls appear only in `案件導向`; `明細` appears only in `人員導向`. The neutral grouping label is `不分組`. The member detail control is one global toggle, defaults to expanded, and must not become per-member expand/collapse UI.
 
 `案件導向` uses stable table/list language with this column language:
 
@@ -406,12 +415,24 @@ Relationship and role badges belong inside the `案件名稱` cell:
 * case view: `↳ [案件關係] case name`
 * member view: `↳ [主負責] case name` or `↳ [協作] case name`
 
+Accepted list hierarchy polish:
+
+* row numbers render as `1.`, `2.`, `3.`
+* extended / child case rows may use subtle full-row tint
+* case group separator rows may use subtle full-row tint and stronger text weight
+* member collaborator rows may use subtle full-row tint
+* do not use side color bars or left accent lines
+* do not use loud red / yellow / green row background tints
+
 Avoid these Dev Projects regressions:
 
 * no card grid for member view
 * no standalone `案件關係` column
 * no chip-wall collaboration summary
 * no popup-modal-first editing for Dev Projects
+* no per-member expand/collapse state or row-level member toggles
+
+Expanded edit mode may show an archive checkbox when progress is 100% or current status is `封存`. This checkbox is lifecycle control, not a visual filter.
 
 Badge color governance:
 

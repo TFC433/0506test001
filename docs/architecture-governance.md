@@ -1578,7 +1578,21 @@ caseStatus
 parentDevId
 ```
 
-Case-oriented view (`案件導向`) is grouped by `parentDevId` / `dependencies`. Only a two-level hierarchy is accepted. Child cases show `↳` and the relation badge inside the `案件名稱` cell. In normal mode, clicking the case name expands read-only notes. In maintenance mode, clicking the case name opens inline edit.
+The accepted title-level controls are:
+
+```text
+顯示方式 [案件導向] [人員導向]
+```
+
+`案件導向` may show display-only grouping controls:
+
+```text
+分組 [不分組] [案件分類] [案件狀態]
+```
+
+Grouping is display-only. It must not filter, hide, remove, mutate, or persist row order. Grouping applies only to `案件導向`, respects system setting order where available, and keeps `封存案件` as a separate bottom group regardless of grouping mode.
+
+Case-oriented view (`案件導向`) is grouped by `parentDevId` / `dependencies` for same-section hierarchy only. Only a two-level hierarchy is accepted. Child cases show `↳` and the relation badge inside the `案件名稱` cell when parent and child are in the same display section/group. Cross-section or cross-group child rows render as normal top-level rows without orphan/missing-parent warning. In normal mode, clicking the case name expands read-only notes. In maintenance mode, clicking the case name opens inline edit.
 
 Dev Projects create/edit is inline. Popup modal behavior is no longer the governing Dev Projects UX, even if compatibility code remains elsewhere. Notes are included in create/edit payloads and must not be removed during UI cleanup.
 
@@ -1587,8 +1601,23 @@ Maintenance boundary:
 * normal mode is read-only except note expansion
 * maintenance/action mode enables editing
 * delete appears only inside the expanded editor in maintenance mode
+* progress `>= 100` locks status to `已完成`
+* `已完成` remains in the normal main list for observation
+* `封存` is a separate manual lifecycle state
+* the archive checkbox appears in expanded edit mode when progress is 100% or current status is `封存`
+* checked archive saves `封存`; unchecked archive restores `已完成` when applicable
 
-Member-oriented view (`人員導向`) is a title-level tab beside `案件導向`. It is grouped by person, uses the same list language as `案件導向`, and is read-only. Member rows use `↳ [主負責] case name` or `↳ [協作] case name`. All tasks are listed directly; do not replace the accepted view with collapse chips or summary-only cards. Workload score uses the existing workload config logic.
+Member-oriented view (`人員導向`) is a title-level tab beside `案件導向`. It must not show `分組` controls. It is grouped by person, uses the same list language as `案件導向`, and is read-only. Member rows use `↳ [主負責] case name` or `↳ [協作] case name`.
+
+`人員導向` has one global detail control only:
+
+```text
+明細 [收合明細] / [展開明細]
+```
+
+The default member detail mode is expanded. Expanded mode shows member workload summary plus detail rows. Collapsed mode may hide detail rows globally, but must preserve member headers and summary counts. Do not add per-member expand/collapse state, row-level member toggles, localStorage, or URL state.
+
+Dev Projects `人員導向` workload logic is aligned with the original lower `團隊成員工作負荷` baseline. The standalone lower `團隊成員工作負荷` block is retired from the Internal Ops page layout, but `public/scripts/internal-ops/internal-ops-team-workload.js` remains as historical/reference logic and must not be treated as deleted.
 
 ---
 

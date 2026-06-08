@@ -177,6 +177,8 @@ Completed non-breaking cleanup:
   Removed unreachable `loadFollowUpPage()` and the orphan `follow-up` page module registration.
 * Product Cost hidden chip-wall frontend cleanup completed in `public/scripts/products/products.js` and `public/views/product-list.html`.
   Removed the hidden chip-wall container and unreachable drag/reorder helpers.
+* Product Cost `wallArea is not defined` hotfix completed in `ProductManager.renderTable(query = '')`.
+  The unsafe implicit `wallArea` reference was replaced with a safe local `.chip-wall-container` DOM query. Product Cost formulas, data shape, sorting, backend behavior, and `ProductDetailModal` behavior were not changed.
 
 Protection notes:
 
@@ -211,4 +213,12 @@ Explicit no-touch reminders:
 * `ProductDetailModal` must not be deleted until separately approved.
 * `repomix-packs/**` are generated and must not be hand-edited.
 
-Internal Ops Dev Projects remains Sheet-backed. The accepted Dev Projects sheet range is `A:U`, with `U = 案件關係`. Existing legacy keys are intentionally preserved for compatibility, while semantic aliases support current UI/product language. The accepted Dev Projects views are `案件導向` and `人員導向`. This module is not part of Supabase migration scope unless separately planned.
+Internal Ops Dev Projects remains Sheet-backed. The accepted Dev Projects sheet range is `A:U`, with `U = 案件關係`. Existing legacy keys are intentionally preserved for compatibility, while semantic aliases support current UI/product language. The accepted Dev Projects views are `案件導向` and `人員導向`.
+
+Current Dev Projects state:
+
+* `案件導向` grouping is display-only, applies only to the case-oriented view, and must not filter or mutate rows.
+* `人員導向` integrates workload summary and detail rows, defaults to expanded, and uses one global `明細` toggle only.
+* the old standalone lower `團隊成員工作負荷` block is retired from the page layout; `public/scripts/internal-ops/internal-ops-team-workload.js` remains historical/reference logic.
+* `已完成` remains in the normal list, while `封存` is a separate manual lifecycle state that moves cases to the bottom `封存案件` group.
+* this module is not part of Supabase migration scope unless separately planned.

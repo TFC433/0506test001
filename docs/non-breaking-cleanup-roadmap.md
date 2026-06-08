@@ -66,7 +66,9 @@ Completed cleanup items:
   - Removed unreachable `loadFollowUpPage()` and orphan `window.CRM_APP.pageModules['follow-up']` registration.
   - Dashboard follow-up logic, `/api/dashboard`, `followUpList`, `followUpCount`, `DashboardService._getFollowUpOpportunities`, `config.FOLLOW_UP`, Opportunity List, Opportunity Detail, Activity Hub, and backend were not touched.
 - Product Cost hidden chip-wall frontend cleanup completed in `public/scripts/products/products.js` and `public/views/product-list.html`.
-  - Removed hidden `#chip-wall-area`, `#category-chip-list`, `#order-save-status`, `initChipWall()`, `getDragAfterElement()`, `checkAndSaveOrder()`, `saveCategoryOrder()`, and the stale chip-wall lookup in `renderTable()`.
+  - Removed hidden `#chip-wall-area`, `#category-chip-list`, `#order-save-status`, `initChipWall()`, `getDragAfterElement()`, `checkAndSaveOrder()`, and `saveCategoryOrder()`.
+  - The unsafe implicit `wallArea` reference in `ProductManager.renderTable(query = '')` was replaced with a safe local `.chip-wall-container` DOM query.
+  - No Product Cost formulas, sorting, data shape, backend behavior, or `ProductDetailModal` behavior changed.
   - Product Cost flat table rendering, inline edit, `addNewRow()`, `saveAll()`, Product Cost Sheet L/M/N/O mapping, `/api/products/opportunity-specs`, `ProductDetailModal`, `openDetailModal()`, `loadCategoryOrder()`, `this.categoryOrder`, backend `/api/products/category-order`, and `SystemPref` remain protected.
 
 Pending cleanup targets that are not approved for deletion:
