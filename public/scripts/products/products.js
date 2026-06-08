@@ -207,6 +207,7 @@ window.ProductManager = {
                 return a.originalIndex - b.originalIndex;
             })
             .map(row => row.item);
+        const wallArea = document.querySelector('.chip-wall-container');
         if (wallArea) wallArea.style.display = 'none';
 
         if (data.length === 0) {

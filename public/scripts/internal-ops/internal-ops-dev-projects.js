@@ -52,6 +52,10 @@ if (typeof window.__devProjectsCaseGroupMode === 'undefined') {
     window.__devProjectsCaseGroupMode = 'none';
 }
 
+if (typeof window.__devProjectsMemberDetailMode === 'undefined') {
+    window.__devProjectsMemberDetailMode = 'expanded';
+}
+
 const DEV_PROJECT_COMPLETED_STATUS = '\u5df2\u5b8c\u6210';
 const DEV_PROJECT_ARCHIVED_STATUS = '\u5c01\u5b58';
 const DEV_PROJECT_ARCHIVED_GROUP_LABEL = '\u5c01\u5b58\u6848\u4ef6';
@@ -64,6 +68,9 @@ const DEV_PROJECT_GROUP_NONE_LABEL = '\u4e0d\u5206\u7d44';
 const DEV_PROJECT_GROUP_CATEGORY_LABEL = '\u6848\u4ef6\u5206\u985e';
 const DEV_PROJECT_GROUP_STATUS_LABEL = '\u6848\u4ef6\u72c0\u614b';
 const DEV_PROJECT_UNGROUPED_LABEL = '\u672a\u5206\u985e';
+const DEV_PROJECT_DETAIL_LABEL = '\u660e\u7d30';
+const DEV_PROJECT_DETAIL_EXPAND_LABEL = '\u5c55\u958b\u660e\u7d30';
+const DEV_PROJECT_DETAIL_COLLAPSE_LABEL = '\u6536\u5408\u660e\u7d30';
 
 function getDevClampedProgress(rawValue) {
     const parsed = parseInt(rawValue, 10);
@@ -115,6 +122,12 @@ window.setDevProjectsCaseGroupMode = function(mode) {
     rerenderDevProjectsInline();
 };
 
+window.setDevProjectsMemberDetailMode = function(mode) {
+    if (!['collapsed', 'expanded'].includes(mode)) return;
+    window.__devProjectsMemberDetailMode = mode;
+    rerenderDevProjectsInline();
+};
+
 
 function updateDevProjectsViewTabs() {
     const activeMode = window.__devProjectsViewMode === 'member' ? 'member' : 'case';
@@ -123,7 +136,7 @@ function updateDevProjectsViewTabs() {
     });
     const groupHost = document.getElementById('dev-project-case-group-controls-host');
     if (groupHost) {
-        groupHost.innerHTML = activeMode === 'case' ? renderDevProjectsCaseGroupControls() : '';
+        groupHost.innerHTML = activeMode === 'case' ? renderDevProjectsCaseGroupControls() : renderDevProjectsMemberDetailControls();
     }
 }
 
@@ -134,6 +147,18 @@ function renderDevProjectsCaseGroupControls() {
             <button type="button" onclick="window.setDevProjectsCaseGroupMode('none')" class="internal-ops-btn dev-case-group-btn ${window.__devProjectsCaseGroupMode === 'none' ? 'is-active' : ''}">${DEV_PROJECT_GROUP_NONE_LABEL}</button>
             <button type="button" onclick="window.setDevProjectsCaseGroupMode('category')" class="internal-ops-btn dev-case-group-btn ${window.__devProjectsCaseGroupMode === 'category' ? 'is-active' : ''}">${DEV_PROJECT_GROUP_CATEGORY_LABEL}</button>
             <button type="button" onclick="window.setDevProjectsCaseGroupMode('status')" class="internal-ops-btn dev-case-group-btn ${window.__devProjectsCaseGroupMode === 'status' ? 'is-active' : ''}">${DEV_PROJECT_GROUP_STATUS_LABEL}</button>
+        </span>
+    `;
+}
+
+function renderDevProjectsMemberDetailControls() {
+    const activeMode = window.__devProjectsMemberDetailMode === 'expanded' ? 'expanded' : 'collapsed';
+    const nextMode = activeMode === 'expanded' ? 'collapsed' : 'expanded';
+    const toggleLabel = activeMode === 'expanded' ? DEV_PROJECT_DETAIL_COLLAPSE_LABEL : DEV_PROJECT_DETAIL_EXPAND_LABEL;
+    return `
+        <span class="dev-case-group-controls">
+            <span class="dev-case-group-label">${DEV_PROJECT_DETAIL_LABEL}</span>
+            <button type="button" onclick="window.setDevProjectsMemberDetailMode('${nextMode}')" class="internal-ops-btn dev-case-group-btn is-active">${toggleLabel}</button>
         </span>
     `;
 }
@@ -1414,7 +1439,7 @@ window.renderDevProjects = function(data) {
         return `<span style="display:inline-block; padding:2px 7px; border-radius:5px; font-size:0.75rem; font-weight:600; background:${colorSet.bgLight}; color:${colorSet.text}; border:1px solid ${colorSet.border}; white-space:nowrap;">${label}</span>`;
     }
 
-    function renderMemberModeRow(item, role) {
+    function renderMemberModeRow(item, role, displayIndex = '') {
         const progressText = item.progress || '0%';
         const progressCueHtml = getDevProgressCueHtml(item);
         const scheduleText = [item.startDate, item.estCompletionDate].filter(Boolean).join(' → ') || '-';
@@ -1430,7 +1455,7 @@ window.renderDevProjects = function(data) {
 
         return `
             <tr class="dev-member-row${rowClass}">
-                <td></td>
+                <td>${displayIndex ? `${displayIndex}.` : ''}</td>
                 <td class="dev-case-name-table-cell" title="${escapeHtml(item.productName || item.caseName || '-')}">
                     <div class="dev-member-case-name">
                         <span class="dev-child-marker">↳</span>
@@ -1451,6 +1476,7 @@ window.renderDevProjects = function(data) {
 
     function renderMemberView(items) {
         const memberGroups = buildDevMemberGroups(items);
+        const isDetailExpanded = window.__devProjectsMemberDetailMode === 'expanded';
         if (!memberGroups.length) {
             return '<div class="dev-member-empty">目前沒有可顯示的成員案件</div>';
         }
@@ -1465,12 +1491,12 @@ window.renderDevProjects = function(data) {
                     const activeCollabTasks = group.collabTasks.filter(item => !isDevProjectArchived(item));
                     const archivedCollabTasks = group.collabTasks.filter(isDevProjectArchived);
                     const archivedRows = [
-                        ...archivedMainTasks.map(item => renderMemberModeRow(item, 'main')),
-                        ...archivedCollabTasks.map(item => renderMemberModeRow(item, 'collab'))
+                        ...archivedMainTasks.map((item, index) => renderMemberModeRow(item, 'main', activeMainTasks.length + activeCollabTasks.length + index + 1)),
+                        ...archivedCollabTasks.map((item, index) => renderMemberModeRow(item, 'collab', activeMainTasks.length + activeCollabTasks.length + archivedMainTasks.length + index + 1))
                     ].join('');
                     const memberRows = [
-                        ...activeMainTasks.map(item => renderMemberModeRow(item, 'main')),
-                        ...activeCollabTasks.map(item => renderMemberModeRow(item, 'collab')),
+                        ...activeMainTasks.map((item, index) => renderMemberModeRow(item, 'main', index + 1)),
+                        ...activeCollabTasks.map((item, index) => renderMemberModeRow(item, 'collab', activeMainTasks.length + index + 1)),
                         archivedRows ? renderArchivedSeparatorRow(9) + archivedRows : ''
                     ].join('') || `<tr class="dev-member-empty-row"><td colspan="9">暫無成員案件</td></tr>`;
                     return `
@@ -1484,6 +1510,7 @@ window.renderDevProjects = function(data) {
                                     <span class="dev-member-summary">落後 ${group.behindCount}</span>
                                 </div>
                             </div>
+                            ${isDetailExpanded ? `
                             <table class="internal-ops-table dev-member-table">
                                 <colgroup>
                                     <col style="width: 1%;">
@@ -1511,6 +1538,7 @@ window.renderDevProjects = function(data) {
                                 </thead>
                                 <tbody>${memberRows}</tbody>
                             </table>
+                            ` : ''}
                         </section>
                     `;
                 }).join('')}
@@ -1577,7 +1605,8 @@ window.renderDevProjects = function(data) {
         personnelHtml += `</div>`;
 
         const caseNameText = item.productName || item.caseName || '-';
-        const rowIndexText = item.__displayIndex || (item.__isChild ? '' : item.__groupIndex);
+        const rowIndexValue = item.__displayIndex || (item.__isChild ? '' : item.__groupIndex);
+        const rowIndexText = rowIndexValue ? `${rowIndexValue}.` : '';
         const childMarker = item.__isChild ? '<span class="dev-child-marker">↳</span>' : '';
         const childClass = item.__isChild ? ' dev-project-child-row' : '';
         const displayRow = `
@@ -1920,7 +1949,7 @@ window.renderDevProjects = function(data) {
                 color: var(--accent-red);
             }
             .dev-project-child-row td {
-                background: color-mix(in srgb, var(--card-bg) 92%, var(--primary-bg));
+                background: rgba(30, 58, 138, 0.045);
             }
             .dev-archived-separator-row td {
                 background: var(--glass-bg);
@@ -1935,16 +1964,17 @@ window.renderDevProjects = function(data) {
                 padding-left: 8px;
             }
             .dev-case-group-separator-row td {
-                background: color-mix(in srgb, var(--primary-bg) 44%, transparent);
+                background: rgba(88, 28, 135, 0.065);
                 color: var(--text-muted);
                 font-size: 0.76rem;
-                font-weight: 600;
+                font-weight: 700;
                 padding: 6px 12px;
+                border-top: 1px solid var(--border-color);
+                border-bottom: 1px solid var(--border-color);
             }
             .dev-case-group-separator-row span {
                 display: inline-block;
-                border-left: 2px solid var(--border-color);
-                padding-left: 8px;
+                padding-left: 0;
             }
             .dev-case-name-cell {
                 display: flex;
@@ -2148,11 +2178,11 @@ window.renderDevProjects = function(data) {
                 white-space: nowrap;
             }
             .dev-member-row-collab td {
-                color: var(--text-secondary);
-                background: color-mix(in srgb, var(--primary-bg) 38%, transparent);
+                color: var(--text-primary);
+                background: rgba(67, 56, 202, 0.045);
             }
             .dev-member-row-collab .dev-case-name-primary {
-                color: var(--text-secondary);
+                color: var(--text-primary);
                 font-weight: 500;
             }
             .dev-member-case-name {
