@@ -55,7 +55,6 @@ const SUBSCRIPTION_FORM_FIELDS = [
     'subscriptionStartDate',
     'subscriptionEndDate',
     'reminderOwnerName',
-    'reminderOwnerEmail',
     'reminderStages',
     'status',
     'notes'
@@ -64,8 +63,6 @@ const SUBSCRIPTION_FORM_FIELDS = [
 const SUBSCRIPTION_OPPORTUNITY_FORM_FIELDS = [
     'subscriptionStartDate',
     'subscriptionEndDate',
-    'reminderOwnerName',
-    'reminderOwnerEmail',
     'reminderStages',
     'status',
     'notes'
@@ -216,7 +213,11 @@ function renderSubscriptionProductOptions(opportunity, selectedValue) {
     return '<option value="">\u672a\u9078\u64c7 / \u4e0d\u6307\u5b9a\u7522\u54c1</option>' + items;
 }
 
-function renderSubscriptionOpportunityReference(opportunity) {
+function getSubscriptionReminderOwnerLabel(opportunity, fallbackOwnerName) {
+    return fallbackOwnerName || (opportunity && opportunity.assignee) || '\u672a\u8a2d\u5b9a';
+}
+
+function renderSubscriptionOpportunityReference(opportunity, fallbackOwnerName = '') {
     if (!opportunity) return '';
 
     const closeDate = formatSubscriptionDateOnly(opportunity.expectedCloseDate || opportunity.lastUpdateTime);
@@ -225,7 +226,7 @@ function renderSubscriptionOpportunityReference(opportunity) {
         ['\u5ba2\u6236', opportunity.customerCompany],
         ['\u6a5f\u6703\u985e\u578b', opportunity.opportunityType],
         ['\u6210\u4ea4\u65e5', closeDate],
-        ['\u6a5f\u6703\u8ca0\u8cac\u4eba', opportunity.assignee]
+        ['\u5167\u90e8\u63d0\u9192\u5c0d\u8c61', getSubscriptionReminderOwnerLabel(opportunity, fallbackOwnerName)]
     ];
 
     return `
@@ -330,8 +331,7 @@ function renderSubscriptionField(prefix, field, item = {}) {
         manualItemName: '\u8a02\u95b1\u9805\u76ee *',
         subscriptionStartDate: '\u8a02\u95b1\u958b\u59cb\u65e5',
         subscriptionEndDate: '\u8a02\u95b1\u5230\u671f\u65e5 *',
-        reminderOwnerName: '\u63d0\u9192\u8ca0\u8cac\u4eba',
-        reminderOwnerEmail: '\u63d0\u9192\u8ca0\u8cac\u4eba Email'
+        reminderOwnerName: '\u5167\u90e8\u63d0\u9192\u5c0d\u8c61'
     };
 
     const types = {
@@ -387,7 +387,7 @@ function renderSubscriptionInlineForm(prefix, item = {}, mode = 'create') {
 
 function renderSubscriptionEditReference(item) {
     const display = getSubscriptionDisplayModel(item);
-    return renderSubscriptionOpportunityReference(display.opportunity);
+    return renderSubscriptionOpportunityReference(display.opportunity, getSubscriptionValue(item, 'reminderOwnerName'));
 }
 
 function renderSubscriptionReadOnlyProduct(item) {
@@ -478,6 +478,11 @@ function collectCreateSubscriptionPayload() {
     const selectedProductId = productSelect ? productSelect.value.trim() : (window.__subscriptionSelectedProductId || '');
     if (selectedProductId) {
         payload.productId = selectedProductId;
+    }
+
+    const selectedOpportunity = getSelectedSubscriptionOpportunity();
+    if (selectedOpportunity && selectedOpportunity.assignee) {
+        payload.reminderOwnerName = selectedOpportunity.assignee;
     }
 
     return payload;

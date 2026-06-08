@@ -32,6 +32,11 @@ const OPTIONAL_NULLABLE_FIELDS = [
     'reminderOwnerEmail'
 ];
 
+const ALERT_FETCH_LIMIT = 1000;
+const ALERT_CUTOFF_DATE = '9999-12-31';
+const UNSPECIFIED_PRODUCT_LABEL = '\u672a\u6307\u5b9a\u5546\u54c1';
+const UNRESOLVED_PRODUCT_LABEL = '\u672a\u89e3\u6790\u5546\u54c1';
+
 class SubscriptionOpsService {
     constructor({ subscriptionOpsSqlReader, subscriptionOpsSqlWriter, opportunitySqlReader, productService }) {
         this.subscriptionOpsSqlReader = subscriptionOpsSqlReader;
@@ -69,26 +74,32 @@ class SubscriptionOpsService {
         }));
     }
 
-    async getUpcomingRenewalAlerts({ limit = 10 } = {}) {
-        const normalizedLimit = this._normalizeAlertLimit(limit);
+    async getUpcomingRenewalAlerts({ limit } = {}) {
+        const explicitLimit = this._normalizeAlertLimit(limit, { allowEmpty: true });
         const today = this._getDateOnly(new Date());
-        const cutoff = this._addDays(today, 90);
-        const records = await this.subscriptionOpsSqlReader.getUpcomingRenewalAlerts({
-            cutoffDate: this._formatDateOnly(cutoff),
-            fetchLimit: Math.max(normalizedLimit * 3, 30)
-        });
+        const [records, opportunities, productOptions] = await Promise.all([
+            this.subscriptionOpsSqlReader.getUpcomingRenewalAlerts({
+                cutoffDate: ALERT_CUTOFF_DATE,
+                fetchLimit: explicitLimit ? Math.max(explicitLimit * 3, 30) : ALERT_FETCH_LIMIT
+            }),
+            this._fetchWonOpportunities(),
+            this._fetchOpportunityProductOptions()
+        ]);
+        const opportunityMap = new Map((opportunities || []).map(opportunity => [String(opportunity.opportunityId), opportunity]));
+        const productOptionMap = new Map((productOptions || []).map(option => [String(option.id), option]));
 
-        return records
+        const alerts = records
             .filter(record => !ALERT_EXCLUDED_STATUSES.includes(record.status))
-            .map(record => this._mapAlertDto(record, today))
+            .map(record => this._mapAlertDto(record, today, opportunityMap, productOptionMap))
             .sort((a, b) => {
                 const overdueA = a.daysRemaining < 0;
                 const overdueB = b.daysRemaining < 0;
                 if (overdueA !== overdueB) return overdueA ? -1 : 1;
                 if (a.daysRemaining !== b.daysRemaining) return a.daysRemaining - b.daysRemaining;
                 return String(a.id).localeCompare(String(b.id));
-            })
-            .slice(0, normalizedLimit);
+            });
+
+        return explicitLimit ? alerts.slice(0, explicitLimit) : alerts;
     }
 
     async createSubscriptionOp(data) {
@@ -287,32 +298,75 @@ class SubscriptionOpsService {
         });
     }
 
-    _mapAlertDto(record, today) {
+    _mapAlertDto(record, today, opportunityMap = new Map(), productOptionMap = new Map()) {
         const endDate = this._parseDateOnly(record.subscriptionEndDate);
         const daysRemaining = this._diffDateOnlyDays(today, endDate);
+        const opportunity = record.opportunityId ? opportunityMap.get(String(record.opportunityId)) : null;
+        const displayOpportunityName = this._resolveAlertOpportunityName(record, opportunity);
+        const displayProductName = this._resolveAlertProductName(record, opportunity, productOptionMap);
 
         return {
             id: record.id,
+            sourceType: record.sourceType,
+            opportunityId: record.opportunityId,
+            productId: record.productId,
+            displayOpportunityName,
+            displayProductName,
+            subscriptionEndDate: record.subscriptionEndDate,
+            daysRemaining,
+            urgency: this._getAlertUrgency(daysRemaining),
             customerName: record.manualCustomerName || '',
             subscriptionItemName: record.manualItemName || '',
             endDate: record.subscriptionEndDate,
             status: record.status,
-            ownerName: record.reminderOwnerName,
-            sourceType: record.sourceType,
             isActive: record.isActive,
-            isArchived: record.isArchived,
-            daysRemaining,
-            urgency: this._getAlertUrgency(daysRemaining)
+            isArchived: record.isArchived
         };
+    }
+
+    _resolveAlertOpportunityName(record, opportunity) {
+        if (record.sourceType === 'opportunity') {
+            return (opportunity && opportunity.opportunityName) || record.manualCustomerName || record.customerName || record.opportunityId || '';
+        }
+
+        return record.manualCustomerName || record.customerName || '';
+    }
+
+    _resolveAlertProductName(record, opportunity, productOptionMap) {
+        if (record.sourceType !== 'opportunity') {
+            return record.manualItemName || record.subscriptionItemName || UNSPECIFIED_PRODUCT_LABEL;
+        }
+
+        if (!record.productId) {
+            return UNSPECIFIED_PRODUCT_LABEL;
+        }
+
+        const productKey = String(record.productId);
+        if (opportunity) {
+            const selectedProduct = this._extractSelectedProducts(opportunity.potentialSpecification, productOptionMap)
+                .find(product => String(product.productId) === productKey);
+            if (selectedProduct) {
+                return selectedProduct.label || selectedProduct.productName || selectedProduct.productId;
+            }
+        }
+
+        const productOption = productOptionMap.get(productKey);
+        if (productOption) {
+            return productOption.label || productOption.name || productKey;
+        }
+
+        return productKey || UNRESOLVED_PRODUCT_LABEL;
     }
 
     _getAlertUrgency(daysRemaining) {
         if (daysRemaining < 0) return 'overdue';
+        if (daysRemaining === 0) return 'dueToday';
         if (daysRemaining <= 30) return 'within30';
         return 'within90';
     }
 
-    _normalizeAlertLimit(limit) {
+    _normalizeAlertLimit(limit, options = {}) {
+        if (options.allowEmpty && (limit === undefined || limit === null || limit === '')) return null;
         const parsed = parseInt(limit, 10);
         if (isNaN(parsed) || parsed <= 0) return 10;
         return Math.min(parsed, 50);

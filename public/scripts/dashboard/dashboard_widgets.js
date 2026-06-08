@@ -681,32 +681,56 @@ const DashboardWidgets = {
 
         marquee.classList.remove('is-empty');
 
-        const severityLabels = {
-            overdue: '已逾期',
-            within30: '30 天內',
-            within90: '90 天內'
-        };
+        const TEXT_UNSPECIFIED_PRODUCT = '\u672a\u6307\u5b9a\u5546\u54c1';
+        const TEXT_UNRESOLVED_PRODUCT = '\u672a\u89e3\u6790\u5546\u54c1';
+        const TEXT_OVERDUE = '\u5df2\u903e\u671f';
+        const TEXT_DUE_TODAY = '\u4eca\u5929\u5230\u671f';
+        const TEXT_WITHIN_30 = '30\u5929\u5167';
+        const TEXT_WITHIN_60 = '60\u5929\u5167';
+        const TEXT_WITHIN_90 = '90\u5929\u5167';
+        const TEXT_WITHIN_180 = '180\u5929\u5167';
+        const TEXT_OVER_180 = '180\u5929\u4ee5\u4e0a';
+        const TEXT_REMAINING_PREFIX = '\u5269';
+        const TEXT_OVERDUE_PREFIX = '\u903e\u671f';
+        const TEXT_DAY_UNIT = '\u5929';
+        const TEXT_SEPARATOR = '\u3000\u3000\uff5c\u3000\u3000';
+
+        const escapeHtml = value => String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
 
         const getDaysText = daysRemaining => {
             const days = Number(daysRemaining);
             if (Number.isNaN(days)) return '-';
-            if (days < 0) return `逾期 ${Math.abs(days)} 天`;
-            if (days === 0) return '今天到期';
-            return `剩 ${days} 天`;
+            if (days < 0) return `${TEXT_OVERDUE_PREFIX} ${Math.abs(days)} ${TEXT_DAY_UNIT}`;
+            if (days === 0) return TEXT_DUE_TODAY;
+            return `${TEXT_REMAINING_PREFIX} ${days} ${TEXT_DAY_UNIT}`;
         };
 
-        const text = alerts.map(item => {
-            const urgency = item.urgency || 'within90';
-            const severity = severityLabels[urgency] || severityLabels.within90;
-            const endDate = item.endDate || '-';
-            const customerName = item.customerName || '-';
-            const itemName = item.subscriptionItemName || '-';
-            const ownerName = item.ownerName || '-';
-            const daysText = getDaysText(item.daysRemaining);
-            return `[${severity}] ${endDate} ${customerName} - ${itemName}，負責人：${ownerName}，${daysText}`;
-        }).join('  ·  ');
+        const getBadge = daysRemaining => {
+            const days = Number(daysRemaining);
+            if (Number.isNaN(days)) return { label: TEXT_WITHIN_90, tier: 'mild' };
+            if (days < 0) return { label: TEXT_OVERDUE, tier: 'critical' };
+            if (days === 0) return { label: TEXT_DUE_TODAY, tier: 'critical' };
+            if (days <= 30) return { label: TEXT_WITHIN_30, tier: 'strong' };
+            if (days <= 60) return { label: TEXT_WITHIN_60, tier: 'medium' };
+            if (days <= 90) return { label: TEXT_WITHIN_90, tier: 'mild' };
+            if (days <= 180) return { label: TEXT_WITHIN_180, tier: 'low' };
+            return { label: TEXT_OVER_180, tier: 'low' };
+        };
 
-        track.textContent = text;
+        const html = alerts.map(item => {
+            const badge = getBadge(item.daysRemaining);
+            const opportunityName = item.displayOpportunityName || item.customerName || '-';
+            const productName = item.displayProductName || item.subscriptionItemName || TEXT_UNSPECIFIED_PRODUCT;
+            const daysText = getDaysText(item.daysRemaining);
+            return `<span class="subscription-alert-marquee-item"><span class="subscription-alert-badge is-${badge.tier}">${escapeHtml(badge.label)}</span><span>${escapeHtml(opportunityName)}</span><span>${escapeHtml(productName)}</span><span>${escapeHtml(daysText)}</span></span>`;
+        }).join(`<span class="subscription-alert-separator">${TEXT_SEPARATOR}</span>`);
+
+        track.innerHTML = html;
     },
 
     /**
@@ -770,24 +794,35 @@ const DashboardWidgets = {
             style.innerHTML = `
                 .subscription-alerts-marquee {
                     display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 260px; max-width: none;
-                    height: 30px; padding: 4px 10px; border: 1px solid rgba(244, 63, 94, 0.34); border-radius: 4px;
-                    background: rgba(244, 63, 94, 0.08); color: #9f1239; cursor: pointer; overflow: hidden;
+                    height: 30px; padding: 4px 10px; border: 1px solid rgba(124, 112, 163, 0.24); border-radius: 4px;
+                    background: rgba(245, 244, 250, 0.92); color: #3f3a56; cursor: pointer; overflow: hidden;
                 }
                 .page-header .header-content { flex: 1 1 auto; min-width: 0; }
                 .page-header .header-content > div { flex: 0 1 auto; min-width: 0; }
                 .page-header .header-actions { flex: 0 0 auto; }
-                .subscription-alerts-marquee:hover { background: rgba(244, 63, 94, 0.12); border-color: rgba(225, 29, 72, 0.42); color: #881337; }
+                .subscription-alerts-marquee:hover { background: rgba(239, 237, 247, 0.96); border-color: rgba(124, 112, 163, 0.36); color: #312d46; }
                 .subscription-alerts-marquee-label {
-                    flex: 0 0 auto; color: #9f1239; font-size: 0.78rem; font-weight: 700; white-space: nowrap;
+                    flex: 0 0 auto; color: #554c73; font-size: 0.78rem; font-weight: 700; white-space: nowrap;
                 }
                 .subscription-alerts-marquee-viewport { flex: 1 1 auto; min-width: 0; overflow: hidden; white-space: nowrap; }
                 .subscription-alerts-marquee-track {
-                    display: inline-block; min-width: 100%; padding-left: 100%; color: #9f1239;
+                    display: inline-block; min-width: 100%; padding-left: 100%; color: #3f3a56;
                     font-size: 0.82rem; line-height: 1.2; white-space: nowrap; animation: subscriptionMarquee 18s linear infinite;
                 }
+                .subscription-alert-marquee-item { display: inline-flex; align-items: center; gap: 8px; }
+                .subscription-alert-separator { color: rgba(85, 76, 115, 0.48); }
+                .subscription-alert-badge {
+                    display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 3px;
+                    font-size: 0.72rem; line-height: 18px; font-weight: 700; border: 1px solid transparent;
+                }
+                .subscription-alert-badge.is-critical { color: #8f2434; background: rgba(244, 63, 94, 0.13); border-color: rgba(244, 63, 94, 0.22); }
+                .subscription-alert-badge.is-strong { color: #935b11; background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.24); }
+                .subscription-alert-badge.is-medium { color: #5c4b91; background: rgba(139, 92, 246, 0.12); border-color: rgba(139, 92, 246, 0.20); }
+                .subscription-alert-badge.is-mild { color: #256372; background: rgba(14, 165, 233, 0.11); border-color: rgba(14, 165, 233, 0.18); }
+                .subscription-alert-badge.is-low { color: #586070; background: rgba(100, 116, 139, 0.10); border-color: rgba(100, 116, 139, 0.16); }
                 .subscription-alerts-marquee:hover .subscription-alerts-marquee-track { animation-play-state: paused; }
                 .subscription-alerts-marquee.is-empty .subscription-alerts-marquee-track {
-                    padding-left: 0; animation: none; color: rgba(159, 18, 57, 0.72);
+                    padding-left: 0; animation: none; color: rgba(85, 76, 115, 0.72);
                 }
                 @keyframes subscriptionMarquee {
                     from { transform: translateX(0); }
