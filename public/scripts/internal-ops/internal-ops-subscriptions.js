@@ -9,6 +9,10 @@ if (typeof window.__subscriptionsCreateOpen === 'undefined') {
     window.__subscriptionsCreateOpen = false;
 }
 
+if (typeof window.__subscriptionsCreateTab === 'undefined') {
+    window.__subscriptionsCreateTab = 'subscription';
+}
+
 if (typeof window.__subscriptionsExpandedEditId === 'undefined') {
     window.__subscriptionsExpandedEditId = null;
 }
@@ -66,6 +70,12 @@ const SUBSCRIPTION_OPPORTUNITY_FORM_FIELDS = [
     'reminderStages',
     'status',
     'notes'
+];
+
+const CUSTOM_REMINDER_FORM_FIELDS = [
+    'customSubject',
+    'customNote',
+    'subscriptionEndDate'
 ];
 
 const SUBSCRIPTION_REMINDER_STAGE_OPTIONS = ['180', '90', '30'];
@@ -148,7 +158,26 @@ function getSubscriptionProductById(opportunity, productId) {
     return opportunity.products.find(item => String(item.productId) === String(productId)) || null;
 }
 
+function isCustomReminder(item) {
+    return Boolean(item && item.reminderKind === 'custom');
+}
+
 function getSubscriptionDisplayModel(item) {
+    if (isCustomReminder(item)) {
+        return {
+            wonDate: '',
+            opportunityName: '',
+            customerName: '\u81ea\u8a02\u63d0\u9192',
+            itemName: getSubscriptionValue(item, 'customSubject'),
+            startDate: '',
+            endDate: getSubscriptionValue(item, 'subscriptionEndDate'),
+            ownerName: '',
+            reminderStages: '',
+            opportunity: null,
+            product: null
+        };
+    }
+
     const opportunity = getSubscriptionOpportunityById(item && item.opportunityId);
     const product = getSubscriptionProductById(opportunity, item && item.productId);
     const isOpportunityLinked = Boolean(item && item.sourceType === 'opportunity');
@@ -281,6 +310,27 @@ function renderSubscriptionOpportunityCreateFields(prefix) {
     `;
 }
 
+function renderSubscriptionCreateTabs() {
+    const activeTab = window.__subscriptionsCreateTab || 'subscription';
+    const tabs = [
+        ['subscription', '\u8a02\u95b1\u7522\u54c1\u63d0\u9192'],
+        ['custom', '\u81ea\u8a02\u63d0\u9192']
+    ];
+
+    return `
+        <div class="subscription-create-tabs" role="tablist">
+            ${tabs.map(([value, label]) => {
+                const activeClass = activeTab === value ? ' is-active' : '';
+                return `
+                    <button type="button" class="subscription-create-tab${activeClass}" onclick="window.setSubscriptionCreateTab('${value}')">
+                        ${label}
+                    </button>
+                `;
+            }).join('')}
+        </div>
+    `;
+}
+
 function renderSubscriptionField(prefix, field, item = {}) {
     const id = `${prefix}-${field}`;
     const value = getSubscriptionValue(item, field);
@@ -326,12 +376,22 @@ function renderSubscriptionField(prefix, field, item = {}) {
         `;
     }
 
+    if (field === 'customNote') {
+        return `
+            <label class="subscription-inline-field subscription-inline-field-wide">
+                <span>\u5099\u8a3b</span>
+                <textarea id="${id}" rows="2">${escapeSubscriptionHtml(value)}</textarea>
+            </label>
+        `;
+    }
+
     const labels = {
         manualCustomerName: '\u5ba2\u6236 *',
         manualItemName: '\u8a02\u95b1\u9805\u76ee *',
         subscriptionStartDate: '\u8a02\u95b1\u958b\u59cb\u65e5',
         subscriptionEndDate: '\u8a02\u95b1\u5230\u671f\u65e5 *',
-        reminderOwnerName: '\u5167\u90e8\u63d0\u9192\u5c0d\u8c61'
+        reminderOwnerName: '\u5167\u90e8\u63d0\u9192\u5c0d\u8c61',
+        customSubject: '\u4e3b\u65e8 *'
     };
 
     const types = {
@@ -344,6 +404,34 @@ function renderSubscriptionField(prefix, field, item = {}) {
             <span>${labels[field] || field}</span>
             <input id="${id}" type="${types[field] || 'text'}" value="${escapeSubscriptionHtml(value)}">
         </label>
+    `;
+}
+
+function renderCustomReminderInlineForm(prefix, item = {}, mode = 'create') {
+    const saveFn = mode === 'create'
+        ? 'window.saveSubscriptionCreateInline()'
+        : `window.saveSubscriptionExpandedEdit('${escapeSubscriptionHtml(item.id)}')`;
+    const cancelFn = mode === 'create'
+        ? 'window.cancelSubscriptionCreateInline()'
+        : 'window.cancelSubscriptionExpandedEdit()';
+
+    return `
+        <tr class="subscription-inline-form-row">
+            <td colspan="10">
+                <div class="subscription-inline-form">
+                    ${mode === 'create' ? renderSubscriptionCreateTabs() : ''}
+                    <div class="subscription-inline-grid">
+                        ${CUSTOM_REMINDER_FORM_FIELDS.map(field => renderSubscriptionField(prefix, field, item)).join('')}
+                    </div>
+                    <div class="subscription-inline-form-actions">
+                        <button type="button" class="internal-ops-btn" onclick="${cancelFn}">\u53d6\u6d88</button>
+                        <button type="button" class="action-btn primary btn-sm" onclick="${saveFn}">
+                            <span class="btn-text">\u5132\u5b58</span>
+                        </button>
+                    </div>
+                </div>
+            </td>
+        </tr>
     `;
 }
 
@@ -368,6 +456,7 @@ function renderSubscriptionInlineForm(prefix, item = {}, mode = 'create') {
         <tr class="subscription-inline-form-row">
             <td colspan="10">
                 <div class="subscription-inline-form">
+                    ${mode === 'create' ? renderSubscriptionCreateTabs() : ''}
                     ${opportunityControls}
                     ${productControls}
                     <div class="subscription-inline-grid">
@@ -429,6 +518,12 @@ function renderLegacySubscriptionInlineForm(prefix, item = {}, mode = 'edit') {
 }
 
 function renderSubscriptionFormForRow(prefix, item = {}, mode = 'create') {
+    if (mode === 'create' && window.__subscriptionsCreateTab === 'custom') {
+        return renderCustomReminderInlineForm(prefix, item, mode);
+    }
+    if (mode === 'edit' && isCustomReminder(item)) {
+        return renderCustomReminderInlineForm(prefix, item, mode);
+    }
     if (mode === 'edit' && item.sourceType !== 'opportunity') {
         return renderLegacySubscriptionInlineForm(prefix, item, mode);
     }
@@ -456,6 +551,13 @@ function collectSubscriptionForm(prefix, fields = SUBSCRIPTION_FORM_FIELDS) {
 }
 
 function validateSubscriptionPayload(payload, mode = 'create') {
+    if (payload.reminderKind === 'custom') {
+        const missing = ['customSubject', 'subscriptionEndDate'].filter(field => !payload[field]);
+        return missing.length > 0
+            ? '\u8acb\u586b\u5beb\u5fc5\u586b\u6b04\u4f4d\uff1a\u4e3b\u65e8\u3001\u5230\u671f\u65e5'
+            : '';
+    }
+
     const required = mode === 'create'
         ? ['opportunityId', 'subscriptionEndDate']
         : ['subscriptionEndDate'];
@@ -469,7 +571,19 @@ function validateSubscriptionPayload(payload, mode = 'create') {
 }
 
 function collectCreateSubscriptionPayload() {
+    if (window.__subscriptionsCreateTab === 'custom') {
+        const payload = collectSubscriptionForm('create-subscription', CUSTOM_REMINDER_FORM_FIELDS);
+        payload.reminderKind = 'custom';
+        payload.sourceType = 'manual';
+        if (payload.customSubject) {
+            payload.manualCustomerName = payload.customSubject;
+            payload.manualItemName = payload.customSubject;
+        }
+        return payload;
+    }
+
     const payload = collectSubscriptionForm('create-subscription', SUBSCRIPTION_OPPORTUNITY_FORM_FIELDS);
+    payload.reminderKind = 'subscription';
     const opportunitySelect = document.getElementById('create-subscription-opportunityId');
     const productSelect = document.getElementById('create-subscription-productId');
     payload.sourceType = 'opportunity';
@@ -490,6 +604,17 @@ function collectCreateSubscriptionPayload() {
 
 function collectEditSubscriptionPayload(id) {
     const record = getSubscriptionRecord(id);
+    if (isCustomReminder(record)) {
+        const payload = collectSubscriptionForm(`edit-${id}`, CUSTOM_REMINDER_FORM_FIELDS);
+        payload.reminderKind = 'custom';
+        payload.sourceType = 'manual';
+        if (payload.customSubject) {
+            payload.manualCustomerName = payload.customSubject;
+            payload.manualItemName = payload.customSubject;
+        }
+        return payload;
+    }
+
     const fields = record && record.sourceType === 'opportunity'
         ? SUBSCRIPTION_OPPORTUNITY_FORM_FIELDS
         : SUBSCRIPTION_FORM_FIELDS;
@@ -629,6 +754,7 @@ window.renderSubscriptions = function(data) {
 
 window.openSubscriptionCreateInline = function() {
     window.__subscriptionsCreateOpen = true;
+    window.__subscriptionsCreateTab = 'subscription';
     window.__subscriptionsExpandedEditId = null;
     window.__subscriptionsInlineError = '';
     window.__subscriptionSelectedOpportunityId = '';
@@ -639,10 +765,22 @@ window.openSubscriptionCreateInline = function() {
 
 window.cancelSubscriptionCreateInline = function() {
     window.__subscriptionsCreateOpen = false;
+    window.__subscriptionsCreateTab = 'subscription';
     window.__subscriptionsInlineError = '';
     window.__subscriptionSelectedOpportunityId = '';
     window.__subscriptionSelectedProductId = '';
     rerenderSubscriptionsInline();
+};
+
+window.setSubscriptionCreateTab = function(tab) {
+    window.__subscriptionsCreateTab = tab === 'custom' ? 'custom' : 'subscription';
+    window.__subscriptionsInlineError = '';
+    window.__subscriptionSelectedOpportunityId = '';
+    window.__subscriptionSelectedProductId = '';
+    rerenderSubscriptionsInline();
+    if (window.__subscriptionsCreateTab === 'subscription') {
+        ensureSubscriptionWonOpportunityOptions();
+    }
 };
 
 window.handleSubscriptionOpportunitySelect = function(opportunityId) {
@@ -786,6 +924,9 @@ window.archiveSubscriptionOp = async function(id) {
         .subscription-inline-field input,
         .subscription-inline-field select,
         .subscription-inline-field textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: 5px; background: var(--secondary-bg); color: var(--text-primary); padding: 7px 8px; font-size: 0.84rem; }
+        .subscription-create-tabs { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 10px; padding: 3px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--secondary-bg); }
+        .subscription-create-tab { border: 0; border-radius: 4px; background: transparent; color: var(--text-secondary); padding: 6px 9px; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+        .subscription-create-tab.is-active { background: var(--card-bg); color: var(--text-primary); box-shadow: 0 0 0 1px var(--border-color); }
         .subscription-reminder-stage-field { border: 0; margin: 0; padding: 0; }
         .subscription-reminder-stage-field legend { color: var(--text-secondary); font-size: 0.78rem; font-weight: 600; padding: 0; margin-bottom: 4px; }
         .subscription-reminder-stage-group { display: flex; align-items: center; gap: 10px; min-height: 34px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--secondary-bg); padding: 6px 8px; box-sizing: border-box; }

@@ -724,10 +724,20 @@ const DashboardWidgets = {
 
         const html = alerts.map(item => {
             const badge = getBadge(item.daysRemaining);
-            const opportunityName = item.displayOpportunityName || item.customerName || '-';
-            const productName = item.displayProductName || item.subscriptionItemName || TEXT_UNSPECIFIED_PRODUCT;
+            const isCustomReminder = item && item.reminderKind === 'custom';
+            const labels = [];
+            if (isCustomReminder) {
+                labels.push(item.customSubject || '-');
+                if (String(item.customNote || '').trim()) {
+                    labels.push(item.customNote);
+                }
+            } else {
+                labels.push(item.displayOpportunityName || item.customerName || '-');
+                labels.push(item.displayProductName || item.subscriptionItemName || TEXT_UNSPECIFIED_PRODUCT);
+            }
             const daysText = getDaysText(item.daysRemaining);
-            return `<span class="subscription-alert-marquee-item"><span class="subscription-alert-badge is-${badge.tier}">${escapeHtml(badge.label)}</span><span>${escapeHtml(opportunityName)}</span><span>${escapeHtml(productName)}</span><span>${escapeHtml(daysText)}</span></span>`;
+            const labelHtml = labels.map(label => `<span>${escapeHtml(label)}</span>`).join('');
+            return `<span class="subscription-alert-marquee-item"><span class="subscription-alert-badge is-${badge.tier}">${escapeHtml(badge.label)}</span>${labelHtml}<span>${escapeHtml(daysText)}</span></span>`;
         }).join(`<span class="subscription-alert-separator">${TEXT_SEPARATOR}</span>`);
 
         track.innerHTML = html;

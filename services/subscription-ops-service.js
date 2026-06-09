@@ -5,12 +5,15 @@
 
 const ALLOWED_FIELDS = [
     'sourceType',
+    'reminderKind',
     'opportunityId',
     'productId',
     'manualCustomerName',
     'manualItemName',
     'subscriptionStartDate',
     'subscriptionEndDate',
+    'customSubject',
+    'customNote',
     'reminderOwnerName',
     'reminderOwnerEmail',
     'reminderStages',
@@ -126,6 +129,9 @@ class SubscriptionOpsService {
         if (!id) throw new Error('id required');
 
         const payload = this._sanitizePayload(data);
+        if (payload.reminderKind === 'custom') {
+            this._validateRequired(payload);
+        }
         const updated = await this.subscriptionOpsSqlWriter.updateSubscriptionOp(id, payload);
 
         return {
@@ -267,6 +273,21 @@ class SubscriptionOpsService {
             normalized.reminderOwnerName = normalized.ownerName;
         }
 
+        const reminderKind = normalized.reminderKind || 'subscription';
+        if (options.applyDefaults && normalized.reminderKind === undefined) {
+            normalized.reminderKind = 'subscription';
+        }
+
+        if (reminderKind === 'custom') {
+            normalized.sourceType = normalized.sourceType || 'manual';
+            if (normalized.customSubject !== undefined && normalized.manualCustomerName === undefined) {
+                normalized.manualCustomerName = normalized.customSubject;
+            }
+            if (normalized.customSubject !== undefined && normalized.manualItemName === undefined) {
+                normalized.manualItemName = normalized.customSubject;
+            }
+        }
+
         if (options.applyDefaults && normalized.sourceType === undefined) {
             normalized.sourceType = 'manual';
         }
@@ -286,6 +307,15 @@ class SubscriptionOpsService {
     }
 
     _validateRequired(payload) {
+        if (payload.reminderKind === 'custom') {
+            ['customSubject', 'subscriptionEndDate'].forEach(field => {
+                if (payload[field] === undefined || payload[field] === null || payload[field] === '') {
+                    throw new Error(`${field} required`);
+                }
+            });
+            return;
+        }
+
         const sourceType = payload.sourceType || 'manual';
         const required = sourceType === 'opportunity'
             ? ['opportunityId', 'subscriptionEndDate']
@@ -308,8 +338,11 @@ class SubscriptionOpsService {
         return {
             id: record.id,
             sourceType: record.sourceType,
+            reminderKind: record.reminderKind || 'subscription',
             opportunityId: record.opportunityId,
             productId: record.productId,
+            customSubject: record.customSubject || '',
+            customNote: record.customNote || '',
             displayOpportunityName,
             displayProductName,
             subscriptionEndDate: record.subscriptionEndDate,
@@ -325,6 +358,10 @@ class SubscriptionOpsService {
     }
 
     _resolveAlertOpportunityName(record, opportunity) {
+        if ((record.reminderKind || 'subscription') === 'custom') {
+            return record.customSubject || '';
+        }
+
         if (record.sourceType === 'opportunity') {
             return (opportunity && opportunity.opportunityName) || record.manualCustomerName || record.customerName || record.opportunityId || '';
         }
@@ -333,6 +370,10 @@ class SubscriptionOpsService {
     }
 
     _resolveAlertProductName(record, opportunity, productOptionMap) {
+        if ((record.reminderKind || 'subscription') === 'custom') {
+            return record.customNote || ' ';
+        }
+
         if (record.sourceType !== 'opportunity') {
             return record.manualItemName || record.subscriptionItemName || UNSPECIFIED_PRODUCT_LABEL;
         }

@@ -7,12 +7,15 @@ const { supabase } = require('../config/supabase');
 
 const FIELD_TO_COLUMN = {
     sourceType: 'source_type',
+    reminderKind: 'reminder_kind',
     opportunityId: 'opportunity_id',
     productId: 'product_id',
     manualCustomerName: 'manual_customer_name',
     manualItemName: 'manual_item_name',
     subscriptionStartDate: 'subscription_start_date',
     subscriptionEndDate: 'subscription_end_date',
+    customSubject: 'custom_subject',
+    customNote: 'custom_note',
     reminderOwnerName: 'reminder_owner_name',
     reminderOwnerEmail: 'reminder_owner_email',
     reminderStages: 'reminder_stages',
