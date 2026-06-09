@@ -97,6 +97,7 @@ const Router = {
         }
 
         console.log(`[Router] 前往: ${pageName}`, params);
+        document.body.dataset.activePage = pageName;
 
         // 1. 更新 URL 歷史紀錄
         if (updateHistory) {
