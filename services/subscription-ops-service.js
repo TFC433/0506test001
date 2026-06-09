@@ -402,6 +402,7 @@ class SubscriptionOpsService {
     _getAlertUrgency(daysRemaining) {
         if (daysRemaining < 0) return 'overdue';
         if (daysRemaining === 0) return 'dueToday';
+        if (daysRemaining <= 7) return 'within7';
         if (daysRemaining <= 30) return 'within30';
         return 'within90';
     }

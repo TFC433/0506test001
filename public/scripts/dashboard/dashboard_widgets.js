@@ -685,6 +685,7 @@ const DashboardWidgets = {
         const TEXT_UNRESOLVED_PRODUCT = '\u672a\u89e3\u6790\u5546\u54c1';
         const TEXT_OVERDUE = '\u5df2\u903e\u671f';
         const TEXT_DUE_TODAY = '\u4eca\u5929\u5230\u671f';
+        const TEXT_WITHIN_7 = '7\u5929\u5167';
         const TEXT_WITHIN_30 = '30\u5929\u5167';
         const TEXT_WITHIN_60 = '60\u5929\u5167';
         const TEXT_WITHIN_90 = '90\u5929\u5167';
@@ -710,11 +711,13 @@ const DashboardWidgets = {
             return `${TEXT_REMAINING_PREFIX} ${days} ${TEXT_DAY_UNIT}`;
         };
 
-        const getBadge = daysRemaining => {
+        const getBadge = (daysRemaining, urgency) => {
             const days = Number(daysRemaining);
+            if (Number.isNaN(days) && urgency === 'within7') return { label: TEXT_WITHIN_7, tier: 'critical' };
             if (Number.isNaN(days)) return { label: TEXT_WITHIN_90, tier: 'mild' };
             if (days < 0) return { label: TEXT_OVERDUE, tier: 'critical' };
             if (days === 0) return { label: TEXT_DUE_TODAY, tier: 'critical' };
+            if (urgency === 'within7' || days <= 7) return { label: TEXT_WITHIN_7, tier: 'critical' };
             if (days <= 30) return { label: TEXT_WITHIN_30, tier: 'strong' };
             if (days <= 60) return { label: TEXT_WITHIN_60, tier: 'medium' };
             if (days <= 90) return { label: TEXT_WITHIN_90, tier: 'mild' };
@@ -723,7 +726,7 @@ const DashboardWidgets = {
         };
 
         const html = alerts.map(item => {
-            const badge = getBadge(item.daysRemaining);
+            const badge = getBadge(item.daysRemaining, item.urgency);
             const isCustomReminder = item && item.reminderKind === 'custom';
             const labels = [];
             if (isCustomReminder) {

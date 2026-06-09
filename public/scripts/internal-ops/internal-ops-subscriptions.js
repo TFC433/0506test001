@@ -21,6 +21,10 @@ if (typeof window.__subscriptionsInlineError === 'undefined') {
     window.__subscriptionsInlineError = '';
 }
 
+if (typeof window.__subscriptionOpsOperationMode === 'undefined') {
+    window.__subscriptionOpsOperationMode = false;
+}
+
 if (typeof window.__subscriptionWonOpportunityOptions === 'undefined') {
     window.__subscriptionWonOpportunityOptions = [];
 }
@@ -45,6 +49,10 @@ if (typeof window.__subscriptionSelectedProductId === 'undefined') {
     window.__subscriptionSelectedProductId = '';
 }
 
+if (typeof window.__subscriptionOpportunitySearchKeyword === 'undefined') {
+    window.__subscriptionOpportunitySearchKeyword = '';
+}
+
 const SUBSCRIPTION_STATUS_OPTIONS = [
     '\u9032\u884c\u4e2d',
     '\u5f85\u8655\u7406',
@@ -65,6 +73,7 @@ const SUBSCRIPTION_FORM_FIELDS = [
 ];
 
 const SUBSCRIPTION_OPPORTUNITY_FORM_FIELDS = [
+    'manualItemName',
     'subscriptionStartDate',
     'subscriptionEndDate',
     'reminderStages',
@@ -167,12 +176,14 @@ function getSubscriptionDisplayModel(item) {
         return {
             wonDate: '',
             opportunityName: '',
-            customerName: '\u81ea\u8a02\u63d0\u9192',
+            customerName: '-',
             itemName: getSubscriptionValue(item, 'customSubject'),
             startDate: '',
             endDate: getSubscriptionValue(item, 'subscriptionEndDate'),
             ownerName: '',
             reminderStages: '',
+            notes: getSubscriptionValue(item, 'customNote'),
+            productLabel: '',
             opportunity: null,
             product: null
         };
@@ -189,12 +200,14 @@ function getSubscriptionDisplayModel(item) {
             ? (opportunity && opportunity.customerCompany)
             : getSubscriptionValue(item, 'manualCustomerName'),
         itemName: isOpportunityLinked
-            ? (product ? (product.label || product.productName || product.productId) : '\u672a\u9078\u64c7')
+            ? (getSubscriptionValue(item, 'manualItemName') || (product ? getSubscriptionProductLabel(product) : '\u672a\u9078\u64c7'))
             : getSubscriptionValue(item, 'manualItemName'),
+        productLabel: product ? getSubscriptionProductLabel(product) : '',
         startDate: getSubscriptionValue(item, 'subscriptionStartDate'),
         endDate: getSubscriptionValue(item, 'subscriptionEndDate'),
         ownerName: getSubscriptionValue(item, 'reminderOwnerName'),
         reminderStages: getSubscriptionValue(item, 'reminderStages'),
+        notes: getSubscriptionValue(item, 'notes'),
         opportunity,
         product
     };
@@ -215,7 +228,19 @@ function renderSubscriptionInlineMessage() {
 }
 
 function renderWonOpportunityOptions(selectedValue) {
+    const keyword = String(window.__subscriptionOpportunitySearchKeyword || '').toLowerCase();
     const options = window.__subscriptionWonOpportunityOptions || [];
+    const filtered = keyword
+        ? options.filter(option => {
+            const name = String(option.opportunityName || '').toLowerCase();
+            const customer = String(option.customerCompany || '').toLowerCase();
+            return name.includes(keyword) || customer.includes(keyword);
+        })
+        : options;
+    return renderSubscriptionOpportunityOptions(filtered, selectedValue);
+}
+
+function renderSubscriptionOpportunityOptions(options, selectedValue) {
     const items = options.map(option => {
         const selected = String(option.opportunityId) === String(selectedValue) ? ' selected' : '';
         const closeDate = formatSubscriptionDateOnly(option.expectedCloseDate || option.lastUpdateTime);
@@ -240,6 +265,121 @@ function renderSubscriptionProductOptions(opportunity, selectedValue) {
     }).join('');
 
     return '<option value="">\u672a\u9078\u64c7 / \u4e0d\u6307\u5b9a\u7522\u54c1</option>' + items;
+}
+
+function getSubscriptionProductLabel(product) {
+    if (!product) return '';
+    return product.label || product.productName || product.productId || '';
+}
+
+function getSubscriptionDaysRemaining(value) {
+    const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return null;
+
+    const today = new Date();
+    const start = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+    const end = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+    return Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+function getSubscriptionDueState(value) {
+    const days = getSubscriptionDaysRemaining(value);
+    if (days === null) return '';
+    if (days < 0) return 'overdue';
+    if (days <= 7) return 'within7';
+    return '';
+}
+
+function formatSubscriptionDueDate(value) {
+    const dateText = formatSubscriptionValue(value);
+    const dueState = getSubscriptionDueState(value);
+    if (!dueState) return dateText;
+
+    const label = dueState === 'overdue' ? '\u5df2\u903e\u671f' : '7\u5929\u5167';
+    return `
+        <span class="subscription-due-stack">
+            <span>${dateText}</span>
+            <span class="subscription-due-badge is-${dueState}">${label}</span>
+        </span>
+    `;
+}
+
+function formatSubscriptionDaysRemaining(value) {
+    const days = getSubscriptionDaysRemaining(value);
+    if (days === null) return '-';
+    if (days < 0) return `\u903e\u671f ${Math.abs(days)} \u5929`;
+    if (days === 0) return '\u4eca\u5929';
+    return `\u5269 ${days} \u5929`;
+}
+
+function getSubscriptionBadgeModel(value) {
+    const days = getSubscriptionDaysRemaining(value);
+    if (days === null) return { label: '-', tier: 'none' };
+    if (days < 0) return { label: '\u5df2\u903e\u671f', tier: 'overdue' };
+    if (days === 0) return { label: '\u4eca\u5929', tier: 'today' };
+    if (days <= 7) return { label: '7\u5929\u5167', tier: 'within7' };
+    if (days <= 30) return { label: '30\u5929\u5167', tier: 'within30' };
+    if (days <= 90) return { label: '90\u5929\u5167', tier: 'within90' };
+    return { label: '90\u5929\u4ee5\u4e0a', tier: 'later' };
+}
+
+function renderSubscriptionUrgencyBadge(value) {
+    const badge = getSubscriptionBadgeModel(value);
+    return `<span class="subscription-urgency-badge is-${badge.tier}">${escapeSubscriptionHtml(badge.label)}</span>`;
+}
+
+function getSubscriptionStatusLabel(item) {
+    return item && item.isArchived === true ? '\u5df2\u5c01\u5b58' : '\u9032\u884c\u4e2d';
+}
+
+function getSubscriptionTypeLabel(item) {
+    return isCustomReminder(item) ? '\u81ea\u8a02' : '\u8a02\u95b1';
+}
+
+function renderSubscriptionPrimaryCell(item, display, id) {
+    const editableAttrs = window.__subscriptionOpsOperationMode
+        ? ` role="button" tabindex="0" onclick="window.openSubscriptionEditFromName('${id}')" onkeydown="window.handleSubscriptionNameKeydown(event, '${id}')"`
+        : '';
+    const editClass = window.__subscriptionOpsOperationMode ? ' is-editable' : '';
+
+    if (isCustomReminder(item)) {
+        return `
+            <div class="subscription-cell-main${editClass}"${editableAttrs}>${formatSubscriptionValue(display.itemName)}</div>
+            <div class="subscription-cell-sub">\u81ea\u8a02\u63d0\u9192</div>
+        `;
+    }
+
+    return `
+        <div class="subscription-cell-main${editClass}"${editableAttrs}>${formatSubscriptionValue(display.opportunityName || display.customerName)}</div>
+    `;
+}
+
+function renderSubscriptionItemNotesCell(item, display) {
+    const primary = isCustomReminder(item)
+        ? display.notes
+        : (display.productLabel || display.itemName);
+    const secondary = isCustomReminder(item) ? '' : display.notes;
+
+    return `
+        <div class="subscription-cell-main">${formatSubscriptionValue(primary)}</div>
+        ${secondary ? `<div class="subscription-cell-sub">${escapeSubscriptionHtml(secondary)}</div>` : ''}
+    `;
+}
+
+function renderSubscriptionFormActions(saveFn, cancelFn, archiveId) {
+    return `
+        <div class="subscription-inline-form-actions">
+            <div class="subscription-inline-form-actions-left">
+                ${archiveId ? `<button type="button" class="subscription-form-btn is-danger" onclick="window.archiveSubscriptionOp('${archiveId}')">\u5c01\u5b58</button>` : ''}
+            </div>
+            <div class="subscription-inline-form-actions-right">
+                <button type="button" class="subscription-form-btn" onclick="${cancelFn}">\u53d6\u6d88</button>
+                <button type="button" class="subscription-form-btn is-save" onclick="${saveFn}">
+                    <span class="btn-text">\u5132\u5b58</span>
+                </button>
+            </div>
+        </div>
+    `;
 }
 
 function getSubscriptionReminderOwnerLabel(opportunity, fallbackOwnerName) {
@@ -273,6 +413,7 @@ function renderSubscriptionOpportunityReference(opportunity, fallbackOwnerName =
 function renderSubscriptionOpportunityCreateFields(prefix) {
     const opportunity = getSelectedSubscriptionOpportunity();
     const products = opportunity && Array.isArray(opportunity.products) ? opportunity.products : [];
+    const searchKeyword = window.__subscriptionOpportunitySearchKeyword || '';
 
     let stateHtml = '';
     if (window.__subscriptionWonOpportunityLoading) {
@@ -289,22 +430,25 @@ function renderSubscriptionOpportunityCreateFields(prefix) {
 
     return `
         <div class="subscription-opportunity-create-block">
-            <div class="subscription-inline-grid">
-                <label class="subscription-inline-field subscription-inline-field-wide">
+            <div class="subscription-opportunity-selector">
+                <label class="subscription-inline-field">
                     <span>\u6210\u4ea4\u6a5f\u6703 *</span>
+                    <input id="${prefix}-opportunitySearch" type="text" value="${escapeSubscriptionHtml(searchKeyword)}" placeholder="\u641c\u5c0b\u6a5f\u6703\u540d\u7a31\u6216\u5ba2\u6236..." oninput="window.filterSubscriptionOpportunities()">
                     <select id="${prefix}-opportunityId" onchange="window.handleSubscriptionOpportunitySelect(this.value)">
                         ${renderWonOpportunityOptions(window.__subscriptionSelectedOpportunityId)}
-                    </select>
-                </label>
-                <label class="subscription-inline-field subscription-inline-field-wide">
-                    <span>\u7522\u54c1</span>
-                    <select id="${prefix}-productId" onchange="window.handleSubscriptionProductSelect(this.value)" ${opportunity ? '' : 'disabled'}>
-                        ${renderSubscriptionProductOptions(opportunity, window.__subscriptionSelectedProductId)}
                     </select>
                 </label>
             </div>
             ${stateHtml}
             ${renderSubscriptionOpportunityReference(opportunity)}
+            <div class="subscription-inline-grid">
+                <label class="subscription-inline-field">
+                    <span>\u7522\u54c1\u5e6b\u624b</span>
+                    <select id="${prefix}-productId" onchange="window.handleSubscriptionProductSelect(this.value)" ${opportunity ? '' : 'disabled'}>
+                        ${renderSubscriptionProductOptions(opportunity, window.__subscriptionSelectedProductId)}
+                    </select>
+                </label>
+            </div>
             ${productState}
         </div>
     `;
@@ -336,14 +480,12 @@ function renderSubscriptionField(prefix, field, item = {}) {
     const value = getSubscriptionValue(item, field);
 
     if (field === 'status') {
-        const selectedValue = value || '\u9032\u884c\u4e2d';
+        const statusText = getSubscriptionStatusLabel(item);
         return `
-            <label class="subscription-inline-field">
-                <span>\u72c0\u614b *</span>
-                <select id="${id}" required>
-                    ${renderSubscriptionOptions(SUBSCRIPTION_STATUS_OPTIONS, selectedValue, false)}
-                </select>
-            </label>
+            <div class="subscription-inline-field">
+                <span>\u72c0\u614b</span>
+                <div class="subscription-status-pill">${statusText}</div>
+            </div>
         `;
     }
 
@@ -371,7 +513,7 @@ function renderSubscriptionField(prefix, field, item = {}) {
         return `
             <label class="subscription-inline-field subscription-inline-field-wide">
                 <span>\u5099\u8a3b</span>
-                <textarea id="${id}" rows="2">${escapeSubscriptionHtml(value)}</textarea>
+                <textarea id="${id}" rows="1" oninput="window.autoExpandSubscriptionTextarea(this)">${escapeSubscriptionHtml(value)}</textarea>
             </label>
         `;
     }
@@ -380,14 +522,14 @@ function renderSubscriptionField(prefix, field, item = {}) {
         return `
             <label class="subscription-inline-field subscription-inline-field-wide">
                 <span>\u5099\u8a3b</span>
-                <textarea id="${id}" rows="2">${escapeSubscriptionHtml(value)}</textarea>
+                <textarea id="${id}" rows="1" oninput="window.autoExpandSubscriptionTextarea(this)">${escapeSubscriptionHtml(value)}</textarea>
             </label>
         `;
     }
 
     const labels = {
         manualCustomerName: '\u5ba2\u6236 *',
-        manualItemName: '\u8a02\u95b1\u9805\u76ee *',
+        manualItemName: '\u63d0\u9192\u540d\u7a31',
         subscriptionStartDate: '\u8a02\u95b1\u958b\u59cb\u65e5',
         subscriptionEndDate: '\u8a02\u95b1\u5230\u671f\u65e5 *',
         reminderOwnerName: '\u5167\u90e8\u63d0\u9192\u5c0d\u8c61',
@@ -414,21 +556,17 @@ function renderCustomReminderInlineForm(prefix, item = {}, mode = 'create') {
     const cancelFn = mode === 'create'
         ? 'window.cancelSubscriptionCreateInline()'
         : 'window.cancelSubscriptionExpandedEdit()';
+    const archiveId = mode === 'edit' && item.id ? escapeSubscriptionHtml(item.id) : '';
 
     return `
         <tr class="subscription-inline-form-row">
-            <td colspan="10">
+            <td colspan="8">
                 <div class="subscription-inline-form">
                     ${mode === 'create' ? renderSubscriptionCreateTabs() : ''}
                     <div class="subscription-inline-grid">
                         ${CUSTOM_REMINDER_FORM_FIELDS.map(field => renderSubscriptionField(prefix, field, item)).join('')}
                     </div>
-                    <div class="subscription-inline-form-actions">
-                        <button type="button" class="internal-ops-btn" onclick="${cancelFn}">\u53d6\u6d88</button>
-                        <button type="button" class="action-btn primary btn-sm" onclick="${saveFn}">
-                            <span class="btn-text">\u5132\u5b58</span>
-                        </button>
-                    </div>
+                    ${renderSubscriptionFormActions(saveFn, cancelFn, archiveId)}
                 </div>
             </td>
         </tr>
@@ -451,10 +589,11 @@ function renderSubscriptionInlineForm(prefix, item = {}, mode = 'create') {
     const productControls = mode === 'create' || item.sourceType !== 'opportunity'
         ? ''
         : renderSubscriptionReadOnlyProduct(item);
+    const archiveId = mode === 'edit' && item.id ? escapeSubscriptionHtml(item.id) : '';
 
     return `
         <tr class="subscription-inline-form-row">
-            <td colspan="10">
+            <td colspan="8">
                 <div class="subscription-inline-form">
                     ${mode === 'create' ? renderSubscriptionCreateTabs() : ''}
                     ${opportunityControls}
@@ -462,12 +601,7 @@ function renderSubscriptionInlineForm(prefix, item = {}, mode = 'create') {
                     <div class="subscription-inline-grid">
                         ${fields.map(field => renderSubscriptionField(prefix, field, item)).join('')}
                     </div>
-                    <div class="subscription-inline-form-actions">
-                        <button type="button" class="internal-ops-btn" onclick="${cancelFn}">\u53d6\u6d88</button>
-                        <button type="button" class="action-btn primary btn-sm" onclick="${saveFn}">
-                            <span class="btn-text">\u5132\u5b58</span>
-                        </button>
-                    </div>
+                    ${renderSubscriptionFormActions(saveFn, cancelFn, archiveId)}
                 </div>
             </td>
         </tr>
@@ -497,20 +631,16 @@ function renderLegacySubscriptionInlineForm(prefix, item = {}, mode = 'edit') {
     const saveFn = `window.saveSubscriptionExpandedEdit('${escapeSubscriptionHtml(item.id)}')`;
     const cancelFn = 'window.cancelSubscriptionExpandedEdit()';
     const fields = SUBSCRIPTION_FORM_FIELDS;
+    const archiveId = item.id ? escapeSubscriptionHtml(item.id) : '';
 
     return `
         <tr class="subscription-inline-form-row">
-            <td colspan="10">
+            <td colspan="8">
                 <div class="subscription-inline-form">
                     <div class="subscription-inline-grid">
                         ${fields.map(field => renderSubscriptionField(prefix, field, item)).join('')}
                     </div>
-                    <div class="subscription-inline-form-actions">
-                        <button type="button" class="internal-ops-btn" onclick="${cancelFn}">\u53d6\u6d88</button>
-                        <button type="button" class="action-btn primary btn-sm" onclick="${saveFn}">
-                            <span class="btn-text">\u5132\u5b58</span>
-                        </button>
-                    </div>
+                    ${renderSubscriptionFormActions(saveFn, cancelFn, archiveId)}
                 </div>
             </td>
         </tr>
@@ -658,7 +788,56 @@ function rerenderSubscriptionsInline() {
     const container = document.getElementById('internal-ops-subscriptions-content');
     if (container) {
         container.innerHTML = window.renderSubscriptions(window.__internalOpsSubscriptionsData || []);
+        applySubscriptionTextareaAutosize();
     }
+}
+
+function applySubscriptionTextareaAutosize() {
+    setTimeout(() => {
+        document
+            .querySelectorAll('.subscription-ops-scope textarea')
+            .forEach(textarea => window.autoExpandSubscriptionTextarea(textarea));
+    }, 0);
+}
+
+function ensureSubscriptionHeaderControls() {
+    setTimeout(() => {
+        const container = document.getElementById('internal-ops-subscriptions-content');
+        const widget = container && container.closest('.internal-ops-widget');
+        const header = widget && widget.querySelector('.internal-ops-header');
+        if (!header) return;
+
+        const addButton = header.querySelector('button[onclick="window.openSubscriptionCreateInline()"]');
+        if (addButton) {
+            addButton.classList.remove('primary');
+            addButton.classList.add('subscription-header-btn');
+        }
+
+        let actionGroup = header.querySelector('#subscription-header-action-group');
+        if (!actionGroup) {
+            actionGroup = document.createElement('div');
+            actionGroup.id = 'subscription-header-action-group';
+            actionGroup.className = 'subscription-header-action-group';
+            header.appendChild(actionGroup);
+        }
+
+        if (addButton && addButton.parentNode !== actionGroup) {
+            actionGroup.appendChild(addButton);
+        }
+
+        let opButton = actionGroup.querySelector('#subscription-operation-toggle');
+        if (!opButton) {
+            opButton = document.createElement('button');
+            opButton.type = 'button';
+            opButton.id = 'subscription-operation-toggle';
+            opButton.className = 'subscription-header-btn';
+            opButton.onclick = () => window.toggleSubscriptionOperationMode();
+            actionGroup.appendChild(opButton);
+        }
+
+        opButton.textContent = window.__subscriptionOpsOperationMode ? '\u7d50\u675f\u7dad\u8b77' : '\u7dad\u8b77';
+        opButton.classList.toggle('is-active', Boolean(window.__subscriptionOpsOperationMode));
+    }, 0);
 }
 
 async function refreshSubscriptionsInline() {
@@ -678,6 +857,7 @@ async function refreshSubscriptionsInline() {
 window.renderSubscriptions = function(data) {
     const records = Array.isArray(data) ? data : [];
     window.__internalOpsSubscriptionsData = records;
+    ensureSubscriptionHeaderControls();
 
     if (
         records.some(item => item && item.sourceType === 'opportunity') &&
@@ -697,20 +877,13 @@ window.renderSubscriptions = function(data) {
         return `
             <tr class="subscription-op-row">
                 <td class="subscription-row-number">${index + 1}.</td>
-                <td>${formatSubscriptionValue(display.wonDate)}</td>
-                <td><strong>${formatSubscriptionValue(display.opportunityName)}</strong></td>
+                <td>${renderSubscriptionPrimaryCell(item, display, id)}</td>
                 <td>${formatSubscriptionValue(display.customerName)}</td>
-                <td>${formatSubscriptionValue(display.itemName)}</td>
+                <td>${renderSubscriptionItemNotesCell(item, display)}</td>
                 <td>${formatSubscriptionValue(display.startDate)}</td>
                 <td>${formatSubscriptionValue(display.endDate)}</td>
-                <td>${formatSubscriptionValue(display.ownerName)}</td>
-                <td>${escapeSubscriptionHtml(formatSubscriptionReminderStages(display.reminderStages))}</td>
-                <td>
-                    <div class="internal-ops-actions">
-                        <button type="button" class="internal-ops-btn" onclick="window.toggleSubscriptionExpandedEdit('${id}')">\u7de8\u8f2f</button>
-                        <button type="button" class="internal-ops-btn subscription-archive-btn" onclick="window.archiveSubscriptionOp('${id}')">\u5c01\u5b58</button>
-                    </div>
-                </td>
+                <td>${escapeSubscriptionHtml(formatSubscriptionDaysRemaining(display.endDate))}</td>
+                <td>${renderSubscriptionUrgencyBadge(display.endDate)}</td>
             </tr>
             ${editOpen ? renderSubscriptionFormForRow(`edit-${id}`, item, 'edit') : ''}
         `;
@@ -721,8 +894,10 @@ window.renderSubscriptions = function(data) {
         : '';
 
     const emptyState = activeRecords.length === 0 && !window.__subscriptionsCreateOpen
-        ? '<tr><td colspan="10"><div class="subscription-empty-state">\u76ee\u524d\u6c92\u6709\u8a02\u95b1\u8ffd\u8e64\u8a18\u9304</div></td></tr>'
+        ? '<tr><td colspan="8"><div class="subscription-empty-state">\u76ee\u524d\u6c92\u6709\u8a02\u95b1\u8ffd\u8e64\u8a18\u9304</div></td></tr>'
         : '';
+
+    applySubscriptionTextareaAutosize();
 
     return `
         <div class="subscription-ops-scope">
@@ -730,16 +905,14 @@ window.renderSubscriptions = function(data) {
             <table class="internal-ops-table subscription-ops-table">
                 <thead>
                     <tr>
-                        <th>#</th>
-                        <th>\u6210\u4ea4\u65e5</th>
-                        <th>\u6a5f\u6703\u540d\u7a31</th>
+                        <th>\u9805\u6b21</th>
+                        <th>\u6a5f\u6703\u540d\u7a31 / \u63d0\u9192\u540d\u7a31</th>
                         <th>\u5ba2\u6236</th>
-                        <th>\u8a02\u95b1\u7522\u54c1</th>
+                        <th>\u63d0\u9192\u9805\u76ee / \u5099\u8a3b</th>
                         <th>\u958b\u59cb\u65e5</th>
                         <th>\u5230\u671f\u65e5</th>
-                        <th>\u63d0\u9192\u8ca0\u8cac\u4eba</th>
+                        <th>\u5269\u9918\u5929\u6578</th>
                         <th>\u63d0\u9192</th>
-                        <th>\u64cd\u4f5c</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -756,9 +929,11 @@ window.openSubscriptionCreateInline = function() {
     window.__subscriptionsCreateOpen = true;
     window.__subscriptionsCreateTab = 'subscription';
     window.__subscriptionsExpandedEditId = null;
+    window.__subscriptionOpsOperationMode = false;
     window.__subscriptionsInlineError = '';
     window.__subscriptionSelectedOpportunityId = '';
     window.__subscriptionSelectedProductId = '';
+    window.__subscriptionOpportunitySearchKeyword = '';
     rerenderSubscriptionsInline();
     ensureSubscriptionWonOpportunityOptions();
 };
@@ -769,6 +944,7 @@ window.cancelSubscriptionCreateInline = function() {
     window.__subscriptionsInlineError = '';
     window.__subscriptionSelectedOpportunityId = '';
     window.__subscriptionSelectedProductId = '';
+    window.__subscriptionOpportunitySearchKeyword = '';
     rerenderSubscriptionsInline();
 };
 
@@ -777,6 +953,7 @@ window.setSubscriptionCreateTab = function(tab) {
     window.__subscriptionsInlineError = '';
     window.__subscriptionSelectedOpportunityId = '';
     window.__subscriptionSelectedProductId = '';
+    window.__subscriptionOpportunitySearchKeyword = '';
     rerenderSubscriptionsInline();
     if (window.__subscriptionsCreateTab === 'subscription') {
         ensureSubscriptionWonOpportunityOptions();
@@ -793,6 +970,66 @@ window.handleSubscriptionOpportunitySelect = function(opportunityId) {
 window.handleSubscriptionProductSelect = function(productId) {
     window.__subscriptionSelectedProductId = productId || '';
     window.__subscriptionsInlineError = '';
+    const opportunity = getSelectedSubscriptionOpportunity();
+    const product = getSubscriptionProductById(opportunity, productId);
+    const reminderNameInput = document.getElementById('create-subscription-manualItemName');
+    if (reminderNameInput && product) {
+        reminderNameInput.value = getSubscriptionProductLabel(product);
+    }
+};
+
+window.filterSubscriptionOpportunities = function() {
+    const input = document.getElementById('create-subscription-opportunitySearch');
+    const select = document.getElementById('create-subscription-opportunityId');
+    if (!input || !select) return;
+
+    const keyword = (input.value || '').toLowerCase();
+    window.__subscriptionOpportunitySearchKeyword = input.value || '';
+    const options = window.__subscriptionWonOpportunityOptions || [];
+    const filtered = keyword
+        ? options.filter(option => {
+            const name = String(option.opportunityName || '').toLowerCase();
+            const customer = String(option.customerCompany || '').toLowerCase();
+            return name.includes(keyword) || customer.includes(keyword);
+        })
+        : options;
+
+    const currentValue = select.value;
+    select.innerHTML = renderSubscriptionOpportunityOptions(filtered, currentValue);
+    if (currentValue && Array.from(select.options).some(option => option.value === currentValue)) {
+        select.value = currentValue;
+    }
+};
+
+window.autoExpandSubscriptionTextarea = function(textarea) {
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    textarea.style.height = `${textarea.scrollHeight}px`;
+};
+
+window.toggleSubscriptionOperationMode = function() {
+    window.__subscriptionOpsOperationMode = !window.__subscriptionOpsOperationMode;
+    window.__subscriptionsCreateOpen = false;
+    window.__subscriptionsExpandedEditId = null;
+    window.__subscriptionsInlineError = '';
+    rerenderSubscriptionsInline();
+    ensureSubscriptionHeaderControls();
+};
+
+window.openSubscriptionEditFromName = function(id) {
+    if (!window.__subscriptionOpsOperationMode) return;
+    window.__subscriptionsCreateOpen = false;
+    window.__subscriptionsInlineError = '';
+    window.__subscriptionsExpandedEditId = String(window.__subscriptionsExpandedEditId || '') === String(id) ? null : String(id);
+    rerenderSubscriptionsInline();
+};
+
+window.handleSubscriptionNameKeydown = function(event, id) {
+    if (!window.__subscriptionOpsOperationMode) return;
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        window.openSubscriptionEditFromName(id);
+    }
 };
 
 window.saveSubscriptionCreateInline = async function() {
@@ -899,54 +1136,84 @@ window.archiveSubscriptionOp = async function(id) {
     style.id = 'subscription-ops-inline-style';
     style.textContent = `
         .subscription-ops-scope { width: 100%; }
-        .subscription-ops-table { table-layout: fixed; min-width: 1120px; }
+        .subscription-ops-table { table-layout: fixed; min-width: 920px; }
+        .subscription-ops-table th,
+        .subscription-ops-table td { padding-top: 3px; padding-bottom: 3px; vertical-align: top; }
+        .subscription-ops-table th { font-size: 0.74rem; padding-top: 4px; padding-bottom: 4px; }
         .subscription-ops-table th:nth-child(1),
-        .subscription-ops-table td:nth-child(1) { width: 48px; color: var(--text-muted); }
+        .subscription-ops-table td:nth-child(1) { width: 72px; }
         .subscription-ops-table th:nth-child(2),
-        .subscription-ops-table td:nth-child(2),
+        .subscription-ops-table td:nth-child(2) { width: 210px; }
+        .subscription-ops-table th:nth-child(3),
+        .subscription-ops-table td:nth-child(3) { width: 128px; }
+        .subscription-ops-table th:nth-child(4),
+        .subscription-ops-table td:nth-child(4) { width: 220px; }
+        .subscription-ops-table th:nth-child(5),
+        .subscription-ops-table td:nth-child(5),
         .subscription-ops-table th:nth-child(6),
         .subscription-ops-table td:nth-child(6),
         .subscription-ops-table th:nth-child(7),
-        .subscription-ops-table td:nth-child(7) { width: 104px; white-space: nowrap; }
+        .subscription-ops-table td:nth-child(7) { width: 84px; white-space: nowrap; }
         .subscription-ops-table th:nth-child(8),
-        .subscription-ops-table td:nth-child(8) { width: 132px; }
-        .subscription-ops-table th:nth-child(9),
-        .subscription-ops-table td:nth-child(9) { width: 112px; }
-        .subscription-ops-table th:nth-child(10),
-        .subscription-ops-table td:nth-child(10) { width: 128px; }
-        .subscription-op-row td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .subscription-row-number { font-variant-numeric: tabular-nums; }
-        .subscription-inline-form-row td { background: var(--secondary-bg); padding: 12px; }
-        .subscription-inline-form { border: 1px solid var(--border-color); border-radius: 6px; background: var(--card-bg); padding: 12px; }
-        .subscription-inline-grid { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: 10px; }
-        .subscription-inline-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-        .subscription-inline-field span { color: var(--text-secondary); font-size: 0.78rem; font-weight: 600; }
+        .subscription-ops-table td:nth-child(8) { width: 82px; white-space: nowrap; }
+        .subscription-op-row td { overflow: hidden; text-overflow: ellipsis; }
+        .subscription-cell-main { color: var(--text-primary); font-size: 0.81rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.25; }
+        .subscription-cell-sub { margin-top: 1px; color: var(--text-muted); font-size: 0.72rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2; }
+        .subscription-due-stack { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+        .subscription-due-badge { display: inline-flex; align-items: center; height: 17px; padding: 0 5px; border-radius: 3px; border: 1px solid rgba(244, 63, 94, 0.24); background: rgba(244, 63, 94, 0.12); color: #b42318; font-size: 0.7rem; font-weight: 700; line-height: 17px; }
+        .subscription-due-badge.is-overdue { background: rgba(185, 28, 28, 0.16); border-color: rgba(185, 28, 28, 0.28); color: #991b1b; }
+        .subscription-urgency-badge { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 3px; border: 1px solid rgba(100, 116, 139, 0.16); background: rgba(100, 116, 139, 0.10); color: #586070; font-size: 0.72rem; font-weight: 700; line-height: 18px; white-space: nowrap; }
+        .subscription-urgency-badge.is-overdue,
+        .subscription-urgency-badge.is-today,
+        .subscription-urgency-badge.is-within7 { color: #991b1b; background: rgba(244, 63, 94, 0.13); border-color: rgba(244, 63, 94, 0.24); }
+        .subscription-urgency-badge.is-within30 { color: #935b11; background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.24); }
+        .subscription-urgency-badge.is-within90 { color: #256372; background: rgba(14, 165, 233, 0.11); border-color: rgba(14, 165, 233, 0.18); }
+        .subscription-status-pill { display: inline-flex; align-items: center; min-height: 28px; padding: 0 7px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--secondary-bg); color: var(--text-secondary); font-size: 0.78rem; font-weight: 600; box-sizing: border-box; }
+        .subscription-type-pill { display: inline-flex; align-items: center; height: 18px; padding: 0 5px; border: 1px solid var(--border-color); border-radius: 3px; background: var(--secondary-bg); color: var(--text-secondary); font-size: 0.7rem; font-weight: 700; line-height: 18px; white-space: nowrap; }
+        .subscription-cell-main.is-editable { cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
+        .subscription-form-btn { border: 1px solid var(--border-color); border-radius: 4px; background: var(--card-bg); color: var(--text-secondary); padding: 2px 6px; font-size: 0.74rem; font-weight: 600; line-height: 1.3; cursor: pointer; min-height: 23px; }
+        .subscription-form-btn:hover { color: var(--text-primary); border-color: color-mix(in srgb, var(--border-color) 70%, var(--text-secondary)); }
+        .subscription-form-btn.is-save { color: var(--accent-blue, #2563eb); background: color-mix(in srgb, var(--accent-blue, #2563eb) 7%, var(--card-bg)); border-color: color-mix(in srgb, var(--accent-blue, #2563eb) 25%, var(--border-color)); }
+        .subscription-form-btn.is-danger { color: var(--danger-color, #b42318); }
+        .subscription-header-action-group { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; }
+        .internal-ops-header .subscription-header-btn { border: 1px solid var(--border-color) !important; border-radius: 4px !important; background: var(--card-bg) !important; color: var(--text-secondary) !important; padding: 3px 8px !important; min-height: 24px !important; height: auto !important; font-size: 0.76rem !important; font-weight: 600 !important; line-height: 1.3 !important; box-shadow: none !important; transform: none !important; margin: 0 !important; }
+        .internal-ops-header .subscription-header-btn.is-active { color: var(--accent-blue, #2563eb) !important; border-color: color-mix(in srgb, var(--accent-blue, #2563eb) 28%, var(--border-color)) !important; background: color-mix(in srgb, var(--accent-blue, #2563eb) 7%, var(--card-bg)) !important; }
+        .subscription-inline-form-row td { background: var(--secondary-bg); padding: 5px; }
+        .subscription-inline-form { border: 1px solid var(--border-color); border-radius: 5px; background: var(--card-bg); padding: 6px; }
+        .subscription-inline-grid { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 5px; }
+        .subscription-inline-field { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+        .subscription-inline-field span { color: var(--text-secondary); font-size: 0.72rem; font-weight: 600; }
         .subscription-inline-field input,
         .subscription-inline-field select,
-        .subscription-inline-field textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: 5px; background: var(--secondary-bg); color: var(--text-primary); padding: 7px 8px; font-size: 0.84rem; }
-        .subscription-create-tabs { display: inline-flex; align-items: center; gap: 4px; margin-bottom: 10px; padding: 3px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--secondary-bg); }
-        .subscription-create-tab { border: 0; border-radius: 4px; background: transparent; color: var(--text-secondary); padding: 6px 9px; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+        .subscription-inline-field textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--border-color); border-radius: 4px; background: var(--secondary-bg); color: var(--text-primary); padding: 4px 6px; font-size: 0.8rem; }
+        .subscription-inline-field textarea { min-height: 28px; overflow: hidden; resize: none; }
+        .subscription-create-tabs { display: inline-flex; align-items: center; gap: 2px; margin-bottom: 5px; padding: 2px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--secondary-bg); }
+        .subscription-create-tab { border: 0; border-radius: 3px; background: transparent; color: var(--text-secondary); padding: 3px 7px; font-size: 0.76rem; font-weight: 600; cursor: pointer; }
         .subscription-create-tab.is-active { background: var(--card-bg); color: var(--text-primary); box-shadow: 0 0 0 1px var(--border-color); }
         .subscription-reminder-stage-field { border: 0; margin: 0; padding: 0; }
-        .subscription-reminder-stage-field legend { color: var(--text-secondary); font-size: 0.78rem; font-weight: 600; padding: 0; margin-bottom: 4px; }
-        .subscription-reminder-stage-group { display: flex; align-items: center; gap: 10px; min-height: 34px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--secondary-bg); padding: 6px 8px; box-sizing: border-box; }
-        .subscription-reminder-stage-option { display: inline-flex; align-items: center; gap: 4px; color: var(--text-primary); font-size: 0.84rem; white-space: nowrap; }
+        .subscription-reminder-stage-field legend { color: var(--text-secondary); font-size: 0.72rem; font-weight: 600; padding: 0; margin-bottom: 2px; }
+        .subscription-reminder-stage-group { display: flex; align-items: center; gap: 6px; min-height: 28px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--secondary-bg); padding: 3px 6px; box-sizing: border-box; }
+        .subscription-reminder-stage-option { display: inline-flex; align-items: center; gap: 3px; color: var(--text-primary); font-size: 0.78rem; white-space: nowrap; }
         .subscription-reminder-stage-option input { width: auto; margin: 0; }
-        .subscription-reminder-stage-option span { color: var(--text-primary); font-size: 0.84rem; font-weight: 500; }
-        .subscription-inline-field-wide { grid-column: span 3; }
-        .subscription-opportunity-create-block { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
-        .subscription-readonly-product { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 8px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--secondary-bg); }
+        .subscription-reminder-stage-option span { color: var(--text-primary); font-size: 0.78rem; font-weight: 500; }
+        .subscription-inline-field-wide { grid-column: span 4; }
+        .subscription-opportunity-create-block { display: flex; flex-direction: column; gap: 4px; margin-bottom: 5px; }
+        .subscription-opportunity-selector .subscription-inline-field { max-width: 360px; }
+        .subscription-opportunity-selector .subscription-inline-field input { margin-bottom: 3px; }
+        .subscription-readonly-product { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; padding: 4px 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--secondary-bg); }
         .subscription-readonly-product span { color: var(--text-muted); font-size: 0.78rem; font-weight: 600; }
         .subscription-readonly-product strong { color: var(--text-primary); font-size: 0.84rem; font-weight: 600; }
-        .subscription-opportunity-reference { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 8px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--secondary-bg); }
-        .subscription-reference-item { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-        .subscription-reference-item span { color: var(--text-muted); font-size: 0.72rem; font-weight: 600; }
-        .subscription-reference-item strong { color: var(--text-primary); font-size: 0.82rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .subscription-inline-note { color: var(--text-muted); font-size: 0.82rem; padding: 2px 0; }
+        .subscription-opportunity-reference { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 4px; padding: 4px 6px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--secondary-bg); }
+        .subscription-reference-item { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+        .subscription-reference-item span { color: var(--text-muted); font-size: 0.68rem; font-weight: 600; }
+        .subscription-reference-item strong { color: var(--text-primary); font-size: 0.78rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .subscription-inline-note { color: var(--text-muted); font-size: 0.76rem; padding: 0; }
         .subscription-inline-note.is-error { color: var(--danger-color, #b42318); }
-        .subscription-inline-form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
-        .subscription-empty-state { padding: 26px; text-align: center; color: var(--text-muted); }
-        .subscription-inline-error { margin: 10px 12px; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 5px; color: var(--danger-color, #b42318); background: var(--card-bg); font-size: 0.84rem; }
+        .subscription-inline-form-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; }
+        .subscription-inline-form-actions-left,
+        .subscription-inline-form-actions-right { display: inline-flex; align-items: center; gap: 5px; }
+        .subscription-empty-state { padding: 16px; text-align: center; color: var(--text-muted); }
+        .subscription-inline-error { margin: 5px 8px; padding: 5px 7px; border: 1px solid var(--border-color); border-radius: 4px; color: var(--danger-color, #b42318); background: var(--card-bg); font-size: 0.78rem; }
         .subscription-archive-btn { color: var(--text-secondary); }
         @media (max-width: 900px) {
             .subscription-inline-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); }
