@@ -319,8 +319,11 @@ function getSubscriptionBadgeModel(value) {
     if (days === 0) return { label: '\u4eca\u5929', tier: 'today' };
     if (days <= 7) return { label: '7\u5929\u5167', tier: 'within7' };
     if (days <= 30) return { label: '30\u5929\u5167', tier: 'within30' };
+    if (days <= 60) return { label: '60\u5929\u5167', tier: 'within60' };
     if (days <= 90) return { label: '90\u5929\u5167', tier: 'within90' };
-    return { label: '90\u5929\u4ee5\u4e0a', tier: 'later' };
+    if (days <= 120) return { label: '120\u5929\u5167', tier: 'within120' };
+    if (days <= 180) return { label: '180\u5929\u5167', tier: 'within180' };
+    return { label: '180\u5929\u4ee5\u4e0a', tier: 'over180' };
 }
 
 function renderSubscriptionUrgencyBadge(value) {
@@ -856,7 +859,7 @@ function ensureSubscriptionHeaderControls() {
         }
 
         opButton.textContent = window.__subscriptionOpsOperationMode ? '\u7d50\u675f\u7dad\u8b77' : '\u7dad\u8b77';
-        opButton.classList.add('is-danger');
+        opButton.classList.toggle('is-danger', Boolean(window.__subscriptionOpsOperationMode));
         opButton.classList.toggle('is-active', Boolean(window.__subscriptionOpsOperationMode));
         actionGroup.appendChild(opButton);
     }, 0);
@@ -1185,11 +1188,15 @@ window.archiveSubscriptionOp = async function(id) {
         .subscription-due-badge { display: inline-flex; align-items: center; height: 17px; padding: 0 5px; border-radius: 3px; border: 1px solid rgba(244, 63, 94, 0.24); background: rgba(244, 63, 94, 0.12); color: #b42318; font-size: 0.7rem; font-weight: 700; line-height: 17px; }
         .subscription-due-badge.is-overdue { background: rgba(185, 28, 28, 0.16); border-color: rgba(185, 28, 28, 0.28); color: #991b1b; }
         .subscription-urgency-badge { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 3px; border: 1px solid rgba(100, 116, 139, 0.16); background: rgba(100, 116, 139, 0.10); color: #586070; font-size: 0.72rem; font-weight: 700; line-height: 18px; white-space: nowrap; }
-        .subscription-urgency-badge.is-overdue,
-        .subscription-urgency-badge.is-today,
-        .subscription-urgency-badge.is-within7 { color: #991b1b; background: rgba(244, 63, 94, 0.13); border-color: rgba(244, 63, 94, 0.24); }
+        .subscription-urgency-badge.is-overdue { color: #7f1d1d; background: rgba(185, 28, 28, 0.16); border-color: rgba(185, 28, 28, 0.28); }
+        .subscription-urgency-badge.is-today { color: #991b1b; background: rgba(244, 63, 94, 0.13); border-color: rgba(244, 63, 94, 0.24); }
+        .subscription-urgency-badge.is-within7 { color: #9f1239; background: rgba(244, 63, 94, 0.10); border-color: rgba(244, 63, 94, 0.20); }
         .subscription-urgency-badge.is-within30 { color: #935b11; background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.24); }
+        .subscription-urgency-badge.is-within60 { color: #854d0e; background: rgba(234, 179, 8, 0.13); border-color: rgba(234, 179, 8, 0.22); }
         .subscription-urgency-badge.is-within90 { color: #256372; background: rgba(14, 165, 233, 0.11); border-color: rgba(14, 165, 233, 0.18); }
+        .subscription-urgency-badge.is-within120 { color: #475569; background: rgba(100, 116, 139, 0.10); border-color: rgba(100, 116, 139, 0.16); }
+        .subscription-urgency-badge.is-within180 { color: #596273; background: rgba(107, 114, 128, 0.09); border-color: rgba(107, 114, 128, 0.14); }
+        .subscription-urgency-badge.is-over180 { color: #6b7280; background: rgba(107, 114, 128, 0.06); border-color: rgba(107, 114, 128, 0.10); }
         .subscription-status-pill { display: inline-flex; align-items: center; min-height: 28px; padding: 0 7px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--secondary-bg); color: var(--text-secondary); font-size: 0.78rem; font-weight: 600; box-sizing: border-box; }
         .subscription-type-pill { display: inline-flex; align-items: center; height: 18px; padding: 0 5px; border: 1px solid var(--border-color); border-radius: 3px; background: var(--secondary-bg); color: var(--text-secondary); font-size: 0.7rem; font-weight: 700; line-height: 18px; white-space: nowrap; }
         .subscription-cell-main.is-editable { cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }

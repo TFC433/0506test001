@@ -689,6 +689,7 @@ const DashboardWidgets = {
         const TEXT_WITHIN_30 = '30\u5929\u5167';
         const TEXT_WITHIN_60 = '60\u5929\u5167';
         const TEXT_WITHIN_90 = '90\u5929\u5167';
+        const TEXT_WITHIN_120 = '120\u5929\u5167';
         const TEXT_WITHIN_180 = '180\u5929\u5167';
         const TEXT_OVER_180 = '180\u5929\u4ee5\u4e0a';
         const TEXT_REMAINING_PREFIX = '\u5269';
@@ -713,16 +714,28 @@ const DashboardWidgets = {
 
         const getBadge = (daysRemaining, urgency) => {
             const days = Number(daysRemaining);
-            if (Number.isNaN(days) && urgency === 'within7') return { label: TEXT_WITHIN_7, tier: 'critical' };
-            if (Number.isNaN(days)) return { label: TEXT_WITHIN_90, tier: 'mild' };
-            if (days < 0) return { label: TEXT_OVERDUE, tier: 'critical' };
-            if (days === 0) return { label: TEXT_DUE_TODAY, tier: 'critical' };
-            if (urgency === 'within7' || days <= 7) return { label: TEXT_WITHIN_7, tier: 'critical' };
-            if (days <= 30) return { label: TEXT_WITHIN_30, tier: 'strong' };
-            if (days <= 60) return { label: TEXT_WITHIN_60, tier: 'medium' };
-            if (days <= 90) return { label: TEXT_WITHIN_90, tier: 'mild' };
-            if (days <= 180) return { label: TEXT_WITHIN_180, tier: 'low' };
-            return { label: TEXT_OVER_180, tier: 'low' };
+            const urgencyBadgeMap = {
+                overdue: { label: TEXT_OVERDUE, tier: 'overdue' },
+                dueToday: { label: TEXT_DUE_TODAY, tier: 'today' },
+                today: { label: TEXT_DUE_TODAY, tier: 'today' },
+                within7: { label: TEXT_WITHIN_7, tier: 'within7' },
+                within30: { label: TEXT_WITHIN_30, tier: 'within30' },
+                within60: { label: TEXT_WITHIN_60, tier: 'within60' },
+                within90: { label: TEXT_WITHIN_90, tier: 'within90' },
+                within120: { label: TEXT_WITHIN_120, tier: 'within120' },
+                within180: { label: TEXT_WITHIN_180, tier: 'within180' },
+                over180: { label: TEXT_OVER_180, tier: 'over180' }
+            };
+            if (Number.isNaN(days)) return urgencyBadgeMap[urgency] || { label: TEXT_WITHIN_90, tier: 'within90' };
+            if (days < 0) return urgencyBadgeMap.overdue;
+            if (days === 0) return urgencyBadgeMap.dueToday;
+            if (days <= 7) return urgencyBadgeMap.within7;
+            if (days <= 30) return urgencyBadgeMap.within30;
+            if (days <= 60) return urgencyBadgeMap.within60;
+            if (days <= 90) return urgencyBadgeMap.within90;
+            if (days <= 120) return urgencyBadgeMap.within120;
+            if (days <= 180) return urgencyBadgeMap.within180;
+            return urgencyBadgeMap.over180;
         };
 
         const html = alerts.map(item => {
@@ -825,11 +838,15 @@ const DashboardWidgets = {
                     display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 3px;
                     font-size: 0.72rem; line-height: 18px; font-weight: 700; border: 1px solid transparent;
                 }
-                .subscription-alert-badge.is-critical { color: #8f2434; background: rgba(244, 63, 94, 0.13); border-color: rgba(244, 63, 94, 0.22); }
-                .subscription-alert-badge.is-strong { color: #935b11; background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.24); }
-                .subscription-alert-badge.is-medium { color: #5c4b91; background: rgba(139, 92, 246, 0.12); border-color: rgba(139, 92, 246, 0.20); }
-                .subscription-alert-badge.is-mild { color: #256372; background: rgba(14, 165, 233, 0.11); border-color: rgba(14, 165, 233, 0.18); }
-                .subscription-alert-badge.is-low { color: #586070; background: rgba(100, 116, 139, 0.10); border-color: rgba(100, 116, 139, 0.16); }
+                .subscription-alert-badge.is-overdue { color: #7f1d1d; background: rgba(185, 28, 28, 0.16); border-color: rgba(185, 28, 28, 0.28); }
+                .subscription-alert-badge.is-today { color: #991b1b; background: rgba(244, 63, 94, 0.13); border-color: rgba(244, 63, 94, 0.24); }
+                .subscription-alert-badge.is-within7 { color: #9f1239; background: rgba(244, 63, 94, 0.10); border-color: rgba(244, 63, 94, 0.20); }
+                .subscription-alert-badge.is-within30 { color: #935b11; background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.24); }
+                .subscription-alert-badge.is-within60 { color: #854d0e; background: rgba(234, 179, 8, 0.13); border-color: rgba(234, 179, 8, 0.22); }
+                .subscription-alert-badge.is-within90 { color: #256372; background: rgba(14, 165, 233, 0.11); border-color: rgba(14, 165, 233, 0.18); }
+                .subscription-alert-badge.is-within120 { color: #475569; background: rgba(100, 116, 139, 0.10); border-color: rgba(100, 116, 139, 0.16); }
+                .subscription-alert-badge.is-within180 { color: #596273; background: rgba(107, 114, 128, 0.09); border-color: rgba(107, 114, 128, 0.14); }
+                .subscription-alert-badge.is-over180 { color: #6b7280; background: rgba(107, 114, 128, 0.06); border-color: rgba(107, 114, 128, 0.10); }
                 .subscription-alerts-marquee:hover .subscription-alerts-marquee-track { animation-play-state: paused; }
                 .subscription-alerts-marquee.is-empty .subscription-alerts-marquee-track {
                     left: 0; animation: none; color: rgba(85, 76, 115, 0.72);

@@ -408,7 +408,11 @@ class SubscriptionOpsService {
         if (daysRemaining === 0) return 'dueToday';
         if (daysRemaining <= 7) return 'within7';
         if (daysRemaining <= 30) return 'within30';
-        return 'within90';
+        if (daysRemaining <= 60) return 'within60';
+        if (daysRemaining <= 90) return 'within90';
+        if (daysRemaining <= 120) return 'within120';
+        if (daysRemaining <= 180) return 'within180';
+        return 'over180';
     }
 
     _normalizeAlertLimit(limit, options = {}) {
