@@ -1342,6 +1342,30 @@ Reference docs:
 * `docs/tfc-crm-ui-style-governance.md` defines current UI style governance and the Dashboard / Opportunity Detail dual baselines.
 * `docs/supabase-access-sop.md` defines current Supabase access posture and future table-access SOP.
 
+## Repository Scan Sequence / Token Boundary Governance
+
+Every Gemini/Codex CRM task must first read the Always Read Baseline Docs.
+
+`docs/repo-scan-boundary.md` is the authoritative scan-boundary policy. The scan-boundary policy protects core docs from being skipped.
+
+After reading baseline docs, agents must apply scan boundaries and inspect only targeted owner files.
+
+Generated snapshots, vendor libraries, static map data, lockfiles, binary assets, and packaging scripts must not be read by default.
+
+Do not duplicate the entire repo-scan-boundary policy inside `docs/architecture-governance.md`.
+
+## Phase Handoff Documentation / Changelog Governance
+
+Every phase handoff or major checkpoint must include a docs-update evaluation.
+
+Relevant repo docs should be updated only when governance, architecture baseline, scan boundary, UI baseline, Supabase/security posture, cleanup/no-touch rules, or current repo state meaningfully changed.
+
+Small patches do not automatically require docs updates.
+
+Changed governance docs must include or update a changelog entry with the date, summary of governance change, and scope.
+
+Governance doc updates should be docs-only patches unless explicitly authorized. Source-code changes and governance-doc changes should not be mixed by default.
+
 ---
 
 # 28.2 Product Cost / Opportunity Spec Governance Addendum (2026-06)
@@ -1643,3 +1667,13 @@ with controlled maintenance,
 clear auditability,
 and disciplined data lifecycle governance.
 ```
+
+---
+
+# Changelog
+
+## 2026-06-09
+
+* Added phase handoff documentation and changelog governance.
+* Clarified that repo docs are updated only when governance, architecture baseline, scan boundary, UI baseline, Supabase/security posture, cleanup/no-touch rules, or current repo state meaningfully change.
+* Confirmed governance doc updates should normally be docs-only patches.
