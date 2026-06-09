@@ -793,12 +793,13 @@ const DashboardWidgets = {
             style.id = 'dashboard-widget-styles';
             style.innerHTML = `
                 .subscription-alerts-marquee {
-                    display: flex; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 260px; max-width: none;
+                    display: flex; align-items: center; gap: 8px; flex: 1 1 0; min-width: 0; max-width: 100%;
                     height: 30px; padding: 4px 10px; border: 1px solid rgba(124, 112, 163, 0.24); border-radius: 4px;
                     background: rgba(245, 244, 250, 0.92); color: #3f3a56; cursor: pointer; overflow: hidden;
                 }
-                .page-header .header-content { flex: 1 1 auto; min-width: 0; }
-                .page-header .header-content > div { flex: 0 1 auto; min-width: 0; }
+                .page-header { min-width: 0; max-width: 100%; }
+                .page-header .header-content { flex: 1 1 auto; min-width: 0; max-width: 100%; overflow: hidden; }
+                .page-header .dashboard-title-block { flex: 0 0 auto; min-width: fit-content; }
                 .page-header .header-actions { flex: 0 0 auto; }
                 .subscription-alerts-marquee:hover { background: rgba(239, 237, 247, 0.96); border-color: rgba(124, 112, 163, 0.36); color: #312d46; }
                 .subscription-alerts-marquee-label {
@@ -829,8 +830,11 @@ const DashboardWidgets = {
                     to { transform: translateX(-100%); }
                 }
                 @media (max-width: 900px) {
-                    .page-header .header-content { flex-wrap: wrap; }
-                    .subscription-alerts-marquee { max-width: 100%; width: 100%; }
+                    .page-header .header-content { flex-wrap: wrap; overflow: visible; }
+                    .subscription-alerts-marquee { flex-basis: 100%; max-width: 100%; width: 100%; }
+                }
+                @media (max-width: 768px) {
+                    .page-header .dashboard-title-block { min-width: 0; }
                 }
                 .dashboard-trend-header { display: flex; align-items: center; gap: 8px; }
                 .dashboard-trend-controls { display: flex !important; align-items: center; justify-content: flex-end; gap: 6px !important; flex-wrap: nowrap; min-width: 0; }
