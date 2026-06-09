@@ -756,7 +756,8 @@ const DashboardWidgets = {
             return `<span class="subscription-alert-marquee-item"><span class="subscription-alert-badge is-${badge.tier}">${escapeHtml(badge.label)}</span>${labelHtml}<span>${escapeHtml(daysText)}</span></span>`;
         }).join(`<span class="subscription-alert-separator">${TEXT_SEPARATOR}</span>`);
 
-        track.innerHTML = html;
+        const copyHtml = `${html}<span class="subscription-alert-separator">${TEXT_SEPARATOR}</span>`;
+        track.innerHTML = copyHtml + copyHtml;
     },
 
     /**
@@ -829,7 +830,7 @@ const DashboardWidgets = {
                 }
                 .subscription-alerts-marquee-viewport { position: relative; flex: 1 1 auto; min-width: 0; max-width: 100%; height: 18px; overflow: hidden; white-space: nowrap; }
                 .subscription-alerts-marquee-track {
-                    position: absolute; left: 100%; top: 50%; display: inline-block; color: #3f3a56;
+                    position: absolute; left: 0; top: 50%; display: inline-block; color: #3f3a56;
                     font-size: 0.82rem; line-height: 1.2; white-space: nowrap; animation: subscriptionMarquee 18s linear infinite;
                 }
                 .subscription-alert-marquee-item { display: inline-flex; align-items: center; gap: 8px; }
@@ -852,8 +853,8 @@ const DashboardWidgets = {
                     left: 0; animation: none; color: rgba(85, 76, 115, 0.72);
                 }
                 @keyframes subscriptionMarquee {
-                    from { transform: translate(0, -50%); }
-                    to { transform: translate(-100%, -50%); }
+                    0% { transform: translate(0, -50%); }
+                    100% { transform: translate(-50%, -50%); }
                 }
                 .dashboard-trend-header { display: flex; align-items: center; gap: 8px; }
                 .dashboard-trend-controls { display: flex !important; align-items: center; justify-content: flex-end; gap: 6px !important; flex-wrap: nowrap; min-width: 0; }
