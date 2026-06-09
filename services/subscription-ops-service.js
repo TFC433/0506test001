@@ -374,6 +374,10 @@ class SubscriptionOpsService {
             return record.customNote || ' ';
         }
 
+        if (record.manualItemName) {
+            return record.manualItemName;
+        }
+
         if (record.sourceType !== 'opportunity') {
             return record.manualItemName || record.subscriptionItemName || UNSPECIFIED_PRODUCT_LABEL;
         }

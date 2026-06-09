@@ -357,7 +357,7 @@ function renderSubscriptionPrimaryCell(item, display, id) {
 function renderSubscriptionItemNotesCell(item, display) {
     const primary = isCustomReminder(item)
         ? display.notes
-        : (display.productLabel || display.itemName);
+        : (display.itemName || display.productLabel);
     const secondary = isCustomReminder(item) ? '' : display.notes;
 
     return `
@@ -807,6 +807,20 @@ function ensureSubscriptionHeaderControls() {
         const header = widget && widget.querySelector('.internal-ops-header');
         if (!header) return;
 
+        const title = header.querySelector('h1, h2, h3, h4, .internal-ops-title');
+        if (title) {
+            title.textContent = '\u8a02\u95b1\u5236\u8207\u5c08\u6848\u63d0\u9192\u7ba1\u7406';
+
+            let subtitle = header.querySelector('#subscription-header-subtitle');
+            if (!subtitle) {
+                subtitle = document.createElement('span');
+                subtitle.id = 'subscription-header-subtitle';
+                subtitle.className = 'subscription-header-subtitle';
+                title.insertAdjacentElement('afterend', subtitle);
+            }
+            subtitle.textContent = '\u4f9d\u5230\u671f\u65e5\u7531\u8fd1\u5230\u9060\u6392\u5e8f';
+        }
+
         const addButton = header.querySelector('button[onclick="window.openSubscriptionCreateInline()"]');
         if (addButton) {
             addButton.classList.remove('primary');
@@ -821,9 +835,16 @@ function ensureSubscriptionHeaderControls() {
             header.appendChild(actionGroup);
         }
 
-        if (addButton && addButton.parentNode !== actionGroup) {
-            actionGroup.appendChild(addButton);
+        let maintenanceHint = actionGroup.querySelector('#subscription-maintenance-hint');
+        if (!maintenanceHint) {
+            maintenanceHint = document.createElement('span');
+            maintenanceHint.id = 'subscription-maintenance-hint';
+            maintenanceHint.className = 'subscription-maintenance-hint';
         }
+        maintenanceHint.textContent = '\u5982\u8981\u7de8\u8f2f\uff0c\u8acb\u9032\u5165\u7dad\u8b77\u6a21\u5f0f\uff0c\u4e26\u9ede\u64ca\u540d\u7a31\u9032\u884c\u7de8\u8f2f';
+        actionGroup.appendChild(maintenanceHint);
+
+        if (addButton) actionGroup.appendChild(addButton);
 
         let opButton = actionGroup.querySelector('#subscription-operation-toggle');
         if (!opButton) {
@@ -832,11 +853,12 @@ function ensureSubscriptionHeaderControls() {
             opButton.id = 'subscription-operation-toggle';
             opButton.className = 'subscription-header-btn';
             opButton.onclick = () => window.toggleSubscriptionOperationMode();
-            actionGroup.appendChild(opButton);
         }
 
         opButton.textContent = window.__subscriptionOpsOperationMode ? '\u7d50\u675f\u7dad\u8b77' : '\u7dad\u8b77';
+        opButton.classList.add('is-danger');
         opButton.classList.toggle('is-active', Boolean(window.__subscriptionOpsOperationMode));
+        actionGroup.appendChild(opButton);
     }, 0);
 }
 
@@ -1175,9 +1197,13 @@ window.archiveSubscriptionOp = async function(id) {
         .subscription-form-btn:hover { color: var(--text-primary); border-color: color-mix(in srgb, var(--border-color) 70%, var(--text-secondary)); }
         .subscription-form-btn.is-save { color: var(--accent-blue, #2563eb); background: color-mix(in srgb, var(--accent-blue, #2563eb) 7%, var(--card-bg)); border-color: color-mix(in srgb, var(--accent-blue, #2563eb) 25%, var(--border-color)); }
         .subscription-form-btn.is-danger { color: var(--danger-color, #b42318); }
+        .subscription-header-subtitle { color: var(--text-secondary); font-size: 0.78rem; font-weight: 500; margin-left: 8px; white-space: nowrap; }
         .subscription-header-action-group { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; }
+        .subscription-maintenance-hint { color: var(--text-secondary); font-size: 0.74rem; font-weight: 500; margin-right: 3px; white-space: nowrap; }
         .internal-ops-header .subscription-header-btn { border: 1px solid var(--border-color) !important; border-radius: 4px !important; background: var(--card-bg) !important; color: var(--text-secondary) !important; padding: 3px 8px !important; min-height: 24px !important; height: auto !important; font-size: 0.76rem !important; font-weight: 600 !important; line-height: 1.3 !important; box-shadow: none !important; transform: none !important; margin: 0 !important; }
         .internal-ops-header .subscription-header-btn.is-active { color: var(--accent-blue, #2563eb) !important; border-color: color-mix(in srgb, var(--accent-blue, #2563eb) 28%, var(--border-color)) !important; background: color-mix(in srgb, var(--accent-blue, #2563eb) 7%, var(--card-bg)) !important; }
+        .internal-ops-header .subscription-header-btn.is-danger { color: var(--danger-color, #b42318) !important; border-color: color-mix(in srgb, var(--danger-color, #b42318) 24%, var(--border-color)) !important; background: color-mix(in srgb, var(--danger-color, #b42318) 5%, var(--card-bg)) !important; }
+        .internal-ops-header .subscription-header-btn.is-danger.is-active { color: var(--danger-color, #b42318) !important; border-color: color-mix(in srgb, var(--danger-color, #b42318) 34%, var(--border-color)) !important; background: color-mix(in srgb, var(--danger-color, #b42318) 8%, var(--card-bg)) !important; }
         .subscription-inline-form-row td { background: var(--secondary-bg); padding: 5px; }
         .subscription-inline-form { border: 1px solid var(--border-color); border-radius: 5px; background: var(--card-bg); padding: 6px; }
         .subscription-inline-grid { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 5px; }
