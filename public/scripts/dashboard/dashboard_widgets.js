@@ -793,18 +793,17 @@ const DashboardWidgets = {
             style.id = 'dashboard-widget-styles';
             style.innerHTML = `
                 .subscription-alerts-marquee {
-                    display: none; align-items: center; gap: 8px; flex: 1 1 auto; min-width: 0; max-width: clamp(240px, 32vw, 520px);
+                    display: flex; align-items: center; gap: 8px; flex: 1 1 0%; min-width: 0; max-width: none;
                     height: 30px; padding: 4px 10px; border: 1px solid rgba(124, 112, 163, 0.24); border-radius: 4px;
                     background: rgba(245, 244, 250, 0.92); color: #3f3a56; cursor: pointer; overflow: hidden;
                 }
-                body[data-active-page="dashboard"] .subscription-alerts-marquee { display: flex; }
                 .subscription-alerts-marquee:hover { background: rgba(239, 237, 247, 0.96); border-color: rgba(124, 112, 163, 0.36); color: #312d46; }
                 .subscription-alerts-marquee-label {
                     flex: 0 0 auto; color: #554c73; font-size: 0.78rem; font-weight: 700; white-space: nowrap;
                 }
-                .subscription-alerts-marquee-viewport { flex: 1 1 auto; min-width: 0; max-width: 100%; overflow: hidden; white-space: nowrap; }
+                .subscription-alerts-marquee-viewport { position: relative; flex: 1 1 auto; min-width: 0; max-width: 100%; height: 18px; overflow: hidden; white-space: nowrap; }
                 .subscription-alerts-marquee-track {
-                    display: inline-block; min-width: 100%; padding-left: 100%; color: #3f3a56;
+                    position: absolute; left: 100%; top: 50%; display: inline-block; color: #3f3a56;
                     font-size: 0.82rem; line-height: 1.2; white-space: nowrap; animation: subscriptionMarquee 18s linear infinite;
                 }
                 .subscription-alert-marquee-item { display: inline-flex; align-items: center; gap: 8px; }
@@ -820,14 +819,11 @@ const DashboardWidgets = {
                 .subscription-alert-badge.is-low { color: #586070; background: rgba(100, 116, 139, 0.10); border-color: rgba(100, 116, 139, 0.16); }
                 .subscription-alerts-marquee:hover .subscription-alerts-marquee-track { animation-play-state: paused; }
                 .subscription-alerts-marquee.is-empty .subscription-alerts-marquee-track {
-                    padding-left: 0; animation: none; color: rgba(85, 76, 115, 0.72);
+                    left: 0; animation: none; color: rgba(85, 76, 115, 0.72);
                 }
                 @keyframes subscriptionMarquee {
-                    from { transform: translateX(0); }
-                    to { transform: translateX(-100%); }
-                }
-                @media (max-width: 900px) {
-                    body[data-active-page="dashboard"] .subscription-alerts-marquee { max-width: min(100%, 420px); }
+                    from { transform: translate(0, -50%); }
+                    to { transform: translate(-100%, -50%); }
                 }
                 .dashboard-trend-header { display: flex; align-items: center; gap: 8px; }
                 .dashboard-trend-controls { display: flex !important; align-items: center; justify-content: flex-end; gap: 6px !important; flex-wrap: nowrap; min-width: 0; }

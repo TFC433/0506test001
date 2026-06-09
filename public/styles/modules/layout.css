@@ -97,6 +97,10 @@
     flex: 1;
 }
 
+.dashboard-title-block {
+    flex-shrink: 0;
+}
+
 .header-content > div {
     display: flex;
     align-items: baseline;
@@ -129,7 +133,8 @@
 .header-actions {
     display: flex;
     gap: var(--spacing-5);
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    flex-shrink: 0;
     align-items: center;
     margin-left: auto;
 }
