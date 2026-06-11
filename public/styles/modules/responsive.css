@@ -10,6 +10,10 @@
         /* 平板：改為 2 欄 */
         grid-template-columns: repeat(2, 1fr); 
     }
+    #page-dashboard .stats-grid {
+        min-width: 0;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
 }
 
 @media (max-width: 768px) {
@@ -39,6 +43,10 @@
         /* 手機直向：改為 2 欄 (3x2 變成 3x2, 看起來也OK，或者改為 1 欄) */
         /* 這裡建議手機版改為 1 欄，避免卡片太窄 */
         grid-template-columns: 1fr; 
+    }
+    #page-dashboard .stats-grid {
+        min-width: 0;
+        grid-template-columns: 1fr;
     }
     .main-content { 
         padding: var(--spacing-4); 
