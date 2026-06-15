@@ -86,6 +86,82 @@
     #page-dashboard .dashboard-mobile-slot {
         min-width: 0;
     }
+    #page-dashboard #mobile-reminder-summary-slot .mobile-reminder-summary-card {
+        border: 1px solid var(--border-color);
+        border-radius: var(--rounded-md);
+        background: var(--secondary-bg);
+        padding: var(--spacing-3) var(--spacing-4);
+        margin-bottom: var(--spacing-3);
+        box-shadow: var(--shadow-sm);
+        min-width: 0;
+        overflow: hidden;
+    }
+    #page-dashboard #mobile-reminder-summary-slot .mobile-reminder-summary-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--spacing-2);
+        min-width: 0;
+    }
+    #page-dashboard #mobile-reminder-summary-slot .mobile-reminder-summary-title {
+        min-width: 0;
+        color: var(--text-primary);
+        font-size: var(--font-size-sm);
+        font-weight: 700;
+    }
+    #page-dashboard #mobile-reminder-summary-slot .mobile-reminder-summary-count {
+        flex: 0 0 auto;
+        color: var(--text-muted);
+        font-size: var(--font-size-xs);
+        font-weight: 700;
+    }
+    #page-dashboard #mobile-reminder-summary-slot .mobile-reminder-list {
+        display: grid;
+        gap: var(--spacing-3);
+        margin: var(--spacing-3) 0 0;
+        padding: 0;
+        list-style: none;
+    }
+    #page-dashboard #mobile-reminder-summary-slot .mobile-reminder-item {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        align-items: start;
+        gap: var(--spacing-2);
+        min-width: 0;
+    }
+    #page-dashboard #mobile-reminder-summary-slot .mobile-reminder-item-body {
+        min-width: 0;
+    }
+    #page-dashboard #mobile-reminder-summary-slot .mobile-reminder-item-primary,
+    #page-dashboard #mobile-reminder-summary-slot .mobile-reminder-item-secondary {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        overflow-wrap: anywhere;
+    }
+    #page-dashboard #mobile-reminder-summary-slot .mobile-reminder-item-primary {
+        color: var(--text-primary);
+        font-size: var(--font-size-sm);
+        font-weight: 600;
+        line-height: 1.35;
+        white-space: normal;
+    }
+    #page-dashboard #mobile-reminder-summary-slot .mobile-reminder-item-secondary,
+    #page-dashboard #mobile-reminder-summary-slot .mobile-reminder-item-days,
+    #page-dashboard #mobile-reminder-summary-slot .mobile-reminder-empty {
+        color: var(--text-muted);
+        font-size: var(--font-size-xs);
+    }
+    #page-dashboard #mobile-reminder-summary-slot .mobile-reminder-item-secondary {
+        line-height: 1.3;
+        margin-top: 2px;
+        white-space: nowrap;
+    }
+    #page-dashboard #mobile-reminder-summary-slot .mobile-reminder-item-days {
+        grid-column: 2;
+        justify-self: start;
+        min-width: 0;
+        white-space: nowrap;
+    }
     .main-content { 
         padding: var(--spacing-4); 
     }

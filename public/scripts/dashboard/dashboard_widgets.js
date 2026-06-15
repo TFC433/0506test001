@@ -654,6 +654,90 @@ const DashboardWidgets = {
         }
     },
 
+    _renderMobileReminderSummary(alerts = [], state = {}, helpers = {}) {
+        const slot = document.getElementById('mobile-reminder-summary-slot');
+        if (!slot) return;
+
+        const escapeHtml = helpers.escapeHtml || (value => String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;'));
+        const getDaysText = helpers.getDaysText || (() => '-');
+        const getBadge = helpers.getBadge || (() => ({ label: '-', tier: 'within90' }));
+        const reminders = Array.isArray(alerts) ? alerts : [];
+        const title = '\u8a02\u95b1\u63d0\u9192';
+
+        if (state.loading) {
+            slot.innerHTML = `
+                <section class="mobile-reminder-summary-card" aria-label="${title}">
+                    <div class="mobile-reminder-summary-header">
+                        <span class="mobile-reminder-summary-title">${title}</span>
+                        <span class="mobile-reminder-summary-count">\u8f09\u5165\u4e2d</span>
+                    </div>
+                </section>`;
+            return;
+        }
+
+        if (state.error) {
+            slot.innerHTML = `
+                <section class="mobile-reminder-summary-card" aria-label="${title}">
+                    <div class="mobile-reminder-summary-header">
+                        <span class="mobile-reminder-summary-title">${title}</span>
+                        <span class="mobile-reminder-summary-count">\u7121\u6cd5\u8f09\u5165</span>
+                    </div>
+                </section>`;
+            return;
+        }
+
+        if (reminders.length === 0) {
+            slot.innerHTML = `
+                <section class="mobile-reminder-summary-card is-empty" aria-label="${title}">
+                    <div class="mobile-reminder-summary-header">
+                        <span class="mobile-reminder-summary-title">${title}</span>
+                        <span class="mobile-reminder-summary-count">0</span>
+                    </div>
+                    <div class="mobile-reminder-empty">\u76ee\u524d\u7121\u8a02\u95b1\u5230\u671f\u63d0\u9192</div>
+                </section>`;
+            return;
+        }
+
+        const visibleReminders = reminders.slice(0, 3);
+        const itemsHtml = visibleReminders.map(item => {
+            const badge = getBadge(item.daysRemaining, item.urgency);
+            const isCustomReminder = item && item.reminderKind === 'custom';
+            const primary = isCustomReminder
+                ? (item.customSubject || '-')
+                : (item.displayOpportunityName || item.customerName || '-');
+            const secondary = isCustomReminder
+                ? item.customNote
+                : (item.displayProductName || item.subscriptionItemName || '\u672a\u6307\u5b9a\u5546\u54c1');
+            const secondaryHtml = String(secondary || '').trim()
+                ? `<div class="mobile-reminder-item-secondary">${escapeHtml(secondary)}</div>`
+                : '';
+
+            return `
+                <li class="mobile-reminder-item">
+                    <span class="subscription-alert-badge is-${badge.tier}">${escapeHtml(badge.label)}</span>
+                    <div class="mobile-reminder-item-body">
+                        <div class="mobile-reminder-item-primary">${escapeHtml(primary)}</div>
+                        ${secondaryHtml}
+                    </div>
+                    <span class="mobile-reminder-item-days">${escapeHtml(getDaysText(item.daysRemaining))}</span>
+                </li>`;
+        }).join('');
+
+        slot.innerHTML = `
+            <section class="mobile-reminder-summary-card" aria-label="${title}">
+                <div class="mobile-reminder-summary-header">
+                    <span class="mobile-reminder-summary-title">${title}</span>
+                    <span class="mobile-reminder-summary-count">${reminders.length}</span>
+                </div>
+                <ul class="mobile-reminder-list">${itemsHtml}</ul>
+            </section>`;
+    },
+
     renderSubscriptionAlerts(alerts = [], state = {}) {
         const marquee = document.getElementById('subscription-alerts-marquee');
         const track = marquee ? marquee.querySelector('.subscription-alerts-marquee-track') : null;
@@ -662,18 +746,21 @@ const DashboardWidgets = {
         this._ensureStyles();
 
         if (state.loading) {
+            this._renderMobileReminderSummary(alerts, state);
             marquee.classList.add('is-empty');
             track.textContent = '載入提醒中...';
             return;
         }
 
         if (state.error) {
+            this._renderMobileReminderSummary(alerts, state);
             marquee.classList.add('is-empty');
             track.textContent = '續約提醒暫時無法載入';
             return;
         }
 
         if (!Array.isArray(alerts) || alerts.length === 0) {
+            this._renderMobileReminderSummary(alerts, state);
             marquee.classList.add('is-empty');
             track.textContent = '\u76ee\u524d\u7121\u8a02\u95b1\u5230\u671f\u63d0\u9192';
             return;
@@ -737,6 +824,8 @@ const DashboardWidgets = {
             if (days <= 180) return urgencyBadgeMap.within180;
             return urgencyBadgeMap.over180;
         };
+
+        this._renderMobileReminderSummary(alerts, state, { escapeHtml, getDaysText, getBadge });
 
         const html = alerts.map(item => {
             const badge = getBadge(item.daysRemaining, item.urgency);
