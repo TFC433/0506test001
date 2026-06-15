@@ -16,6 +16,10 @@
     }
 }
 
+#page-dashboard .dashboard-mobile-slots {
+    display: none;
+}
+
 @media (max-width: 768px) {
     .main-content { 
         margin-left: 0; 
@@ -74,6 +78,13 @@
     #page-dashboard #trend-chart-container {
         min-width: 0;
         min-height: 240px;
+    }
+    #page-dashboard .dashboard-mobile-slots {
+        display: block;
+        min-width: 0;
+    }
+    #page-dashboard .dashboard-mobile-slot {
+        min-width: 0;
     }
     .main-content { 
         padding: var(--spacing-4); 
