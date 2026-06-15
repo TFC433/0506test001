@@ -51,6 +51,30 @@
     #page-dashboard .stats-grid > .stat-card {
         min-width: 0;
     }
+    #page-dashboard .dashboard-grid-flexible {
+        gap: var(--spacing-4);
+    }
+    #page-dashboard .dashboard-widget {
+        min-width: 0;
+        padding: var(--spacing-4);
+    }
+    #page-dashboard .dashboard-widget .widget-header {
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: var(--spacing-3);
+    }
+    #page-dashboard .dashboard-widget .widget-title {
+        flex: 1 1 180px;
+        min-width: 0;
+    }
+    #page-dashboard .dashboard-widget .widget-header > :not(.widget-title) {
+        flex: 0 1 auto;
+        min-width: 0;
+    }
+    #page-dashboard #trend-chart-container {
+        min-width: 0;
+        min-height: 240px;
+    }
     .main-content { 
         padding: var(--spacing-4); 
     }
@@ -184,6 +208,21 @@
     }
     #page-dashboard .stats-grid > .stat-card {
         min-width: 0;
+    }
+    #page-dashboard .dashboard-grid-flexible {
+        gap: var(--spacing-3);
+    }
+    #page-dashboard .dashboard-widget {
+        padding: var(--spacing-3);
+    }
+    #page-dashboard .dashboard-widget .widget-header {
+        gap: var(--spacing-2);
+    }
+    #page-dashboard .dashboard-widget .widget-title {
+        flex-basis: 160px;
+    }
+    #page-dashboard #trend-chart-container {
+        min-height: 220px;
     }
     .header-actions {
         flex-grow: 1;
