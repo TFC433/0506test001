@@ -46,7 +46,10 @@
     }
     #page-dashboard .stats-grid {
         min-width: 0;
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    #page-dashboard .stats-grid > .stat-card {
+        min-width: 0;
     }
     .main-content { 
         padding: var(--spacing-4); 
@@ -175,9 +178,22 @@
     .stats-grid { 
         grid-template-columns: 1fr; 
     }
+    #page-dashboard .stats-grid {
+        min-width: 0;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    #page-dashboard .stats-grid > .stat-card {
+        min-width: 0;
+    }
     .header-actions {
         flex-grow: 1;
         justify-content: flex-end;
+    }
+}
+
+@media (max-width: 360px) {
+    #page-dashboard .stats-grid {
+        grid-template-columns: 1fr;
     }
 }
 
