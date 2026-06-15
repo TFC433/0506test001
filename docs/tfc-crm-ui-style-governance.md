@@ -318,14 +318,16 @@ Module migration NG:
 
 ## 13. Gemini / Codex workflow rules
 
-Gemini is read-only repo forensic unless explicitly authorized otherwise.
+AI roles, Scope Freeze, and PASS / NG authority are governed by `docs/architecture-governance.md`.
 
-Codex is repo patch executor.
+Repo scan, docs-reading, and Necessary Docs Only rules are governed by `docs/repo-scan-boundary.md`.
 
-Workflow rules:
+UI-specific workflow rules:
 
 * precise scope is mandatory
 * small patches require especially precise scope
+* do not use UI style work as a broad redesign or global CSS refactor
+* read only files explicitly allowed or directly required by the UI task
 * no browser UI tests by default
 * do not start or restart the local server unless explicitly requested
 * do not perform login, session, or localStorage workarounds
@@ -344,6 +346,8 @@ Do not expand validation beyond the requested scope without authorization.
 ## 14. PASS / NG validation rule
 
 Every future UI migration must be judged as PASS or NG against this document.
+
+ChatGPT performs CODE PASS / NG against scope, governance, evidence, and static validation. The user performs final UI / product PASS / NG.
 
 PASS means:
 

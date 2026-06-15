@@ -96,10 +96,12 @@ Uncontrolled deletion
 The user owns:
 
 * workflow direction
+* product direction
 * layout direction
 * operational rhythm
 * UX judgment
 * PASS / NG authority
+* final QA ownership
 * product feeling
 * hierarchy judgment
 * final business semantics
@@ -126,11 +128,14 @@ The user's product judgment overrides:
 
 ChatGPT owns:
 
+* strategy
 * architecture judgment
 * governance enforcement
 * prompt strategy
 * scope control
+* Scope Freeze ownership
 * PASS / NG translation
+* PASS / NG judgment
 * renderer boundary reasoning
 * visual-language translation
 * product semantics clarification
@@ -171,6 +176,8 @@ Gemini owns:
 * dependency tracing
 * evidence-based route/controller/service/reader/writer mapping
 
+Gemini is an evidence-only forensics role. Gemini is not a strategy, planning, recommendation, product direction, or final patch-plan authority.
+
 Gemini MUST:
 
 * provide evidence-first analysis
@@ -179,12 +186,17 @@ Gemini MUST:
 * explain selector/runtime interactions
 * identify no-touch files
 * distinguish known facts from assumptions
+* return owner files, functions/selectors, current behavior, repo evidence, constraints, shared/cross-page risks, minimum touch points, forbidden files, and stop conditions when requested
 
 Gemini MUST NOT:
 
 * make final UX/product judgments
 * make final data lifecycle judgments
 * redesign architecture without instruction
+* decide product strategy
+* decide UI design direction
+* provide final patch plans
+* provide implementation code unless explicitly authorized
 * over-refactor
 * optimize outside scope
 * patch unless explicitly instructed
@@ -201,6 +213,8 @@ Codex owns:
 * syntax verification
 * scoped UI iteration
 * repo-local implementation details
+
+Codex is a minimal patch executor only. Codex is not a repo exploration tool, architecture strategist, product strategist, or recommendation authority unless explicitly instructed for a read-only forensic task.
 
 Codex MAY be used as:
 
@@ -232,8 +246,12 @@ Codex MUST NOT:
 
 No AI or contributor may assume:
 
+* file names
+* doc locations
+* current implementation
 * runtime behavior
 * selector ownership
+* owner functions
 * constructor order
 * DI order
 * payload structure
@@ -241,14 +259,19 @@ No AI or contributor may assume:
 * route ownership
 * modal ownership
 * CSS application
+* CSS specificity
+* CSS load order
 * hierarchy ownership
 * database columns
+* DB constraints
 * table relationships
 * writer allowed columns
 * reader DTO fields
 * endpoint behavior
 * cache behavior
 * event report linkage
+* validation state
+* tool scope
 
 without evidence.
 
@@ -262,6 +285,8 @@ Every meaningful modification requires:
 * DB schema evidence when relevant
 * route/controller/service evidence when relevant
 
+No repo owner decision may be made without repo evidence. Scope Freeze must be based on explicit repo evidence or user-provided facts.
+
 Never patch based on:
 
 * memory
@@ -269,6 +294,8 @@ Never patch based on:
 * "probably"
 * generic framework assumptions
 * field names that merely look reasonable
+
+If evidence is missing, the correct next step is evidence-only forensics or asking the user for repo output, not patching.
 
 Critical example:
 
@@ -303,6 +330,19 @@ Every forensic phase must clearly define:
 * expected output format
 * PASS / NG criteria
 * exact files/functions to cite
+
+Before every Codex patch, ChatGPT must freeze:
+
+* what this patch solves
+* what this patch does not solve
+* success criteria
+* allowed files
+* forbidden files
+* allowed selectors/functions when applicable
+* forbidden behavior changes
+* validation
+* report format
+* stop conditions
 
 Forensics must separate:
 
@@ -672,14 +712,23 @@ All Gemini prompts:
 * single-layer formatting
 * no nested fences
 * no fragile markdown structures
+* evidence-only by default
+* ask only for owner files, functions/selectors, current behavior, repo evidence, constraints, shared/cross-page risks, minimum touch points, forbidden files, and stop conditions
+* must not ask Gemini for product strategy, UI design direction, final patch plans, or implementation code unless explicitly authorized
 
 All Codex prompts:
 
 * must clearly state whether read-only or patch
+* must define task type
 * must define allowed files
 * must define hard no-touch files
+* must define product decision
+* must define repo evidence
+* must define patch requirements
+* must define non-goals
 * must define validation commands
 * must define expected output format
+* must define stop conditions
 
 All prompts must:
 
@@ -1344,11 +1393,23 @@ Reference docs:
 
 ## Repository Scan Sequence / Token Boundary Governance
 
-Every Gemini/Codex CRM task must first read the Always Read Baseline Docs.
+Necessary Docs Only / Task-tiered Docs Reading replaces the old Always Read Baseline Docs requirement.
 
-`docs/repo-scan-boundary.md` is the authoritative scan-boundary policy. The scan-boundary policy protects core docs from being skipped.
+Reading docs is not free and can waste Gemini/Codex usage. Gemini and Codex must not be required to read all baseline `.md` files by default.
 
-After reading baseline docs, agents must apply scan boundaries and inspect only targeted owner files.
+Micro patches should usually rely on ChatGPT Scope Freeze and targeted repo evidence.
+
+Small patches may read only directly relevant docs when needed.
+
+Architecture, cross-module, and governance tasks may read necessary governance docs, but still only the minimum relevant set.
+
+Unknown-scope tasks should use Gemini evidence-only owner/selector/function forensics before Codex patching.
+
+Docs are governance references, not mandatory input for every task. The old pattern "always read all baseline docs before patching" is deprecated.
+
+`docs/repo-scan-boundary.md` remains a governance reference for scan-boundary policy when that policy is directly relevant.
+
+After necessary docs or targeted evidence are identified, agents must apply scan boundaries and inspect only targeted owner files.
 
 Generated snapshots, vendor libraries, static map data, lockfiles, binary assets, and packaging scripts must not be read by default.
 

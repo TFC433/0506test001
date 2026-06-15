@@ -2,15 +2,15 @@
 
 ## Core Principle
 
-The repo scan boundary policy must not be used to skip the core CRM governance docs.
+The repo scan boundary policy must prevent context pollution while preserving access to necessary governance references.
 
-Every Gemini/Codex CRM task must first read the Always Read Baseline Docs, then apply scan boundaries, then inspect only targeted owner files.
+Every Gemini/Codex CRM task must apply Necessary Docs Only / Task-Tiered Docs Reading, then inspect only targeted owner files or explicitly scoped governance references.
 
 ## 1. Purpose
 
 This document prevents context pollution and uncontrolled repo scanning.
 
-It protects the core governance docs as mandatory reading before any repository inspection.
+It treats governance docs as references to read when directly relevant, not mandatory input for every task.
 
 It excludes generated, vendor, binary, lockfile, static-map, and duplicated context from default full-content reads.
 
@@ -20,32 +20,30 @@ It enforces targeted owner-file inspection instead of broad repository scanning.
 
 Every future Gemini/Codex CRM task must follow this order:
 
-1. Always Read Baseline Docs.
-2. Apply this repo scan boundary policy.
-3. Identify the task owner area.
-4. Inspect only targeted owner files.
-5. Use targeted `rg`/search for runtime linkage when needed.
-6. Stop and report if the task requires out-of-scope files, schema/RLS/GRANT changes, product decisions, or browser/runtime confirmation.
+1. Identify task type and scope.
+2. If scope is known and the patch is micro/small, follow ChatGPT Scope Freeze and targeted repo evidence.
+3. If scope is unknown, use Gemini evidence-only forensics to identify owner files, functions, selectors, constraints, and stop conditions before Codex patching.
+4. If the task is architecture, cross-module, or governance work, read only the necessary governance docs.
+5. Apply this repo scan boundary policy.
+6. Inspect only targeted owner files.
+7. Use targeted `rg`/search for runtime linkage when needed.
+8. Stop and report if the task requires out-of-scope files, schema/RLS/GRANT changes, product decisions, or browser/runtime confirmation.
 
-## 3. Always Read Baseline Docs
+## 3. Necessary Docs Only / Task-Tiered Docs Reading
 
-These must be read at the start of every Gemini/Codex CRM task:
+Reading docs is not free and can waste Gemini/Codex usage.
 
-* `docs/architecture-governance.md`
-* `docs/tfc-crm-ui-style-governance.md`
-* `docs/repo-operational-consolidation-report.md`
-* `docs/supabase-access-sop.md`
-* `docs/non-breaking-cleanup-roadmap.md`
-* `docs/repo-scan-boundary.md`
+The old pattern "always read all baseline docs before patching" is deprecated.
 
-Why each file is mandatory:
+Docs are governance references, not mandatory input for every task.
 
-* `docs/architecture-governance.md` is the supreme collaboration, architecture, PASS/NG, Zero Assumption, and minimal diff rulebook.
-* `docs/tfc-crm-ui-style-governance.md` defines UI style, layout, SaaS workspace, density, hierarchy, and visual PASS/NG baselines.
-* `docs/repo-operational-consolidation-report.md` provides the current repo state map, active module boundaries, acceptable baselines, and no-touch reminders.
-* `docs/supabase-access-sop.md` protects DB access, `service_role` usage, RLS/GRANT decisions, and prevents frontend direct Supabase access.
-* `docs/non-breaking-cleanup-roadmap.md` protects cleanup boundaries, do-not-touch areas, legacy fallback risks, and prevents opportunistic deletion/refactor.
-* `docs/repo-scan-boundary.md` defines the current scan policy.
+Task-tiered reading:
+
+* Micro patches usually do not read docs; they rely on ChatGPT Scope Freeze and targeted repo evidence.
+* Small patches read only directly relevant docs when needed.
+* Governance, architecture, and cross-module tasks may read necessary governance docs only.
+* Unknown-scope tasks use Gemini evidence-only forensics first, not Codex broad scanning.
+* Do not read all baseline docs by default.
 
 ## 4. Conditional Topic Docs
 
@@ -165,35 +163,41 @@ These areas may be active, hidden, pending ownership decision, or legacy but sti
 
 ## 9. Gemini Rule
 
-Gemini is read-only repo forensics unless explicitly authorized otherwise.
+Gemini is evidence-only repo forensics unless explicitly authorized otherwise.
 
 Gemini must:
 
-* read the Always Read Baseline Docs first
 * follow `docs/repo-scan-boundary.md`
+* read docs broadly only when the task itself is governance/docs forensics
 * report inspected files
 * report intentionally skipped files
 * report targeted searches used
 * identify owner files
+* identify headings, selectors, functions, current behavior, constraints, conflicts, touch points, forbidden files, and stop conditions when relevant
 * identify unknowns
+* not act as product strategy, planning, recommendation, UI design, or final patch-plan authority
+* not produce patch text or final implementation plans unless explicitly requested
 * not patch unless explicitly authorized
 
 ## 10. Codex Rule
 
-Codex is repo hands.
+Codex is a minimal patch executor.
 
 Codex must:
 
-* read the Always Read Baseline Docs first
+* follow ChatGPT Scope Freeze
 * follow `docs/repo-scan-boundary.md`
 * modify only explicitly allowed files
+* read only files explicitly allowed or directly required by the task
 * avoid no-read content unless explicitly authorized
+* avoid broad repo exploration
+* avoid baseline docs reading by default
 * avoid scope creep
 * not run browser tests
 * not start server
 * not install packages
 * not commit
-* stop and report if the required owner is outside allowed scope
+* stop and report if required files/scope are unclear or if the required owner/change is outside allowed scope
 
 Default validation:
 
@@ -206,11 +210,11 @@ For JavaScript changes only:
 
 ## 11. Phase Handoff And Changelog Rule
 
-`docs/repo-scan-boundary.md` is part of the Always Read Baseline Docs.
+`docs/repo-scan-boundary.md` is a governance reference for scan-boundary policy.
 
-After a phase handoff, agents must evaluate whether this file or other baseline docs need updates.
+After a phase handoff, agents must evaluate whether this file or other directly relevant governance docs need updates.
 
-Updates are required only when scan boundaries, Always Read docs, Default No-Read areas, Must Keep Available areas, Unknown/Need User Decision areas, or prompt workflow rules changed.
+Updates are required only when scan boundaries, Necessary Docs Only rules, Default No-Read areas, Must Keep Available areas, Unknown/Need User Decision areas, or prompt workflow rules changed.
 
 Any update must include a changelog entry.
 
@@ -219,22 +223,23 @@ Small patches do not require changing this file unless the scan policy itself ch
 ## 12. Prompt Snippet
 
 ```text
-Read the Always Read Baseline Docs first:
-docs/architecture-governance.md
-docs/tfc-crm-ui-style-governance.md
-docs/repo-operational-consolidation-report.md
-docs/supabase-access-sop.md
-docs/non-breaking-cleanup-roadmap.md
-docs/repo-scan-boundary.md
-
-Then apply docs/repo-scan-boundary.md.
+Follow the ChatGPT Scope Freeze.
+Read only files explicitly allowed or directly required by the task.
+Do not perform broad docs or repo scans.
 Do not scan the whole repo.
 Do not read Default No-Read contents unless explicitly authorized.
 Use targeted owner-file inspection and targeted rg/search only.
+If scope is unclear, stop and request evidence-only forensics.
+Use static validation only unless the user explicitly approves otherwise.
 Report inspected files and intentionally skipped files.
 ```
 
 ## 13. Changelog
+
+### 2026-06-15
+
+* Replaced Always Read Baseline Docs with Necessary Docs Only / Task-Tiered Docs Reading.
+* Aligned Gemini, Codex, and prompt snippet rules with Scope Freeze and targeted evidence.
 
 ### 2026-06-09
 
