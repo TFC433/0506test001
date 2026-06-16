@@ -17,6 +17,14 @@ if (typeof window.__subscriptionsExpandedEditId === 'undefined') {
     window.__subscriptionsExpandedEditId = null;
 }
 
+if (typeof window.__subscriptionsExpandedNoteId === 'undefined') {
+    window.__subscriptionsExpandedNoteId = null;
+}
+
+if (typeof window.__subscriptionsAllNotesExpanded === 'undefined') {
+    window.__subscriptionsAllNotesExpanded = false;
+}
+
 if (typeof window.__subscriptionsInlineError === 'undefined') {
     window.__subscriptionsInlineError = '';
 }
@@ -342,18 +350,18 @@ function getSubscriptionTypeLabel(item) {
 function renderSubscriptionPrimaryCell(item, display, id) {
     const editableAttrs = window.__subscriptionOpsOperationMode
         ? ` role="button" tabindex="0" onclick="window.openSubscriptionEditFromName('${id}')" onkeydown="window.handleSubscriptionNameKeydown(event, '${id}')"`
-        : '';
-    const editClass = window.__subscriptionOpsOperationMode ? ' is-editable' : '';
+        : ` role="button" tabindex="0" onclick="window.toggleSubscriptionNoteDetail('${id}')" onkeydown="window.handleSubscriptionNameKeydown(event, '${id}')"`;
+    const interactionClass = window.__subscriptionOpsOperationMode ? ' is-editable' : ' is-viewable';
 
     if (isCustomReminder(item)) {
         return `
-            <div class="subscription-cell-main${editClass}"${editableAttrs}>${formatSubscriptionValue(display.itemName)}</div>
+            <div class="subscription-cell-main subscription-primary-name${interactionClass}"${editableAttrs}>${formatSubscriptionValue(display.itemName)}</div>
             <div class="subscription-cell-sub">\u81ea\u8a02\u63d0\u9192</div>
         `;
     }
 
     return `
-        <div class="subscription-cell-main${editClass}"${editableAttrs}>${formatSubscriptionValue(display.opportunityName || display.customerName)}</div>
+        <div class="subscription-cell-main subscription-primary-name${interactionClass}"${editableAttrs}>${formatSubscriptionValue(display.opportunityName || display.customerName)}</div>
     `;
 }
 
@@ -366,6 +374,119 @@ function renderSubscriptionItemNotesCell(item, display) {
     return `
         <div class="subscription-cell-main">${formatSubscriptionValue(primary)}</div>
         ${secondary ? `<div class="subscription-cell-sub">${escapeSubscriptionHtml(secondary)}</div>` : ''}
+    `;
+}
+
+function getSubscriptionDateDay(value) {
+    if (!value) return null;
+    const rawValue = String(value).trim();
+    if (!rawValue) return null;
+
+    const dateMatch = rawValue.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (dateMatch) {
+        const year = Number(dateMatch[1]);
+        const month = Number(dateMatch[2]);
+        const day = Number(dateMatch[3]);
+        const parsed = new Date(year, month - 1, day);
+        if (
+            parsed.getFullYear() === year &&
+            parsed.getMonth() === month - 1 &&
+            parsed.getDate() === day
+        ) {
+            return Math.floor(Date.UTC(year, month - 1, day) / 86400000);
+        }
+        return null;
+    }
+
+    const parsed = new Date(rawValue);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return Math.floor(Date.UTC(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()) / 86400000);
+}
+
+function getSubscriptionPeriodProgress(startDate, endDate) {
+    const startDay = getSubscriptionDateDay(startDate);
+    const endDay = getSubscriptionDateDay(endDate);
+    if (startDay === null || endDay === null) return null;
+
+    const today = new Date();
+    const todayDay = Math.floor(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000);
+    const totalDays = endDay - startDay;
+
+    if (totalDays < 0) return null;
+    if (totalDays === 0) return todayDay >= endDay ? 100 : 0;
+
+    const elapsedDays = todayDay - startDay;
+    return Math.min(Math.max(Math.round((elapsedDays / totalDays) * 100), 0), 100);
+}
+
+function getSubscriptionProgressSeverity(percent, display) {
+    const daysRemaining = getSubscriptionDaysRemaining(display && display.endDate);
+    if (daysRemaining !== null && daysRemaining < 0) return 'critical';
+    if (percent >= 100) return 'critical';
+    if (percent >= 75) return 'alert';
+    if (percent >= 50) return 'warning';
+    return 'normal';
+}
+
+function getSubscriptionRemainingDaysSeverity(display) {
+    const progress = getSubscriptionPeriodProgress(display.startDate, display.endDate);
+    if (progress !== null) return getSubscriptionProgressSeverity(progress, display);
+
+    const daysRemaining = getSubscriptionDaysRemaining(display.endDate);
+    return daysRemaining !== null && daysRemaining < 0 ? 'critical' : '';
+}
+
+function renderSubscriptionPeriodCell(display) {
+    return `
+        <div class="subscription-period-cell">
+            <div class="subscription-period-dates">
+                <div class="subscription-period-row">
+                    <span class="subscription-period-label">開始</span>
+                    <span class="subscription-period-value">${formatSubscriptionValue(display.startDate)}</span>
+                </div>
+                <div class="subscription-period-row">
+                    <span class="subscription-period-label">到期</span>
+                    <span class="subscription-period-value">${formatSubscriptionValue(display.endDate)}</span>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function renderSubscriptionTimeProgressCell(display) {
+    const progress = getSubscriptionPeriodProgress(display.startDate, display.endDate);
+    if (progress === null) {
+        return '<span class="subscription-time-progress-empty">-</span>';
+    }
+    const severity = getSubscriptionProgressSeverity(progress, display);
+
+    return `
+        <div class="subscription-time-progress is-${severity}" aria-label="期間進度 ${progress}%">
+            <div class="subscription-time-progress-track">
+                <span class="subscription-time-progress-fill" style="width: ${progress}%;"></span>
+            </div>
+            <span class="subscription-time-progress-percent">${progress}%</span>
+        </div>
+    `;
+}
+
+function renderSubscriptionRemainingDaysCell(display) {
+    const severity = getSubscriptionRemainingDaysSeverity(display);
+    const severityClass = severity ? ` is-${severity}` : '';
+    return `<span class="subscription-days-remaining${severityClass}">${escapeSubscriptionHtml(formatSubscriptionDaysRemaining(display.endDate))}</span>`;
+}
+
+function renderSubscriptionNoteDetailRow(display) {
+    const noteText = display.notes ? escapeSubscriptionHtml(display.notes) : '\u5c1a\u7121\u5099\u8a3b';
+    return `
+        <tr class="subscription-note-detail-row">
+            <td colspan="8" class="subscription-note-detail-cell">
+                <div class="subscription-note-detail">
+                    <span class="subscription-note-detail-label">\u5099\u8a3b</span>
+                    <span class="subscription-note-detail-text">${noteText}</span>
+                </div>
+            </td>
+        </tr>
     `;
 }
 
@@ -847,6 +968,19 @@ function ensureSubscriptionHeaderControls() {
         maintenanceHint.textContent = '\u5982\u8981\u7de8\u8f2f\uff0c\u8acb\u9032\u5165\u7dad\u8b77\u6a21\u5f0f\uff0c\u4e26\u9ede\u64ca\u540d\u7a31\u9032\u884c\u7de8\u8f2f';
         actionGroup.appendChild(maintenanceHint);
 
+        let noteToggleButton = actionGroup.querySelector('#subscription-notes-toggle');
+        if (!noteToggleButton) {
+            noteToggleButton = document.createElement('button');
+            noteToggleButton.type = 'button';
+            noteToggleButton.id = 'subscription-notes-toggle';
+            noteToggleButton.className = 'subscription-header-btn';
+            noteToggleButton.onclick = () => window.toggleAllSubscriptionNotes();
+        }
+        noteToggleButton.textContent = window.__subscriptionsAllNotesExpanded ? '\u6536\u5408\u5099\u8a3b' : '\u5c55\u958b\u5099\u8a3b';
+        noteToggleButton.disabled = Boolean(window.__subscriptionOpsOperationMode);
+        noteToggleButton.classList.toggle('is-active', Boolean(window.__subscriptionsAllNotesExpanded));
+        actionGroup.appendChild(noteToggleButton);
+
         if (addButton) actionGroup.appendChild(addButton);
 
         let opButton = actionGroup.querySelector('#subscription-operation-toggle');
@@ -868,6 +1002,8 @@ function ensureSubscriptionHeaderControls() {
 async function refreshSubscriptionsInline() {
     window.__subscriptionsCreateOpen = false;
     window.__subscriptionsExpandedEditId = null;
+    window.__subscriptionsExpandedNoteId = null;
+    window.__subscriptionsAllNotesExpanded = false;
     window.__subscriptionsInlineError = '';
 
     if (typeof window.fetchAndRenderSection === 'function') {
@@ -897,6 +1033,10 @@ window.renderSubscriptions = function(data) {
     const rows = activeRecords.map((item, index) => {
         const id = escapeSubscriptionHtml(item.id);
         const editOpen = String(window.__subscriptionsExpandedEditId || '') === String(item.id);
+        const noteOpen = !window.__subscriptionOpsOperationMode && (
+            window.__subscriptionsAllNotesExpanded ||
+            String(window.__subscriptionsExpandedNoteId || '') === String(item.id)
+        );
         const display = getSubscriptionDisplayModel(item);
 
         return `
@@ -905,11 +1045,12 @@ window.renderSubscriptions = function(data) {
                 <td>${renderSubscriptionPrimaryCell(item, display, id)}</td>
                 <td>${formatSubscriptionValue(display.customerName)}</td>
                 <td>${renderSubscriptionItemNotesCell(item, display)}</td>
-                <td>${formatSubscriptionValue(display.startDate)}</td>
-                <td>${formatSubscriptionValue(display.endDate)}</td>
-                <td>${escapeSubscriptionHtml(formatSubscriptionDaysRemaining(display.endDate))}</td>
+                <td>${renderSubscriptionPeriodCell(display)}</td>
+                <td>${renderSubscriptionTimeProgressCell(display)}</td>
+                <td>${renderSubscriptionRemainingDaysCell(display)}</td>
                 <td>${renderSubscriptionUrgencyBadge(display.endDate)}</td>
             </tr>
+            ${noteOpen ? renderSubscriptionNoteDetailRow(display) : ''}
             ${editOpen ? renderSubscriptionFormForRow(`edit-${id}`, item, 'edit') : ''}
         `;
     }).join('');
@@ -927,6 +1068,9 @@ window.renderSubscriptions = function(data) {
     return `
         <div class="subscription-ops-scope">
             ${renderSubscriptionInlineMessage()}
+            <div class="subscription-list-count-row">
+                <span class="subscription-list-count">\u5171 ${activeRecords.length} \u7b46</span>
+            </div>
             <table class="internal-ops-table subscription-ops-table">
                 <thead>
                     <tr>
@@ -934,8 +1078,8 @@ window.renderSubscriptions = function(data) {
                         <th>\u6a5f\u6703\u540d\u7a31 / \u63d0\u9192\u540d\u7a31</th>
                         <th>\u5ba2\u6236</th>
                         <th>\u63d0\u9192\u9805\u76ee / \u5099\u8a3b</th>
-                        <th>\u958b\u59cb\u65e5</th>
-                        <th>\u5230\u671f\u65e5</th>
+                        <th>\u671f\u9593</th>
+                        <th>\u9032\u5ea6</th>
                         <th>\u5269\u9918\u5929\u6578</th>
                         <th>\u63d0\u9192</th>
                     </tr>
@@ -954,6 +1098,8 @@ window.openSubscriptionCreateInline = function() {
     window.__subscriptionsCreateOpen = true;
     window.__subscriptionsCreateTab = 'subscription';
     window.__subscriptionsExpandedEditId = null;
+    window.__subscriptionsExpandedNoteId = null;
+    window.__subscriptionsAllNotesExpanded = false;
     window.__subscriptionOpsOperationMode = false;
     window.__subscriptionsInlineError = '';
     window.__subscriptionSelectedOpportunityId = '';
@@ -1036,6 +1182,8 @@ window.toggleSubscriptionOperationMode = function() {
     window.__subscriptionOpsOperationMode = !window.__subscriptionOpsOperationMode;
     window.__subscriptionsCreateOpen = false;
     window.__subscriptionsExpandedEditId = null;
+    window.__subscriptionsExpandedNoteId = null;
+    window.__subscriptionsAllNotesExpanded = false;
     window.__subscriptionsInlineError = '';
     rerenderSubscriptionsInline();
     ensureSubscriptionHeaderControls();
@@ -1044,16 +1192,42 @@ window.toggleSubscriptionOperationMode = function() {
 window.openSubscriptionEditFromName = function(id) {
     if (!window.__subscriptionOpsOperationMode) return;
     window.__subscriptionsCreateOpen = false;
+    window.__subscriptionsExpandedNoteId = null;
+    window.__subscriptionsAllNotesExpanded = false;
     window.__subscriptionsInlineError = '';
     window.__subscriptionsExpandedEditId = String(window.__subscriptionsExpandedEditId || '') === String(id) ? null : String(id);
     rerenderSubscriptionsInline();
 };
 
+window.toggleSubscriptionNoteDetail = function(id) {
+    if (window.__subscriptionOpsOperationMode) return;
+    window.__subscriptionsCreateOpen = false;
+    window.__subscriptionsExpandedEditId = null;
+    window.__subscriptionsAllNotesExpanded = false;
+    window.__subscriptionsInlineError = '';
+    window.__subscriptionsExpandedNoteId = String(window.__subscriptionsExpandedNoteId || '') === String(id) ? null : String(id);
+    rerenderSubscriptionsInline();
+};
+
+window.toggleAllSubscriptionNotes = function() {
+    if (window.__subscriptionOpsOperationMode) return;
+    window.__subscriptionsCreateOpen = false;
+    window.__subscriptionsExpandedEditId = null;
+    window.__subscriptionsExpandedNoteId = null;
+    window.__subscriptionsAllNotesExpanded = !window.__subscriptionsAllNotesExpanded;
+    window.__subscriptionsInlineError = '';
+    rerenderSubscriptionsInline();
+    ensureSubscriptionHeaderControls();
+};
+
 window.handleSubscriptionNameKeydown = function(event, id) {
-    if (!window.__subscriptionOpsOperationMode) return;
     if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        window.openSubscriptionEditFromName(id);
+        if (window.__subscriptionOpsOperationMode) {
+            window.openSubscriptionEditFromName(id);
+        } else {
+            window.toggleSubscriptionNoteDetail(id);
+        }
     }
 };
 
@@ -1089,6 +1263,8 @@ window.saveSubscriptionCreateInline = async function() {
 window.toggleSubscriptionExpandedEdit = function(id) {
     window.__subscriptionsCreateOpen = false;
     window.__subscriptionsInlineError = '';
+    window.__subscriptionsExpandedNoteId = null;
+    window.__subscriptionsAllNotesExpanded = false;
     window.__subscriptionsExpandedEditId = String(window.__subscriptionsExpandedEditId || '') === String(id) ? null : id;
     rerenderSubscriptionsInline();
 };
@@ -1161,7 +1337,9 @@ window.archiveSubscriptionOp = async function(id) {
     style.id = 'subscription-ops-inline-style';
     style.textContent = `
         .subscription-ops-scope { width: 100%; }
-        .subscription-ops-table { table-layout: fixed; min-width: 920px; }
+        .subscription-ops-table { table-layout: fixed; min-width: 1060px; }
+        .subscription-list-count-row { display: flex; justify-content: flex-end; padding: 0 4px 5px; }
+        .subscription-list-count { color: var(--text-secondary); font-size: 0.78rem; font-weight: 600; line-height: 1.3; white-space: nowrap; }
         .subscription-ops-table th,
         .subscription-ops-table td { padding-top: 3px; padding-bottom: 3px; vertical-align: top; }
         .subscription-ops-table th { font-size: 0.74rem; padding-top: 4px; padding-bottom: 4px; }
@@ -1174,16 +1352,41 @@ window.archiveSubscriptionOp = async function(id) {
         .subscription-ops-table th:nth-child(4),
         .subscription-ops-table td:nth-child(4) { width: 220px; }
         .subscription-ops-table th:nth-child(5),
-        .subscription-ops-table td:nth-child(5),
+        .subscription-ops-table td:nth-child(5) { width: 140px; white-space: normal; }
         .subscription-ops-table th:nth-child(6),
-        .subscription-ops-table td:nth-child(6),
+        .subscription-ops-table td:nth-child(6) { width: 120px; white-space: nowrap; }
         .subscription-ops-table th:nth-child(7),
-        .subscription-ops-table td:nth-child(7) { width: 84px; white-space: nowrap; }
+        .subscription-ops-table td:nth-child(7),
         .subscription-ops-table th:nth-child(8),
-        .subscription-ops-table td:nth-child(8) { width: 82px; white-space: nowrap; }
+        .subscription-ops-table td:nth-child(8) { width: 84px; white-space: nowrap; }
         .subscription-op-row td { overflow: hidden; text-overflow: ellipsis; }
         .subscription-cell-main { color: var(--text-primary); font-size: 0.81rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.25; }
         .subscription-cell-sub { margin-top: 1px; color: var(--text-muted); font-size: 0.72rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2; }
+        .subscription-period-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+        .subscription-period-dates { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+        .subscription-period-row { display: grid; grid-template-columns: 30px minmax(0, 1fr); column-gap: 6px; align-items: baseline; min-width: 0; }
+        .subscription-period-label { color: var(--text-muted); font-size: 0.72rem; font-weight: 600; line-height: 1.15; white-space: nowrap; }
+        .subscription-period-value { color: var(--text-secondary); font-size: 0.76rem; font-weight: 600; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .subscription-time-progress { --subscription-progress-color: var(--accent-blue, #2563eb); display: grid; grid-template-columns: 78px 32px; align-items: center; gap: 6px; min-width: 0; padding-top: 6px; }
+        .subscription-time-progress.is-warning { --subscription-progress-color: #d97706; }
+        .subscription-time-progress.is-alert { --subscription-progress-color: #dc2626; }
+        .subscription-time-progress.is-critical { --subscription-progress-color: #991b1b; }
+        .subscription-time-progress-track { position: relative; width: 78px; height: 6px; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--border-color) 72%, transparent); }
+        .subscription-time-progress-fill { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--subscription-progress-color); }
+        .subscription-time-progress-percent { color: var(--subscription-progress-color); font-size: 0.7rem; font-weight: 700; line-height: 1; text-align: right; white-space: nowrap; }
+        .subscription-time-progress-empty { display: inline-block; padding-top: 5px; color: var(--text-muted); font-size: 0.76rem; font-weight: 600; }
+        .subscription-days-remaining { color: var(--text-secondary); font-size: 0.78rem; font-weight: 600; }
+        .subscription-days-remaining.is-normal { color: var(--accent-blue, #2563eb); }
+        .subscription-days-remaining.is-warning { color: #d97706; }
+        .subscription-days-remaining.is-alert { color: #dc2626; }
+        .subscription-days-remaining.is-critical { color: #991b1b; }
+        .subscription-primary-name.is-viewable { cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
+        .subscription-primary-name.is-viewable:hover { color: var(--accent-blue, #2563eb); }
+        .subscription-note-detail-row td { background: color-mix(in srgb, var(--secondary-bg) 82%, var(--card-bg)); }
+        .subscription-note-detail-cell { padding: 5px 8px !important; border-top: 0; }
+        .subscription-note-detail { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: start; gap: 8px; min-width: 0; padding: 5px 7px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--card-bg); }
+        .subscription-note-detail-label { color: var(--text-muted); font-size: 0.72rem; font-weight: 700; line-height: 1.35; white-space: nowrap; }
+        .subscription-note-detail-text { color: var(--text-secondary); font-size: 0.78rem; font-weight: 500; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
         .subscription-due-stack { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
         .subscription-due-badge { display: inline-flex; align-items: center; height: 17px; padding: 0 5px; border-radius: 3px; border: 1px solid rgba(244, 63, 94, 0.24); background: rgba(244, 63, 94, 0.12); color: #b42318; font-size: 0.7rem; font-weight: 700; line-height: 17px; }
         .subscription-due-badge.is-overdue { background: rgba(185, 28, 28, 0.16); border-color: rgba(185, 28, 28, 0.28); color: #991b1b; }
@@ -1200,6 +1403,7 @@ window.archiveSubscriptionOp = async function(id) {
         .subscription-status-pill { display: inline-flex; align-items: center; min-height: 28px; padding: 0 7px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--secondary-bg); color: var(--text-secondary); font-size: 0.78rem; font-weight: 600; box-sizing: border-box; }
         .subscription-type-pill { display: inline-flex; align-items: center; height: 18px; padding: 0 5px; border: 1px solid var(--border-color); border-radius: 3px; background: var(--secondary-bg); color: var(--text-secondary); font-size: 0.7rem; font-weight: 700; line-height: 18px; white-space: nowrap; }
         .subscription-cell-main.is-editable { cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
+        .subscription-cell-main.is-editable:hover { color: var(--accent-blue, #2563eb); }
         .subscription-form-btn { border: 1px solid var(--border-color); border-radius: 4px; background: var(--card-bg); color: var(--text-secondary); padding: 2px 6px; font-size: 0.74rem; font-weight: 600; line-height: 1.3; cursor: pointer; min-height: 23px; }
         .subscription-form-btn:hover { color: var(--text-primary); border-color: color-mix(in srgb, var(--border-color) 70%, var(--text-secondary)); }
         .subscription-form-btn.is-save { color: var(--accent-blue, #2563eb); background: color-mix(in srgb, var(--accent-blue, #2563eb) 7%, var(--card-bg)); border-color: color-mix(in srgb, var(--accent-blue, #2563eb) 25%, var(--border-color)); }
@@ -1211,6 +1415,7 @@ window.archiveSubscriptionOp = async function(id) {
         .internal-ops-header .subscription-header-btn.is-active { color: var(--accent-blue, #2563eb) !important; border-color: color-mix(in srgb, var(--accent-blue, #2563eb) 28%, var(--border-color)) !important; background: color-mix(in srgb, var(--accent-blue, #2563eb) 7%, var(--card-bg)) !important; }
         .internal-ops-header .subscription-header-btn.is-danger { color: var(--danger-color, #b42318) !important; border-color: color-mix(in srgb, var(--danger-color, #b42318) 24%, var(--border-color)) !important; background: color-mix(in srgb, var(--danger-color, #b42318) 5%, var(--card-bg)) !important; }
         .internal-ops-header .subscription-header-btn.is-danger.is-active { color: var(--danger-color, #b42318) !important; border-color: color-mix(in srgb, var(--danger-color, #b42318) 34%, var(--border-color)) !important; background: color-mix(in srgb, var(--danger-color, #b42318) 8%, var(--card-bg)) !important; }
+        .internal-ops-header .subscription-header-btn:disabled { opacity: 0.45 !important; cursor: not-allowed !important; }
         .subscription-inline-form-row td { background: var(--secondary-bg); padding: 5px; }
         .subscription-inline-form { border: 1px solid var(--border-color); border-radius: 5px; background: var(--card-bg); padding: 6px; }
         .subscription-inline-grid { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)); gap: 5px; }

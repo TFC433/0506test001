@@ -2058,26 +2058,64 @@ window.renderDevProjects = function(data) {
                 font-weight: 400;
                 white-space: nowrap;
             }
-            .dev-project-toolbar {
+            .dev-project-control-bar {
                 display: flex;
                 align-items: center;
-                gap: 8px;
-                flex-wrap: wrap;
-                justify-content: flex-end;
+                margin-bottom: 8px;
+                padding: 8px 12px 0;
             }
-            .dev-project-toolbar .internal-ops-btn {
+            .dev-project-count {
+                color: var(--text-secondary);
+                font-size: 0.9rem;
+                font-weight: 500;
+                white-space: nowrap;
+            }
+            .dev-project-toolbar {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                margin-left: auto;
+            }
+            .dev-project-toolbar-help {
+                color: var(--text-secondary);
+                font-size: 0.74rem;
+                font-weight: 500;
+                margin-right: 3px;
+                white-space: nowrap;
+            }
+            .dev-project-toolbar .dev-project-header-btn {
+                border: 1px solid var(--border-color);
+                border-radius: 4px;
+                background: var(--card-bg);
+                color: var(--text-secondary);
                 padding: 3px 8px;
                 min-height: 24px;
-                border: 1px solid var(--border-color);
-                background: transparent;
-                color: var(--text-secondary);
+                height: auto;
                 font-size: 0.76rem;
-                font-weight: 500;
-                line-height: 1;
+                font-weight: 600;
+                line-height: 1.3;
+                box-shadow: none;
+                transform: none;
+                margin: 0;
             }
-            .dev-project-toolbar .internal-ops-btn:hover {
+            .dev-project-toolbar .dev-project-header-btn:hover {
                 color: var(--text-primary);
-                background: color-mix(in srgb, var(--primary-bg) 68%, transparent);
+                border-color: color-mix(in srgb, var(--border-color) 70%, var(--text-secondary));
+            }
+            .dev-project-toolbar .dev-project-header-btn.is-active {
+                color: var(--accent-blue, #2563eb);
+                border-color: color-mix(in srgb, var(--accent-blue, #2563eb) 28%, var(--border-color));
+                background: color-mix(in srgb, var(--accent-blue, #2563eb) 7%, var(--card-bg));
+            }
+            .dev-project-toolbar .dev-project-header-btn.is-danger {
+                color: var(--danger-color, #b42318);
+                border-color: color-mix(in srgb, var(--danger-color, #b42318) 24%, var(--border-color));
+                background: color-mix(in srgb, var(--danger-color, #b42318) 5%, var(--card-bg));
+            }
+            .dev-project-toolbar .dev-project-header-btn.is-danger.is-active {
+                color: var(--danger-color, #b42318);
+                border-color: color-mix(in srgb, var(--danger-color, #b42318) 34%, var(--border-color));
+                background: color-mix(in srgb, var(--danger-color, #b42318) 8%, var(--card-bg));
             }
             .dev-case-group-controls {
                 display: inline-flex;
@@ -2248,17 +2286,18 @@ window.renderDevProjects = function(data) {
                 }
             }
         </style>
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; padding: 8px 12px 0;">
-            <div style="font-size: 0.9rem; color: var(--text-secondary); font-weight: 500;">共 ${data.length} 筆</div>
+        <div class="dev-project-control-bar">
+            <div class="dev-project-count">共 ${data.length} 筆</div>
             <div class="dev-project-toolbar">
-                ${activeViewMode === 'case' && window.__isDevActionMode ? '<span class="dev-maintenance-indicator">維護模式中</span>' : ''}
-                ${activeViewMode === 'case' && window.__isDevActionMode ? '<span class="dev-maintenance-help">點選案件名稱進入編輯</span>' : ''}
                 ${activeViewMode === 'case' ? `
-                    <button onclick="window.openDevProjectCreateInline()" class="internal-ops-btn">
+                    <span class="dev-project-toolbar-help">
+                        ${window.__isDevActionMode ? '維護模式中，點選案件名稱進入編輯' : '如要編輯，請進入維護模式，並點擊名稱進行編輯'}
+                    </span>
+                    <button onclick="window.openDevProjectCreateInline()" class="dev-project-header-btn">
                         新增
                     </button>
-                    <button onclick="window.toggleDevTableActions()" class="internal-ops-btn">
-                        ${window.__isDevActionMode ? '結束操作' : '操作模式'}
+                    <button onclick="window.toggleDevTableActions()" class="dev-project-header-btn ${window.__isDevActionMode ? 'is-danger is-active' : ''}">
+                        維護
                     </button>
                 ` : ''}
             </div>
