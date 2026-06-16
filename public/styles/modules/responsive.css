@@ -130,6 +130,64 @@
     #page-dashboard #trend-chart-container {
         min-width: 0;
         min-height: 240px;
+        max-width: 100%;
+        overflow: hidden;
+    }
+    #page-dashboard #kpi-trend-widget .widget-header {
+        align-items: flex-start !important;
+        flex-wrap: wrap !important;
+        gap: var(--spacing-3);
+        min-width: 0;
+    }
+    #page-dashboard #kpi-trend-widget .widget-title {
+        flex: 1 1 100%;
+        min-width: 0;
+    }
+    #page-dashboard #dashboard-trend-quick-controls,
+    #page-dashboard .dashboard-trend-controls {
+        display: flex !important;
+        flex: 1 1 100%;
+        flex-wrap: wrap !important;
+        justify-content: flex-start !important;
+        gap: var(--spacing-2) !important;
+        max-width: 100%;
+        min-width: 0;
+    }
+    #page-dashboard .trend-tab-filter {
+        flex: 1 1 100%;
+        flex-wrap: wrap;
+        min-width: 0;
+        white-space: normal;
+    }
+    #page-dashboard .trend-tab-list {
+        max-width: 100%;
+        min-width: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+    #page-dashboard .trend-tab-list::-webkit-scrollbar {
+        display: none;
+    }
+    #page-dashboard .trend-filter-tab {
+        flex: 0 0 auto;
+        min-height: 30px;
+        padding: 5px 9px;
+        white-space: nowrap;
+    }
+    #page-dashboard #weekly-business-widget .widget-header {
+        align-items: flex-start;
+        flex-wrap: wrap;
+        min-width: 0;
+    }
+    #page-dashboard #weekly-business-widget .widget-header .action-btn {
+        flex: 0 0 auto;
+    }
+    #page-dashboard #kanban-widget .kanban-controls-container {
+        max-width: 100%;
+        min-width: 0;
+        overflow-x: auto;
     }
     #page-dashboard .dashboard-mobile-slots {
         display: block;
@@ -371,6 +429,13 @@
     }
     #page-dashboard #trend-chart-container {
         min-height: 220px;
+    }
+    #page-dashboard #kpi-trend-widget .widget-header {
+        gap: var(--spacing-2);
+    }
+    #page-dashboard .trend-filter-tab {
+        min-height: 28px;
+        padding: 4px 8px;
     }
     .header-actions {
         flex-grow: 1;
