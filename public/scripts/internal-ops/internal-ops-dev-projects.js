@@ -40,6 +40,10 @@ if (typeof window.__devProjectsExpandedNoteId === 'undefined') {
     window.__devProjectsExpandedNoteId = null;
 }
 
+if (typeof window.__devProjectsAllNotesExpanded === 'undefined') {
+    window.__devProjectsAllNotesExpanded = false;
+}
+
 if (typeof window.__devProjectsCreateOpen === 'undefined') {
     window.__devProjectsCreateOpen = false;
 }
@@ -71,6 +75,95 @@ const DEV_PROJECT_UNGROUPED_LABEL = '\u672a\u5206\u985e';
 const DEV_PROJECT_DETAIL_LABEL = '\u660e\u7d30';
 const DEV_PROJECT_DETAIL_EXPAND_LABEL = '\u5c55\u958b\u660e\u7d30';
 const DEV_PROJECT_DETAIL_COLLAPSE_LABEL = '\u6536\u5408\u660e\u7d30';
+const DEV_PROJECT_NOTES_EXPAND_LABEL = '\u5c55\u958b\u5099\u8a3b';
+const DEV_PROJECT_NOTES_COLLAPSE_LABEL = '\u6536\u5408\u5099\u8a3b';
+const DEV_PROJECT_CREATE_LABEL = '\u65b0\u589e';
+const DEV_PROJECT_MAINTENANCE_LABEL = '\u7dad\u8b77';
+const DEV_PROJECT_MAINTENANCE_DONE_LABEL = '\u7d50\u675f\u7dad\u8b77';
+const DEV_PROJECT_EDIT_HELP_LABEL = '\u5982\u8981\u7de8\u8f2f\uff0c\u8acb\u9032\u5165\u7dad\u8b77\u6a21\u5f0f\uff0c\u4e26\u9ede\u64ca\u540d\u7a31\u9032\u884c\u7de8\u8f2f';
+const DEV_PROJECT_EDITING_HELP_LABEL = DEV_PROJECT_EDIT_HELP_LABEL;
+
+function hasDevProjectNotes(item) {
+    return Boolean(item && String(item.notes || '').trim());
+}
+
+function hasAnyDevProjectNotes() {
+    return (window.__internalOpsDevProjectsData || []).some(hasDevProjectNotes);
+}
+
+function ensureDevProjectHeaderControls() {
+    setTimeout(() => {
+        const container = document.getElementById('internal-ops-dev-projects-content');
+        const widget = container && container.closest('.internal-ops-widget');
+        const header = widget && widget.querySelector('.internal-ops-header');
+        if (!header) return;
+
+        let actionGroup = header.querySelector('#dev-project-header-action-group');
+        if (!actionGroup) {
+            actionGroup = document.createElement('span');
+            actionGroup.id = 'dev-project-header-action-group';
+            actionGroup.className = 'dev-project-header-action-group';
+            (header.querySelector('#dev-project-header-controls') || header).appendChild(actionGroup);
+        }
+
+        let actionSeparator = actionGroup.querySelector('#dev-project-action-separator');
+        if (!actionSeparator) {
+            actionSeparator = document.createElement('span');
+            actionSeparator.id = 'dev-project-action-separator';
+            actionSeparator.className = 'dev-project-toolbar-separator';
+            actionSeparator.textContent = '|';
+        }
+        actionGroup.appendChild(actionSeparator);
+
+        let maintenanceHint = actionGroup.querySelector('#dev-project-maintenance-hint');
+        if (!maintenanceHint) {
+            maintenanceHint = document.createElement('span');
+            maintenanceHint.id = 'dev-project-maintenance-hint';
+            maintenanceHint.className = 'dev-project-toolbar-help';
+        }
+        maintenanceHint.textContent = DEV_PROJECT_EDITING_HELP_LABEL;
+        maintenanceHint.style.display = '';
+        actionGroup.appendChild(maintenanceHint);
+
+        let noteToggleButton = actionGroup.querySelector('#dev-project-notes-toggle');
+        if (!noteToggleButton) {
+            noteToggleButton = document.createElement('button');
+            noteToggleButton.type = 'button';
+            noteToggleButton.id = 'dev-project-notes-toggle';
+            noteToggleButton.className = 'dev-project-header-btn';
+            noteToggleButton.onclick = () => window.toggleAllDevProjectNotes();
+        }
+        const hasNotes = hasAnyDevProjectNotes();
+        noteToggleButton.textContent = window.__devProjectsAllNotesExpanded ? DEV_PROJECT_NOTES_COLLAPSE_LABEL : DEV_PROJECT_NOTES_EXPAND_LABEL;
+        noteToggleButton.disabled = Boolean(window.__isDevActionMode) || !hasNotes;
+        noteToggleButton.classList.toggle('is-active', Boolean(window.__devProjectsAllNotesExpanded && hasNotes));
+        actionGroup.appendChild(noteToggleButton);
+
+        let createButton = actionGroup.querySelector('#dev-project-create-inline');
+        if (!createButton) {
+            createButton = document.createElement('button');
+            createButton.type = 'button';
+            createButton.id = 'dev-project-create-inline';
+            createButton.className = 'dev-project-header-btn';
+            createButton.onclick = () => window.openDevProjectCreateInline();
+        }
+        createButton.textContent = DEV_PROJECT_CREATE_LABEL;
+        actionGroup.appendChild(createButton);
+
+        let maintenanceButton = actionGroup.querySelector('#dev-project-maintenance-toggle');
+        if (!maintenanceButton) {
+            maintenanceButton = document.createElement('button');
+            maintenanceButton.type = 'button';
+            maintenanceButton.id = 'dev-project-maintenance-toggle';
+            maintenanceButton.className = 'dev-project-header-btn';
+            maintenanceButton.onclick = () => window.toggleDevTableActions();
+        }
+        maintenanceButton.textContent = window.__isDevActionMode ? DEV_PROJECT_MAINTENANCE_DONE_LABEL : DEV_PROJECT_MAINTENANCE_LABEL;
+        maintenanceButton.classList.toggle('is-danger', Boolean(window.__isDevActionMode));
+        maintenanceButton.classList.toggle('is-active', Boolean(window.__isDevActionMode));
+        actionGroup.appendChild(maintenanceButton);
+    }, 0);
+}
 
 function getDevClampedProgress(rawValue) {
     const parsed = parseInt(rawValue, 10);
@@ -143,7 +236,7 @@ function updateDevProjectsViewTabs() {
 function renderDevProjectsCaseGroupControls() {
     return `
         <span class="dev-case-group-controls">
-            <span class="dev-case-group-label">${DEV_PROJECT_GROUP_LABEL}</span>
+            <span class="dev-case-group-label">| ${DEV_PROJECT_GROUP_LABEL}</span>
             <button type="button" onclick="window.setDevProjectsCaseGroupMode('none')" class="internal-ops-btn dev-case-group-btn ${window.__devProjectsCaseGroupMode === 'none' ? 'is-active' : ''}">${DEV_PROJECT_GROUP_NONE_LABEL}</button>
             <button type="button" onclick="window.setDevProjectsCaseGroupMode('category')" class="internal-ops-btn dev-case-group-btn ${window.__devProjectsCaseGroupMode === 'category' ? 'is-active' : ''}">${DEV_PROJECT_GROUP_CATEGORY_LABEL}</button>
             <button type="button" onclick="window.setDevProjectsCaseGroupMode('status')" class="internal-ops-btn dev-case-group-btn ${window.__devProjectsCaseGroupMode === 'status' ? 'is-active' : ''}">${DEV_PROJECT_GROUP_STATUS_LABEL}</button>
@@ -157,7 +250,7 @@ function renderDevProjectsMemberDetailControls() {
     const toggleLabel = activeMode === 'expanded' ? DEV_PROJECT_DETAIL_COLLAPSE_LABEL : DEV_PROJECT_DETAIL_EXPAND_LABEL;
     return `
         <span class="dev-case-group-controls">
-            <span class="dev-case-group-label">${DEV_PROJECT_DETAIL_LABEL}</span>
+            <span class="dev-case-group-label">| ${DEV_PROJECT_DETAIL_LABEL}</span>
             <button type="button" onclick="window.setDevProjectsMemberDetailMode('${nextMode}')" class="internal-ops-btn dev-case-group-btn is-active">${toggleLabel}</button>
         </span>
     `;
@@ -189,6 +282,7 @@ window.openDevProjectCreateInline = async function() {
     window.__devProjectsCreateOpen = true;
     window.__devProjectsExpandedEditId = null;
     window.__devProjectsExpandedNoteId = null;
+    window.__devProjectsAllNotesExpanded = false;
     const container = rerenderDevProjectsInline();
     await ensureDevProjectOpportunitiesLoaded(container);
 };
@@ -344,6 +438,7 @@ window.saveCreateDevProjectInline = async function() {
 window.toggleExpandedDevProject = async function(devId) {
     window.__devProjectsExpandedEditId = window.__devProjectsExpandedEditId === devId ? null : devId;
     window.__devProjectsExpandedNoteId = null;
+    window.__devProjectsAllNotesExpanded = false;
     const container = document.getElementById('internal-ops-dev-projects-content');
     if (container && window.__internalOpsDevProjectsData) {
         container.innerHTML = window.renderDevProjects(window.__internalOpsDevProjectsData);
@@ -377,8 +472,12 @@ window.toggleDevProjectNote = function(devId) {
         return;
     }
 
+    const item = getDevProjectById(devId);
+    if (!hasDevProjectNotes(item)) return;
+
     window.__devProjectsExpandedNoteId = window.__devProjectsExpandedNoteId === devId ? null : devId;
     window.__devProjectsExpandedEditId = null;
+    window.__devProjectsAllNotesExpanded = false;
     const container = document.getElementById('internal-ops-dev-projects-content');
     if (container && window.__internalOpsDevProjectsData) {
         container.innerHTML = window.renderDevProjects(window.__internalOpsDevProjectsData);
@@ -528,6 +627,7 @@ window.toggleDevTableActions = function() {
     window.__isDevActionMode = !window.__isDevActionMode;
     window.__devProjectsExpandedEditId = null;
     window.__devProjectsExpandedNoteId = null;
+    window.__devProjectsAllNotesExpanded = false;
     const container = document.getElementById('internal-ops-dev-projects-content');
     if (container && window.__internalOpsDevProjectsData) {
         container.innerHTML = window.renderDevProjects(window.__internalOpsDevProjectsData);
@@ -539,6 +639,7 @@ window.toggleDevProjectsViewMode = function(mode) {
     window.__devProjectsViewMode = mode;
     window.__devProjectsExpandedEditId = null;
     window.__devProjectsExpandedNoteId = null;
+    window.__devProjectsAllNotesExpanded = false;
     updateDevProjectsViewTabs();
     const container = document.getElementById('internal-ops-dev-projects-content');
     if (container && window.__internalOpsDevProjectsData) {
@@ -546,8 +647,23 @@ window.toggleDevProjectsViewMode = function(mode) {
     }
 };
 
+window.toggleAllDevProjectNotes = function() {
+    if (window.__isDevActionMode) return;
+    if (!hasAnyDevProjectNotes()) return;
+    window.__devProjectsCreateOpen = false;
+    window.__devProjectsExpandedEditId = null;
+    window.__devProjectsExpandedNoteId = null;
+    window.__devProjectsAllNotesExpanded = !window.__devProjectsAllNotesExpanded;
+    const container = document.getElementById('internal-ops-dev-projects-content');
+    if (container && window.__internalOpsDevProjectsData) {
+        container.innerHTML = window.renderDevProjects(window.__internalOpsDevProjectsData);
+    }
+    ensureDevProjectHeaderControls();
+};
+
 window.renderDevProjects = function(data) {
     window.__internalOpsDevProjectsData = data; 
+    ensureDevProjectHeaderControls();
     updateDevProjectsViewTabs();
 
     // config-driven sort order helper
@@ -994,9 +1110,8 @@ window.renderDevProjects = function(data) {
 
     function renderNoteViewerRow(item) {
         const notesText = (item.notes || '').trim();
-        const bodyHtml = notesText
-            ? `<div class="dev-note-viewer-body">${escapeHtml(notesText).replace(/\n/g, '<br>')}</div>`
-            : '<div class="dev-note-viewer-empty">暫無備註</div>';
+        if (!notesText) return '';
+        const bodyHtml = `<div class="dev-note-viewer-body">${escapeHtml(notesText).replace(/\n/g, '<br>')}</div>`;
 
         return `
             <tr class="dev-project-note-viewer-row">
@@ -1554,7 +1669,11 @@ window.renderDevProjects = function(data) {
         if (item.__caseGroupSeparator) return renderCaseGroupSeparatorRow(visibleColumnCount, item.__caseGroupLabel);
         if (item.__archivedSeparator) return renderArchivedSeparatorRow(visibleColumnCount);
         const isExpanded = window.__devProjectsExpandedEditId === item.devId;
-        const isNoteExpanded = !window.__isDevActionMode && window.__devProjectsExpandedNoteId === item.devId;
+        const hasNote = hasDevProjectNotes(item);
+        const isNoteExpanded = hasNote && !window.__isDevActionMode && (
+            window.__devProjectsAllNotesExpanded ||
+            window.__devProjectsExpandedNoteId === item.devId
+        );
         const scheduleHtml = `
             <div style="display: flex; flex-direction: column; gap: 4px; min-width: 110px;">
                 <div class="dev-secondary-meta-row" style="display: flex; justify-content: space-between; gap: 8px;">
@@ -1613,7 +1732,7 @@ window.renderDevProjects = function(data) {
         <tr class="${childClass}">
             <td>${rowIndexText}</td>
             <td class="dev-case-name-table-cell" title="${caseNameText}">
-                <div class="dev-case-name-cell ${item.__isChild ? 'is-child' : ''} ${window.__isDevActionMode ? 'is-editable' : 'is-viewable'}" onclick="${window.__isDevActionMode ? `window.toggleExpandedDevProject('${item.devId}')` : `window.toggleDevProjectNote('${item.devId}')`}">
+                <div class="dev-case-name-cell ${item.__isChild ? 'is-child' : ''} ${window.__isDevActionMode ? 'is-editable' : (hasNote ? 'is-viewable' : '')}" onclick="${window.__isDevActionMode ? `window.toggleExpandedDevProject('${item.devId}')` : `window.toggleDevProjectNote('${item.devId}')`}">
                     ${childMarker}
                     ${renderRelationBadge(item)}
                     <span class="dev-case-name-primary">${caseNameText}</span>
@@ -1710,11 +1829,6 @@ window.renderDevProjects = function(data) {
                 line-height: 1.45;
                 white-space: normal;
                 word-break: break-word;
-            }
-            .dev-note-viewer-empty {
-                color: var(--text-muted);
-                font-size: 0.76rem;
-                line-height: 1.3;
             }
             .dev-project-expanded-editor {
                 background: rgba(59, 130, 246, 0.07);
@@ -2070,20 +2184,57 @@ window.renderDevProjects = function(data) {
                 font-weight: 500;
                 white-space: nowrap;
             }
-            .dev-project-toolbar {
+            .dev-project-toolbar-help {
+                color: var(--text-secondary);
+                font-size: 0.76rem;
+                font-weight: 500;
+                margin-right: 0;
+                line-height: 1.25;
+                white-space: nowrap;
+            }
+            .dev-project-toolbar-separator {
+                color: var(--text-secondary);
+                font-size: 0.78rem;
+                font-weight: 500;
+                line-height: 1.25;
+                white-space: nowrap;
+            }
+            .internal-ops-widget:has(#internal-ops-dev-projects-content) > .internal-ops-header {
+                display: flex;
+                align-items: center;
+                justify-content: flex-start;
+                flex-wrap: nowrap;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+            .internal-ops-widget:has(#internal-ops-dev-projects-content) > .internal-ops-header .widget-title {
+                display: inline-flex !important;
+                align-items: center;
+                gap: 8px !important;
+                flex-wrap: nowrap !important;
+                white-space: nowrap;
+                flex: 0 0 auto;
+            }
+            .dev-project-header-controls {
                 display: inline-flex;
                 align-items: center;
                 gap: 5px;
-                margin-left: auto;
-            }
-            .dev-project-toolbar-help {
-                color: var(--text-secondary);
-                font-size: 0.74rem;
-                font-weight: 500;
-                margin-right: 3px;
+                flex-wrap: nowrap;
                 white-space: nowrap;
+                margin-left: auto;
+                min-width: max-content;
             }
-            .dev-project-toolbar .dev-project-header-btn {
+            .dev-project-header-action-group {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                flex-wrap: nowrap;
+                white-space: nowrap;
+                margin-left: 0;
+            }
+            .internal-ops-header .dev-project-header-btn,
+            .dev-project-view-tab,
+            .dev-case-group-btn {
                 border: 1px solid var(--border-color);
                 border-radius: 4px;
                 background: var(--card-bg);
@@ -2093,47 +2244,67 @@ window.renderDevProjects = function(data) {
                 height: auto;
                 font-size: 0.76rem;
                 font-weight: 600;
-                line-height: 1.3;
+                line-height: 1.25;
                 box-shadow: none;
                 transform: none;
                 margin: 0;
+                cursor: pointer;
+                white-space: nowrap;
             }
-            .dev-project-toolbar .dev-project-header-btn:hover {
+            .internal-ops-header .dev-project-header-btn:hover,
+            .dev-project-view-tab:hover,
+            .dev-case-group-btn:hover {
                 color: var(--text-primary);
                 border-color: color-mix(in srgb, var(--border-color) 70%, var(--text-secondary));
+                background: color-mix(in srgb, var(--primary-bg) 68%, transparent);
             }
-            .dev-project-toolbar .dev-project-header-btn.is-active {
+            .internal-ops-header .dev-project-header-btn.is-active,
+            .dev-project-view-tab.is-active,
+            .dev-case-group-btn.is-active {
                 color: var(--accent-blue, #2563eb);
                 border-color: color-mix(in srgb, var(--accent-blue, #2563eb) 28%, var(--border-color));
                 background: color-mix(in srgb, var(--accent-blue, #2563eb) 7%, var(--card-bg));
+                font-weight: 600;
             }
-            .dev-project-toolbar .dev-project-header-btn.is-danger {
+            .internal-ops-header .dev-project-header-btn.is-danger {
                 color: var(--danger-color, #b42318);
                 border-color: color-mix(in srgb, var(--danger-color, #b42318) 24%, var(--border-color));
                 background: color-mix(in srgb, var(--danger-color, #b42318) 5%, var(--card-bg));
             }
-            .dev-project-toolbar .dev-project-header-btn.is-danger.is-active {
+            .internal-ops-header .dev-project-header-btn.is-danger.is-active {
                 color: var(--danger-color, #b42318);
                 border-color: color-mix(in srgb, var(--danger-color, #b42318) 34%, var(--border-color));
                 background: color-mix(in srgb, var(--danger-color, #b42318) 8%, var(--card-bg));
+            }
+            .internal-ops-header .dev-project-header-btn:disabled {
+                opacity: 0.45;
+                cursor: not-allowed;
             }
             .dev-case-group-controls {
                 display: inline-flex;
                 align-items: center;
                 gap: 5px;
-                margin-left: 4px;
-                padding-left: 10px;
-                border-left: 1px solid var(--border-color);
+                flex-wrap: nowrap;
+                white-space: nowrap;
+                margin-left: 0;
+                padding-left: 0;
+                border-left: 0;
             }
             .dev-case-group-label {
-                color: var(--text-muted);
-                font-size: 0.74rem;
+                color: var(--text-secondary);
+                font-size: 0.78rem;
                 font-weight: 500;
                 white-space: nowrap;
             }
             .dev-header-control-label {
-                color: var(--text-muted);
-                font-size: 0.74rem;
+                color: var(--text-secondary);
+                font-size: 0.78rem;
+                font-weight: 500;
+                white-space: nowrap;
+            }
+            .dev-header-sort-label {
+                color: var(--text-secondary);
+                font-size: 0.78rem;
                 font-weight: 500;
                 white-space: nowrap;
             }
@@ -2141,31 +2312,8 @@ window.renderDevProjects = function(data) {
                 display: inline-flex;
                 align-items: center;
                 gap: 5px;
-            }
-            .dev-project-view-tab,
-            .dev-case-group-btn {
-                min-height: 24px;
-                padding: 3px 8px;
-                border: 1px solid var(--border-color);
-                border-radius: 5px;
-                background: transparent;
-                color: var(--text-muted);
-                font-size: 0.76rem;
-                font-weight: 500;
-                line-height: 1;
-                cursor: pointer;
-            }
-            .dev-project-view-tab:hover,
-            .dev-case-group-btn:hover {
-                color: var(--text-primary);
-                background: color-mix(in srgb, var(--primary-bg) 68%, transparent);
-            }
-            .dev-project-view-tab.is-active,
-            .dev-case-group-btn.is-active {
-                background: color-mix(in srgb, var(--accent-blue) 10%, transparent);
-                color: var(--accent-blue);
-                font-weight: 600;
-                border-color: color-mix(in srgb, var(--accent-blue) 45%, var(--border-color));
+                flex-wrap: nowrap;
+                white-space: nowrap;
             }
             .dev-member-view {
                 display: flex;
@@ -2288,19 +2436,6 @@ window.renderDevProjects = function(data) {
         </style>
         <div class="dev-project-control-bar">
             <div class="dev-project-count">共 ${data.length} 筆</div>
-            <div class="dev-project-toolbar">
-                ${activeViewMode === 'case' ? `
-                    <span class="dev-project-toolbar-help">
-                        ${window.__isDevActionMode ? '維護模式中，點選案件名稱進入編輯' : '如要編輯，請進入維護模式，並點擊名稱進行編輯'}
-                    </span>
-                    <button onclick="window.openDevProjectCreateInline()" class="dev-project-header-btn">
-                        新增
-                    </button>
-                    <button onclick="window.toggleDevTableActions()" class="dev-project-header-btn ${window.__isDevActionMode ? 'is-danger is-active' : ''}">
-                        維護
-                    </button>
-                ` : ''}
-            </div>
         </div>
         ${viewHtml}
     `;
