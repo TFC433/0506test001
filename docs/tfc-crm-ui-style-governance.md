@@ -283,6 +283,10 @@ The following are NG unless explicitly justified by approved forensic findings:
 * browser UI testing by default
 * local server start / restart without explicit request
 * login, session, or localStorage workarounds for validation
+* diagnosing visual hierarchy mismatch only by adjusting margin/padding before checking CSS class stacking and specificity
+* mixing different-generation button classes inside one toolbar
+* letting a toolbar button carry both an old base class and a new compact class unless evidence proves it is intentional
+* changing visual controls that look non-unified before first inspecting DOM class composition, active-state selectors, and specificity
 
 Governance is by convention first.
 
@@ -385,13 +389,22 @@ The current operational SaaS visual direction is low-noise, high-density, restra
 
 Internal Ops / Dev Projects uses the accepted operational table/list language for `各種類型案件追蹤`.
 
-The title-level tabs are part of the section title area:
+The accepted Dev Projects header toolbar baseline is:
 
 ```text
-各種類型案件追蹤 顯示方式 [案件導向] [人員導向]
+left: 各種類型案件追蹤 + 依操作日期由近到遠排序
+right: 顯示方式 [案件導向] [人員導向] | 分組 [不分組] [案件分類] [案件狀態] | 如要編輯，請進入維護模式，並點擊名稱進行編輯 [展開備註] [新增] [維護]
 ```
 
-View tabs are navigation state controls. They are not action buttons and must not be mixed visually with `新增` or `操作模式`.
+The toolbar is no-wrap. Controls are right-aligned except the title/subtitle. The `|` separator is accepted for header control groups. The maintenance helper text is always visible to guide edit behavior.
+
+All Dev Projects header toolbar buttons must use the unified compact visual class `dev-project-header-btn`. Do not mix different-generation button classes in this toolbar. Do not mix these old classes into accepted Dev Projects header toolbar buttons:
+
+* `dev-project-view-tab`
+* `dev-case-group-btn`
+* `internal-ops-btn`
+
+Preserve behavior attributes/handlers such as `data-dev-project-view-tab`, existing onclick handlers, `is-active`, and `is-danger`.
 
 The accepted header control patterns are:
 
@@ -425,6 +438,12 @@ Accepted list hierarchy polish:
 * extended / child case rows may use subtle full-row tint
 * case group separator rows may use subtle full-row tint and stronger text weight
 * member collaborator rows may use subtle full-row tint
+* in `人員導向`, a lightweight workload explanation note row is accepted under the Dev Projects header and above the `共 XX 筆` count row
+* in `案件導向`, the workload explanation note is not shown
+* the workload note row should visually match subtitle/helper text level: muted, compact, non-intrusive
+* workload note text must use dynamic config via `getDevMemberWorkloadConfig()`
+* do not hardcode Google Sheet example values in workload note text
+* do not display internal fallback/default calculation behavior as user-facing note text
 * do not use side color bars or left accent lines
 * do not use loud red / yellow / green row background tints
 

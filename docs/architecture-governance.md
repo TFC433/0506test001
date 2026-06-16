@@ -715,6 +715,8 @@ All Gemini prompts:
 * evidence-only by default
 * ask only for owner files, functions/selectors, current behavior, repo evidence, constraints, shared/cross-page risks, minimum touch points, forbidden files, and stop conditions
 * must not ask Gemini for product strategy, UI design direction, final patch plans, or implementation code unless explicitly authorized
+* must use English in the main body for repo forensics prompts
+* remain read-only for repo forensics unless explicitly instructed otherwise
 
 All Codex prompts:
 
@@ -729,6 +731,8 @@ All Codex prompts:
 * must define validation commands
 * must define expected output format
 * must define stop conditions
+* must be strict minimal patch prompts with explicit allowed files, forbidden files, non-goals, hard stop conditions, and validation commands
+* must not include future-phase roadmap text or out-of-scope future tasks
 
 All prompts must:
 
@@ -737,6 +741,8 @@ All prompts must:
 * define output format
 * define safety checks
 * define PASS / NG targets
+* have agreed scope before Codex patch prompts are sent
+* use a second targeted placement forensic before Codex when a Gemini report identifies candidate docs but lacks exact placement / section evidence
 
 Prompt header format is mandatory:
 
@@ -1385,6 +1391,9 @@ Role boundaries:
 * Codex is a precise repo patch executor; Codex is not the product judge and not the visual judge.
 * The user is the final product authority, performs local browser / UI visual validation, and provides screenshots when needed.
 * ChatGPT is the architecture governor, PASS / NG judge, scope strategist, and prompt strategist.
+* Gemini repo forensics prompts should use English in the main body.
+* Codex patch prompts must stay strict, minimal, scoped, and free of future-phase roadmap tasks.
+* If documentation placement remains uncertain after first forensics, run a second targeted placement forensic before asking Codex to patch docs.
 
 Reference docs:
 
@@ -1622,7 +1631,9 @@ Pending cleanup targets:
 
 ---
 
-# 29. Internal Ops Dev Projects Governance Baseline
+# 29. Internal Ops Governance Baseline
+
+## 29.1 Internal Ops Dev Projects Governance Baseline
 
 Internal Ops / Dev Projects / 進度追蹤 BETA is governed as an accepted Sheet-backed operational module.
 
@@ -1704,6 +1715,31 @@ The default member detail mode is expanded. Expanded mode shows member workload 
 
 Dev Projects `人員導向` workload logic is aligned with the original lower `團隊成員工作負荷` baseline. The standalone lower `團隊成員工作負荷` block is retired from the Internal Ops page layout, but `public/scripts/internal-ops/internal-ops-team-workload.js` remains as historical/reference logic and must not be treated as deleted.
 
+Workload explanation governance:
+
+* Dev Projects member workload explanation must reuse the same config used by the actual calculation: `getDevMemberWorkloadConfig()`.
+* Do not independently parse `window.__systemConfig` for workload explanation UI.
+* Do not hardcode sample Google Sheet values into UI explanations.
+* UI explanations must reflect configured workload settings: max load, main-owner role weight, collaborator role weight, positive status weights, and zero-weight statuses.
+* Do not expose internal fallback / default behavior as user-facing explanation unless explicitly requested by product direction.
+* Do not change `getDevMemberWorkloadConfig()` or `buildDevMemberGroups()` merely to render explanatory text.
+
+## 29.2 Subscription Ops Governance Baseline
+
+The lower Internal Ops section `訂閱制與專案提醒管理` is UI PASS.
+
+Accepted baseline:
+
+* Accepted header pattern: compact `新增 / 維護` controls.
+* Accepted semantic split:
+  * `custom_subject` = 專案主旨
+  * `custom_note` = 提醒項目 / 說明
+  * `notes` = true expanded 備註
+* Accepted archive behavior: archived subscription records render in a read-only archived section.
+* Accepted future-start behavior: future-start records show `尚未開始` in management UI and are excluded from dashboard alert marquee.
+* Accepted note behavior: expanded notes use the true `notes` field and note contrast is scoped to the note card only.
+* Accepted layout polish: active/archive count rows are left aligned and table layout remains compact.
+
 ---
 
 # 30. Final Governance Principle
@@ -1735,6 +1771,10 @@ and disciplined data lifecycle governance.
 
 ## 2026-06-16
 
+* Added phase archive documentation update for Internal Ops.
+* Documented Subscription Ops accepted baseline.
+* Documented Dev Projects header toolbar accepted baseline and member workload note row governance.
+* Strengthened prompt governance for English Gemini forensics prompts, strict Codex minimal patch scope, no future-phase roadmap text in Codex prompts, and second placement forensics when docs placement is uncertain.
 * Sealed Mobile Dashboard V1 after regression QA PASS.
 * Updated docs for the Mobile Dashboard UI baseline and repository consolidation record.
 * Recorded that desktop retains the header marquee while mobile uses the compact expandable reminder panel.
