@@ -237,9 +237,9 @@ function renderDevProjectsCaseGroupControls() {
     return `
         <span class="dev-case-group-controls">
             <span class="dev-case-group-label">| ${DEV_PROJECT_GROUP_LABEL}</span>
-            <button type="button" onclick="window.setDevProjectsCaseGroupMode('none')" class="internal-ops-btn dev-case-group-btn ${window.__devProjectsCaseGroupMode === 'none' ? 'is-active' : ''}">${DEV_PROJECT_GROUP_NONE_LABEL}</button>
-            <button type="button" onclick="window.setDevProjectsCaseGroupMode('category')" class="internal-ops-btn dev-case-group-btn ${window.__devProjectsCaseGroupMode === 'category' ? 'is-active' : ''}">${DEV_PROJECT_GROUP_CATEGORY_LABEL}</button>
-            <button type="button" onclick="window.setDevProjectsCaseGroupMode('status')" class="internal-ops-btn dev-case-group-btn ${window.__devProjectsCaseGroupMode === 'status' ? 'is-active' : ''}">${DEV_PROJECT_GROUP_STATUS_LABEL}</button>
+            <button type="button" onclick="window.setDevProjectsCaseGroupMode('none')" class="dev-project-header-btn ${window.__devProjectsCaseGroupMode === 'none' ? 'is-active' : ''}">${DEV_PROJECT_GROUP_NONE_LABEL}</button>
+            <button type="button" onclick="window.setDevProjectsCaseGroupMode('category')" class="dev-project-header-btn ${window.__devProjectsCaseGroupMode === 'category' ? 'is-active' : ''}">${DEV_PROJECT_GROUP_CATEGORY_LABEL}</button>
+            <button type="button" onclick="window.setDevProjectsCaseGroupMode('status')" class="dev-project-header-btn ${window.__devProjectsCaseGroupMode === 'status' ? 'is-active' : ''}">${DEV_PROJECT_GROUP_STATUS_LABEL}</button>
         </span>
     `;
 }
@@ -251,7 +251,7 @@ function renderDevProjectsMemberDetailControls() {
     return `
         <span class="dev-case-group-controls">
             <span class="dev-case-group-label">| ${DEV_PROJECT_DETAIL_LABEL}</span>
-            <button type="button" onclick="window.setDevProjectsMemberDetailMode('${nextMode}')" class="internal-ops-btn dev-case-group-btn is-active">${toggleLabel}</button>
+            <button type="button" onclick="window.setDevProjectsMemberDetailMode('${nextMode}')" class="dev-project-header-btn is-active">${toggleLabel}</button>
         </span>
     `;
 }

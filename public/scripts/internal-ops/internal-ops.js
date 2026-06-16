@@ -68,8 +68,8 @@ window.loadInternalOpsPage = async function(params) {
                         <span id="dev-project-header-controls" class="dev-project-header-controls">
                             <span class="dev-header-control-label">\u986f\u793a\u65b9\u5f0f</span>
                             <span class="dev-project-view-tabs" role="tablist" aria-label="Dev Projects view mode">
-                                <button type="button" data-dev-project-view-tab="case" class="dev-project-view-tab is-active" onclick="window.toggleDevProjectsViewMode && window.toggleDevProjectsViewMode('case')">\u6848\u4ef6\u5c0e\u5411</button>
-                                <button type="button" data-dev-project-view-tab="member" class="dev-project-view-tab" onclick="window.toggleDevProjectsViewMode && window.toggleDevProjectsViewMode('member')">\u4eba\u54e1\u5c0e\u5411</button>
+                                <button type="button" data-dev-project-view-tab="case" class="dev-project-header-btn is-active" onclick="window.toggleDevProjectsViewMode && window.toggleDevProjectsViewMode('case')">\u6848\u4ef6\u5c0e\u5411</button>
+                                <button type="button" data-dev-project-view-tab="member" class="dev-project-header-btn" onclick="window.toggleDevProjectsViewMode && window.toggleDevProjectsViewMode('member')">\u4eba\u54e1\u5c0e\u5411</button>
                             </span>
                             <span id="dev-project-case-group-controls-host"></span>
                             <span id="dev-project-header-action-group" class="dev-project-header-action-group"></span>
