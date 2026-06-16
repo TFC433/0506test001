@@ -430,7 +430,22 @@ function getSubscriptionPeriodProgress(startDate, endDate) {
     return Math.min(Math.max(Math.round((elapsedDays / totalDays) * 100), 0), 100);
 }
 
+function getSubscriptionNotStartedInfo(startDate) {
+    const startDay = getSubscriptionDateDay(startDate);
+    if (startDay === null) return { isNotStarted: false, daysUntilStart: 0 };
+
+    const today = new Date();
+    const todayDay = Math.floor(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000);
+    if (startDay <= todayDay) return { isNotStarted: false, daysUntilStart: 0 };
+
+    return {
+        isNotStarted: true,
+        daysUntilStart: startDay - todayDay
+    };
+}
+
 function getSubscriptionProgressSeverity(percent, display) {
+    if (getSubscriptionNotStartedInfo(display && display.startDate).isNotStarted) return 'normal';
     const daysRemaining = getSubscriptionDaysRemaining(display && display.endDate);
     if (daysRemaining !== null && daysRemaining < 0) return 'critical';
     if (percent >= 100) return 'critical';
@@ -440,6 +455,7 @@ function getSubscriptionProgressSeverity(percent, display) {
 }
 
 function getSubscriptionRemainingDaysSeverity(display) {
+    if (getSubscriptionNotStartedInfo(display.startDate).isNotStarted) return '';
     const progress = getSubscriptionPeriodProgress(display.startDate, display.endDate);
     if (progress !== null) return getSubscriptionProgressSeverity(progress, display);
 
@@ -482,6 +498,16 @@ function renderSubscriptionTimeProgressCell(display) {
 }
 
 function renderSubscriptionRemainingDaysCell(display) {
+    const notStarted = getSubscriptionNotStartedInfo(display.startDate);
+    if (notStarted.isNotStarted) {
+        return `
+            <span class="subscription-days-not-started">
+                <span>\u5c1a\u672a\u958b\u59cb</span>
+                <span>\u8ddd\u96e2\u958b\u59cb ${notStarted.daysUntilStart} \u5929</span>
+            </span>
+        `;
+    }
+
     const severity = getSubscriptionRemainingDaysSeverity(display);
     const severityClass = severity ? ` is-${severity}` : '';
     return `<span class="subscription-days-remaining${severityClass}">${escapeSubscriptionHtml(formatSubscriptionDaysRemaining(display.endDate))}</span>`;
@@ -493,6 +519,13 @@ function renderArchivedSubscriptionRemainingDaysCell(display) {
 
 function renderArchivedSubscriptionBadge() {
     return '<span class="subscription-archived-badge">\u5df2\u5c01\u5b58</span>';
+}
+
+function renderSubscriptionReminderBadge(display) {
+    if (getSubscriptionNotStartedInfo(display.startDate).isNotStarted) {
+        return '<span class="subscription-not-started-badge">\u5c1a\u672a\u958b\u59cb</span>';
+    }
+    return renderSubscriptionUrgencyBadge(display.endDate);
 }
 
 function renderSubscriptionNoteDetailRow(display) {
@@ -1095,7 +1128,7 @@ window.renderSubscriptions = function(data) {
                 <td>${renderSubscriptionPeriodCell(display)}</td>
                 <td>${renderSubscriptionTimeProgressCell(display)}</td>
                 <td>${isArchived ? renderArchivedSubscriptionRemainingDaysCell(display) : renderSubscriptionRemainingDaysCell(display)}</td>
-                <td>${isArchived ? renderArchivedSubscriptionBadge() : renderSubscriptionUrgencyBadge(display.endDate)}</td>
+                <td>${isArchived ? renderArchivedSubscriptionBadge() : renderSubscriptionReminderBadge(display)}</td>
             </tr>
             ${noteOpen ? renderSubscriptionNoteDetailRow(display) : ''}
             ${editOpen ? renderSubscriptionFormForRow(`edit-${id}`, item, 'edit') : ''}
@@ -1411,7 +1444,7 @@ window.archiveSubscriptionOp = async function(id) {
     style.textContent = `
         .subscription-ops-scope { width: 100%; }
         .subscription-ops-table { table-layout: fixed; min-width: 1060px; }
-        .subscription-list-count-row { display: flex; justify-content: flex-end; padding: 0 4px 5px; }
+        .subscription-list-count-row { display: flex; justify-content: flex-start; padding: 0 4px 5px; }
         .subscription-list-count { color: var(--text-secondary); font-size: 0.78rem; font-weight: 600; line-height: 1.3; white-space: nowrap; }
         .subscription-archived-section { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border-color); }
         .subscription-archived-count-row { padding-top: 2px; }
@@ -1419,13 +1452,15 @@ window.archiveSubscriptionOp = async function(id) {
         .subscription-ops-table td { padding-top: 3px; padding-bottom: 3px; vertical-align: top; }
         .subscription-ops-table th { font-size: 0.74rem; padding-top: 4px; padding-bottom: 4px; }
         .subscription-ops-table th:nth-child(1),
-        .subscription-ops-table td:nth-child(1) { width: 72px; }
+        .subscription-ops-table td:nth-child(1) { width: 48px; padding-left: 4px; padding-right: 4px; text-align: left; }
         .subscription-ops-table th:nth-child(2),
-        .subscription-ops-table td:nth-child(2) { width: 210px; }
+        .subscription-ops-table td:nth-child(2),
         .subscription-ops-table th:nth-child(3),
-        .subscription-ops-table td:nth-child(3) { width: 128px; }
+        .subscription-ops-table td:nth-child(3),
         .subscription-ops-table th:nth-child(4),
-        .subscription-ops-table td:nth-child(4) { width: 220px; }
+        .subscription-ops-table td:nth-child(4) { width: 194px; }
+        .subscription-ops-table th:nth-child(2),
+        .subscription-ops-table td:nth-child(2) { padding-left: 6px; }
         .subscription-ops-table th:nth-child(5),
         .subscription-ops-table td:nth-child(5) { width: 140px; white-space: normal; }
         .subscription-ops-table th:nth-child(6),
@@ -1461,14 +1496,16 @@ window.archiveSubscriptionOp = async function(id) {
         .subscription-days-remaining.is-alert { color: #dc2626; }
         .subscription-days-remaining.is-critical { color: #991b1b; }
         .subscription-days-remaining.is-muted { color: var(--text-muted); }
+        .subscription-days-not-started { display: inline-flex; flex-direction: column; gap: 1px; color: var(--text-muted); font-size: 0.72rem; font-weight: 600; line-height: 1.2; white-space: nowrap; }
         .subscription-primary-name.is-viewable { cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
         .subscription-primary-name.is-viewable:hover { color: var(--accent-blue, #2563eb); }
         .subscription-archived-badge { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 3px; border: 1px solid rgba(100, 116, 139, 0.16); background: rgba(100, 116, 139, 0.08); color: var(--text-secondary); font-size: 0.72rem; font-weight: 700; line-height: 18px; white-space: nowrap; }
+        .subscription-not-started-badge { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 3px; border: 1px solid rgba(100, 116, 139, 0.16); background: rgba(100, 116, 139, 0.08); color: var(--text-secondary); font-size: 0.72rem; font-weight: 700; line-height: 18px; white-space: nowrap; }
         .subscription-note-detail-row td { background: transparent; }
         .subscription-note-detail-cell { padding: 5px 8px !important; border-top: 0; }
-        .subscription-note-detail { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: start; gap: 8px; min-width: 0; padding: 5px 7px; border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 6px; background: rgba(148, 163, 184, 0.10); }
-        .subscription-note-detail-label { color: var(--text-muted); font-size: 0.72rem; font-weight: 700; line-height: 1.35; white-space: nowrap; }
-        .subscription-note-detail-text { color: var(--text-secondary); font-size: 0.78rem; font-weight: 500; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .subscription-note-detail { display: block; min-width: 0; padding: 5px 7px; text-align: left; border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 6px; background: rgba(148, 163, 184, 0.10); }
+        .subscription-note-detail-label { display: block; color: var(--text-muted); font-size: 0.72rem; font-weight: 700; line-height: 1.35; white-space: nowrap; text-align: left; }
+        .subscription-note-detail-text { display: block; margin-top: 2px; color: var(--text-secondary); font-size: 0.78rem; font-weight: 500; line-height: 1.45; text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; }
         .subscription-due-stack { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
         .subscription-due-badge { display: inline-flex; align-items: center; height: 17px; padding: 0 5px; border-radius: 3px; border: 1px solid rgba(244, 63, 94, 0.24); background: rgba(244, 63, 94, 0.12); color: #b42318; font-size: 0.7rem; font-weight: 700; line-height: 17px; }
         .subscription-due-badge.is-overdue { background: rgba(185, 28, 28, 0.16); border-color: rgba(185, 28, 28, 0.28); color: #991b1b; }

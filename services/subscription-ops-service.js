@@ -93,6 +93,7 @@ class SubscriptionOpsService {
 
         const alerts = records
             .filter(record => !ALERT_EXCLUDED_STATUSES.includes(record.status))
+            .filter(record => !this._isFutureStartRecord(record, today))
             .map(record => this._mapAlertDto(record, today, opportunityMap, productOptionMap))
             .sort((a, b) => {
                 const overdueA = a.daysRemaining < 0;
@@ -103,6 +104,11 @@ class SubscriptionOpsService {
             });
 
         return explicitLimit ? alerts.slice(0, explicitLimit) : alerts;
+    }
+
+    _isFutureStartRecord(record, today) {
+        const startDate = this._parseDateOnly(record && record.subscriptionStartDate);
+        return Boolean(startDate && startDate.getTime() > today.getTime());
     }
 
     async createSubscriptionOp(data) {
