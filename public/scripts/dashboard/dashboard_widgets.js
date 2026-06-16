@@ -17,6 +17,7 @@
 const DashboardWidgets = {
     _latestTrendChartOption: null,
     _trendPreviewChart: null,
+    _mobileReminderExpanded: false,
 
     /**
      * 渲染儀表板上方的統計數字卡片
@@ -670,6 +671,7 @@ const DashboardWidgets = {
         const title = '\u8a02\u95b1\u63d0\u9192';
 
         if (state.loading) {
+            this._mobileReminderExpanded = false;
             slot.innerHTML = `
                 <section class="mobile-reminder-summary-card" aria-label="${title}">
                     <div class="mobile-reminder-summary-header">
@@ -681,6 +683,7 @@ const DashboardWidgets = {
         }
 
         if (state.error) {
+            this._mobileReminderExpanded = false;
             slot.innerHTML = `
                 <section class="mobile-reminder-summary-card" aria-label="${title}">
                     <div class="mobile-reminder-summary-header">
@@ -692,6 +695,7 @@ const DashboardWidgets = {
         }
 
         if (reminders.length === 0) {
+            this._mobileReminderExpanded = false;
             slot.innerHTML = `
                 <section class="mobile-reminder-summary-card is-empty" aria-label="${title}">
                     <div class="mobile-reminder-summary-header">
@@ -703,7 +707,8 @@ const DashboardWidgets = {
             return;
         }
 
-        const visibleReminders = reminders.slice(0, 3);
+        const hasOverflow = reminders.length > 3;
+        const visibleReminders = this._mobileReminderExpanded ? reminders : reminders.slice(0, 3);
         const itemsHtml = visibleReminders.map(item => {
             const badge = getBadge(item.daysRemaining, item.urgency);
             const isCustomReminder = item && item.reminderKind === 'custom';
@@ -727,15 +732,27 @@ const DashboardWidgets = {
                     <span class="mobile-reminder-item-days">${escapeHtml(getDaysText(item.daysRemaining))}</span>
                 </li>`;
         }).join('');
+        const toggleHtml = hasOverflow
+            ? `<button type="button" class="mobile-reminder-toggle" data-mobile-reminder-toggle>${this._mobileReminderExpanded ? '\u6536\u5408' : '\u5c55\u958b\u5168\u90e8'}</button>`
+            : '';
 
         slot.innerHTML = `
             <section class="mobile-reminder-summary-card" aria-label="${title}">
                 <div class="mobile-reminder-summary-header">
                     <span class="mobile-reminder-summary-title">${title}</span>
-                    <span class="mobile-reminder-summary-count">${reminders.length}</span>
+                    <span class="mobile-reminder-summary-count">${visibleReminders.length}/${reminders.length}</span>
                 </div>
                 <ul class="mobile-reminder-list">${itemsHtml}</ul>
+                ${toggleHtml}
             </section>`;
+
+        const toggle = slot.querySelector('[data-mobile-reminder-toggle]');
+        if (toggle) {
+            toggle.onclick = () => {
+                this._mobileReminderExpanded = !this._mobileReminderExpanded;
+                this._renderMobileReminderSummary(alerts, state, helpers);
+            };
+        }
     },
 
     renderSubscriptionAlerts(alerts = [], state = {}) {
