@@ -92,7 +92,8 @@ const SUBSCRIPTION_OPPORTUNITY_FORM_FIELDS = [
 const CUSTOM_REMINDER_FORM_FIELDS = [
     'customSubject',
     'customNote',
-    'subscriptionEndDate'
+    'subscriptionEndDate',
+    'notes'
 ];
 
 const SUBSCRIPTION_REMINDER_STAGE_OPTIONS = ['180', '90', '30'];
@@ -186,11 +187,12 @@ function getSubscriptionDisplayModel(item) {
             opportunityName: '',
             customerName: '-',
             itemName: getSubscriptionValue(item, 'customSubject'),
+            itemDescription: getSubscriptionValue(item, 'customNote'),
             startDate: '',
             endDate: getSubscriptionValue(item, 'subscriptionEndDate'),
             ownerName: '',
             reminderStages: '',
-            notes: getSubscriptionValue(item, 'customNote'),
+            notes: getSubscriptionValue(item, 'notes'),
             productLabel: '',
             opportunity: null,
             product: null
@@ -210,6 +212,7 @@ function getSubscriptionDisplayModel(item) {
         itemName: isOpportunityLinked
             ? (getSubscriptionValue(item, 'manualItemName') || (product ? getSubscriptionProductLabel(product) : '\u672a\u9078\u64c7'))
             : getSubscriptionValue(item, 'manualItemName'),
+        itemDescription: '',
         productLabel: product ? getSubscriptionProductLabel(product) : '',
         startDate: getSubscriptionValue(item, 'subscriptionStartDate'),
         endDate: getSubscriptionValue(item, 'subscriptionEndDate'),
@@ -347,11 +350,17 @@ function getSubscriptionTypeLabel(item) {
     return isCustomReminder(item) ? '\u81ea\u8a02' : '\u8a02\u95b1';
 }
 
-function renderSubscriptionPrimaryCell(item, display, id) {
-    const editableAttrs = window.__subscriptionOpsOperationMode
+function renderSubscriptionPrimaryCell(item, display, id, options = {}) {
+    const hasNote = hasSubscriptionRealNote(display);
+    const isArchived = options.isArchived === true;
+    const editableAttrs = isArchived
+        ? (hasNote ? ` role="button" tabindex="0" onclick="window.toggleArchivedSubscriptionNoteDetail('${id}')" onkeydown="window.handleArchivedSubscriptionNameKeydown(event, '${id}')"` : '')
+        : (window.__subscriptionOpsOperationMode
         ? ` role="button" tabindex="0" onclick="window.openSubscriptionEditFromName('${id}')" onkeydown="window.handleSubscriptionNameKeydown(event, '${id}')"`
-        : ` role="button" tabindex="0" onclick="window.toggleSubscriptionNoteDetail('${id}')" onkeydown="window.handleSubscriptionNameKeydown(event, '${id}')"`;
-    const interactionClass = window.__subscriptionOpsOperationMode ? ' is-editable' : ' is-viewable';
+        : (hasNote ? ` role="button" tabindex="0" onclick="window.toggleSubscriptionNoteDetail('${id}')" onkeydown="window.handleSubscriptionNameKeydown(event, '${id}')"` : ''));
+    const interactionClass = isArchived
+        ? (hasNote ? ' is-viewable' : '')
+        : (window.__subscriptionOpsOperationMode ? ' is-editable' : (hasNote ? ' is-viewable' : ''));
 
     if (isCustomReminder(item)) {
         return `
@@ -367,14 +376,16 @@ function renderSubscriptionPrimaryCell(item, display, id) {
 
 function renderSubscriptionItemNotesCell(item, display) {
     const primary = isCustomReminder(item)
-        ? display.notes
+        ? display.itemDescription
         : (display.itemName || display.productLabel);
-    const secondary = isCustomReminder(item) ? '' : display.notes;
 
     return `
         <div class="subscription-cell-main">${formatSubscriptionValue(primary)}</div>
-        ${secondary ? `<div class="subscription-cell-sub">${escapeSubscriptionHtml(secondary)}</div>` : ''}
     `;
+}
+
+function hasSubscriptionRealNote(display) {
+    return Boolean(display && String(display.notes || '').trim());
 }
 
 function getSubscriptionDateDay(value) {
@@ -476,8 +487,17 @@ function renderSubscriptionRemainingDaysCell(display) {
     return `<span class="subscription-days-remaining${severityClass}">${escapeSubscriptionHtml(formatSubscriptionDaysRemaining(display.endDate))}</span>`;
 }
 
+function renderArchivedSubscriptionRemainingDaysCell(display) {
+    return `<span class="subscription-days-remaining is-muted">${escapeSubscriptionHtml(formatSubscriptionDaysRemaining(display.endDate))}</span>`;
+}
+
+function renderArchivedSubscriptionBadge() {
+    return '<span class="subscription-archived-badge">\u5df2\u5c01\u5b58</span>';
+}
+
 function renderSubscriptionNoteDetailRow(display) {
-    const noteText = display.notes ? escapeSubscriptionHtml(display.notes) : '\u5c1a\u7121\u5099\u8a3b';
+    if (!hasSubscriptionRealNote(display)) return '';
+    const noteText = escapeSubscriptionHtml(String(display.notes).trim());
     return `
         <tr class="subscription-note-detail-row">
             <td colspan="8" class="subscription-note-detail-cell">
@@ -488,6 +508,12 @@ function renderSubscriptionNoteDetailRow(display) {
             </td>
         </tr>
     `;
+}
+
+function hasActiveSubscriptionNotes() {
+    return (window.__internalOpsSubscriptionsData || [])
+        .filter(item => item && item.isArchived !== true)
+        .some(item => hasSubscriptionRealNote(getSubscriptionDisplayModel(item)));
 }
 
 function renderSubscriptionFormActions(saveFn, cancelFn, archiveId) {
@@ -645,7 +671,7 @@ function renderSubscriptionField(prefix, field, item = {}) {
     if (field === 'customNote') {
         return `
             <label class="subscription-inline-field subscription-inline-field-wide">
-                <span>\u5099\u8a3b</span>
+                <span>\u63d0\u9192\u9805\u76ee / \u8aaa\u660e *</span>
                 <textarea id="${id}" rows="1" oninput="window.autoExpandSubscriptionTextarea(this)">${escapeSubscriptionHtml(value)}</textarea>
             </label>
         `;
@@ -657,7 +683,7 @@ function renderSubscriptionField(prefix, field, item = {}) {
         subscriptionStartDate: '\u8a02\u95b1\u958b\u59cb\u65e5',
         subscriptionEndDate: '\u8a02\u95b1\u5230\u671f\u65e5 *',
         reminderOwnerName: '\u5167\u90e8\u63d0\u9192\u5c0d\u8c61',
-        customSubject: '\u4e3b\u65e8 *'
+        customSubject: '\u5c08\u6848\u4e3b\u65e8 *'
     };
 
     const types = {
@@ -806,9 +832,9 @@ function collectSubscriptionForm(prefix, fields = SUBSCRIPTION_FORM_FIELDS) {
 
 function validateSubscriptionPayload(payload, mode = 'create') {
     if (payload.reminderKind === 'custom') {
-        const missing = ['customSubject', 'subscriptionEndDate'].filter(field => !payload[field]);
+        const missing = ['customSubject', 'customNote', 'subscriptionEndDate'].filter(field => !payload[field]);
         return missing.length > 0
-            ? '\u8acb\u586b\u5beb\u5fc5\u586b\u6b04\u4f4d\uff1a\u4e3b\u65e8\u3001\u5230\u671f\u65e5'
+            ? '\u8acb\u586b\u5beb\u5fc5\u586b\u6b04\u4f4d\uff1a\u5c08\u6848\u4e3b\u65e8\u3001\u63d0\u9192\u9805\u76ee / \u8aaa\u660e\u3001\u5230\u671f\u65e5'
             : '';
     }
 
@@ -976,9 +1002,10 @@ function ensureSubscriptionHeaderControls() {
             noteToggleButton.className = 'subscription-header-btn';
             noteToggleButton.onclick = () => window.toggleAllSubscriptionNotes();
         }
+        const hasNotes = hasActiveSubscriptionNotes();
         noteToggleButton.textContent = window.__subscriptionsAllNotesExpanded ? '\u6536\u5408\u5099\u8a3b' : '\u5c55\u958b\u5099\u8a3b';
-        noteToggleButton.disabled = Boolean(window.__subscriptionOpsOperationMode);
-        noteToggleButton.classList.toggle('is-active', Boolean(window.__subscriptionsAllNotesExpanded));
+        noteToggleButton.disabled = Boolean(window.__subscriptionOpsOperationMode) || !hasNotes;
+        noteToggleButton.classList.toggle('is-active', Boolean(window.__subscriptionsAllNotesExpanded && hasNotes));
         actionGroup.appendChild(noteToggleButton);
 
         if (addButton) actionGroup.appendChild(addButton);
@@ -1029,31 +1056,53 @@ window.renderSubscriptions = function(data) {
         setTimeout(() => ensureSubscriptionWonOpportunityOptions(), 0);
     }
 
+    const tableHeader = `
+        <thead>
+            <tr>
+                <th>\u9805\u6b21</th>
+                <th>\u6a5f\u6703\u540d\u7a31 / \u5c08\u6848\u4e3b\u65e8</th>
+                <th>\u5ba2\u6236</th>
+                <th>\u63d0\u9192\u9805\u76ee / \u8aaa\u660e</th>
+                <th>\u671f\u9593</th>
+                <th>\u9032\u5ea6</th>
+                <th>\u5269\u9918\u5929\u6578</th>
+                <th>\u63d0\u9192</th>
+            </tr>
+        </thead>
+    `;
+
     const activeRecords = records.filter(item => item && item.isArchived !== true);
-    const rows = activeRecords.map((item, index) => {
+    const archivedRecords = records.filter(item => item && item.isArchived === true);
+    const renderRows = (items, options = {}) => items.map((item, index) => {
+        const isArchived = options.isArchived === true;
         const id = escapeSubscriptionHtml(item.id);
-        const editOpen = String(window.__subscriptionsExpandedEditId || '') === String(item.id);
-        const noteOpen = !window.__subscriptionOpsOperationMode && (
-            window.__subscriptionsAllNotesExpanded ||
-            String(window.__subscriptionsExpandedNoteId || '') === String(item.id)
-        );
+        const editOpen = !isArchived && String(window.__subscriptionsExpandedEditId || '') === String(item.id);
         const display = getSubscriptionDisplayModel(item);
+        const hasNote = hasSubscriptionRealNote(display);
+        const noteOpen = hasNote && (isArchived
+            ? String(window.__subscriptionsExpandedNoteId || '') === String(item.id)
+            : (!window.__subscriptionOpsOperationMode && (
+                window.__subscriptionsAllNotesExpanded ||
+                String(window.__subscriptionsExpandedNoteId || '') === String(item.id)
+            )));
 
         return `
-            <tr class="subscription-op-row">
+            <tr class="subscription-op-row ${isArchived ? 'is-archived' : ''}">
                 <td class="subscription-row-number">${index + 1}.</td>
-                <td>${renderSubscriptionPrimaryCell(item, display, id)}</td>
+                <td>${renderSubscriptionPrimaryCell(item, display, id, { isArchived })}</td>
                 <td>${formatSubscriptionValue(display.customerName)}</td>
                 <td>${renderSubscriptionItemNotesCell(item, display)}</td>
                 <td>${renderSubscriptionPeriodCell(display)}</td>
                 <td>${renderSubscriptionTimeProgressCell(display)}</td>
-                <td>${renderSubscriptionRemainingDaysCell(display)}</td>
-                <td>${renderSubscriptionUrgencyBadge(display.endDate)}</td>
+                <td>${isArchived ? renderArchivedSubscriptionRemainingDaysCell(display) : renderSubscriptionRemainingDaysCell(display)}</td>
+                <td>${isArchived ? renderArchivedSubscriptionBadge() : renderSubscriptionUrgencyBadge(display.endDate)}</td>
             </tr>
             ${noteOpen ? renderSubscriptionNoteDetailRow(display) : ''}
             ${editOpen ? renderSubscriptionFormForRow(`edit-${id}`, item, 'edit') : ''}
         `;
     }).join('');
+    const rows = renderRows(activeRecords);
+    const archivedRows = renderRows(archivedRecords, { isArchived: true });
 
     const createRow = window.__subscriptionsCreateOpen
         ? renderSubscriptionFormForRow('create-subscription', {}, 'create')
@@ -1069,27 +1118,29 @@ window.renderSubscriptions = function(data) {
         <div class="subscription-ops-scope">
             ${renderSubscriptionInlineMessage()}
             <div class="subscription-list-count-row">
-                <span class="subscription-list-count">\u5171 ${activeRecords.length} \u7b46</span>
+                <span class="subscription-list-count">\u9032\u884c\u4e2d \u5171 ${activeRecords.length} \u7b46</span>
             </div>
             <table class="internal-ops-table subscription-ops-table">
-                <thead>
-                    <tr>
-                        <th>\u9805\u6b21</th>
-                        <th>\u6a5f\u6703\u540d\u7a31 / \u63d0\u9192\u540d\u7a31</th>
-                        <th>\u5ba2\u6236</th>
-                        <th>\u63d0\u9192\u9805\u76ee / \u5099\u8a3b</th>
-                        <th>\u671f\u9593</th>
-                        <th>\u9032\u5ea6</th>
-                        <th>\u5269\u9918\u5929\u6578</th>
-                        <th>\u63d0\u9192</th>
-                    </tr>
-                </thead>
+                ${tableHeader}
                 <tbody>
                     ${createRow}
                     ${rows}
                     ${emptyState}
                 </tbody>
             </table>
+            ${archivedRecords.length > 0 ? `
+                <section class="subscription-archived-section">
+                    <div class="subscription-list-count-row subscription-archived-count-row">
+                        <span class="subscription-list-count">\u5df2\u5c01\u5b58 \u5171 ${archivedRecords.length} \u7b46</span>
+                    </div>
+                    <table class="internal-ops-table subscription-ops-table subscription-archived-table">
+                        ${tableHeader}
+                        <tbody>
+                            ${archivedRows}
+                        </tbody>
+                    </table>
+                </section>
+            ` : ''}
         </div>
     `;
 };
@@ -1201,6 +1252,20 @@ window.openSubscriptionEditFromName = function(id) {
 
 window.toggleSubscriptionNoteDetail = function(id) {
     if (window.__subscriptionOpsOperationMode) return;
+    const record = getSubscriptionRecord(id);
+    if (!hasSubscriptionRealNote(getSubscriptionDisplayModel(record))) return;
+    window.__subscriptionsCreateOpen = false;
+    window.__subscriptionsExpandedEditId = null;
+    window.__subscriptionsAllNotesExpanded = false;
+    window.__subscriptionsInlineError = '';
+    window.__subscriptionsExpandedNoteId = String(window.__subscriptionsExpandedNoteId || '') === String(id) ? null : String(id);
+    rerenderSubscriptionsInline();
+};
+
+window.toggleArchivedSubscriptionNoteDetail = function(id) {
+    const record = getSubscriptionRecord(id);
+    if (!record || record.isArchived !== true) return;
+    if (!hasSubscriptionRealNote(getSubscriptionDisplayModel(record))) return;
     window.__subscriptionsCreateOpen = false;
     window.__subscriptionsExpandedEditId = null;
     window.__subscriptionsAllNotesExpanded = false;
@@ -1211,6 +1276,7 @@ window.toggleSubscriptionNoteDetail = function(id) {
 
 window.toggleAllSubscriptionNotes = function() {
     if (window.__subscriptionOpsOperationMode) return;
+    if (!hasActiveSubscriptionNotes()) return;
     window.__subscriptionsCreateOpen = false;
     window.__subscriptionsExpandedEditId = null;
     window.__subscriptionsExpandedNoteId = null;
@@ -1228,6 +1294,13 @@ window.handleSubscriptionNameKeydown = function(event, id) {
         } else {
             window.toggleSubscriptionNoteDetail(id);
         }
+    }
+};
+
+window.handleArchivedSubscriptionNameKeydown = function(event, id) {
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        window.toggleArchivedSubscriptionNoteDetail(id);
     }
 };
 
@@ -1340,6 +1413,8 @@ window.archiveSubscriptionOp = async function(id) {
         .subscription-ops-table { table-layout: fixed; min-width: 1060px; }
         .subscription-list-count-row { display: flex; justify-content: flex-end; padding: 0 4px 5px; }
         .subscription-list-count { color: var(--text-secondary); font-size: 0.78rem; font-weight: 600; line-height: 1.3; white-space: nowrap; }
+        .subscription-archived-section { margin-top: 12px; padding-top: 8px; border-top: 1px solid var(--border-color); }
+        .subscription-archived-count-row { padding-top: 2px; }
         .subscription-ops-table th,
         .subscription-ops-table td { padding-top: 3px; padding-bottom: 3px; vertical-align: top; }
         .subscription-ops-table th { font-size: 0.74rem; padding-top: 4px; padding-bottom: 4px; }
@@ -1360,6 +1435,11 @@ window.archiveSubscriptionOp = async function(id) {
         .subscription-ops-table th:nth-child(8),
         .subscription-ops-table td:nth-child(8) { width: 84px; white-space: nowrap; }
         .subscription-op-row td { overflow: hidden; text-overflow: ellipsis; }
+        .subscription-op-row.is-archived td { color: var(--text-secondary); background: color-mix(in srgb, var(--secondary-bg) 42%, transparent); }
+        .subscription-op-row.is-archived .subscription-cell-main,
+        .subscription-op-row.is-archived .subscription-period-value { color: var(--text-secondary); }
+        .subscription-op-row.is-archived .subscription-cell-sub,
+        .subscription-op-row.is-archived .subscription-period-label { color: var(--text-muted); }
         .subscription-cell-main { color: var(--text-primary); font-size: 0.81rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.25; }
         .subscription-cell-sub { margin-top: 1px; color: var(--text-muted); font-size: 0.72rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2; }
         .subscription-period-cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -1380,11 +1460,13 @@ window.archiveSubscriptionOp = async function(id) {
         .subscription-days-remaining.is-warning { color: #d97706; }
         .subscription-days-remaining.is-alert { color: #dc2626; }
         .subscription-days-remaining.is-critical { color: #991b1b; }
+        .subscription-days-remaining.is-muted { color: var(--text-muted); }
         .subscription-primary-name.is-viewable { cursor: pointer; text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
         .subscription-primary-name.is-viewable:hover { color: var(--accent-blue, #2563eb); }
-        .subscription-note-detail-row td { background: color-mix(in srgb, var(--secondary-bg) 82%, var(--card-bg)); }
+        .subscription-archived-badge { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: 3px; border: 1px solid rgba(100, 116, 139, 0.16); background: rgba(100, 116, 139, 0.08); color: var(--text-secondary); font-size: 0.72rem; font-weight: 700; line-height: 18px; white-space: nowrap; }
+        .subscription-note-detail-row td { background: transparent; }
         .subscription-note-detail-cell { padding: 5px 8px !important; border-top: 0; }
-        .subscription-note-detail { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: start; gap: 8px; min-width: 0; padding: 5px 7px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--card-bg); }
+        .subscription-note-detail { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: start; gap: 8px; min-width: 0; padding: 5px 7px; border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 6px; background: rgba(148, 163, 184, 0.10); }
         .subscription-note-detail-label { color: var(--text-muted); font-size: 0.72rem; font-weight: 700; line-height: 1.35; white-space: nowrap; }
         .subscription-note-detail-text { color: var(--text-secondary); font-size: 0.78rem; font-weight: 500; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
         .subscription-due-stack { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
