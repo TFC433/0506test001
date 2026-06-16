@@ -23,6 +23,17 @@
 @media (max-width: 768px) {
     .main-content { 
         margin-left: 0; 
+        width: 100%;
+        max-width: 100vw;
+        min-width: 0;
+        box-sizing: border-box;
+    }
+    #page-content-container,
+    .page-view {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
     }
     .sidebar { 
         transform: translateX(-100%); 
@@ -48,6 +59,9 @@
         /* 這裡建議手機版改為 1 欄，避免卡片太窄 */
         grid-template-columns: 1fr; 
     }
+    #page-dashboard .dashboard-grid-flexible > .stats-grid.grid-col-6 {
+        grid-column: span 12;
+    }
     #page-dashboard .stats-grid {
         min-width: 0;
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -57,6 +71,9 @@
     }
     #page-dashboard .dashboard-grid-flexible {
         gap: var(--spacing-4);
+        max-width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
     }
     #page-dashboard .dashboard-widget {
         min-width: 0;
