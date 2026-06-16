@@ -1496,6 +1496,31 @@ window.renderDevProjects = function(data) {
         return { maxLoad, mainWeight, collabWeight, statusWeights, loadLevels };
     }
 
+    function renderDevMemberWorkloadNote(activeMode) {
+        if (activeMode !== 'member') return '';
+        const config = getDevMemberWorkloadConfig();
+        const formatWeight = (value) => Number.isFinite(value) ? String(Number(value.toFixed(4))) : String(value);
+        const positiveWeights = [];
+        const zeroWeights = [];
+
+        Object.entries(config.statusWeights || {}).forEach(([status, weight]) => {
+            if (weight > 0) {
+                positiveWeights.push(`${escapeHtml(status)} ${formatWeight(weight)}`);
+            } else if (weight === 0) {
+                zeroWeights.push(escapeHtml(status));
+            }
+        });
+
+        const segments = [
+            `最大負荷件數 ${formatWeight(config.maxLoad)}`,
+            `角色權重：主負責 ${formatWeight(config.mainWeight)}、協作 ${formatWeight(config.collabWeight)}`
+        ];
+        if (positiveWeights.length) segments.push(`狀態權重：${positiveWeights.join('、')}`);
+        if (zeroWeights.length) segments.push(`不計負荷：${zeroWeights.join('、')}`);
+
+        return `<div class="dev-member-workload-note">人員負荷權重說明：${segments.join('｜')}</div>`;
+    }
+
     function getDevMemberOrder() {
         const list = Array.isArray(sysConfig['團隊成員']) ? sysConfig['團隊成員'] : [];
         const order = new Map();
@@ -2172,6 +2197,14 @@ window.renderDevProjects = function(data) {
                 font-weight: 400;
                 white-space: nowrap;
             }
+            .dev-member-workload-note {
+                color: var(--text-secondary);
+                font-size: 0.78rem;
+                font-weight: 500;
+                line-height: 1.35;
+                padding: 8px 12px 0;
+                white-space: nowrap;
+            }
             .dev-project-control-bar {
                 display: flex;
                 align-items: center;
@@ -2434,6 +2467,7 @@ window.renderDevProjects = function(data) {
                 }
             }
         </style>
+        ${renderDevMemberWorkloadNote(activeViewMode)}
         <div class="dev-project-control-bar">
             <div class="dev-project-count">共 ${data.length} 筆</div>
         </div>
