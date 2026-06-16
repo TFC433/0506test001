@@ -222,3 +222,47 @@ Current Dev Projects state:
 * the old standalone lower `團隊成員工作負荷` block is retired from the page layout; `public/scripts/internal-ops/internal-ops-team-workload.js` remains historical/reference logic.
 * `已完成` remains in the normal list, while `封存` is a separate manual lifecycle state that moves cases to the bottom `封存案件` group.
 * this module is not part of Supabase migration scope unless separately planned.
+
+## 13. Mobile Dashboard V1 Consolidation
+
+Mobile Dashboard V1 is sealed after regression QA PASS.
+
+Completed implementation summary:
+
+* M2 added mobile-only Dashboard slots before the main Dashboard grid.
+* M3 and M6A formalized the mobile reminder panel in the existing mobile reminder slot.
+* F1 repaired the Dashboard `stats-grid` outer grid span on mobile.
+* F2 repaired mobile shell width containment and page-level horizontal overflow.
+* M4 compacted KPI cards for the accepted 2-column mobile layout.
+* M5 made chart / widget controls mobile-safe, including trend controls.
+* M6B-1 added the mobile header overflow guard.
+* M6B-2 header visual polish is deferred / backlog and is not part of the sealed V1 scope.
+
+Implementation files:
+
+* `public/dashboard.html`
+* `public/scripts/dashboard/dashboard_widgets.js`
+* `public/styles/modules/responsive.css`
+
+Validation summary:
+
+* `git diff --check` passed during implementation phases.
+* `node --check public/scripts/dashboard/dashboard_widgets.js` passed for JavaScript-touching phases.
+* Mobile QA confirmed no page-level horizontal overflow.
+* Dashboard `stats-grid` spans full width on mobile while KPI remains 2-column at normal phone widths.
+* Mobile reminder panel expand / collapse works against the current alerts array.
+* Mobile header marquee is hidden.
+* Desktop header marquee remains unchanged.
+* Desktop zero-regression visual QA passed.
+
+Lessons learned:
+
+* Do not scale the desktop Dashboard directly into mobile.
+* Fix responsive foundation before component polish.
+* `stats-grid` has a dual role: outer Dashboard grid item and inner KPI grid.
+* Desktop zero-regression is mandatory for mobile Dashboard work.
+* Mobile header marquee is deprecated; the mobile reminder panel is the official mobile reminder entry.
+* Scoped `!important` is allowed only when overriding inline styles or JS-injected important rules, and only inside mobile-scoped selectors.
+* App shell header scope and Dashboard content scope must stay separate.
+* Console computed style checks are critical for responsive foundation diagnosis.
+* Every mobile patch must verify no horizontal overflow.

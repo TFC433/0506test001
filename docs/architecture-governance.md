@@ -1733,6 +1733,15 @@ and disciplined data lifecycle governance.
 
 # Changelog
 
+## 2026-06-16
+
+* Sealed Mobile Dashboard V1 after regression QA PASS.
+* Updated docs for the Mobile Dashboard UI baseline and repository consolidation record.
+* Recorded that desktop retains the header marquee while mobile uses the compact expandable reminder panel.
+* Confirmed mobile foundation repairs and the mobile header overflow guard as part of the sealed V1 scope.
+* Recorded desktop zero-regression as mandatory for Mobile Dashboard work.
+* Deferred M6B-2 header visual polish to backlog.
+
 ## 2026-06-09
 
 * Added phase handoff documentation and changelog governance.

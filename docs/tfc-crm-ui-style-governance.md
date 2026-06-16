@@ -454,3 +454,15 @@ Progress may show `超前` or `落後` beside progress when applicable. Normal p
 Dev Projects should remain compact, low-noise, operational SaaS UI: sharp table/list surfaces, restrained badges, readable primary case names, and muted secondary metadata.
 
 Do not perform global CSS extraction yet. Governance is by convention first, followed by module-by-module migration and user visual PASS / NG.
+
+## 15.2 Mobile Dashboard UI Baseline
+
+Mobile Dashboard is an independent mobile layout, not a scaled-down desktop Dashboard. Desktop Dashboard remains the analytics / KPI / chart / widget control baseline, while mobile Dashboard may use dedicated mobile-only slots and compact content patterns when those changes are scoped to mobile breakpoints.
+
+Desktop header marquee remains the desktop reminder entry and must keep its existing appearance, animation, and render path. Mobile does not use the header marquee; it is hidden at mobile viewport widths. Mobile uses the compact reminder panel above KPI as the official mobile reminder entry.
+
+The mobile reminder panel default state shows at most 3 reminders. When the current alerts array contains more than 3 reminders, the panel may show `展開全部` / `收合` controls. Expanding shows only the current alerts array already returned by the existing alerts endpoint. It must not fetch more data, widen backend query scope, or require API / SQL changes.
+
+Desktop zero-regression is mandatory for Mobile Dashboard work. Mobile CSS must stay inside mobile media queries unless a non-visual JS state property is required for mobile-only rendering. Mobile Dashboard content scope and global app shell header scope must remain separate: Dashboard content patches must not become header redesigns, and header overflow guards must not alter Dashboard content.
+
+M6B-2 header visual polish is deferred / backlog. V1 only accepts the mobile header overflow guard needed to prevent small-viewport squeezing or horizontal overflow.
