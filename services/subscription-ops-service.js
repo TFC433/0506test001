@@ -3,6 +3,8 @@
  * Backend API service for Subscription Ops.
  */
 
+const { buildChangedFieldsDiff } = require('../utils/audit-helpers');
+
 const ALLOWED_FIELDS = [
     'sourceType',
     'reminderKind',
@@ -39,6 +41,42 @@ const ALERT_FETCH_LIMIT = 1000;
 const ALERT_CUTOFF_DATE = '9999-12-31';
 const UNSPECIFIED_PRODUCT_LABEL = '\u672a\u6307\u5b9a\u5546\u54c1';
 const UNRESOLVED_PRODUCT_LABEL = '\u672a\u89e3\u6790\u5546\u54c1';
+const SUBSCRIPTION_REDACTED_VALUE = '[REDACTED]';
+
+const SUBSCRIPTION_FIELD_LABELS = {
+    manualCustomerName: '客戶',
+    manualItemName: '項目名稱',
+    customSubject: '自訂提醒主旨',
+    customNote: '自訂提醒內容',
+    notes: '備註',
+    status: '狀態',
+    reminderKind: '提醒類型',
+    sourceType: '來源類型',
+    reminderOwnerName: '提醒負責人',
+    reminderOwnerEmail: '提醒負責人 Email',
+    opportunityId: '關聯機會',
+    productId: '關聯產品',
+    subscriptionStartDate: '開始日期',
+    subscriptionEndDate: '結束日期',
+    isArchived: '封存狀態',
+    isActive: '啟用狀態'
+};
+
+const SUBSCRIPTION_SENSITIVE_FIELDS = new Set([
+    'notes',
+    'customNote',
+    'reminderOwnerEmail'
+]);
+
+const SUBSCRIPTION_LONG_FIELD_PATTERNS = [
+    'email',
+    'phone',
+    'mobile',
+    'contact',
+    'detail',
+    'payload',
+    'raw'
+];
 
 class SubscriptionOpsService {
     constructor({ subscriptionOpsSqlReader, subscriptionOpsSqlWriter, opportunitySqlReader, productService }) {
@@ -46,6 +84,115 @@ class SubscriptionOpsService {
         this.subscriptionOpsSqlWriter = subscriptionOpsSqlWriter;
         this.opportunitySqlReader = opportunitySqlReader;
         this.productService = productService;
+    }
+
+    _getActorName(auditContext) {
+        return (auditContext.actor && auditContext.actor.name) || 'System';
+    }
+
+    _buildSubscriptionTargetLabel(data = {}) {
+        return data.customSubject ||
+            data.manualItemName ||
+            data.subscriptionItemName ||
+            data.manualCustomerName ||
+            data.customerName ||
+            data.opportunityId ||
+            data.id ||
+            '訂閱提醒';
+    }
+
+    _isSensitiveAuditField(fieldName) {
+        const normalized = String(fieldName || '').toLowerCase();
+        return SUBSCRIPTION_SENSITIVE_FIELDS.has(fieldName) ||
+            SUBSCRIPTION_LONG_FIELD_PATTERNS.some(pattern => normalized.includes(pattern));
+    }
+
+    _sanitizeSubscriptionAuditData(data = {}) {
+        return Object.keys(data || {}).reduce((sanitized, key) => {
+            sanitized[key] = this._isSensitiveAuditField(key) ? SUBSCRIPTION_REDACTED_VALUE : data[key];
+            return sanitized;
+        }, {});
+    }
+
+    _getChangedFieldLabels(fields = []) {
+        return fields.map(field => SUBSCRIPTION_FIELD_LABELS[field] || field);
+    }
+
+    _detectCreateSource(data = {}) {
+        if (data.reminderKind === 'custom') return 'custom_reminder';
+        if (data.sourceType === 'opportunity' || data.reminderKind === 'subscription') return 'opportunity_product_reminder';
+        return 'manual';
+    }
+
+    _detectSubscriptionEvents(beforeData = {}, afterData = {}, baseEvent = 'updated') {
+        const detectedEvents = [baseEvent];
+
+        const changed = field => beforeData[field] !== afterData[field];
+        if (changed('subscriptionStartDate') || changed('subscriptionEndDate') || changed('startDate') || changed('endDate')) {
+            detectedEvents.push('dates_changed');
+        }
+        if (changed('reminderOwnerName') || changed('reminderOwnerEmail')) {
+            detectedEvents.push('notification_target_changed');
+        }
+        if (changed('status') || changed('isActive') || changed('isArchived')) {
+            detectedEvents.push('status_changed');
+        }
+        if (changed('customSubject') || changed('customNote') || changed('notes') || changed('manualCustomerName') || changed('manualItemName')) {
+            detectedEvents.push('reminder_content_changed');
+        }
+        if (changed('reminderKind')) {
+            detectedEvents.push('reminder_kind_changed');
+        }
+        if (changed('sourceType')) {
+            detectedEvents.push('source_type_changed');
+        }
+
+        return detectedEvents;
+    }
+
+    _buildSubscriptionAuditMetadata(data = {}, changedFields = [], detectedEvents = []) {
+        return {
+            changed_fields: changedFields,
+            changed_field_labels: this._getChangedFieldLabels(changedFields),
+            source: 'subscription_ops',
+            audit_version: 'v1',
+            reminder_kind: data.reminderKind || null,
+            source_type: data.sourceType || null,
+            create_source: this._detectCreateSource(data),
+            related_opportunity_id: data.opportunityId || null,
+            related_product_id: data.productId || null,
+            related_company_or_customer_label: data.manualCustomerName || data.customerName || null,
+            detected_events: detectedEvents
+        };
+    }
+
+    async _logSubscriptionAudit(event, auditContext = {}) {
+        try {
+            const auditLoggerService = auditContext.auditLoggerService;
+            if (!auditLoggerService || typeof auditLoggerService.logMutation !== 'function') return;
+
+            await auditLoggerService.logMutation({
+                actor_username: auditContext.actor && auditContext.actor.username,
+                actor_name: auditContext.actor && auditContext.actor.name,
+                actor_role: auditContext.actor && auditContext.actor.role,
+                session_id: auditContext.actor && auditContext.actor.sessionId,
+                module: 'subscription_ops',
+                action: event.action,
+                target_type: 'subscription_op',
+                target_id: event.targetId,
+                target_label: event.targetLabel || null,
+                event_title: event.eventTitle,
+                event_summary: event.eventSummary,
+                event_category: event.eventCategory,
+                business_event_type: event.businessEventType,
+                changes: event.changes || {},
+                metadata: event.metadata || {},
+                ip_address: auditContext.ipAddress || null,
+                user_agent: auditContext.userAgent || null
+            });
+        } catch (auditError) {
+            console.warn(`[SubscriptionOpsService] System Audit Log Error: ${auditError.message}`);
+        }
     }
 
     async getSubscriptionOps() {
@@ -111,7 +258,7 @@ class SubscriptionOpsService {
         return Boolean(startDate && startDate.getTime() > today.getTime());
     }
 
-    async createSubscriptionOp(data) {
+    async createSubscriptionOp(data, auditContext = {}) {
         const payload = this._sanitizePayload(data, { applyDefaults: true });
         this._validateRequired(payload);
 
@@ -124,38 +271,138 @@ class SubscriptionOpsService {
             ...payload
         });
 
+        const afterData = this.subscriptionOpsSqlReader._mapRowToDto(created);
+        const changes = buildChangedFieldsDiff({}, this._sanitizeSubscriptionAuditData(afterData));
+        const changedFields = Object.keys(changes);
+        const detectedEvents = ['created'];
+        if (afterData.reminderKind === 'custom') {
+            detectedEvents.push('custom_reminder_created');
+        }
+        if (afterData.sourceType === 'opportunity' || afterData.reminderKind === 'subscription') {
+            detectedEvents.push('product_reminder_created');
+        }
+
+        if (auditContext.auditLoggerService) {
+            const targetLabel = this._buildSubscriptionTargetLabel(afterData);
+            const actorName = this._getActorName(auditContext);
+            await this._logSubscriptionAudit({
+                action: 'create',
+                targetId: created.id,
+                targetLabel,
+                eventTitle: '建立訂閱提醒',
+                eventSummary: `${actorName} 建立訂閱提醒「${targetLabel}」`,
+                eventCategory: 'business_event',
+                businessEventType: 'subscription_created',
+                changes,
+                metadata: this._buildSubscriptionAuditMetadata(afterData, changedFields, detectedEvents)
+            }, auditContext);
+        }
+
         return {
             success: true,
             id: created.id,
-            data: this.subscriptionOpsSqlReader._mapRowToDto(created)
+            data: afterData
         };
     }
 
-    async updateSubscriptionOp(id, data) {
+    async updateSubscriptionOp(id, data, auditContext = {}) {
         if (!id) throw new Error('id required');
+
+        let beforeData = null;
+        try {
+            beforeData = await this.subscriptionOpsSqlReader.getSubscriptionOpById(id);
+        } catch (auditReadError) {
+            console.warn(`[SubscriptionOpsService] Audit beforeData read failed for update ${id}: ${auditReadError.message}`);
+        }
 
         const payload = this._sanitizePayload(data);
         if (payload.reminderKind === 'custom') {
             this._validateRequired(payload);
         }
         const updated = await this.subscriptionOpsSqlWriter.updateSubscriptionOp(id, payload);
+        const afterData = this.subscriptionOpsSqlReader._mapRowToDto(updated);
+
+        if (beforeData && afterData) {
+            const changes = buildChangedFieldsDiff(
+                this._sanitizeSubscriptionAuditData(beforeData),
+                this._sanitizeSubscriptionAuditData(afterData)
+            );
+            const changedFields = Object.keys(changes);
+
+            if (changedFields.length > 0) {
+                const targetLabel = this._buildSubscriptionTargetLabel(afterData);
+                const actorName = this._getActorName(auditContext);
+                await this._logSubscriptionAudit({
+                    action: 'update',
+                    targetId: id,
+                    targetLabel,
+                    eventTitle: '編輯訂閱提醒',
+                    eventSummary: `${actorName} 編輯訂閱提醒「${targetLabel}」`,
+                    eventCategory: 'business_event',
+                    businessEventType: 'subscription_updated',
+                    changes,
+                    metadata: this._buildSubscriptionAuditMetadata(
+                        afterData,
+                        changedFields,
+                        this._detectSubscriptionEvents(beforeData, afterData, 'updated')
+                    )
+                }, auditContext);
+            }
+        }
 
         return {
             success: true,
             id: updated.id,
-            data: this.subscriptionOpsSqlReader._mapRowToDto(updated)
+            data: afterData
         };
     }
 
-    async archiveSubscriptionOp(id) {
+    async archiveSubscriptionOp(id, auditContext = {}) {
         if (!id) throw new Error('id required');
 
+        let beforeData = null;
+        try {
+            beforeData = await this.subscriptionOpsSqlReader.getSubscriptionOpById(id);
+        } catch (auditReadError) {
+            console.warn(`[SubscriptionOpsService] Audit beforeData read failed for archive ${id}: ${auditReadError.message}`);
+        }
+
         const archived = await this.subscriptionOpsSqlWriter.archiveSubscriptionOp(id);
+        const afterData = this.subscriptionOpsSqlReader._mapRowToDto(archived);
+
+        if (beforeData && afterData) {
+            const archiveBefore = {
+                isArchived: beforeData.isArchived,
+                isActive: beforeData.isActive,
+                status: beforeData.status
+            };
+            const archiveAfter = {
+                isArchived: afterData.isArchived,
+                isActive: afterData.isActive,
+                status: afterData.status
+            };
+            const changes = buildChangedFieldsDiff(archiveBefore, archiveAfter);
+            const changedFields = Object.keys(changes);
+            const targetLabel = this._buildSubscriptionTargetLabel(afterData);
+            const actorName = this._getActorName(auditContext);
+
+            await this._logSubscriptionAudit({
+                action: 'archive',
+                targetId: id,
+                targetLabel,
+                eventTitle: '封存訂閱提醒',
+                eventSummary: `${actorName} 封存訂閱提醒「${targetLabel}」`,
+                eventCategory: 'archive',
+                businessEventType: 'subscription_archived',
+                changes,
+                metadata: this._buildSubscriptionAuditMetadata(afterData, changedFields, ['archived', 'status_changed'])
+            }, auditContext);
+        }
 
         return {
             success: true,
             id: archived.id,
-            data: this.subscriptionOpsSqlReader._mapRowToDto(archived)
+            data: afterData
         };
     }
 

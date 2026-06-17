@@ -6,7 +6,26 @@
  * @description 處理內部運營與進度追蹤的 API 請求
  */
 
+const { extractRequestMetadata } = require('../utils/audit-helpers');
+
 class InternalOpsController {
+    static _buildAuditContext(req) {
+        const services = req.app && req.app.get ? req.app.get('services') : {};
+        const user = req.user || {};
+        const requestMetadata = extractRequestMetadata(req);
+
+        return {
+            auditLoggerService: services.auditLoggerService || null,
+            actor: {
+                username: user.username || user.name || 'unknown',
+                name: user.displayName || user.name || user.username || 'System',
+                role: user.role || null,
+                sessionId: user.session_id || null
+            },
+            ipAddress: requestMetadata.ipAddress,
+            userAgent: requestMetadata.userAgent
+        };
+    }
     
     // ==========================================
     // 團隊成員負荷
@@ -136,7 +155,10 @@ class InternalOpsController {
     static async createSubscription(req, res, next) {
         try {
             const { subscriptionOpsService } = req.app.get('services');
-            const result = await subscriptionOpsService.createSubscriptionOp(req.body);
+            const result = await subscriptionOpsService.createSubscriptionOp(
+                req.body,
+                InternalOpsController._buildAuditContext(req)
+            );
             res.status(201).json(result);
         } catch (error) {
             next(error);
@@ -147,7 +169,11 @@ class InternalOpsController {
         try {
             const { subscriptionOpsService } = req.app.get('services');
             const { subId } = req.params;
-            const result = await subscriptionOpsService.updateSubscriptionOp(subId, req.body);
+            const result = await subscriptionOpsService.updateSubscriptionOp(
+                subId,
+                req.body,
+                InternalOpsController._buildAuditContext(req)
+            );
             res.status(200).json(result);
         } catch (error) {
             next(error);
@@ -158,7 +184,10 @@ class InternalOpsController {
         try {
             const { subscriptionOpsService } = req.app.get('services');
             const { subId } = req.params;
-            const result = await subscriptionOpsService.archiveSubscriptionOp(subId);
+            const result = await subscriptionOpsService.archiveSubscriptionOp(
+                subId,
+                InternalOpsController._buildAuditContext(req)
+            );
             res.status(200).json(result);
         } catch (error) {
             next(error);
