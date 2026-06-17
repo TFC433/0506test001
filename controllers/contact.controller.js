@@ -37,6 +37,7 @@
  */
 
 const { handleApiError } = require('../middleware/error.middleware');
+const { extractRequestMetadata } = require('../utils/audit-helpers');
 
 class ContactController {
     /**
@@ -52,6 +53,24 @@ class ContactController {
 
     _getAuditUser(req) {
         return req?.user?.displayName || req?.user?.name || req?.user?.username || 'System';
+    }
+
+    _buildAuditContext(req) {
+        const services = req.app && req.app.get ? req.app.get('services') : {};
+        const user = req.user || {};
+        const requestMetadata = extractRequestMetadata(req);
+
+        return {
+            auditLoggerService: services.auditLoggerService || null,
+            actor: {
+                username: user.username || user.name || 'unknown',
+                name: user.displayName || user.name || user.username || 'System',
+                role: user.role || null,
+                sessionId: user.session_id || null
+            },
+            ipAddress: requestMetadata.ipAddress,
+            userAgent: requestMetadata.userAgent
+        };
     }
 
     /**
@@ -133,7 +152,8 @@ class ContactController {
             const result = await this.workflowService.upgradeContactToOpportunity(
                 rowIndex, 
                 req.body, 
-                user
+                user,
+                this._buildAuditContext(req)
             );
             res.json(result);
         } catch (error) {

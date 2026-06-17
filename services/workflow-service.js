@@ -318,10 +318,10 @@ class WorkflowService {
      * @param {Object} rawContactData 
      * @param {Object} user 
      */
-    async upgradeContactToOpportunity(rowIndex, rawContactData, user) {
+    async upgradeContactToOpportunity(rowIndex, rawContactData, user, auditContext = {}) {
         // 撠?rowIndex 瘜典 payload嚗Ⅱ靽?皜?Service (憒?閬? ?賣迤蝣箸?啁???
         const dataWithRowIndex = { ...rawContactData, rowIndex };
-        return await this.upgradeContactAndCreateOpp(dataWithRowIndex, user);
+        return await this.upgradeContactAndCreateOpp(dataWithRowIndex, user, auditContext);
     }
 
     /**
@@ -329,8 +329,18 @@ class WorkflowService {
      * @param {Object} rawContactData 
      * @param {Object} user 
      */
-    async upgradeContactAndCreateOpp(rawContactData, user) {
+    async upgradeContactAndCreateOpp(rawContactData, user, auditContext = {}) {
         try {
+            const upgradeAuditContext = auditContext.auditLoggerService
+                ? {
+                    ...auditContext,
+                    createSource: 'raw_contact_upgrade',
+                    linkSource: 'raw_contact_upgrade',
+                    detectedEvent: 'upgraded_from_raw_contact',
+                    sourceRowIndex: rawContactData.rowIndex || rawContactData.sourceId || null
+                }
+                : auditContext;
+
             // 1. 撱箇?甇???舐窗鈭?
             const rawContact = rawContactData.rowIndex
                 ? await this.contactService.getPotentialContactByRow(rawContactData.rowIndex)
@@ -361,10 +371,10 @@ class WorkflowService {
                     currentStage: rawContactData.currentStage
                 };
 
-                const oppResult = await this.opportunityService.createOpportunity(oppPayload, user);
+                const oppResult = await this.opportunityService.createOpportunity(oppPayload, user, upgradeAuditContext);
 
                 // 3. 撱箇?? (憒? OpportunityService ??靘迨 API)
-                await this.opportunityService.addContactToOpportunity(oppResult.id, { contactId: contactResult.id }, user);
+                await this.opportunityService.addContactToOpportunity(oppResult.id, { contactId: contactResult.id }, user, upgradeAuditContext);
                 
                 return { 
                     success: true, 

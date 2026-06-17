@@ -335,9 +335,10 @@ class OpportunityService {
             eventCategory: 'data_change',
             changes,
             changedFields,
-            detectedEvents: ['created'],
+            detectedEvents: auditContext.detectedEvent ? ['created', auditContext.detectedEvent] : ['created'],
             metadata: {
-                create_source: 'standard_opportunity_create'
+                create_source: auditContext.createSource || 'standard_opportunity_create',
+                ...(auditContext.sourceRowIndex ? { source_row_index: auditContext.sourceRowIndex } : {})
             }
         };
     }
@@ -409,12 +410,16 @@ class OpportunityService {
             eventCategory: 'relationship_change',
             changes,
             changedFields,
-            detectedEvents: [isLink ? 'contact_linked' : 'contact_unlinked'],
+            detectedEvents: auditContext.detectedEvent
+                ? [isLink ? 'contact_linked' : 'contact_unlinked', auditContext.detectedEvent]
+                : [isLink ? 'contact_linked' : 'contact_unlinked'],
             metadata: {
                 related_opportunity_id: opportunityId,
                 related_company_id: companyId,
                 related_contact_id: contactId,
-                relationship_type: 'opportunity_contact'
+                relationship_type: 'opportunity_contact',
+                ...(auditContext.linkSource ? { link_source: auditContext.linkSource } : {}),
+                ...(auditContext.sourceRowIndex ? { source_row_index: auditContext.sourceRowIndex } : {})
             }
         };
     }
@@ -796,7 +801,11 @@ class OpportunityService {
                 await this._logOpportunityAudit({
                     targetId: opportunityId,
                     targetLabel: afterData.opportunityName || afterData.name || originalOpportunity.opportunityName || originalOpportunity.name,
-                    ...auditEvent
+                    ...auditEvent,
+                    metadata: {
+                        ...(auditEvent.metadata || {}),
+                        ...(auditContext.updateSource ? { update_source: auditContext.updateSource } : {})
+                    }
                 }, auditContext);
             }
             
@@ -1128,8 +1137,11 @@ class OpportunityService {
         }
     }
 
-    async batchUpdateOpportunities(updates) {
+    async batchUpdateOpportunities(updates, auditContext = {}) {
         let successCount = 0;
+        const batchAuditContext = auditContext.auditLoggerService
+            ? { ...auditContext, updateSource: 'batch_update' }
+            : auditContext;
         
         for (const update of updates) {
             if (!update.opportunityId) {
@@ -1137,7 +1149,7 @@ class OpportunityService {
             }
 
             try {
-                await this.updateOpportunity(update.opportunityId, update.data, { displayName: update.modifier });
+                await this.updateOpportunity(update.opportunityId, update.data, { displayName: update.modifier }, batchAuditContext);
                 successCount++;
             } catch (error) {
                 console.error(`[OpportunityService] Batch Update Error (ID: ${update.opportunityId}):`, error);

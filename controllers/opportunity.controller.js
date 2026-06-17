@@ -114,7 +114,10 @@ class OpportunityController {
     // PUT /api/opportunities/batch
     batchUpdateOpportunities = async (req, res) => {
         try {
-            const result = await this.opportunityService.batchUpdateOpportunities(req.body.updates);
+            const result = await this.opportunityService.batchUpdateOpportunities(
+                req.body.updates,
+                this._buildAuditContext(req)
+            );
             res.json(result);
         } catch (error) {
             handleApiError(res, error, 'Batch Update Opps');
