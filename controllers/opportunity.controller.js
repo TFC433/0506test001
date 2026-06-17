@@ -141,7 +141,8 @@ class OpportunityController {
         try {
             const result = await this.opportunityService.deleteOpportunity(
                 req.params.opportunityId, 
-                req.user
+                req.user,
+                this._buildAuditContext(req)
             );
             res.json(result);
         } catch (error) {
@@ -154,6 +155,7 @@ class OpportunityController {
         try {
             const { opportunityId } = req.params;
             const payload = req.body || {};
+            const auditContext = this._buildAuditContext(req);
             const hasRowIndex = payload.rowIndex !== undefined && payload.rowIndex !== null && payload.rowIndex !== '';
             const hasContactId = Boolean(payload.contactId);
 
@@ -162,7 +164,8 @@ class OpportunityController {
                 const result = await this.opportunityService.addContactToOpportunity(
                     opportunityId,
                     { contactId: resolved.contactId, name: resolved.contactName || payload.name },
-                    req.user
+                    req.user,
+                    auditContext
                 );
                 return res.json(result);
             }
@@ -176,7 +179,8 @@ class OpportunityController {
                 const result = await this.opportunityService.addContactToOpportunity(
                     opportunityId,
                     { contactId: payload.contactId, name: payload.name },
-                    req.user
+                    req.user,
+                    auditContext
                 );
                 return res.json(result);
             }
@@ -186,7 +190,8 @@ class OpportunityController {
                 const result = await this.opportunityService.addContactToOpportunity(
                     opportunityId,
                     { contactId: contactResult.id, name: payload.name },
-                    req.user
+                    req.user,
+                    auditContext
                 );
                 return res.json(result);
             }
@@ -194,7 +199,8 @@ class OpportunityController {
             const result = await this.opportunityService.addContactToOpportunity(
                 opportunityId,
                 payload,
-                req.user
+                req.user,
+                auditContext
             );
             res.json(result);
         } catch (error) {
@@ -208,7 +214,8 @@ class OpportunityController {
             const result = await this.opportunityService.deleteContactLink(
                 req.params.opportunityId, 
                 req.params.contactId, 
-                req.user
+                req.user,
+                this._buildAuditContext(req)
             );
             res.json(result);
         } catch (error) {

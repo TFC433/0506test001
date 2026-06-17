@@ -49,9 +49,14 @@ const OPPORTUNITY_FIELD_LABELS = {
     opportunityValue: '機會金額',
     assignee: '負責人',
     expectedCloseDate: '預計結案日',
+    deleted: '刪除狀態',
     customerName: '客戶',
     companyName: '公司',
+    companyId: '關聯公司',
+    opportunityId: '關聯機會',
+    contactId: '關聯聯絡人',
     contactName: '聯絡人',
+    relationship: '關聯關係',
     notes: '備註',
     potentialSpecification: '規格/需求',
     product_details: '產品資訊',
@@ -165,7 +170,7 @@ class OpportunityService {
                 session_id: auditContext.actor && auditContext.actor.sessionId,
                 module: 'opportunities',
                 action: event.action || 'update',
-                target_type: 'opportunity',
+                target_type: event.targetType || 'opportunity',
                 target_id: event.targetId,
                 target_label: event.targetLabel || null,
                 event_title: event.eventTitle,
@@ -333,6 +338,83 @@ class OpportunityService {
             detectedEvents: ['created'],
             metadata: {
                 create_source: 'standard_opportunity_create'
+            }
+        };
+    }
+
+    _getOpportunityName(opportunity = {}, fallback = null) {
+        return opportunity.opportunityName || opportunity.name || opportunity.title || fallback || opportunity.opportunityId || opportunity.id || '未命名機會';
+    }
+
+    _getContactName(contact = {}, fallback = null) {
+        return contact.name || contact.contactName || fallback || contact.contactId || contact.id || '未命名聯絡人';
+    }
+
+    _buildOpportunityDeleteAuditEvent(opportunity, auditContext, modifier) {
+        const actorName = this._getAuditActorName(auditContext, modifier);
+        const opportunityName = this._getOpportunityName(opportunity);
+        const changes = {
+            deleted: {
+                before: false,
+                after: true
+            }
+        };
+        const changedFields = Object.keys(changes);
+
+        return {
+            action: 'delete',
+            businessEventType: 'opportunity_deleted',
+            eventTitle: '刪除機會',
+            eventSummary: `${actorName} 刪除機會「${opportunityName}」`,
+            eventCategory: 'delete',
+            changes,
+            changedFields,
+            detectedEvents: ['deleted'],
+            metadata: {
+                related_opportunity_id: opportunity.opportunityId || opportunity.id || null,
+                related_company_id: opportunity.companyId || opportunity.company_id || null,
+                related_contact_id: opportunity.contactId || opportunity.contact_id || opportunity.mainContactId || null,
+                opportunity_stage: opportunity.currentStage || null,
+                opportunity_status: opportunity.currentStatus || null
+            }
+        };
+    }
+
+    _buildOpportunityContactAuditEvent({ action, opportunity, contact, opportunityId, contactId, auditContext, modifier }) {
+        const actorName = this._getAuditActorName(auditContext, modifier);
+        const opportunityName = this._getOpportunityName(opportunity, opportunityId);
+        const contactName = this._getContactName(contact, contactId);
+        const companyId = (contact && (contact.companyId || contact.company_id)) ||
+            (opportunity && (opportunity.companyId || opportunity.company_id)) ||
+            null;
+        const isLink = action === 'link';
+        const changes = {
+            relationship: {
+                before: isLink ? null : { opportunityId, contactId, contactName, companyId },
+                after: isLink ? { opportunityId, contactId, contactName, companyId } : null
+            }
+        };
+        const changedFields = Object.keys(changes);
+
+        return {
+            action,
+            targetType: 'opportunity_contact',
+            targetId: `${opportunityId}:${contactId}`,
+            targetLabel: `${opportunityName} / ${contactName}`,
+            businessEventType: isLink ? 'opportunity_contact_linked' : 'opportunity_contact_unlinked',
+            eventTitle: isLink ? '關聯聯絡人' : '解除聯絡人關聯',
+            eventSummary: isLink
+                ? `${actorName} 將聯絡人「${contactName}」關聯至機會「${opportunityName}」`
+                : `${actorName} 將聯絡人「${contactName}」自機會「${opportunityName}」解除關聯`,
+            eventCategory: 'relationship_change',
+            changes,
+            changedFields,
+            detectedEvents: [isLink ? 'contact_linked' : 'contact_unlinked'],
+            metadata: {
+                related_opportunity_id: opportunityId,
+                related_company_id: companyId,
+                related_contact_id: contactId,
+                relationship_type: 'opportunity_contact'
             }
         };
     }
@@ -725,7 +807,7 @@ class OpportunityService {
         }
     }
     
-    async addContactToOpportunity(opportunityId, contactData, user) {
+    async addContactToOpportunity(opportunityId, contactData, user, auditContext = {}) {
         try {
             const modifier = this._resolveModifier(user);
             if (!contactData.contactId) {
@@ -739,6 +821,15 @@ class OpportunityService {
                 id: contactData.contactId,
                 name: (existingContact && existingContact.name) || contactData.name || `ID ${contactData.contactId}`
             };
+            let opportunity = null;
+
+            if (auditContext.auditLoggerService) {
+                try {
+                    opportunity = await this.opportunitySqlReader.getOpportunityById(opportunityId);
+                } catch (auditReadError) {
+                    console.warn(`[OpportunityService] Audit opportunity read failed before contact link: ${auditReadError.message}`);
+                }
+            }
 
             const linkResult = await this.opportunitySqlWriter.linkContact(opportunityId, contactToLink.id, modifier);
             
@@ -749,6 +840,20 @@ class OpportunityService {
                 modifier
             );
 
+            if (linkResult && linkResult.success && auditContext.auditLoggerService) {
+                const auditEvent = this._buildOpportunityContactAuditEvent({
+                    action: 'link',
+                    opportunity,
+                    contact: existingContact || contactToLink,
+                    opportunityId,
+                    contactId: contactToLink.id,
+                    auditContext,
+                    modifier
+                });
+
+                await this._logOpportunityAudit(auditEvent, auditContext);
+            }
+
             return { success: true, message: '聯絡人關聯成功', data: { contact: contactToLink, link: linkResult } };
         } catch (error) {
             console.error('[OpportunityService] addContactToOpportunity Error:', error);
@@ -756,15 +861,24 @@ class OpportunityService {
         }
     }
 
-    async deleteContactLink(opportunityId, contactId, user) {
+    async deleteContactLink(opportunityId, contactId, user, auditContext = {}) {
         try {
             const modifier = this._resolveModifier(user);
+            let opportunity = null;
             
             const contact = this.contactSqlReader 
                 ? await this.contactSqlReader.getContactById(contactId)
                 : (await this.contactReader.getContactList()).find(c => c.contactId === contactId);
                 
             const contactName = contact ? contact.name : `ID ${contactId}`;
+
+            if (auditContext.auditLoggerService) {
+                try {
+                    opportunity = await this.opportunitySqlReader.getOpportunityById(opportunityId);
+                } catch (auditReadError) {
+                    console.warn(`[OpportunityService] Audit opportunity read failed before contact unlink: ${auditReadError.message}`);
+                }
+            }
 
             const deleteResult = await this.opportunitySqlWriter.unlinkContact(opportunityId, contactId);
 
@@ -777,6 +891,20 @@ class OpportunityService {
                 );
             }
 
+            if (deleteResult && deleteResult.success && auditContext.auditLoggerService) {
+                const auditEvent = this._buildOpportunityContactAuditEvent({
+                    action: 'unlink',
+                    opportunity,
+                    contact: contact || { contactId, name: contactName },
+                    opportunityId,
+                    contactId,
+                    auditContext,
+                    modifier
+                });
+
+                await this._logOpportunityAudit(auditEvent, auditContext);
+            }
+
             return deleteResult;
         } catch (error) {
             console.error('[OpportunityService] deleteContactLink Error:', error);
@@ -784,7 +912,7 @@ class OpportunityService {
         }
     }
 
-    async deleteOpportunity(opportunityId, user) {
+    async deleteOpportunity(opportunityId, user, auditContext = {}) {
         try {
             const modifier = this._resolveModifier(user);
             
@@ -816,6 +944,15 @@ class OpportunityService {
                 } catch (logError) {
                      console.warn(`[OpportunityService] 公司互動記錄寫入失敗 (刪除機會案件): ${logError.message}`);
                 }
+            }
+
+            if (deleteResult && deleteResult.success && auditContext.auditLoggerService) {
+                const auditEvent = this._buildOpportunityDeleteAuditEvent(opportunity, auditContext, modifier);
+                await this._logOpportunityAudit({
+                    targetId: opportunityId,
+                    targetLabel: this._getOpportunityName(opportunity, opportunityId),
+                    ...auditEvent
+                }, auditContext);
             }
             
             return deleteResult;

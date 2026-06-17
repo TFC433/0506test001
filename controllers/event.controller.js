@@ -13,9 +13,122 @@
  */
 
 const { handleApiError } = require('../middleware/error.middleware');
+const { buildChangedFieldsDiff, extractRequestMetadata } = require('../utils/audit-helpers');
 
 // 輔助函式：從 req.app 獲取服務
 const getServices = (req) => req.app.get('services');
+
+const EVENT_LOG_FIELD_LABELS = {
+  eventName: '事件名稱',
+  name: '事件名稱',
+  eventType: '事件類型',
+  visitPlace: '拜訪地點',
+  content: '內容',
+  eventContent: '內容',
+  notes: '備註',
+  eventNotes: '備註',
+  participants: '參與人員',
+  ourParticipants: '我方參與人員',
+  clientParticipants: '客戶參與人員',
+  opportunityId: '關聯機會',
+  companyId: '關聯公司',
+  eventDate: '事件日期',
+  startTime: '開始時間',
+  endTime: '結束時間',
+  status: '狀態'
+};
+
+const EVENT_LOG_REDACTED_VALUE = '[REDACTED]';
+
+function buildEventAuditContext(req) {
+  const services = getServices(req) || {};
+  const user = req.user || {};
+  const requestMetadata = extractRequestMetadata(req);
+
+  return {
+    auditLoggerService: services.auditLoggerService || null,
+    actor: {
+      username: user.username || user.name || 'unknown',
+      name: user.displayName || user.name || user.username || 'System',
+      role: user.role || null,
+      sessionId: user.session_id || null
+    },
+    ipAddress: requestMetadata.ipAddress,
+    userAgent: requestMetadata.userAgent
+  };
+}
+
+function getEventAuditLabel(eventData = {}) {
+  return eventData.eventName || eventData.eventTitle || eventData.name || eventData.title || '未命名事件報告';
+}
+
+function isLongOrSensitiveEventField(key) {
+  const normalized = String(key || '').toLowerCase();
+  return normalized.includes('content') ||
+    normalized.includes('notes') ||
+    normalized.includes('participant') ||
+    normalized.includes('detail') ||
+    normalized.includes('spec') ||
+    normalized.includes('attachment') ||
+    normalized.includes('link') ||
+    normalized.includes('drive') ||
+    normalized.includes('calendar');
+}
+
+function sanitizeEventLogAuditData(data = {}) {
+  return Object.keys(data || {}).reduce((sanitized, key) => {
+    sanitized[key] = isLongOrSensitiveEventField(key) ? EVENT_LOG_REDACTED_VALUE : data[key];
+    return sanitized;
+  }, {});
+}
+
+function getChangedFieldLabels(fields) {
+  return fields.map(field => EVENT_LOG_FIELD_LABELS[field] || field);
+}
+
+function buildEventLogAuditMetadata(eventData = {}, changedFields = [], detectedEvent) {
+  return {
+    changed_fields: changedFields,
+    changed_field_labels: getChangedFieldLabels(changedFields),
+    source: 'event_logs',
+    audit_version: 'v1',
+    related_opportunity_id: eventData.opportunityId || eventData.opportunity_id || null,
+    related_company_id: eventData.companyId || eventData.company_id || null,
+    event_type: eventData.eventType || eventData.event_type || null,
+    event_status: eventData.status || eventData.eventStatus || eventData.event_status || null,
+    detected_events: [detectedEvent]
+  };
+}
+
+async function logEventLogAudit(req, event) {
+  const auditContext = buildEventAuditContext(req);
+  const auditLoggerService = auditContext.auditLoggerService;
+  if (!auditLoggerService || typeof auditLoggerService.logMutation !== 'function') return;
+
+  try {
+    await auditLoggerService.logMutation({
+      actor_username: auditContext.actor.username,
+      actor_name: auditContext.actor.name,
+      actor_role: auditContext.actor.role,
+      session_id: auditContext.actor.sessionId,
+      module: 'event_logs',
+      action: event.action,
+      target_type: 'event_log',
+      target_id: event.targetId,
+      target_label: event.targetLabel || null,
+      event_title: event.eventTitle,
+      event_summary: event.eventSummary,
+      event_category: event.eventCategory,
+      business_event_type: event.businessEventType,
+      changes: event.changes || {},
+      metadata: event.metadata || {},
+      ip_address: auditContext.ipAddress || null,
+      user_agent: auditContext.userAgent || null
+    });
+  } catch (auditError) {
+    console.warn('[EventController] System Audit Log Error:', auditError.message);
+  }
+}
 
 // ==========================================
 // Part 1: 事件紀錄 (Event Log) 相關功能
@@ -74,6 +187,26 @@ exports.createEventLog = async (req, res) => {
             console.warn('[EventController] Warning: Failed to create linked interaction for Event Report:', intErr.message);
           }
         }
+      }
+
+      if (eventId) {
+        const afterData = { ...(req.body || {}), eventId };
+        const changes = buildChangedFieldsDiff({}, sanitizeEventLogAuditData(afterData));
+        const changedFields = Object.keys(changes);
+        const eventName = getEventAuditLabel(afterData);
+        const auditContext = buildEventAuditContext(req);
+
+        await logEventLogAudit(req, {
+          action: 'create',
+          targetId: eventId,
+          targetLabel: eventName,
+          eventTitle: '建立事件報告',
+          eventSummary: `${auditContext.actor.name} 建立事件報告「${eventName}」`,
+          eventCategory: 'business_event',
+          businessEventType: 'event_log_created',
+          changes,
+          metadata: buildEventLogAuditMetadata(afterData, changedFields, 'created')
+        });
       }
     }
 
@@ -153,6 +286,29 @@ exports.updateEventLog = async (req, res) => {
       }
     }
 
+    if (result && result.success && existingEvent) {
+      const afterData = { ...existingEvent, ...(req.body || {}), eventId: req.params.eventId };
+      const changes = buildChangedFieldsDiff(
+        sanitizeEventLogAuditData(existingEvent),
+        sanitizeEventLogAuditData(afterData)
+      );
+      const changedFields = Object.keys(changes);
+      const eventName = getEventAuditLabel(afterData);
+      const auditContext = buildEventAuditContext(req);
+
+      await logEventLogAudit(req, {
+        action: 'update',
+        targetId: req.params.eventId,
+        targetLabel: eventName,
+        eventTitle: '編輯事件報告',
+        eventSummary: `${auditContext.actor.name} 編輯事件報告「${eventName}」`,
+        eventCategory: 'business_event',
+        businessEventType: 'event_log_updated',
+        changes,
+        metadata: buildEventLogAuditMetadata(afterData, changedFields, 'updated')
+      });
+    }
+
     res.json(result);
   } catch (error) {
     handleApiError(res, error, 'Update Event Log');
@@ -172,12 +328,41 @@ exports.voidEventLog = async (req, res) => {
     }
 
     const services = getServices(req);
+    const existingEvent = await services.eventLogService.getEventById(eventId);
     const result = await services.eventLogService.voidEventLog(eventId, {
       interactionId,
       voidReason: req.body ? req.body.voidReason : null,
       user: req.user || {},
       interactionService: services.interactionService
     });
+
+    if (result && result.success && existingEvent) {
+      const afterData = {
+        ...existingEvent,
+        eventId,
+        status: 'voided',
+        voidReason: req.body ? req.body.voidReason : null
+      };
+      const changes = buildChangedFieldsDiff(
+        sanitizeEventLogAuditData(existingEvent),
+        sanitizeEventLogAuditData(afterData)
+      );
+      const changedFields = Object.keys(changes);
+      const eventName = getEventAuditLabel(existingEvent);
+      const auditContext = buildEventAuditContext(req);
+
+      await logEventLogAudit(req, {
+        action: 'void',
+        targetId: eventId,
+        targetLabel: eventName,
+        eventTitle: '作廢事件報告',
+        eventSummary: `${auditContext.actor.name} 作廢事件報告「${eventName}」`,
+        eventCategory: 'delete',
+        businessEventType: 'event_log_voided',
+        changes,
+        metadata: buildEventLogAuditMetadata(afterData, changedFields, 'voided')
+      });
+    }
 
     res.json(result);
   } catch (error) {
@@ -217,6 +402,31 @@ exports.deleteEventLog = async (req, res) => {
           console.warn('[EventController] Warning: Failed to create interaction for Delete Event Log:', intErr.message);
         }
       }
+    }
+
+    if (result && result.success && existingEvent) {
+      const eventId = req.params.eventId;
+      const eventName = getEventAuditLabel(existingEvent);
+      const auditContext = buildEventAuditContext(req);
+      const changes = {
+        deleted: {
+          before: false,
+          after: true
+        }
+      };
+      const changedFields = Object.keys(changes);
+
+      await logEventLogAudit(req, {
+        action: 'delete',
+        targetId: eventId,
+        targetLabel: eventName,
+        eventTitle: '刪除事件報告',
+        eventSummary: `${auditContext.actor.name} 刪除事件報告「${eventName}」`,
+        eventCategory: 'delete',
+        businessEventType: 'event_log_deleted',
+        changes,
+        metadata: buildEventLogAuditMetadata(existingEvent, changedFields, 'deleted')
+      });
     }
 
     res.json(result);
