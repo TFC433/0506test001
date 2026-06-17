@@ -59,7 +59,7 @@ class AuditLogSqlWriter {
     async createAuditLog(entry) {
         const { data, error } = await supabase
             .from(this.systemAuditLogsTable)
-            .insert([this._compactRow(entry)])
+            .insert([this._mapAuditLogRow(entry)])
             .select('*')
             .single();
 
@@ -94,7 +94,33 @@ class AuditLogSqlWriter {
         });
         return row;
     }
+
+    _mapAuditLogRow(entry = {}) {
+        return {
+            actor_username: this._firstDefined(entry.actor_username, entry.actorUsername),
+            actor_name: this._firstDefined(entry.actor_name, entry.actorName, null),
+            actor_role: this._firstDefined(entry.actor_role, entry.actorRole, null),
+            session_id: this._firstDefined(entry.session_id, entry.sessionId, null),
+            module: entry.module,
+            action: entry.action,
+            target_type: this._firstDefined(entry.target_type, entry.targetType, null),
+            target_id: this._firstDefined(entry.target_id, entry.targetId),
+            target_label: this._firstDefined(entry.target_label, entry.targetLabel, null),
+            event_title: this._firstDefined(entry.event_title, entry.eventTitle, null),
+            event_summary: this._firstDefined(entry.event_summary, entry.eventSummary, null),
+            event_category: this._firstDefined(entry.event_category, entry.eventCategory, null),
+            business_event_type: this._firstDefined(entry.business_event_type, entry.businessEventType, null),
+            changes: this._firstDefined(entry.changes, {}),
+            metadata: this._firstDefined(entry.metadata, {}),
+            ip_address: this._firstDefined(entry.ip_address, entry.ipAddress, null),
+            user_agent: this._firstDefined(entry.user_agent, entry.userAgent, null),
+            created_at: this._firstDefined(entry.created_at, entry.createdAt)
+        };
+    }
+
+    _firstDefined(...values) {
+        return values.find(value => value !== undefined);
+    }
 }
 
 module.exports = AuditLogSqlWriter;
-

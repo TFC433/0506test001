@@ -9,6 +9,7 @@
  */
 
 const { handleApiError } = require('../middleware/error.middleware');
+const { extractRequestMetadata } = require('../utils/audit-helpers');
 
 class CompanyController {
     /**
@@ -55,7 +56,12 @@ class CompanyController {
             }
             
             // 傳入 req.body 作為完整資料 (包含 type, phone 等)，確保一次寫入
-            const result = await this.companyService.createCompany(companyName, req.body, req.user);
+            const result = await this.companyService.createCompany(
+                companyName,
+                req.body,
+                req.user,
+                this._buildAuditContext(req)
+            );
             res.json(result);
         } catch (error) {
             handleApiError(res, error, 'Create Company');
@@ -91,7 +97,8 @@ class CompanyController {
             const result = await this.companyService.updateCompany(
                 companyId, 
                 req.body, 
-                req.user
+                req.user,
+                this._buildAuditContext(req)
             );
             
             res.json(result);
@@ -108,7 +115,11 @@ class CompanyController {
         try {
             const companyId = req.params.companyId;
             
-            const result = await this.companyService.deleteCompany(companyId, req.user);
+            const result = await this.companyService.deleteCompany(
+                companyId,
+                req.user,
+                this._buildAuditContext(req)
+            );
             res.json(result);
         } catch (error) {
             // 特別處理「有關聯資料無法刪除」的邏輯錯誤，回傳 400 讓前端顯示 Toast
@@ -118,6 +129,24 @@ class CompanyController {
             handleApiError(res, error, 'Delete Company');
         }
     };
+
+    _buildAuditContext(req) {
+        const services = req.app && req.app.get ? req.app.get('services') : {};
+        const user = req.user || {};
+        const requestMetadata = extractRequestMetadata(req);
+
+        return {
+            auditLoggerService: services.auditLoggerService || null,
+            actor: {
+                username: user.username || user.name || 'unknown',
+                name: user.displayName || user.name || user.username || 'System',
+                role: user.role || null,
+                sessionId: user.session_id || null
+            },
+            ipAddress: requestMetadata.ipAddress,
+            userAgent: requestMetadata.userAgent
+        };
+    }
 }
 
 module.exports = CompanyController;

@@ -52,6 +52,10 @@ class AuditLoggerService {
             target_type: entry.target_type || entry.targetType || null,
             target_id: entry.target_id || entry.targetId,
             target_label: entry.target_label || entry.targetLabel || null,
+            event_title: entry.event_title || entry.eventTitle || null,
+            event_summary: entry.event_summary || entry.eventSummary || null,
+            event_category: entry.event_category || entry.eventCategory || null,
+            business_event_type: entry.business_event_type || entry.businessEventType || null,
             changes: sanitizeAuditPayload(entry.changes || {}),
             metadata: sanitizeAuditPayload(entry.metadata || {}),
             ip_address: entry.ip_address || entry.ipAddress || null,
@@ -85,4 +89,3 @@ class AuditLoggerService {
 }
 
 module.exports = AuditLoggerService;
-

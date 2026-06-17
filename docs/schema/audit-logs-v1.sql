@@ -59,6 +59,11 @@ create table if not exists public.system_audit_logs (
     target_type text null,
     target_id text not null,
     target_label text null,
+    -- Human-readable fields for manager review and future frontend filtering.
+    event_title text null,
+    event_summary text null,
+    event_category text null,
+    business_event_type text null,
     changes jsonb not null default '{}'::jsonb,
     metadata jsonb not null default '{}'::jsonb,
     ip_address text null,
@@ -81,6 +86,12 @@ create index if not exists idx_system_audit_logs_module
 
 create index if not exists idx_system_audit_logs_action
     on public.system_audit_logs (action);
+
+create index if not exists idx_system_audit_logs_event_category
+    on public.system_audit_logs (event_category);
+
+create index if not exists idx_system_audit_logs_business_event_type
+    on public.system_audit_logs (business_event_type);
 
 create index if not exists idx_system_audit_logs_target_type_target_id
     on public.system_audit_logs (target_type, target_id);
@@ -107,4 +118,3 @@ revoke all on table public.system_audit_logs from authenticated;
 -- Explicit backend service-role access. service_role is expected to bypass RLS.
 grant select, insert, update on table public.user_sessions to service_role;
 grant select, insert on table public.system_audit_logs to service_role;
-

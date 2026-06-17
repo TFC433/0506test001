@@ -11,6 +11,18 @@
  * - [PATCH] Unified interaction logging entry point: replaced interactionWriter with interactionService. No behavior change.
  */
 
+const { buildChangedFieldsDiff } = require('../utils/audit-helpers');
+
+const COMPANY_FIELD_LABELS = {
+    companyName: '公司名稱',
+    name: '公司名稱',
+    phone: '電話',
+    address: '地址',
+    taxId: '統一編號',
+    industry: '產業',
+    notes: '備註'
+};
+
 class CompanyService {
     constructor(
         companyReader, companyWriter, contactReader, contactWriter,
@@ -150,7 +162,61 @@ class CompanyService {
         }
     }
 
-    async createCompany(companyName, companyData, user) {
+    async _logCompanyAudit(event, auditContext = {}) {
+        try {
+            const auditLoggerService = auditContext.auditLoggerService;
+            if (!auditLoggerService || typeof auditLoggerService.logMutation !== 'function') return;
+
+            await auditLoggerService.logMutation({
+                actor_username: auditContext.actor && auditContext.actor.username,
+                actor_name: auditContext.actor && auditContext.actor.name,
+                actor_role: auditContext.actor && auditContext.actor.role,
+                session_id: auditContext.actor && auditContext.actor.sessionId,
+                module: 'companies',
+                action: event.action,
+                target_type: 'company',
+                target_id: event.targetId,
+                target_label: event.targetLabel || null,
+                event_title: event.eventTitle,
+                event_summary: event.eventSummary,
+                event_category: event.eventCategory,
+                business_event_type: event.businessEventType,
+                changes: event.changes || {},
+                metadata: {
+                    changed_fields: event.changedFields || [],
+                    changed_field_labels: this._getChangedFieldLabels(event.changedFields || []),
+                    source: 'companies',
+                    audit_version: 'v1',
+                    ...(event.metadata || {})
+                },
+                ip_address: auditContext.ipAddress || null,
+                user_agent: auditContext.userAgent || null
+            });
+        } catch (auditError) {
+            console.warn(`[CompanyService] System Audit Log Error: ${auditError.message}`);
+        }
+    }
+
+    _getActorName(auditContext, fallback) {
+        return (auditContext.actor && auditContext.actor.name) || fallback || 'System';
+    }
+
+    _getChangedFieldLabels(fields) {
+        return fields.map(field => COMPANY_FIELD_LABELS[field] || field);
+    }
+
+    _getChangedFields(changes) {
+        return Object.keys(changes || {});
+    }
+
+    _buildCompanyAfterData(beforeData, updateData) {
+        return {
+            ...beforeData,
+            ...updateData
+        };
+    }
+
+    async createCompany(companyName, companyData, user, auditContext = {}) {
         try {
             const modifier = user.displayName || user.username || user || 'System';
             
@@ -189,6 +255,22 @@ class CompanyService {
                 );
             }
             
+            if (result && result.success) {
+                const changes = buildChangedFieldsDiff({}, dataToWrite);
+                const changedFields = this._getChangedFields(changes);
+                await this._logCompanyAudit({
+                    action: 'create',
+                    targetId: companyId,
+                    targetLabel: companyName,
+                    eventTitle: '建立公司',
+                    eventSummary: `${this._getActorName(auditContext, modifier)} 建立公司「${companyName}」`,
+                    eventCategory: 'data_change',
+                    businessEventType: 'company_created',
+                    changes,
+                    changedFields
+                }, auditContext);
+            }
+
             if (this.companyReader && this.companyReader.invalidateCache) {
                 this.companyReader.invalidateCache('companyList');
             }
@@ -406,7 +488,7 @@ class CompanyService {
         }
     }
 
-    async updateCompany(companyId, updateData, user) {
+    async updateCompany(companyId, updateData, user, auditContext = {}) {
         try {
             const modifier = user.displayName || user.username || 'System';
             
@@ -414,6 +496,23 @@ class CompanyService {
             if (!companyInfo) throw new Error(`找不到公司 ID: ${companyId}`);
 
             const result = await this.companySqlWriter.updateCompany(companyInfo.companyId, updateData, modifier);
+
+            if (result && result.success) {
+                const afterData = this._buildCompanyAfterData(companyInfo, updateData);
+                const changes = buildChangedFieldsDiff(companyInfo, afterData);
+                const changedFields = this._getChangedFields(changes);
+                await this._logCompanyAudit({
+                    action: 'update',
+                    targetId: companyInfo.companyId,
+                    targetLabel: afterData.companyName || companyInfo.companyName,
+                    eventTitle: '更新公司資料',
+                    eventSummary: `${this._getActorName(auditContext, modifier)} 更新公司「${afterData.companyName || companyInfo.companyName}」的資料`,
+                    eventCategory: 'data_change',
+                    businessEventType: 'company_updated',
+                    changes,
+                    changedFields
+                }, auditContext);
+            }
             
             await this._logCompanyInteraction(companyInfo.companyId, '資料更新', `公司資料已更新。`, modifier);
             
@@ -428,7 +527,7 @@ class CompanyService {
         }
     }
 
-    async deleteCompany(companyId, user) {
+    async deleteCompany(companyId, user, auditContext = {}) {
         try {
             const companyInfo = await this._getCompanyById(companyId);
             if (!companyInfo) throw new Error(`找不到公司 ID: ${companyId}`);
@@ -446,6 +545,25 @@ class CompanyService {
             }
 
             const result = await this.companySqlWriter.deleteCompany(companyInfo.companyId);
+
+            if (result && result.success) {
+                await this._logCompanyAudit({
+                    action: 'delete',
+                    targetId: companyInfo.companyId,
+                    targetLabel: companyName,
+                    eventTitle: '刪除公司',
+                    eventSummary: `${this._getActorName(auditContext, user && (user.displayName || user.username))} 刪除公司「${companyName}」`,
+                    eventCategory: 'delete',
+                    businessEventType: 'company_deleted',
+                    changes: {
+                        deleted: {
+                            before: false,
+                            after: true
+                        }
+                    },
+                    changedFields: ['deleted']
+                }, auditContext);
+            }
             
             if (this.companyReader && this.companyReader.invalidateCache) {
                 this.companyReader.invalidateCache('companyList');
