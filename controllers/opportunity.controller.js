@@ -9,6 +9,7 @@
  */
 
 const { handleApiError } = require('../middleware/error.middleware');
+const { extractRequestMetadata } = require('../utils/audit-helpers');
 
 class OpportunityController {
     /**
@@ -99,7 +100,11 @@ class OpportunityController {
     createOpportunity = async (req, res) => {
         try {
             // 使用 WorkflowService 處理建立邏輯 (可能包含發通知等)
-            const result = await this.workflowService.createOpportunity(req.body, req.user.name);
+            const result = await this.workflowService.createOpportunity(
+                req.body,
+                req.user,
+                this._buildAuditContext(req)
+            );
             res.json(result);
         } catch (error) {
             handleApiError(res, error, 'Create Opp');
@@ -122,7 +127,8 @@ class OpportunityController {
             const result = await this.opportunityService.updateOpportunity(
                 req.params.opportunityId, 
                 req.body, 
-                req.user
+                req.user,
+                this._buildAuditContext(req)
             );
             res.json(result);
         } catch (error) {
@@ -209,6 +215,24 @@ class OpportunityController {
             handleApiError(res, error, 'Delete Contact Link');
         }
     };
+
+    _buildAuditContext(req) {
+        const services = req.app && req.app.get ? req.app.get('services') : {};
+        const user = req.user || {};
+        const requestMetadata = extractRequestMetadata(req);
+
+        return {
+            auditLoggerService: services.auditLoggerService || null,
+            actor: {
+                username: user.username || user.name || 'unknown',
+                name: user.displayName || user.name || user.username || 'System',
+                role: user.role || null,
+                sessionId: user.session_id || null
+            },
+            ipAddress: requestMetadata.ipAddress,
+            userAgent: requestMetadata.userAgent
+        };
+    }
 }
 
 module.exports = OpportunityController;

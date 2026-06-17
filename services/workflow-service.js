@@ -249,12 +249,12 @@ class WorkflowService {
      * @param {Object} opportunityData 
      * @param {string|Object} user 
      */
-    async createOpportunity(opportunityData, user) {
+    async createOpportunity(opportunityData, user, auditContext = {}) {
         try {
             // Controller (req.user.name) ?喳摮葡嚗??詨? Service ?? { displayName } ?拐辣
             const modifierObj = typeof user === 'string' ? { displayName: user } : (user || { displayName: 'System' });
             
-            const result = await this.opportunityService.createOpportunity(opportunityData, modifierObj);
+            const result = await this.opportunityService.createOpportunity(opportunityData, modifierObj, auditContext);
             const hasRowIndex = opportunityData.rowIndex !== undefined && opportunityData.rowIndex !== null && opportunityData.rowIndex !== '';
             const hasContactId = Boolean(opportunityData.contactId);
             const hasMainContact = String(opportunityData.mainContact || '').trim() !== '';

@@ -39,6 +39,40 @@
  * - [PHASE 7] Migrated Contact Linking (Add/Delete) to SQL Writer.
  */
 
+const { buildChangedFieldsDiff } = require('../utils/audit-helpers');
+
+const OPPORTUNITY_FIELD_LABELS = {
+    opportunityName: '機會名稱',
+    name: '機會名稱',
+    currentStage: '機會階段',
+    currentStatus: '機會狀態',
+    opportunityValue: '機會金額',
+    assignee: '負責人',
+    expectedCloseDate: '預計結案日',
+    customerName: '客戶',
+    companyName: '公司',
+    contactName: '聯絡人',
+    notes: '備註',
+    potentialSpecification: '規格/需求',
+    product_details: '產品資訊',
+    driveFolderLink: '雲端資料夾連結',
+    drive_link: '雲端連結'
+};
+
+const OPPORTUNITY_REDACTED_FIELDS = new Set([
+    'notes',
+    'potentialSpecification',
+    'product_details',
+    'driveFolderLink',
+    'drive_link'
+]);
+
+const WON_STAGE = '撌脫?鈭?';
+const WON_STATUS = '撌脩?獢?';
+const LOST_STAGE = '撌脣仃??撌脣仃??';
+const LOST_STATUS = '撌脩?獢?';
+const REDACTED_VALUE = '[REDACTED]';
+
 class OpportunityService {
     constructor({
         config,
@@ -119,7 +153,191 @@ class OpportunityService {
         }
     }
 
-    async createOpportunity(opportunityData, user) {
+    async _logOpportunityAudit(event, auditContext = {}) {
+        try {
+            const auditLoggerService = auditContext.auditLoggerService;
+            if (!auditLoggerService || typeof auditLoggerService.logMutation !== 'function') return;
+
+            await auditLoggerService.logMutation({
+                actor_username: auditContext.actor && auditContext.actor.username,
+                actor_name: auditContext.actor && auditContext.actor.name,
+                actor_role: auditContext.actor && auditContext.actor.role,
+                session_id: auditContext.actor && auditContext.actor.sessionId,
+                module: 'opportunities',
+                action: event.action || 'update',
+                target_type: 'opportunity',
+                target_id: event.targetId,
+                target_label: event.targetLabel || null,
+                event_title: event.eventTitle,
+                event_summary: event.eventSummary,
+                event_category: event.eventCategory,
+                business_event_type: event.businessEventType,
+                changes: event.changes || {},
+                metadata: {
+                    changed_fields: event.changedFields || [],
+                    changed_field_labels: this._getOpportunityFieldLabels(event.changedFields || []),
+                    detected_events: event.detectedEvents || [],
+                    source: 'opportunities',
+                    audit_version: 'v1',
+                    ...(event.metadata || {})
+                },
+                ip_address: auditContext.ipAddress || null,
+                user_agent: auditContext.userAgent || null
+            });
+        } catch (auditError) {
+            console.warn(`[OpportunityService] System Audit Log Error: ${auditError.message}`);
+        }
+    }
+
+    _getAuditActorName(auditContext, fallback) {
+        return (auditContext.actor && auditContext.actor.name) || fallback || 'System';
+    }
+
+    _getOpportunityFieldLabels(fields) {
+        return fields.map(field => OPPORTUNITY_FIELD_LABELS[field] || field);
+    }
+
+    _sanitizeOpportunityAuditData(data = {}) {
+        return Object.keys(data || {}).reduce((sanitized, key) => {
+            sanitized[key] = OPPORTUNITY_REDACTED_FIELDS.has(key) ? REDACTED_VALUE : data[key];
+            return sanitized;
+        }, {});
+    }
+
+    _detectOpportunityEvents(beforeData, afterData) {
+        const detectedEvents = [];
+
+        if (beforeData.currentStage !== afterData.currentStage) detectedEvents.push('stage_changed');
+        if (beforeData.currentStatus !== afterData.currentStatus) detectedEvents.push('status_changed');
+        if (beforeData.opportunityValue !== afterData.opportunityValue) detectedEvents.push('value_changed');
+        if ((beforeData.assignee || beforeData.owner) !== (afterData.assignee || afterData.owner)) detectedEvents.push('assignee_changed');
+        if (beforeData.expectedCloseDate !== afterData.expectedCloseDate) detectedEvents.push('expected_close_date_changed');
+        if (afterData.currentStage === LOST_STAGE) {
+            detectedEvents.push('lost');
+        } else if (afterData.currentStage === WON_STAGE || afterData.currentStatus === WON_STATUS) {
+            detectedEvents.push('won');
+        }
+
+        return detectedEvents;
+    }
+
+    _buildOpportunityAuditEvent(beforeData, afterData, auditContext, modifier) {
+        const sanitizedBefore = this._sanitizeOpportunityAuditData(beforeData);
+        const sanitizedAfter = this._sanitizeOpportunityAuditData(afterData);
+        const changes = buildChangedFieldsDiff(sanitizedBefore, sanitizedAfter);
+        const changedFields = Object.keys(changes);
+        const detectedEvents = this._detectOpportunityEvents(beforeData, afterData);
+        const actorName = this._getAuditActorName(auditContext, modifier);
+        const opportunityName = afterData.opportunityName || afterData.name || beforeData.opportunityName || beforeData.name || afterData.opportunityId;
+        const stageChanged = detectedEvents.includes('stage_changed');
+        const statusChanged = detectedEvents.includes('status_changed');
+
+        if (detectedEvents.includes('won')) {
+            return {
+                businessEventType: 'opportunity_won',
+                eventTitle: '機會成交',
+                eventSummary: `${actorName} 將機會「${opportunityName}」更新為成交`,
+                eventCategory: 'status_change',
+                changes,
+                changedFields,
+                detectedEvents
+            };
+        }
+
+        if (detectedEvents.includes('lost')) {
+            return {
+                businessEventType: 'opportunity_lost',
+                eventTitle: '機會失敗',
+                eventSummary: `${actorName} 將機會「${opportunityName}」更新為失敗`,
+                eventCategory: 'status_change',
+                changes,
+                changedFields,
+                detectedEvents
+            };
+        }
+
+        if (stageChanged) {
+            return {
+                businessEventType: 'opportunity_stage_changed',
+                eventTitle: '更新機會階段',
+                eventSummary: `${actorName} 將機會「${opportunityName}」階段由「${beforeData.currentStage || '未填寫'}」更新為「${afterData.currentStage || '未填寫'}」`,
+                eventCategory: 'status_change',
+                changes,
+                changedFields,
+                detectedEvents
+            };
+        }
+
+        if (statusChanged) {
+            return {
+                businessEventType: 'opportunity_status_changed',
+                eventTitle: '更新機會狀態',
+                eventSummary: `${actorName} 將機會「${opportunityName}」狀態由「${beforeData.currentStatus || '未填寫'}」更新為「${afterData.currentStatus || '未填寫'}」`,
+                eventCategory: 'status_change',
+                changes,
+                changedFields,
+                detectedEvents
+            };
+        }
+
+        if (detectedEvents.includes('assignee_changed')) {
+            return {
+                businessEventType: 'opportunity_assignee_changed',
+                eventTitle: '更新機會負責人',
+                eventSummary: `${actorName} 更新機會「${opportunityName}」的負責人`,
+                eventCategory: 'assignment_change',
+                changes,
+                changedFields,
+                detectedEvents
+            };
+        }
+
+        if (detectedEvents.includes('value_changed')) {
+            return {
+                businessEventType: 'opportunity_value_changed',
+                eventTitle: '更新機會金額',
+                eventSummary: `${actorName} 更新機會「${opportunityName}」的金額`,
+                eventCategory: 'data_change',
+                changes,
+                changedFields,
+                detectedEvents
+            };
+        }
+
+        return {
+            businessEventType: 'opportunity_updated',
+            eventTitle: '更新機會',
+            eventSummary: `${actorName} 更新機會「${opportunityName}」的資料`,
+            eventCategory: 'data_change',
+            changes,
+            changedFields,
+            detectedEvents
+        };
+    }
+
+    _buildOpportunityCreateAuditEvent(afterData, auditContext, modifier) {
+        const sanitizedAfter = this._sanitizeOpportunityAuditData(afterData);
+        const changes = buildChangedFieldsDiff({}, sanitizedAfter);
+        const changedFields = Object.keys(changes);
+        const actorName = this._getAuditActorName(auditContext, modifier);
+        const opportunityName = afterData.opportunityName || afterData.name || afterData.opportunityId || afterData.id || '未命名機會';
+
+        return {
+            action: 'create',
+            businessEventType: 'opportunity_created',
+            eventTitle: '建立機會',
+            eventSummary: `${actorName} 建立機會「${opportunityName}」`,
+            eventCategory: 'data_change',
+            changes,
+            changedFields,
+            detectedEvents: ['created'],
+            metadata: {
+                create_source: 'standard_opportunity_create'
+            }
+        };
+    }
+
+    async createOpportunity(opportunityData, user, auditContext = {}) {
         try {
             const modifier = this._resolveModifier(user);
 
@@ -163,6 +381,20 @@ class OpportunityService {
                     `建立機會案件「${oppName}」，指派給 ${owner}。`,
                     modifier
                 );
+
+                if (auditContext.auditLoggerService) {
+                    const afterData = {
+                        ...opportunityData,
+                        opportunityId: result.id,
+                        id: result.id
+                    };
+                    const auditEvent = this._buildOpportunityCreateAuditEvent(afterData, auditContext, modifier);
+                    await this._logOpportunityAudit({
+                        targetId: result.id,
+                        targetLabel: afterData.opportunityName || afterData.name || oppName,
+                        ...auditEvent
+                    }, auditContext);
+                }
             }
             
             return result;
@@ -424,7 +656,7 @@ class OpportunityService {
         }
     }
 
-    async updateOpportunity(opportunityId, updateData, user) {
+    async updateOpportunity(opportunityId, updateData, user, auditContext = {}) {
         try {
             const modifier = this._resolveModifier(user);
             
@@ -471,6 +703,19 @@ class OpportunityService {
                     logs.join('；'),
                     modifier
                 );
+            }
+
+            if (updateResult && updateResult.success && auditContext.auditLoggerService) {
+                const afterData = {
+                    ...originalOpportunity,
+                    ...updateData
+                };
+                const auditEvent = this._buildOpportunityAuditEvent(originalOpportunity, afterData, auditContext, modifier);
+                await this._logOpportunityAudit({
+                    targetId: opportunityId,
+                    targetLabel: afterData.opportunityName || afterData.name || originalOpportunity.opportunityName || originalOpportunity.name,
+                    ...auditEvent
+                }, auditContext);
             }
             
             return updateResult;
