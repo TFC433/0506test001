@@ -162,7 +162,7 @@ function ensureDevProjectHeaderControls() {
             maintenanceButton.onclick = () => window.toggleDevTableActions();
         }
         maintenanceButton.textContent = window.__isDevActionMode ? DEV_PROJECT_MAINTENANCE_DONE_LABEL : DEV_PROJECT_MAINTENANCE_LABEL;
-        maintenanceButton.disabled = isMemberView;
+        maintenanceButton.disabled = false;
         maintenanceButton.classList.toggle('is-danger', Boolean(window.__isDevActionMode));
         maintenanceButton.classList.toggle('is-active', Boolean(window.__isDevActionMode));
         actionGroup.appendChild(maintenanceButton);
@@ -1592,6 +1592,10 @@ window.renderDevProjects = function(data) {
         const progressCueHtml = getDevProgressCueHtml(item);
         const scheduleText = [item.startDate, item.estCompletionDate].filter(Boolean).join(' → ') || '-';
         const rowClass = role === 'collab' ? ' dev-member-row-collab' : '';
+        const canEditMainTask = role === 'main' && Boolean(window.__isDevActionMode);
+        const isExpanded = role === 'main' && window.__devProjectsExpandedEditId === item.devId;
+        const editableClass = canEditMainTask ? ' is-editable' : '';
+        const editableAction = canEditMainTask ? ` onclick="window.toggleExpandedDevProject('${item.devId}')"` : '';
         const rowOpportunityId = item.assigneeCode || item.opportunityId || '';
         const rowOpportunityName = item.projectName || item.opportunityName || '';
         let opportunityHtml = '<span class="internal-ops-muted-badge">-</span>';
@@ -1601,11 +1605,11 @@ window.renderDevProjects = function(data) {
             opportunityHtml = `<span title="${escapeHtml(rowOpportunityName)}" class="dev-opportunity-subtle">${escapeHtml(rowOpportunityName)}</span>`;
         }
 
-        return `
+        const displayRow = `
             <tr class="dev-member-row${rowClass}">
                 <td>${displayIndex ? `${displayIndex}.` : ''}</td>
                 <td class="dev-case-name-table-cell" title="${escapeHtml(item.productName || item.caseName || '-')}">
-                    <div class="dev-member-case-name">
+                    <div class="dev-case-name-cell dev-member-case-name${editableClass}"${editableAction}>
                         <span class="dev-child-marker">↳</span>
                         ${renderMemberRoleBadge(role)}
                         <span class="dev-case-name-primary">${escapeHtml(item.productName || item.caseName || '-')}</span>
@@ -1620,6 +1624,8 @@ window.renderDevProjects = function(data) {
                 <td><span class="dev-member-progress">${escapeHtml(progressText)}</span>${progressCueHtml}</td>
             </tr>
         `;
+        if (isExpanded) return displayRow + renderExpandedEditorRow(item);
+        return displayRow;
     }
 
     function renderMemberView(items) {
