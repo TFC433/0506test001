@@ -98,6 +98,8 @@ function ensureDevProjectHeaderControls() {
         const header = widget && widget.querySelector('.internal-ops-header');
         if (!header) return;
 
+        const isMemberView = window.__devProjectsViewMode === 'member';
+
         let actionGroup = header.querySelector('#dev-project-header-action-group');
         if (!actionGroup) {
             actionGroup = document.createElement('span');
@@ -135,7 +137,7 @@ function ensureDevProjectHeaderControls() {
         }
         const hasNotes = hasAnyDevProjectNotes();
         noteToggleButton.textContent = window.__devProjectsAllNotesExpanded ? DEV_PROJECT_NOTES_COLLAPSE_LABEL : DEV_PROJECT_NOTES_EXPAND_LABEL;
-        noteToggleButton.disabled = Boolean(window.__isDevActionMode) || !hasNotes;
+        noteToggleButton.disabled = isMemberView || Boolean(window.__isDevActionMode) || !hasNotes;
         noteToggleButton.classList.toggle('is-active', Boolean(window.__devProjectsAllNotesExpanded && hasNotes));
         actionGroup.appendChild(noteToggleButton);
 
@@ -148,6 +150,7 @@ function ensureDevProjectHeaderControls() {
             createButton.onclick = () => window.openDevProjectCreateInline();
         }
         createButton.textContent = DEV_PROJECT_CREATE_LABEL;
+        createButton.disabled = isMemberView;
         actionGroup.appendChild(createButton);
 
         let maintenanceButton = actionGroup.querySelector('#dev-project-maintenance-toggle');
@@ -159,6 +162,7 @@ function ensureDevProjectHeaderControls() {
             maintenanceButton.onclick = () => window.toggleDevTableActions();
         }
         maintenanceButton.textContent = window.__isDevActionMode ? DEV_PROJECT_MAINTENANCE_DONE_LABEL : DEV_PROJECT_MAINTENANCE_LABEL;
+        maintenanceButton.disabled = isMemberView;
         maintenanceButton.classList.toggle('is-danger', Boolean(window.__isDevActionMode));
         maintenanceButton.classList.toggle('is-active', Boolean(window.__isDevActionMode));
         actionGroup.appendChild(maintenanceButton);
@@ -640,6 +644,10 @@ window.toggleDevProjectsViewMode = function(mode) {
     window.__devProjectsExpandedEditId = null;
     window.__devProjectsExpandedNoteId = null;
     window.__devProjectsAllNotesExpanded = false;
+    if (mode === 'member') {
+        window.__isDevActionMode = false;
+        window.__devProjectsCreateOpen = false;
+    }
     updateDevProjectsViewTabs();
     const container = document.getElementById('internal-ops-dev-projects-content');
     if (container && window.__internalOpsDevProjectsData) {
