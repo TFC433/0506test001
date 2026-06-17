@@ -52,6 +52,7 @@ const AnnouncementSqlWriter = require('../data/announcement-sql-writer');
 const ProductWriter = require('../data/product-writer');
 const InternalOpsWriter = require('../data/internal-ops-writer');
 const SubscriptionOpsSqlWriter = require('../data/subscription-ops-sql-writer');
+const AuditLogSqlWriter = require('../data/audit-log-sql-writer');
 
 // --- Import Domain Services ---
 const AuthService = require('./auth-service');
@@ -71,6 +72,7 @@ const EventService = require('./event-service');
 const SystemService = require('./system-service');
 const InternalOpsService = require('./internal-ops-service');
 const SubscriptionOpsService = require('./subscription-ops-service');
+const AuditLoggerService = require('./audit-logger-service');
 
 // --- Import Controllers ---
 const AuthController = require('../controllers/auth.controller');
@@ -135,6 +137,7 @@ async function initializeServices() {
         const productWriter = new ProductWriter(sheets, config.IDS.PRODUCT, productReader);
         const internalOpsWriter = new InternalOpsWriter(sheets, config.IDS.INTERNAL_OPS, internalOpsReader);
         const subscriptionOpsSqlWriter = new SubscriptionOpsSqlWriter();
+        const auditLogSqlWriter = new AuditLogSqlWriter();
 
         // 4. Domain Services
         const calendarService = new CalendarService(calendar);
@@ -283,6 +286,7 @@ async function initializeServices() {
             opportunitySqlReader,
             productService
         });
+        const auditLoggerService = new AuditLoggerService(auditLogSqlWriter);
 
         // 5. Controllers
         const authController = new AuthController(authService);
@@ -314,6 +318,7 @@ async function initializeServices() {
             systemService,
             internalOpsService,
             subscriptionOpsService,
+            auditLoggerService,
             authController,
             systemController,
             announcementController,
@@ -332,7 +337,8 @@ async function initializeServices() {
             internalOpsReader,
             internalOpsWriter,
             subscriptionOpsSqlReader,
-            subscriptionOpsSqlWriter
+            subscriptionOpsSqlWriter,
+            auditLogSqlWriter
         };
 
         return services;
