@@ -17,11 +17,12 @@ class AuthService {
      * @param {SystemReader} systemReader - 負責讀取使用者資料
      * @param {SystemWriter} systemWriter - 負責寫入使用者資料 (修改密碼用)
      */
-    constructor(systemReader, systemWriter) {
+    constructor(systemReader, systemWriter, auditLoggerService = null) {
         if (!systemReader) throw new Error('AuthService 需要 SystemReader 實例');
         // systemWriter 是選擇性的，但為了修改密碼功能，建議注入
         this.systemReader = systemReader;
         this.systemWriter = systemWriter;
+        this.auditLoggerService = auditLoggerService;
 
         // [Line-Leads L2] 使用與原 line-leads.controller.js 相同的環境變數邏輯
         this.LINE_CHANNEL_ID = process.env.LINE_CHANNEL_ID || '2006367469';
@@ -86,7 +87,7 @@ class AuthService {
      * @param {string} password
      * @returns {Promise<Object>} { user, token }
      */
-    async login(username, password) {
+    async login(username, password, requestMetadata = {}) {
         if (!username || !password) {
             throw new Error('請輸入帳號和密碼');
         }
@@ -112,12 +113,27 @@ class AuthService {
             throw new Error('帳號或密碼錯誤');
         }
 
+        if (!this.auditLoggerService) {
+            throw new Error('[AuthService] auditLoggerService is required to create login sessions.');
+        }
+
+        const userSession = await this.auditLoggerService.startUserSession({
+            username: user.username,
+            displayName: user.displayName || user.username,
+            role: user.role || 'sales'
+        }, requestMetadata || {});
+
+        if (!userSession || !userSession.session_id) {
+            throw new Error('[AuthService] Failed to create login session.');
+        }
+
         // 簽發 Token
         const payload = {
             username: user.username,
             name: user.displayName || user.username,
             displayName: user.displayName || user.username,
-            role: user.role || 'sales'
+            role: user.role || 'sales',
+            session_id: userSession.session_id
         };
 
         const token = jwt.sign(
@@ -131,6 +147,7 @@ class AuthService {
         return {
             name: user.displayName,
             role: user.role,
+            session_id: userSession.session_id,
             token
         };
     }
@@ -150,6 +167,21 @@ class AuthService {
         } else {
             return (password === user.passwordHash);
         }
+    }
+
+    async logout(sessionId, options = {}) {
+        if (!sessionId || !this.auditLoggerService) {
+            return { success: true, closed: false };
+        }
+
+        await this.auditLoggerService.endUserSession(sessionId, {
+            logoutReason: options.logoutReason || options.logout_reason || 'manual_logout',
+            logoutTime: options.logoutTime || options.logout_time || new Date().toISOString(),
+            loginTime: options.loginTime || options.login_time,
+            durationSeconds: options.durationSeconds || options.duration_seconds
+        });
+
+        return { success: true, closed: true };
     }
 
     /**

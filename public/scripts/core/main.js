@@ -132,19 +132,34 @@ function getCurrentUser() {
     return window.CRM_APP?.currentUser || localStorage.getItem('crmCurrentUserName') || '系統';
 }
 
-function logout() {
-    localStorage.removeItem('crm-token');
-    localStorage.removeItem('crmToken');
-    localStorage.removeItem('crmCurrentUserName');
-    localStorage.removeItem('crmUserRole');
-    
+async function logout() {
+    const token = localStorage.getItem('crm-token') || localStorage.getItem('crmToken');
+
     try {
-        sessionStorage.removeItem('crmSessionAvatar');
+        if (token) {
+            await fetch('/api/auth/logout', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+        }
     } catch (e) {
-        console.warn('[Avatar] Failed to clear session avatar on logout', e);
+        console.warn('[Auth] Backend logout failed; continuing local logout', e);
+    } finally {
+        localStorage.removeItem('crm-token');
+        localStorage.removeItem('crmToken');
+        localStorage.removeItem('crmCurrentUserName');
+        localStorage.removeItem('crmUserRole');
+
+        try {
+            sessionStorage.removeItem('crmSessionAvatar');
+        } catch (e) {
+            console.warn('[Avatar] Failed to clear session avatar on logout', e);
+        }
+
+        window.location.href = '/';
     }
-    
-    window.location.href = '/';
 }
 
 function initSessionUserAvatar() {

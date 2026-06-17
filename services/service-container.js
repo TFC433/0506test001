@@ -141,7 +141,8 @@ async function initializeServices() {
 
         // 4. Domain Services
         const calendarService = new CalendarService(calendar);
-        const authService = new AuthService(systemReader, systemWriter);
+        const auditLoggerService = new AuditLoggerService(auditLogSqlWriter);
+        const authService = new AuthService(systemReader, systemWriter, auditLoggerService);
 
         const announcementService = new AnnouncementService({
             announcementSqlReader,
@@ -286,7 +287,6 @@ async function initializeServices() {
             opportunitySqlReader,
             productService
         });
-        const auditLoggerService = new AuditLoggerService(auditLogSqlWriter);
 
         // 5. Controllers
         const authController = new AuthController(authService);

@@ -26,6 +26,10 @@ router.post('/login', (req, res, next) => {
 });
 
 // 2. 檢查 Token 有效性 (需登入)
+router.post('/logout', (req, res, next) => {
+    getController(req).logout(req, res, next);
+});
+
 router.get('/verify', verifyToken, (req, res, next) => {
     getController(req).verifySession(req, res, next);
 });

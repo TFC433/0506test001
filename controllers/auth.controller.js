@@ -7,6 +7,9 @@
  */
 
 const { handleApiError } = require('../middleware/error.middleware');
+const { extractRequestMetadata } = require('../utils/audit-helpers');
+const jwt = require('jsonwebtoken');
+const config = require('../config');
 
 class AuthController {
     /**
@@ -22,8 +25,9 @@ class AuthController {
     login = async (req, res) => {
         try {
             const { username, password } = req.body;
+            const requestMetadata = extractRequestMetadata(req);
             // 呼叫 Service
-            const result = await this.authService.login(username, password);
+            const result = await this.authService.login(username, password, requestMetadata);
             
             res.json({ 
                 success: true, 
@@ -39,6 +43,23 @@ class AuthController {
     };
 
     /**
+     * POST /api/auth/logout
+     */
+    logout = async (req, res) => {
+        const sessionId = this._extractSessionIdFromRequest(req);
+
+        if (sessionId) {
+            try {
+                await this.authService.logout(sessionId, { logoutReason: 'manual_logout' });
+            } catch (error) {
+                console.warn('[AuthController] Failed to close logout session:', error.message);
+            }
+        }
+
+        res.json({ success: true });
+    };
+
+    /**
      * GET /api/auth/verify
      * 驗證 Session (Token) 有效性
      */
@@ -50,6 +71,27 @@ class AuthController {
             user: req.user 
         });
     };
+
+    _extractSessionIdFromRequest(req) {
+        if (req && req.user && req.user.session_id) {
+            return req.user.session_id;
+        }
+
+        const authHeader = req && req.headers ? req.headers['authorization'] : null;
+        const token = authHeader && authHeader.split(' ')[0] === 'Bearer'
+            ? authHeader.split(' ')[1]
+            : null;
+
+        if (!token) return null;
+
+        try {
+            const decoded = jwt.verify(token, config.AUTH.JWT_SECRET, { ignoreExpiration: true });
+            return decoded && decoded.session_id ? decoded.session_id : null;
+        } catch (error) {
+            console.warn('[AuthController] Logout token decode skipped:', error.message);
+            return null;
+        }
+    }
 
     /**
      * POST /api/auth/verify-password
