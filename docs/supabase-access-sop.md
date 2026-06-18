@@ -52,6 +52,13 @@ Decision:
 * do not grant `anon` or `authenticated`
 * do not expose direct frontend table access
 
+Backend-only audit/session tables:
+
+* `public.user_sessions`
+* `public.system_audit_logs`
+
+These are canonical backend-only CRM audit/session infrastructure tables. They should be accessed through backend services using server-side credentials, not exposed as frontend Data API tables. RLS remains enabled for these tables. Do not copy schema details into this SOP; use `docs/audit-session-log-governance.md` for governance and `docs/schema/audit-logs-v1.sql` for schema reference when audit/schema work is explicitly in scope.
+
 ### B. Frontend direct Supabase table
 
 Use this only if a future feature is explicitly designed for direct Supabase Data API access from the browser.

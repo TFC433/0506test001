@@ -1769,6 +1769,12 @@ and disciplined data lifecycle governance.
 
 # Changelog
 
+## 2026-06-18
+
+* Completed the Audit / Session Log Foundation chapter at CODE PASS / USER PASS level.
+* Added `docs/audit-session-log-governance.md` as the canonical reference for audit/session architecture, taxonomy, redaction, and future patch rules.
+* Clarified that backend audit/session foundation now exists; frontend/admin manager audit viewer remains future work.
+
 ## 2026-06-16
 
 * Added phase archive documentation update for Internal Ops.

@@ -101,6 +101,24 @@ Known caution areas:
 * Non-breaking cleanup planning is governed by `docs/non-breaking-cleanup-roadmap.md`.
 * `repomix-packs/**` files are generated snapshots and must not be hand-edited.
 
+## 8.1 Audit / Session Log backend foundation
+
+The Audit / Session Log backend foundation is complete for the current chapter.
+
+Backend infrastructure now includes:
+
+* `AuditLoggerService` as the standard backend audit/session service entry point.
+* `AuditLogSqlWriter` for backend writes to audit/session infrastructure tables.
+* `public.user_sessions` for login/logout/last-seen session lifecycle.
+* `public.system_audit_logs` for structured business audit events.
+* Auth token propagation of `session_id` for downstream audit context.
+
+Covered audit domains include Companies, Opportunities, Event Logs, Interactions, SubscriptionOps, and InternalOps / DevProjects. Opportunity batch update and raw contact upgrade reuse existing per-record audit events with source metadata rather than adding separate summary rows.
+
+Canonical governance reference:
+
+* `docs/audit-session-log-governance.md`
+
 ## 9. Recommended next actions ranked by safety
 
 1. Documentation review.

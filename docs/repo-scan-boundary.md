@@ -49,10 +49,14 @@ Task-tiered reading:
 
 Read these only when the task matches the topic:
 
+* `docs/audit-session-log-governance.md`
+  Use for audit/session architecture, audit taxonomy, session lifecycle, backend mutation audit hooks, audit redaction rules, or manager-log future work.
 * `docs/echarts-migration-record.md`
   Use for chart, ECharts, Dashboard analytics, Sales Analysis chart, Taiwan map, or chart style migration work.
 * `docs/highcharts-highmaps-remaining-references-audit.md`
   Use for Highcharts, Highmaps, Event chart dependencies, chart vendor cleanup, or vendor removal work.
+* `docs/schema/audit-logs-v1.sql`
+  Keep available for audit/session schema-related tasks when schema evidence is explicitly required.
 
 ## 5. Default No-Read Content
 
@@ -235,6 +239,11 @@ Report inspected files and intentionally skipped files.
 ```
 
 ## 13. Changelog
+
+### 2026-06-18
+
+* Added `docs/audit-session-log-governance.md` as the conditional must-read reference for audit/session/backend mutation audit work.
+* Clarified that `docs/schema/audit-logs-v1.sql` remains available for explicit audit/session schema-evidence tasks.
 
 ### 2026-06-15
 
