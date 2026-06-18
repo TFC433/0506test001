@@ -102,6 +102,7 @@ function renderInteractionOverviewTabs(activeTab) {
 
 function renderInteractionOverviewShell(query = '', activeTab = 'crm') {
     const isCrmTab = activeTab === 'crm';
+    const isAuditTab = activeTab === 'audit';
 
     return `
         <div class="dashboard-widget">
@@ -113,6 +114,11 @@ function renderInteractionOverviewShell(query = '', activeTab = 'crm') {
                 <div class="search-pagination" style="padding: 0 1.5rem 1rem;">
                     <input type="text" class="search-box" id="all-interactions-search" placeholder="搜尋內容、機會名稱、記錄人..." value="${query}">
                     <div class="pagination" id="all-interactions-pagination"></div>
+                </div>
+            ` : ''}
+            ${isAuditTab ? `
+                <div class="search-pagination" style="padding: 0 1.5rem 1rem;">
+                    <div class="pagination" id="audit-logs-pagination"></div>
                 </div>
             ` : ''}
             <div id="all-interactions-content" class="widget-content">
@@ -138,6 +144,11 @@ function bindInteractionOverviewControls(query = '') {
             const selectedTab = tabButton.dataset.interactionsTab;
             if (selectedTab === 'crm') {
                 loadAllInteractionsPage(1, currentInteractionOverviewQuery);
+                return;
+            }
+
+            if (selectedTab === 'audit') {
+                loadAuditLogsPage(1);
                 return;
             }
 
@@ -345,6 +356,93 @@ async function saveActivityTimelineDisplaySettings(query = '') {
             }
         }
     }
+}
+
+async function loadAuditLogsPage(page = 1) {
+    const container = document.getElementById('page-interactions');
+    if (!container) return;
+
+    currentInteractionOverviewTab = 'audit';
+
+    container.innerHTML = renderInteractionOverviewShell(currentInteractionOverviewQuery, currentInteractionOverviewTab);
+    bindInteractionOverviewControls(currentInteractionOverviewQuery);
+
+    const content = document.getElementById('all-interactions-content');
+    if (!content) return;
+
+    content.innerHTML = '<div class="loading show"><div class="spinner"></div><p>載入系統稽核紀錄中...</p></div>';
+
+    try {
+        const result = await authedFetch(`/api/audit-logs?page=${page}&limit=50`);
+        const auditLogs = result.data || [];
+
+        content.innerHTML = renderAuditLogsTable(auditLogs);
+
+        const pagination = result.pagination || {
+            current: page,
+            total: 1,
+            totalItems: auditLogs.length,
+            hasNext: false,
+            hasPrev: page > 1
+        };
+
+        renderPagination('audit-logs-pagination', pagination, 'loadAuditLogsPage');
+    } catch (error) {
+        content.innerHTML = `<div class="alert alert-error">載入系統稽核紀錄失敗: ${escapeActivitySettingsHtml(error.message)}</div>`;
+    }
+}
+
+function formatAuditLogDate(value) {
+    if (!value) return '-';
+    if (typeof formatDateTime === 'function') {
+        return formatDateTime(value);
+    }
+    return value;
+}
+
+function renderAuditLogsTable(auditLogs) {
+    if (!auditLogs || auditLogs.length === 0) {
+        return '<div class="alert alert-info" style="text-align:center;">目前沒有系統稽核紀錄</div>';
+    }
+
+    let tableHTML = `<table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>時間</th>
+                                <th>事件</th>
+                                <th>內容</th>
+                                <th>模組</th>
+                                <th>使用者</th>
+                                <th>關聯對象</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+
+    auditLogs.forEach(item => {
+        const eventText = item.eventTitle || item.businessEventType || item.action || '-';
+        const moduleText = item.module || '-';
+        const businessEventType = item.businessEventType && item.businessEventType !== eventText
+            ? `<div style="font-size: 0.85em; opacity: 0.75;">${escapeActivitySettingsHtml(item.businessEventType)}</div>`
+            : '';
+        const actorText = item.actorName && item.actorUsername
+            ? `${item.actorName} (${item.actorUsername})`
+            : (item.actorName || item.actorUsername || '-');
+        const targetText = item.targetLabel || item.targetId || '-';
+
+        tableHTML += `
+            <tr>
+                <td data-label="時間">${escapeActivitySettingsHtml(formatAuditLogDate(item.createdAt))}</td>
+                <td data-label="事件">${escapeActivitySettingsHtml(eventText)}</td>
+                <td data-label="內容" style="white-space: pre-wrap; word-break: break-word;">${escapeActivitySettingsHtml(item.eventSummary || '-')}</td>
+                <td data-label="模組">${escapeActivitySettingsHtml(moduleText)}${businessEventType}</td>
+                <td data-label="使用者">${escapeActivitySettingsHtml(actorText)}</td>
+                <td data-label="關聯對象">${escapeActivitySettingsHtml(targetText)}</td>
+            </tr>
+        `;
+    });
+
+    tableHTML += '</tbody></table>';
+    return tableHTML;
 }
 
 async function loadAllInteractionsPage(page = 1, query = '') {
