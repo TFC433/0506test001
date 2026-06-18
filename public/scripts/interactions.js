@@ -8,6 +8,70 @@
 let currentInteractionOverviewTab = 'crm';
 let currentInteractionOverviewQuery = '';
 
+const ACTIVITY_TIMELINE_PREF_ITEM = 'activity_timeline_enabled_event_types';
+
+const ACTIVITY_TIMELINE_OPTION_GROUPS = [
+    {
+        label: '事件紀錄',
+        options: [
+            { value: 'event_log_created', label: '新增事件紀錄', defaultChecked: true },
+            { value: 'event_log_updated', label: '更新事件紀錄', defaultChecked: false },
+            { value: 'event_log_deleted', label: '刪除事件紀錄', defaultChecked: false },
+            { value: 'event_log_voided', label: '作廢事件紀錄', defaultChecked: false }
+        ]
+    },
+    {
+        label: '機會案件',
+        options: [
+            { value: 'opportunity_created', label: '新增機會', defaultChecked: true },
+            { value: 'opportunity_won', label: '機會成交', defaultChecked: true },
+            { value: 'opportunity_lost', label: '機會失敗', defaultChecked: true },
+            { value: 'opportunity_stage_changed', label: '變更機會階段', defaultChecked: true },
+            { value: 'opportunity_status_changed', label: '變更機會狀態', defaultChecked: true },
+            { value: 'opportunity_assignee_changed', label: '變更機會負責人', defaultChecked: true },
+            { value: 'opportunity_value_changed', label: '變更機會金額', defaultChecked: true },
+            { value: 'opportunity_contact_linked', label: '機會關聯聯絡人', defaultChecked: false },
+            { value: 'opportunity_contact_unlinked', label: '機會移除聯絡人', defaultChecked: false },
+            { value: 'opportunity_updated', label: '更新機會一般欄位', defaultChecked: false },
+            { value: 'opportunity_deleted', label: '刪除機會', defaultChecked: false }
+        ]
+    },
+    {
+        label: '公司資料',
+        options: [
+            { value: 'company_created', label: '新增公司', defaultChecked: true },
+            { value: 'company_updated', label: '更新公司', defaultChecked: false },
+            { value: 'company_deleted', label: '刪除公司', defaultChecked: false }
+        ]
+    },
+    {
+        label: '內部開發',
+        options: [
+            { value: 'dev_project_created', label: '新增開發專案', defaultChecked: true },
+            { value: 'dev_project_completed', label: '完成開發專案', defaultChecked: true },
+            { value: 'dev_project_status_changed', label: '變更開發專案狀態', defaultChecked: true },
+            { value: 'dev_project_owner_changed', label: '變更開發專案負責人', defaultChecked: true },
+            { value: 'dev_project_progress_changed', label: '變更開發專案進度', defaultChecked: false },
+            { value: 'dev_project_archived', label: '封存開發專案', defaultChecked: false },
+            { value: 'dev_project_unarchived', label: '解除封存開發專案', defaultChecked: false },
+            { value: 'dev_project_collaborators_changed', label: '變更協作者', defaultChecked: false },
+            { value: 'dev_project_dates_changed', label: '變更日期', defaultChecked: false },
+            { value: 'dev_project_opportunity_link_changed', label: '變更關聯機會', defaultChecked: false },
+            { value: 'dev_project_parent_changed', label: '變更父層關聯', defaultChecked: false },
+            { value: 'dev_project_updated', label: '編輯開發專案一般欄位', defaultChecked: false },
+            { value: 'dev_project_deleted', label: '刪除開發專案', defaultChecked: false }
+        ]
+    },
+    {
+        label: '訂閱營運',
+        options: [
+            { value: 'subscription_created', label: '新增訂閱項目', defaultChecked: true },
+            { value: 'subscription_archived', label: '封存訂閱項目', defaultChecked: true },
+            { value: 'subscription_updated', label: '更新訂閱項目', defaultChecked: false }
+        ]
+    }
+];
+
 function getNormalizedCurrentRole() {
     return String(localStorage.getItem('crmUserRole') || '').trim().toLowerCase();
 }
@@ -22,7 +86,8 @@ function renderInteractionOverviewTabs(activeTab) {
     const tabs = [
         { id: 'crm', label: 'CRM 互動總覽' },
         { id: 'audit', label: '系統稽核總覽' },
-        { id: 'activity', label: '使用者活動' }
+        { id: 'activity', label: '使用者活動' },
+        { id: 'settings', label: '活動顯示設定' }
     ];
 
     return `
@@ -76,6 +141,11 @@ function bindInteractionOverviewControls(query = '') {
                 return;
             }
 
+            if (selectedTab === 'settings') {
+                renderActivityDisplaySettingsTab(query);
+                return;
+            }
+
             renderInteractionOverviewPlaceholder(selectedTab, query);
         });
     });
@@ -97,6 +167,184 @@ function renderInteractionOverviewPlaceholder(activeTab, query = '') {
         <div class="alert alert-info" style="text-align:center;">${placeholderText}</div>
     `;
     bindInteractionOverviewControls(query);
+}
+
+function escapeActivitySettingsHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function getDefaultActivityTimelineEnabledEventTypes() {
+    return ACTIVITY_TIMELINE_OPTION_GROUPS
+        .flatMap(group => group.options)
+        .filter(option => option.defaultChecked)
+        .map(option => option.value);
+}
+
+function findActivityTimelineSettingRow() {
+    const systemConfig = window.CRM_APP?.systemConfig || {};
+    const groups = Object.values(systemConfig).filter(Array.isArray);
+
+    for (const group of groups) {
+        const row = group.find(item => item && item.value === ACTIVITY_TIMELINE_PREF_ITEM);
+        if (row) return row;
+    }
+
+    return null;
+}
+
+async function ensureActivityTimelineSystemConfig() {
+    const config = window.CRM_APP?.systemConfig || {};
+    const hasConfigArrays = Object.values(config).some(Array.isArray);
+
+    if (!hasConfigArrays && window.CRM_APP && typeof window.CRM_APP.loadConfig === 'function') {
+        try {
+            await window.CRM_APP.loadConfig();
+        } catch (error) {
+            console.warn('[Activity Settings] Failed to load system config:', error);
+        }
+    }
+}
+
+function getSavedActivityTimelineEnabledEventTypes() {
+    const settingRow = findActivityTimelineSettingRow();
+    if (!settingRow || typeof settingRow.note !== 'string') {
+        return getDefaultActivityTimelineEnabledEventTypes();
+    }
+
+    try {
+        const parsed = JSON.parse(settingRow.note);
+        if (Array.isArray(parsed)) {
+            return parsed.filter(item => typeof item === 'string');
+        }
+    } catch (error) {
+        console.warn('[Activity Settings] Invalid saved event type setting:', error);
+    }
+
+    return getDefaultActivityTimelineEnabledEventTypes();
+}
+
+function renderActivityDisplaySettingsContent(enabledEventTypes, message = null) {
+    const enabledSet = new Set(enabledEventTypes);
+    const messageHtml = message
+        ? `<div class="alert ${message.type === 'error' ? 'alert-error' : 'alert-info'}" style="margin-bottom: 1rem;">${escapeActivitySettingsHtml(message.text)}</div>`
+        : '';
+
+    return `
+        <div class="alert alert-info" style="margin-bottom: 1rem;">
+            此設定會決定未來 CRM 活動時間軸可顯示哪些系統事件。本階段只儲存設定，不會改變現有互動總覽資料。
+        </div>
+        ${messageHtml}
+        <div id="activity-display-settings-form">
+            ${ACTIVITY_TIMELINE_OPTION_GROUPS.map(group => `
+                <div class="form-group">
+                    <div class="form-label">${escapeActivitySettingsHtml(group.label)}</div>
+                    <div style="display: grid; gap: 0.5rem;">
+                        ${group.options.map(option => `
+                            <label style="display: flex; align-items: center; gap: 0.5rem;">
+                                <input type="checkbox" name="activity-event-type" value="${escapeActivitySettingsHtml(option.value)}" ${enabledSet.has(option.value) ? 'checked' : ''}>
+                                <span>${escapeActivitySettingsHtml(option.label)}</span>
+                                <code style="font-size: 0.85em;">${escapeActivitySettingsHtml(option.value)}</code>
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+        <div class="action-buttons-container">
+            <button type="button" class="action-btn primary" id="save-activity-settings">儲存設定</button>
+        </div>
+    `;
+}
+
+async function renderActivityDisplaySettingsTab(query = '', message = null) {
+    const container = document.getElementById('page-interactions');
+    if (!container) return;
+
+    currentInteractionOverviewTab = 'settings';
+    currentInteractionOverviewQuery = query;
+
+    container.innerHTML = renderInteractionOverviewShell(query, currentInteractionOverviewTab);
+    bindInteractionOverviewControls(query);
+
+    const content = document.getElementById('all-interactions-content');
+    if (!content) return;
+
+    content.innerHTML = '<div class="loading show"><div class="spinner"></div><p>載入設定中...</p></div>';
+    await ensureActivityTimelineSystemConfig();
+
+    content.innerHTML = renderActivityDisplaySettingsContent(getSavedActivityTimelineEnabledEventTypes(), message);
+    const saveButton = document.getElementById('save-activity-settings');
+    if (saveButton) {
+        saveButton.addEventListener('click', () => saveActivityTimelineDisplaySettings(query));
+    }
+}
+
+function getSelectedActivityTimelineEventTypes() {
+    return Array.from(document.querySelectorAll('input[name="activity-event-type"]:checked'))
+        .map(input => input.value);
+}
+
+function updateLocalActivityTimelineSetting(note) {
+    if (!window.CRM_APP) return;
+    if (!window.CRM_APP.systemConfig) window.CRM_APP.systemConfig = {};
+
+    const existingRow = findActivityTimelineSettingRow();
+    if (existingRow) {
+        existingRow.note = note;
+        return;
+    }
+
+    if (!Array.isArray(window.CRM_APP.systemConfig.SystemPref)) {
+        window.CRM_APP.systemConfig.SystemPref = [];
+    }
+
+    window.CRM_APP.systemConfig.SystemPref.push({
+        value: ACTIVITY_TIMELINE_PREF_ITEM,
+        note,
+        order: 0,
+        category: 'System'
+    });
+}
+
+async function saveActivityTimelineDisplaySettings(query = '') {
+    const saveButton = document.getElementById('save-activity-settings');
+    const enabledEventTypes = getSelectedActivityTimelineEventTypes();
+    const note = JSON.stringify(enabledEventTypes);
+
+    if (saveButton) {
+        saveButton.disabled = true;
+        saveButton.textContent = '儲存中...';
+    }
+
+    try {
+        await authedFetch('/api/config/pref', {
+            method: 'PUT',
+            body: JSON.stringify({
+                item: ACTIVITY_TIMELINE_PREF_ITEM,
+                note
+            })
+        });
+
+        updateLocalActivityTimelineSetting(note);
+        await renderActivityDisplaySettingsTab(query, { type: 'success', text: '活動顯示設定已儲存。' });
+    } catch (error) {
+        const content = document.getElementById('all-interactions-content');
+        if (content) {
+            content.innerHTML = renderActivityDisplaySettingsContent(enabledEventTypes, {
+                type: 'error',
+                text: `儲存失敗：${error.message}`
+            });
+            const retryButton = document.getElementById('save-activity-settings');
+            if (retryButton) {
+                retryButton.addEventListener('click', () => saveActivityTimelineDisplaySettings(query));
+            }
+        }
+    }
 }
 
 async function loadAllInteractionsPage(page = 1, query = '') {
