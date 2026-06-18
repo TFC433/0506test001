@@ -5,33 +5,112 @@
  * @param {number} [page=1] - 要載入的頁碼
  * @param {string} [query=''] - 搜尋關鍵字
  */
-async function loadAllInteractionsPage(page = 1, query = '') {
-    const container = document.getElementById('page-interactions');
-    if (!container) return;
+let currentInteractionOverviewTab = 'crm';
+let currentInteractionOverviewQuery = '';
 
-    // 步驟 1: 渲染頁面基本骨架
-    container.innerHTML = `
+function getNormalizedCurrentRole() {
+    return String(localStorage.getItem('crmUserRole') || '').trim().toLowerCase();
+}
+
+function isCurrentUserSuperAdmin() {
+    return getNormalizedCurrentRole() === 'super_admin';
+}
+
+function renderInteractionOverviewTabs(activeTab) {
+    if (!isCurrentUserSuperAdmin()) return '';
+
+    const tabs = [
+        { id: 'crm', label: 'CRM 互動總覽' },
+        { id: 'audit', label: '系統稽核總覽' },
+        { id: 'activity', label: '使用者活動' }
+    ];
+
+    return `
+        <div class="action-buttons-container" style="margin-bottom: 1rem;">
+            ${tabs.map(tab => {
+                const activeStyle = tab.id === activeTab ? 'border-color: var(--accent-blue); color: var(--text-primary);' : '';
+                return `<button type="button" class="action-btn small secondary" style="${activeStyle}" data-interactions-tab="${tab.id}">${tab.label}</button>`;
+            }).join('')}
+        </div>
+    `;
+}
+
+function renderInteractionOverviewShell(query = '', activeTab = 'crm') {
+    const isCrmTab = activeTab === 'crm';
+
+    return `
         <div class="dashboard-widget">
             <div class="widget-header">
                 <h2 class="widget-title">所有互動紀錄</h2>
             </div>
-            <div class="search-pagination" style="padding: 0 1.5rem 1rem;">
-                <input type="text" class="search-box" id="all-interactions-search" placeholder="搜尋內容、機會名稱、記錄人..." value="${query}">
-                <div class="pagination" id="all-interactions-pagination"></div>
-            </div>
+            ${renderInteractionOverviewTabs(activeTab)}
+            ${isCrmTab ? `
+                <div class="search-pagination" style="padding: 0 1.5rem 1rem;">
+                    <input type="text" class="search-box" id="all-interactions-search" placeholder="搜尋內容、機會名稱、記錄人..." value="${query}">
+                    <div class="pagination" id="all-interactions-pagination"></div>
+                </div>
+            ` : ''}
             <div id="all-interactions-content" class="widget-content">
-                <div class="loading show"><div class="spinner"></div><p>載入互動總覽中...</p></div>
+                ${isCrmTab ? '<div class="loading show"><div class="spinner"></div><p>載入互動總覽中...</p></div>' : ''}
             </div>
         </div>
     `;
+}
+
+function bindInteractionOverviewControls(query = '') {
+    const searchInput = document.getElementById('all-interactions-search');
+    if (searchInput) {
+        searchInput.addEventListener('keyup', (event) => {
+            if (event.key === 'Enter') {
+                const newQuery = event.target.value;
+                loadAllInteractionsPage(1, newQuery);
+            }
+        });
+    }
+
+    document.querySelectorAll('[data-interactions-tab]').forEach(tabButton => {
+        tabButton.addEventListener('click', () => {
+            const selectedTab = tabButton.dataset.interactionsTab;
+            if (selectedTab === 'crm') {
+                loadAllInteractionsPage(1, currentInteractionOverviewQuery);
+                return;
+            }
+
+            renderInteractionOverviewPlaceholder(selectedTab, query);
+        });
+    });
+}
+
+function renderInteractionOverviewPlaceholder(activeTab, query = '') {
+    const container = document.getElementById('page-interactions');
+    if (!container) return;
+
+    currentInteractionOverviewTab = activeTab;
+    currentInteractionOverviewQuery = query;
+
+    const placeholderText = activeTab === 'audit'
+        ? '系統稽核總覽功能將在後續階段建置。'
+        : '使用者登入與活動總覽功能將在後續階段建置。';
+
+    container.innerHTML = renderInteractionOverviewShell(query, activeTab);
+    document.getElementById('all-interactions-content').innerHTML = `
+        <div class="alert alert-info" style="text-align:center;">${placeholderText}</div>
+    `;
+    bindInteractionOverviewControls(query);
+}
+
+async function loadAllInteractionsPage(page = 1, query = '') {
+    const container = document.getElementById('page-interactions');
+    if (!container) return;
+
+    currentInteractionOverviewTab = 'crm';
+    currentInteractionOverviewQuery = query;
+
+    // 步驟 1: 渲染頁面基本骨架
+    container.innerHTML = renderInteractionOverviewShell(query, currentInteractionOverviewTab);
 
     // 綁定搜尋事件
-    document.getElementById('all-interactions-search').addEventListener('keyup', (event) => {
-        if (event.key === 'Enter') {
-            const newQuery = event.target.value;
-            loadAllInteractionsPage(1, newQuery);
-        }
-    });
+    bindInteractionOverviewControls(query);
 
     // 步驟 2: 獲取數據並渲染
     try {
