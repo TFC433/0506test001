@@ -3,8 +3,9 @@ const {
 } = require('../utils/audit-helpers');
 
 class AuditLoggerService {
-    constructor(auditLogSqlWriter) {
+    constructor(auditLogSqlWriter, auditLogSqlReader = null) {
         this.auditLogSqlWriter = auditLogSqlWriter;
+        this.auditLogSqlReader = auditLogSqlReader;
     }
 
     async startUserSession(user = {}, reqMetadata = {}) {
@@ -62,6 +63,14 @@ class AuditLoggerService {
             user_agent: entry.user_agent || entry.userAgent || null,
             created_at: entry.created_at || entry.createdAt || new Date().toISOString()
         });
+    }
+
+    async getAuditLogs(filters = {}) {
+        if (!this.auditLogSqlReader || typeof this.auditLogSqlReader.getAuditLogs !== 'function') {
+            throw new Error('[AuditLoggerService] Audit log reader is not configured.');
+        }
+
+        return this.auditLogSqlReader.getAuditLogs(filters);
     }
 
     _resolveDurationSeconds(logoutTime, options) {

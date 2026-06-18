@@ -49,6 +49,11 @@ router.get('/system/status', (req, res, next) => {
 
 // --- 儀表板路由 ---
 
+// GET /api/audit-logs
+router.get('/audit-logs', requireRole('super_admin'), (req, res, next) => {
+    getController(req).getAuditLogs(req, res, next);
+});
+
 // GET /api/dashboard
 router.get('/dashboard', (req, res, next) => {
     getController(req).getDashboardData(req, res, next);

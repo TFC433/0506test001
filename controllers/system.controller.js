@@ -21,14 +21,25 @@ const SystemService = require('../services/system-service');
 
 const ACTIVITY_TIMELINE_EVENT_TYPES_PREF = 'activity_timeline_enabled_event_types';
 const MAX_ACTIVITY_TIMELINE_PREF_NOTE_LENGTH = 10000;
+const AUDIT_LOG_FILTER_KEYS = [
+    'module',
+    'action',
+    'business_event_type',
+    'target_type',
+    'target_id',
+    'actor_username',
+    'date_from',
+    'date_to'
+];
 
 class SystemController {
     /**
      * @param {SystemService|SystemReader} arg1 - SystemService 或 SystemReader (Legacy)
      * @param {DashboardService|SystemWriter} arg2 - DashboardService 或 SystemWriter (Legacy)
-     * @param {DashboardService} [arg3] - DashboardService (Legacy only)
+     * @param {DashboardService|AuditLoggerService} [arg3] - AuditLoggerService (Service) or DashboardService (Legacy)
+     * @param {AuditLoggerService} [arg4] - AuditLoggerService (Legacy only)
      */
-    constructor(arg1, arg2, arg3) {
+    constructor(arg1, arg2, arg3, arg4) {
         // Duck Typing: 若第一個參數具有 getSystemConfig 方法，判定為 SystemService
         const isService = arg1 && typeof arg1.getSystemConfig === 'function';
 
@@ -36,11 +47,13 @@ class SystemController {
             // 新式注入: (systemService, dashboardService)
             this.systemService = arg1;
             this.dashboardService = arg2;
+            this.auditLoggerService = arg3;
         } else {
             // 舊式注入相容: (systemReader, systemWriter, dashboardService)
             // 內部自行組裝 Service
             this.systemService = new SystemService(arg1, arg2);
             this.dashboardService = arg3;
+            this.auditLoggerService = arg4;
         }
     }
 
@@ -111,6 +124,44 @@ class SystemController {
     };
 
     // --- Dashboard 聚合方法 (維持使用 DashboardService) ---
+
+    // ?? GET /api/audit-logs
+    getAuditLogs = async (req, res) => {
+        try {
+            const page = this._normalizePositiveInt(req.query.page, 1);
+            const limit = Math.min(this._normalizePositiveInt(req.query.limit, 50), 100);
+            const filters = { page, limit };
+
+            AUDIT_LOG_FILTER_KEYS.forEach(key => {
+                if (typeof req.query[key] === 'string' && req.query[key].trim()) {
+                    filters[key] = req.query[key].trim();
+                }
+            });
+
+            const result = await this.auditLoggerService.getAuditLogs(filters);
+            const totalItems = result.totalItems || 0;
+            const total = Math.max(Math.ceil(totalItems / limit), 1);
+
+            res.json({
+                success: true,
+                data: result.data || [],
+                pagination: {
+                    current: page,
+                    total,
+                    totalItems,
+                    hasNext: page < total,
+                    hasPrev: page > 1
+                }
+            });
+        } catch (error) {
+            handleApiError(res, error, 'Get Audit Logs');
+        }
+    };
+
+    _normalizePositiveInt(value, fallback) {
+        const parsed = Number.parseInt(value, 10);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+    }
 
     // 處理 GET /api/dashboard
     getDashboardData = async (req, res) => {
