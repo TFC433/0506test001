@@ -54,6 +54,11 @@ router.get('/audit-logs', requireRole('super_admin'), (req, res, next) => {
     getController(req).getAuditLogs(req, res, next);
 });
 
+// GET /api/activity-timeline
+router.get('/activity-timeline', requireRole('super_admin'), (req, res, next) => {
+    getController(req).getActivityTimeline(req, res, next);
+});
+
 // GET /api/dashboard
 router.get('/dashboard', (req, res, next) => {
     getController(req).getDashboardData(req, res, next);

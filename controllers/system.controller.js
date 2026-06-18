@@ -37,9 +37,10 @@ class SystemController {
      * @param {SystemService|SystemReader} arg1 - SystemService 或 SystemReader (Legacy)
      * @param {DashboardService|SystemWriter} arg2 - DashboardService 或 SystemWriter (Legacy)
      * @param {DashboardService|AuditLoggerService} [arg3] - AuditLoggerService (Service) or DashboardService (Legacy)
-     * @param {AuditLoggerService} [arg4] - AuditLoggerService (Legacy only)
+     * @param {AuditLoggerService|ActivityTimelineService} [arg4] - ActivityTimelineService (Service) or AuditLoggerService (Legacy)
+     * @param {ActivityTimelineService} [arg5] - ActivityTimelineService (Legacy only)
      */
-    constructor(arg1, arg2, arg3, arg4) {
+    constructor(arg1, arg2, arg3, arg4, arg5) {
         // Duck Typing: 若第一個參數具有 getSystemConfig 方法，判定為 SystemService
         const isService = arg1 && typeof arg1.getSystemConfig === 'function';
 
@@ -48,12 +49,14 @@ class SystemController {
             this.systemService = arg1;
             this.dashboardService = arg2;
             this.auditLoggerService = arg3;
+            this.activityTimelineService = arg4;
         } else {
             // 舊式注入相容: (systemReader, systemWriter, dashboardService)
             // 內部自行組裝 Service
             this.systemService = new SystemService(arg1, arg2);
             this.dashboardService = arg3;
             this.auditLoggerService = arg4;
+            this.activityTimelineService = arg5;
         }
     }
 
@@ -155,6 +158,40 @@ class SystemController {
             });
         } catch (error) {
             handleApiError(res, error, 'Get Audit Logs');
+        }
+    };
+
+    // ?? GET /api/activity-timeline
+    getActivityTimeline = async (req, res) => {
+        try {
+            const filters = {
+                page: this._normalizePositiveInt(req.query.page, 1),
+                limit: Math.min(this._normalizePositiveInt(req.query.limit, 50), 100)
+            };
+
+            if (typeof req.query.target_type === 'string' && req.query.target_type.trim()) {
+                filters.target_type = req.query.target_type.trim();
+            }
+
+            if (typeof req.query.target_id === 'string' && req.query.target_id.trim()) {
+                filters.target_id = req.query.target_id.trim();
+            }
+
+            const result = await this.activityTimelineService.getActivityTimeline(filters);
+
+            res.json({
+                success: true,
+                data: result.data || [],
+                pagination: result.pagination || {
+                    current: filters.page,
+                    total: 1,
+                    totalItems: 0,
+                    hasNext: false,
+                    hasPrev: false
+                }
+            });
+        } catch (error) {
+            handleApiError(res, error, 'Get Activity Timeline');
         }
     };
 

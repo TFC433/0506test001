@@ -74,6 +74,7 @@ const SystemService = require('./system-service');
 const InternalOpsService = require('./internal-ops-service');
 const SubscriptionOpsService = require('./subscription-ops-service');
 const AuditLoggerService = require('./audit-logger-service');
+const ActivityTimelineService = require('./activity-timeline-service');
 
 // --- Import Controllers ---
 const AuthController = require('../controllers/auth.controller');
@@ -289,10 +290,15 @@ async function initializeServices() {
             opportunitySqlReader,
             productService
         });
+        const activityTimelineService = new ActivityTimelineService({
+            interactionService,
+            auditLoggerService,
+            systemService
+        });
 
         // 5. Controllers
         const authController = new AuthController(authService);
-        const systemController = new SystemController(systemService, dashboardService, auditLoggerService);
+        const systemController = new SystemController(systemService, dashboardService, auditLoggerService, activityTimelineService);
         const announcementController = new AnnouncementController(announcementService);
         const contactController = new ContactController(contactService, workflowService, contactWriter);
         const companyController = new CompanyController(companyService);
@@ -321,6 +327,7 @@ async function initializeServices() {
             internalOpsService,
             subscriptionOpsService,
             auditLoggerService,
+            activityTimelineService,
             authController,
             systemController,
             announcementController,
