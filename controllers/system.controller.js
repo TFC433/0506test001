@@ -19,6 +19,9 @@ const { handleApiError } = require('../middleware/error.middleware');
 // [New] 引入 SystemService 以支援向後相容的內部實例化
 const SystemService = require('../services/system-service');
 
+const ACTIVITY_TIMELINE_EVENT_TYPES_PREF = 'activity_timeline_enabled_event_types';
+const MAX_ACTIVITY_TIMELINE_PREF_NOTE_LENGTH = 10000;
+
 class SystemController {
     /**
      * @param {SystemService|SystemReader} arg1 - SystemService 或 SystemReader (Legacy)
@@ -48,6 +51,36 @@ class SystemController {
             res.json(config);
         } catch (error) {
             handleApiError(res, error, 'Get Config');
+        }
+    };
+
+    // 處理 PUT /api/config/pref
+    updateSystemPref = async (req, res) => {
+        try {
+            const { item, note } = req.body || {};
+
+            if (item !== ACTIVITY_TIMELINE_EVENT_TYPES_PREF) {
+                return res.status(400).json({ success: false, message: 'Invalid preference item.' });
+            }
+
+            if (typeof note !== 'string') {
+                return res.status(400).json({ success: false, message: 'Invalid preference note.' });
+            }
+
+            if (note.length > MAX_ACTIVITY_TIMELINE_PREF_NOTE_LENGTH) {
+                return res.status(400).json({ success: false, message: 'Preference note is too long.' });
+            }
+
+            const modifier = req.user?.displayName || req.user?.username || req.user?.name || 'System';
+            await this.systemService.updateSystemPref(item, note, modifier);
+
+            res.json({
+                success: true,
+                message: 'System preference updated.',
+                data: { item }
+            });
+        } catch (error) {
+            handleApiError(res, error, 'Update System Pref');
         }
     };
 

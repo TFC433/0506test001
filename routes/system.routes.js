@@ -13,6 +13,7 @@
 
 const express = require('express');
 const router = express.Router();
+const { requireRole } = require('../middleware/role.middleware');
 
 // 輔助函式：動態獲取 Controller
 const getController = (req) => {
@@ -27,6 +28,11 @@ const getController = (req) => {
 // GET /api/config
 router.get('/config', (req, res, next) => {
     getController(req).getSystemConfig(req, res, next);
+});
+
+// PUT /api/config/pref
+router.put('/config/pref', requireRole('super_admin'), (req, res, next) => {
+    getController(req).updateSystemPref(req, res, next);
 });
 
 // 清除快取
