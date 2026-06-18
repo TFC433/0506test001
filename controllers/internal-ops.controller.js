@@ -88,7 +88,10 @@ class InternalOpsController {
     static async createDevProject(req, res, next) {
         try {
             const { internalOpsService } = req.app.get('services');
-            const result = await internalOpsService.createDevProject(req.body);
+            const result = await internalOpsService.createDevProject(
+                req.body,
+                InternalOpsController._buildAuditContext(req)
+            );
             res.status(201).json(result);
         } catch (error) {
             next(error);
@@ -99,7 +102,11 @@ class InternalOpsController {
         try {
             const { internalOpsService } = req.app.get('services');
             const { devId } = req.params;
-            const result = await internalOpsService.updateDevProject(devId, req.body);
+            const result = await internalOpsService.updateDevProject(
+                devId,
+                req.body,
+                InternalOpsController._buildAuditContext(req)
+            );
             res.status(200).json(result);
         } catch (error) {
             next(error);
@@ -110,7 +117,10 @@ class InternalOpsController {
         try {
             const { internalOpsService } = req.app.get('services');
             const { devId } = req.params;
-            const result = await internalOpsService.deleteDevProject(devId);
+            const result = await internalOpsService.deleteDevProject(
+                devId,
+                InternalOpsController._buildAuditContext(req)
+            );
             res.status(200).json(result);
         } catch (error) {
             next(error);
