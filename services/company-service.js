@@ -23,6 +23,28 @@ const COMPANY_FIELD_LABELS = {
     notes: '備註'
 };
 
+const COMPANY_AUDIT_REDACTED_VALUE = '[REDACTED]';
+const COMPANY_AUDIT_MAX_STRING_LENGTH = 200;
+const COMPANY_AUDIT_SENSITIVE_PATTERNS = [
+    'notes',
+    'note',
+    'description',
+    'comment',
+    'detail',
+    'address',
+    'email',
+    'phone',
+    'mobile',
+    'tel',
+    'line',
+    'url',
+    'link',
+    'token',
+    'secret',
+    'raw',
+    'payload'
+];
+
 class CompanyService {
     constructor(
         companyReader, companyWriter, contactReader, contactWriter,
@@ -209,6 +231,23 @@ class CompanyService {
         return Object.keys(changes || {});
     }
 
+    _sanitizeCompanyAuditData(data = {}) {
+        if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+
+        return Object.keys(data).reduce((sanitized, key) => {
+            const value = data[key];
+            const normalizedKey = String(key || '').toLowerCase();
+            const isSensitiveField = COMPANY_AUDIT_SENSITIVE_PATTERNS.some(pattern => normalizedKey.includes(pattern));
+            const isLongString = typeof value === 'string' && value.length > COMPANY_AUDIT_MAX_STRING_LENGTH;
+
+            sanitized[key] = isSensitiveField || isLongString
+                ? COMPANY_AUDIT_REDACTED_VALUE
+                : value;
+
+            return sanitized;
+        }, {});
+    }
+
     _buildCompanyAfterData(beforeData, updateData) {
         return {
             ...beforeData,
@@ -256,7 +295,7 @@ class CompanyService {
             }
             
             if (result && result.success) {
-                const changes = buildChangedFieldsDiff({}, dataToWrite);
+                const changes = buildChangedFieldsDiff({}, this._sanitizeCompanyAuditData(dataToWrite));
                 const changedFields = this._getChangedFields(changes);
                 await this._logCompanyAudit({
                     action: 'create',
@@ -499,7 +538,10 @@ class CompanyService {
 
             if (result && result.success) {
                 const afterData = this._buildCompanyAfterData(companyInfo, updateData);
-                const changes = buildChangedFieldsDiff(companyInfo, afterData);
+                const changes = buildChangedFieldsDiff(
+                    this._sanitizeCompanyAuditData(companyInfo),
+                    this._sanitizeCompanyAuditData(afterData)
+                );
                 const changedFields = this._getChangedFields(changes);
                 await this._logCompanyAudit({
                     action: 'update',
