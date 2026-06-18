@@ -103,6 +103,7 @@ function renderInteractionOverviewTabs(activeTab) {
 function renderInteractionOverviewShell(query = '', activeTab = 'crm') {
     const isCrmTab = activeTab === 'crm';
     const isAuditTab = activeTab === 'audit';
+    const isLegacyCrmTab = isCrmTab && !isCurrentUserSuperAdmin();
 
     return `
         <div class="dashboard-widget">
@@ -112,7 +113,7 @@ function renderInteractionOverviewShell(query = '', activeTab = 'crm') {
             ${renderInteractionOverviewTabs(activeTab)}
             ${isCrmTab ? `
                 <div class="search-pagination" style="padding: 0 1.5rem 1rem;">
-                    <input type="text" class="search-box" id="all-interactions-search" placeholder="搜尋內容、機會名稱、記錄人..." value="${query}">
+                    ${isLegacyCrmTab ? `<input type="text" class="search-box" id="all-interactions-search" placeholder="搜尋內容、機會名稱、記錄人..." value="${query}">` : ''}
                     <div class="pagination" id="all-interactions-pagination"></div>
                 </div>
             ` : ''}
@@ -445,9 +446,130 @@ function renderAuditLogsTable(auditLogs) {
     return tableHTML;
 }
 
+async function loadActivityTimelinePage(page = 1) {
+    const container = document.getElementById('page-interactions');
+    if (!container) return;
+
+    currentInteractionOverviewTab = 'crm';
+
+    container.innerHTML = renderInteractionOverviewShell('', currentInteractionOverviewTab);
+    bindInteractionOverviewControls('');
+
+    const content = document.getElementById('all-interactions-content');
+    if (!content) return;
+
+    content.innerHTML = '<div class="loading show"><div class="spinner"></div><p>載入 CRM 活動時間流中...</p></div>';
+
+    try {
+        const result = await authedFetch(`/api/activity-timeline?page=${page}&limit=50`);
+        const timelineItems = result.data || [];
+
+        content.innerHTML = renderActivityTimelineTable(timelineItems);
+
+        const pagination = result.pagination || {
+            current: page,
+            total: 1,
+            totalItems: timelineItems.length,
+            hasNext: false,
+            hasPrev: page > 1
+        };
+
+        renderPagination('all-interactions-pagination', pagination, 'loadActivityTimelinePage');
+    } catch (error) {
+        content.innerHTML = `<div class="alert alert-error">載入 CRM 活動時間流失敗: ${escapeActivitySettingsHtml(error.message)}</div>`;
+    }
+}
+
+function renderActivityTimelineTable(items) {
+    if (!items || items.length === 0) {
+        return '<div class="alert alert-info" style="text-align:center;">目前沒有 CRM 活動時間流紀錄</div>';
+    }
+
+    let tableHTML = `<table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>時間</th>
+                                <th>關聯對象</th>
+                                <th>事件類型</th>
+                                <th>內容摘要</th>
+                                <th>記錄人</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+
+    items.forEach(item => {
+        const targetHtml = renderActivityTimelineTarget(item);
+        const summaryHtml = item.source === 'interaction'
+            ? renderInteractionSummaryWithEventReportLinks(item.summary || '-')
+            : escapeActivitySettingsHtml(item.summary || '-');
+        const titleText = item.title || item.businessEventType || item.interactionType || item.module || '-';
+        const secondaryText = item.source === 'audit'
+            ? (item.module || item.businessEventType || '')
+            : (item.interactionType || '');
+        const eventHtml = secondaryText && secondaryText !== titleText
+            ? `${escapeActivitySettingsHtml(titleText)}<div style="font-size: 0.85em; opacity: 0.75;">${escapeActivitySettingsHtml(secondaryText)}</div>`
+            : escapeActivitySettingsHtml(titleText);
+        const actorText = item.actorName || item.actorUsername || '-';
+
+        tableHTML += `
+            <tr>
+                <td data-label="時間">${escapeActivitySettingsHtml(formatAuditLogDate(item.time))}</td>
+                <td data-label="關聯對象">${targetHtml}</td>
+                <td data-label="事件類型">${eventHtml}</td>
+                <td data-label="內容摘要" style="white-space: pre-wrap; word-break: break-word;">${summaryHtml}</td>
+                <td data-label="記錄人">${escapeActivitySettingsHtml(actorText)}</td>
+            </tr>
+        `;
+    });
+
+    tableHTML += '</tbody></table>';
+    return tableHTML;
+}
+
+function renderActivityTimelineTarget(item) {
+    const targetText = item.targetLabel || item.targetId || '-';
+
+    if (item.source !== 'interaction') {
+        return escapeActivitySettingsHtml(targetText);
+    }
+
+    if (item.targetType === 'opportunity' && item.targetId) {
+        return `<a href="#" class="text-link" onclick="event.preventDefault(); CRM_APP.navigateTo('opportunity-details', { opportunityId: '${escapeActivitySettingsJsString(item.targetId)}' })">
+                    ${escapeActivitySettingsHtml(targetText)}
+                </a>`;
+    }
+
+    if (item.targetType === 'company' && targetText !== '-') {
+        const encodedCompanyName = encodeURIComponent(item.targetLabel || item.targetId);
+        return `<a href="#" class="text-link" onclick="event.preventDefault(); CRM_APP.navigateTo('company-details', { companyName: '${escapeActivitySettingsJsString(encodedCompanyName)}' })">
+                    ${escapeActivitySettingsHtml(targetText)}
+                </a>`;
+    }
+
+    return escapeActivitySettingsHtml(targetText);
+}
+
+function renderInteractionSummaryWithEventReportLinks(summary) {
+    const escapedSummary = escapeActivitySettingsHtml(summary);
+    const linkRegex = /\[(.*?)\]\(event_log_id=([a-zA-Z0-9]+)\)/g;
+
+    return escapedSummary.replace(linkRegex, (fullMatch, text, eventId) => {
+        const safeEventId = escapeActivitySettingsJsString(eventId);
+        return `<a href="#" class="text-link" onclick="event.preventDefault(); showEventLogReport('${safeEventId}')">${escapeActivitySettingsHtml(text)}</a>`;
+    });
+}
+
+function escapeActivitySettingsJsString(value) {
+    return String(value ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
 async function loadAllInteractionsPage(page = 1, query = '') {
     const container = document.getElementById('page-interactions');
     if (!container) return;
+
+    if (isCurrentUserSuperAdmin()) {
+        return loadActivityTimelinePage(page);
+    }
 
     currentInteractionOverviewTab = 'crm';
     currentInteractionOverviewQuery = query;
@@ -541,3 +663,5 @@ function renderAllInteractionsTable(interactions) {
 if (window.CRM_APP) {
     window.CRM_APP.pageModules.interactions = loadAllInteractionsPage;
 }
+
+window.loadActivityTimelinePage = loadActivityTimelinePage;
