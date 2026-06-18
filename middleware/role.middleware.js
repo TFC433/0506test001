@@ -4,6 +4,20 @@
  * 角色權限檢查中間件
  * @param {Array<string>|string} allowedRoles - 允許的角色 (例如 'admin', ['admin', 'manager'])
  */
+function normalizeRole(role, fallbackRole = '') {
+    return String(role || fallbackRole).trim().toLowerCase();
+}
+
+function getEffectiveRoles(role) {
+    const normalizedRole = normalizeRole(role, 'sales');
+
+    if (normalizedRole === 'super_admin') {
+        return ['super_admin', 'admin'];
+    }
+
+    return [normalizedRole];
+}
+
 exports.requireRole = (allowedRoles) => {
     return (req, res, next) => {
         // 1. 確保使用者已登入 (req.user 存在)
@@ -12,13 +26,15 @@ exports.requireRole = (allowedRoles) => {
         }
 
         // 2. 統一轉為陣列處理
-        const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+        const roles = (Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles]).map(normalizeRole);
 
         // 3. 檢查權限
         // 假設 req.user.role 來自 decoded JWT payload
-        const userRole = req.user.role || 'sales'; // 預設降級為 sales
+        const userRole = normalizeRole(req.user.role, 'sales'); // 預設降級為 sales
 
-        if (roles.includes(userRole)) {
+        const effectiveRoles = getEffectiveRoles(userRole);
+
+        if (roles.some(role => effectiveRoles.includes(role))) {
             next(); // 通行
         } else {
             console.warn(`⛔ [Access Denied] User: ${req.user.username}, Role: ${userRole}, Required: ${roles.join(',')}`);
