@@ -73,6 +73,14 @@ class AuditLoggerService {
         return this.auditLogSqlReader.getAuditLogs(filters);
     }
 
+    async getUserSessions(filters = {}) {
+        if (!this.auditLogSqlReader || typeof this.auditLogSqlReader.getUserSessions !== 'function') {
+            throw new Error('[AuditLoggerService] User session reader is not configured.');
+        }
+
+        return this.auditLogSqlReader.getUserSessions(filters);
+    }
+
     _resolveDurationSeconds(logoutTime, options) {
         const providedDuration = options.durationSeconds !== undefined
             ? options.durationSeconds

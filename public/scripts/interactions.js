@@ -9,9 +9,12 @@ let currentInteractionOverviewTab = 'crm';
 let currentInteractionOverviewQuery = '';
 let activityTimelinePageSize = 50;
 let auditLogsPageSize = 50;
+let userSessionsPageSize = 50;
+let userSessionsPeriodDays = 30;
 
 const ACTIVITY_TIMELINE_PREF_ITEM = 'activity_timeline_enabled_event_types';
 const SUPER_ADMIN_PAGE_SIZE_OPTIONS = [50, 100, 300];
+const USER_SESSION_PERIOD_OPTIONS = [7, 30, 90];
 
 const ACTIVITY_TIMELINE_OPTION_GROUPS = [
     {
@@ -113,9 +116,20 @@ function renderPageSizeQuickButtons(kind, activeSize) {
     `;
 }
 
+function renderUserSessionPeriodButtons(activeDays) {
+    return `
+        <span class="text-muted">&#26399;&#38291;&#65306;</span>
+        ${USER_SESSION_PERIOD_OPTIONS.map(days => {
+            const buttonClass = days === activeDays ? 'lightweight-action-btn is-active' : 'lightweight-action-btn';
+            return `<button type="button" class="${buttonClass}" data-user-sessions-period-days="${days}">${days}&#22825;</button>`;
+        }).join('')}
+    `;
+}
+
 function renderInteractionOverviewShell(query = '', activeTab = 'crm') {
     const isCrmTab = activeTab === 'crm';
     const isAuditTab = activeTab === 'audit';
+    const isActivityTab = activeTab === 'activity';
     const isLegacyCrmTab = isCrmTab && !isCurrentUserSuperAdmin();
 
     return `
@@ -135,6 +149,16 @@ function renderInteractionOverviewShell(query = '', activeTab = 'crm') {
                 <div class="search-pagination" style="padding: 0 1.5rem 1rem;">
                     <div class="lightweight-action-group"><span id="audit-logs-range" class="text-muted"></span>${renderPageSizeQuickButtons('audit-logs', auditLogsPageSize)}</div>
                     <div class="pagination" id="audit-logs-pagination"></div>
+                </div>
+            ` : ''}
+            ${isActivityTab ? `
+                <div class="search-pagination" style="padding: 0 1.5rem 1rem;">
+                    <div class="lightweight-action-group">
+                        <span id="user-sessions-range" class="text-muted"></span>
+                        ${renderPageSizeQuickButtons('user-sessions', userSessionsPageSize)}
+                        ${renderUserSessionPeriodButtons(userSessionsPeriodDays)}
+                    </div>
+                    <div class="pagination" id="user-sessions-pagination"></div>
                 </div>
             ` : ''}
             <div id="all-interactions-content" class="widget-content">
@@ -168,6 +192,11 @@ function bindInteractionOverviewControls(query = '') {
                 return;
             }
 
+            if (selectedTab === 'activity') {
+                loadUserActivityPage(1);
+                return;
+            }
+
             if (selectedTab === 'settings') {
                 renderActivityDisplaySettingsTab(query);
                 return;
@@ -188,6 +217,20 @@ function bindInteractionOverviewControls(query = '') {
         sizeButton.addEventListener('click', () => {
             auditLogsPageSize = Number.parseInt(sizeButton.dataset.auditLogsPageSize, 10) || 50;
             loadAuditLogsPage(1);
+        });
+    });
+
+    document.querySelectorAll('[data-user-sessions-page-size]').forEach(sizeButton => {
+        sizeButton.addEventListener('click', () => {
+            userSessionsPageSize = Number.parseInt(sizeButton.dataset.userSessionsPageSize, 10) || 50;
+            loadUserActivityPage(1);
+        });
+    });
+
+    document.querySelectorAll('[data-user-sessions-period-days]').forEach(periodButton => {
+        periodButton.addEventListener('click', () => {
+            userSessionsPeriodDays = Number.parseInt(periodButton.dataset.userSessionsPeriodDays, 10) || 30;
+            loadUserActivityPage(1);
         });
     });
 }
@@ -497,6 +540,101 @@ function renderAuditLogsTable(auditLogs) {
     return tableHTML;
 }
 
+async function loadUserActivityPage(page = 1) {
+    const container = document.getElementById('page-interactions');
+    if (!container) return;
+
+    currentInteractionOverviewTab = 'activity';
+
+    container.innerHTML = renderInteractionOverviewShell(currentInteractionOverviewQuery, currentInteractionOverviewTab);
+    bindInteractionOverviewControls(currentInteractionOverviewQuery);
+
+    const content = document.getElementById('all-interactions-content');
+    if (!content) return;
+
+    content.innerHTML = '<div class="loading show"><div class="spinner"></div><p>載入使用者活動中...</p></div>';
+
+    try {
+        const result = await authedFetch(`/api/user-sessions?page=${page}&limit=${userSessionsPageSize}&period_days=${userSessionsPeriodDays}`);
+        const sessions = result.data || [];
+        const pagination = result.pagination || {
+            current: page,
+            total: 1,
+            totalItems: sessions.length,
+            hasNext: false,
+            hasPrev: page > 1
+        };
+        const currentPage = pagination.current || page;
+
+        content.innerHTML = renderUserActivityTable(sessions, currentPage, userSessionsPageSize);
+        renderUserSessionsRangeText(currentPage, userSessionsPageSize, pagination.totalItems || 0);
+        renderPagination('user-sessions-pagination', pagination, 'loadUserActivityPage');
+    } catch (error) {
+        content.innerHTML = `<div class="alert alert-error">載入使用者活動失敗，請稍後再試: ${escapeActivitySettingsHtml(error.message)}</div>`;
+    }
+}
+
+function renderUserActivityTable(sessions, page = 1, pageSize = userSessionsPageSize) {
+    if (!sessions || sessions.length === 0) {
+        return '<div class="text-muted">目前沒有使用者 session 活動紀錄</div>';
+    }
+
+    let tableHTML = `<table class="compact-data-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>使用者</th>
+                                <th>角色</th>
+                                <th>登入時間</th>
+                                <th>登出時間</th>
+                                <th>最後活動</th>
+                                <th>狀態</th>
+                                <th>停留時間</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+
+    sessions.forEach((session, index) => {
+        const rowNumber = (page - 1) * pageSize + index + 1;
+        const username = session.username || '-';
+        const displayName = session.displayName || username;
+
+        tableHTML += `
+            <tr>
+                <td data-label="#">${rowNumber}</td>
+                <td data-label="使用者">
+                    <div>${escapeActivitySettingsHtml(displayName)}</div>
+                    <div class="text-muted">${escapeActivitySettingsHtml(username)}</div>
+                </td>
+                <td data-label="角色">${escapeActivitySettingsHtml(session.role || '-')}</td>
+                <td data-label="登入時間">${escapeActivitySettingsHtml(formatAuditLogDate(session.loginTime))}</td>
+                <td data-label="登出時間">${escapeActivitySettingsHtml(session.logoutTime ? formatAuditLogDate(session.logoutTime) : '-')}</td>
+                <td data-label="最後活動">${escapeActivitySettingsHtml(session.lastSeenAt ? formatAuditLogDate(session.lastSeenAt) : '-')}</td>
+                <td data-label="狀態">${escapeActivitySettingsHtml(session.statusLabel || session.status || '-')}</td>
+                <td data-label="停留時間">${escapeActivitySettingsHtml(formatSessionDuration(session.durationSeconds))}</td>
+            </tr>
+        `;
+    });
+
+    tableHTML += '</tbody></table>';
+    return tableHTML;
+}
+
+function formatSessionDuration(seconds) {
+    const normalizedSeconds = Number(seconds);
+    if (!Number.isFinite(normalizedSeconds) || normalizedSeconds < 0) return '-';
+
+    const totalMinutes = Math.floor(normalizedSeconds / 60);
+    if (totalMinutes < 1) return `${Math.floor(normalizedSeconds)}秒`;
+
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+
+    if (hours > 0 && minutes > 0) return `${hours}小時 ${minutes}分`;
+    if (hours > 0) return `${hours}小時`;
+    return `${minutes}分`;
+}
+
 async function loadActivityTimelinePage(page = 1) {
     const container = document.getElementById('page-interactions');
     if (!container) return;
@@ -537,6 +675,10 @@ function renderActivityTimelineRangeText(page, limit, totalItems) {
 
 function renderAuditLogsRangeText(page, limit, totalItems) {
     renderResultRangeText('audit-logs-range', page, limit, totalItems);
+}
+
+function renderUserSessionsRangeText(page, limit, totalItems) {
+    renderResultRangeText('user-sessions-range', page, limit, totalItems);
 }
 
 function renderResultRangeText(elementId, page, limit, totalItems) {
@@ -740,3 +882,4 @@ if (window.CRM_APP) {
 }
 
 window.loadActivityTimelinePage = loadActivityTimelinePage;
+window.loadUserActivityPage = loadUserActivityPage;

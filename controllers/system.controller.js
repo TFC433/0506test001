@@ -21,6 +21,7 @@ const SystemService = require('../services/system-service');
 
 const ACTIVITY_TIMELINE_EVENT_TYPES_PREF = 'activity_timeline_enabled_event_types';
 const MAX_ACTIVITY_TIMELINE_PREF_NOTE_LENGTH = 10000;
+const USER_SESSION_ALLOWED_PERIOD_DAYS = new Set([7, 30, 90]);
 const AUDIT_LOG_FILTER_KEYS = [
     'module',
     'action',
@@ -162,6 +163,34 @@ class SystemController {
     };
 
     // ?? GET /api/activity-timeline
+    getUserSessions = async (req, res) => {
+        try {
+            const page = this._normalizePositiveInt(req.query.page, 1);
+            const limit = Math.min(this._normalizePositiveInt(req.query.limit, 50), 300);
+            const periodDays = this._normalizeUserSessionPeriodDays(req.query.period_days);
+            const filters = { page, limit, periodDays };
+
+            const result = await this.auditLoggerService.getUserSessions(filters);
+            const totalItems = result.totalItems || 0;
+            const total = Math.max(Math.ceil(totalItems / limit), 1);
+
+            res.json({
+                success: true,
+                data: result.data || [],
+                pagination: {
+                    current: page,
+                    total,
+                    totalItems,
+                    hasNext: page < total,
+                    hasPrev: page > 1
+                },
+                period: result.period || null
+            });
+        } catch (error) {
+            handleApiError(res, error, 'Get User Sessions');
+        }
+    };
+
     getActivityTimeline = async (req, res) => {
         try {
             const filters = {
@@ -198,6 +227,11 @@ class SystemController {
     _normalizePositiveInt(value, fallback) {
         const parsed = Number.parseInt(value, 10);
         return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+    }
+
+    _normalizeUserSessionPeriodDays(value) {
+        const parsed = this._normalizePositiveInt(value, 30);
+        return USER_SESSION_ALLOWED_PERIOD_DAYS.has(parsed) ? parsed : 30;
     }
 
     // 處理 GET /api/dashboard
