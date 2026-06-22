@@ -458,16 +458,8 @@ class OpportunityService {
 
             const result = await this.opportunitySqlWriter.createOpportunity(opportunityData, modifier);
             
-            // [Phase A Patch] Create Interaction Log for New Opportunity
             if (result && result.success) {
                 const oppName = opportunityData.opportunityName || '未命名機會';
-                const owner = opportunityData.assignee || modifier || '未指派';
-                await this._logOpportunityInteraction(
-                    result.id,
-                    '建立機會案件',
-                    `建立機會案件「${oppName}」，指派給 ${owner}。`,
-                    modifier
-                );
 
                 if (auditContext.auditLoggerService) {
                     const afterData = {
@@ -783,15 +775,6 @@ class OpportunityService {
 
             const updateResult = await this.opportunitySqlWriter.updateOpportunity(opportunityId, updateData, modifier);
             
-            if (logs.length > 0) {
-                await this._logOpportunityInteraction(
-                    opportunityId,
-                    '更新機會案件',
-                    logs.join('；'),
-                    modifier
-                );
-            }
-
             if (updateResult && updateResult.success && auditContext.auditLoggerService) {
                 const afterData = {
                     ...originalOpportunity,

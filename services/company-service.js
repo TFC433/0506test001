@@ -284,16 +284,6 @@ class CompanyService {
             
             const result = await this.companySqlWriter.createCompany(dataToWrite, modifier);
             
-            // [Phase A Patch] Create Interaction Log for New Company
-            if (result && result.success) {
-                await this._logCompanyInteraction(
-                    companyId,
-                    '建立公司',
-                    `建立公司：「${companyName}」`,
-                    modifier
-                );
-            }
-            
             if (result && result.success) {
                 const changes = buildChangedFieldsDiff({}, this._sanitizeCompanyAuditData(dataToWrite));
                 const changedFields = this._getChangedFields(changes);
@@ -555,9 +545,6 @@ class CompanyService {
                     changedFields
                 }, auditContext);
             }
-            
-            await this._logCompanyInteraction(companyInfo.companyId, '資料更新', `公司資料已更新。`, modifier);
-            
             if (this.companyReader && this.companyReader.invalidateCache) {
                 this.companyReader.invalidateCache('companyList');
             }
