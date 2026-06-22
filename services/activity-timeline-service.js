@@ -1,8 +1,17 @@
 const ACTIVITY_TIMELINE_PREF_ITEM = 'activity_timeline_enabled_event_types';
 const NOISE_INTERACTION_EVENT_TYPES = new Set([
-    '蝟餌絞鈭辣',
-    '蝟餌絞鈭?蝝??',
-    '鈭辣?勗?'
+    '\u7cfb\u7d71\u4e8b\u4ef6', // system event
+    '\u7cfb\u7d71\u4e92\u52d5\u7d00\u9304', // system interaction record
+    '\u4e8b\u4ef6\u5831\u544a' // event report
+]);
+const NOISE_INTERACTION_TITLES = new Set([
+    '\u66f4\u65b0\u4e8b\u4ef6\u5831\u544a', // update event report
+    '\u5efa\u7acb\u4e8b\u4ef6\u5831\u544a', // create event report
+    '\u522a\u9664\u4e8b\u4ef6\u5831\u544a', // delete event report
+    '\u4f5c\u5ee2\u4e8b\u4ef6\u5831\u544a', // void event report
+    '\u66f4\u65b0\u6a5f\u6703\u6848\u4ef6', // update opportunity
+    '\u5efa\u7acb\u6a5f\u6703\u6848\u4ef6', // create opportunity
+    '\u522a\u9664\u6a5f\u6703\u6848\u4ef6' // delete opportunity
 ]);
 
 class ActivityTimelineService {
@@ -24,7 +33,7 @@ class ActivityTimelineService {
         ]);
 
         let interactionItems = (interactionResult.data || [])
-            .filter(item => !NOISE_INTERACTION_EVENT_TYPES.has(item.eventType))
+            .filter(item => !this._isNoiseInteraction(item))
             .map(item => this._mapInteractionToTimelineItem(item))
             .filter(item => this._matchesTargetFilter(item, targetType, targetId));
 
@@ -104,6 +113,24 @@ class ActivityTimelineService {
         };
     }
 
+    _isNoiseInteraction(item = {}) {
+        const candidateTypes = [
+            item.eventType,
+            item.interactionType
+        ].map(value => this._normalizeString(value));
+
+        if (candidateTypes.some(value => NOISE_INTERACTION_EVENT_TYPES.has(value))) {
+            return true;
+        }
+
+        const candidateTitles = [
+            item.eventTitle,
+            item.title
+        ].map(value => this._normalizeString(value));
+
+        return candidateTitles.some(value => NOISE_INTERACTION_TITLES.has(value));
+    }
+
     _mapAuditToTimelineItem(item) {
         return {
             id: item.auditId,
@@ -174,7 +201,7 @@ class ActivityTimelineService {
     }
 
     _normalizeString(value) {
-        return typeof value === 'string' ? value.trim() : '';
+        return String(value || '').trim();
     }
 }
 
