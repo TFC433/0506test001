@@ -824,13 +824,6 @@ class OpportunityService {
             }
 
             const linkResult = await this.opportunitySqlWriter.linkContact(opportunityId, contactToLink.id, modifier);
-            
-            await this._logOpportunityInteraction(
-                opportunityId,
-                '關聯聯絡人',
-                `將聯絡人 "${contactToLink.name}" 關聯至此機會。`,
-                modifier
-            );
 
             if (linkResult && linkResult.success && auditContext.auditLoggerService) {
                 const auditEvent = this._buildOpportunityContactAuditEvent({
@@ -873,15 +866,6 @@ class OpportunityService {
             }
 
             const deleteResult = await this.opportunitySqlWriter.unlinkContact(opportunityId, contactId);
-
-            if (deleteResult.success) {
-                await this._logOpportunityInteraction(
-                    opportunityId,
-                    '解除聯絡人關聯',
-                    `將聯絡人 "${contactName}" 從此機會移除。`,
-                    modifier
-                );
-            }
 
             if (deleteResult && deleteResult.success && auditContext.auditLoggerService) {
                 const auditEvent = this._buildOpportunityContactAuditEvent({
