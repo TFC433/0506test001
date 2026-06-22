@@ -4,14 +4,14 @@ const NOISE_INTERACTION_EVENT_TYPES = new Set([
     '\u7cfb\u7d71\u4e92\u52d5\u7d00\u9304', // system interaction record
     '\u4e8b\u4ef6\u5831\u544a' // event report
 ]);
-const NOISE_INTERACTION_TITLES = new Set([
-    '\u66f4\u65b0\u4e8b\u4ef6\u5831\u544a', // update event report
-    '\u5efa\u7acb\u4e8b\u4ef6\u5831\u544a', // create event report
-    '\u522a\u9664\u4e8b\u4ef6\u5831\u544a', // delete event report
-    '\u4f5c\u5ee2\u4e8b\u4ef6\u5831\u544a', // void event report
-    '\u66f4\u65b0\u6a5f\u6703\u6848\u4ef6', // update opportunity
-    '\u5efa\u7acb\u6a5f\u6703\u6848\u4ef6', // create opportunity
-    '\u522a\u9664\u6a5f\u6703\u6848\u4ef6' // delete opportunity
+const LEGACY_INTERACTION_TITLE_EVENT_TYPES = new Map([
+    ['\u66f4\u65b0\u6a5f\u6703\u6848\u4ef6', 'opportunity_updated'], // update opportunity
+    ['\u5efa\u7acb\u6a5f\u6703\u6848\u4ef6', 'opportunity_created'], // create opportunity
+    ['\u522a\u9664\u6a5f\u6703\u6848\u4ef6', 'opportunity_deleted'], // delete opportunity
+    ['\u66f4\u65b0\u4e8b\u4ef6\u5831\u544a', 'event_log_updated'], // update event report
+    ['\u5efa\u7acb\u4e8b\u4ef6\u5831\u544a', 'event_log_created'], // create event report
+    ['\u522a\u9664\u4e8b\u4ef6\u5831\u544a', 'event_log_deleted'], // delete event report
+    ['\u4f5c\u5ee2\u4e8b\u4ef6\u5831\u544a', 'event_log_voided'] // void event report
 ]);
 
 class ActivityTimelineService {
@@ -33,8 +33,9 @@ class ActivityTimelineService {
         ]);
 
         let interactionItems = (interactionResult.data || [])
-            .filter(item => !this._isNoiseInteraction(item))
-            .map(item => this._mapInteractionToTimelineItem(item))
+            .map(item => this._classifyInteraction(item, enabledEventTypes))
+            .filter(result => result.include)
+            .map(result => this._mapInteractionToTimelineItem(result.item, result.businessEventType))
             .filter(item => this._matchesTargetFilter(item, targetType, targetId));
 
         let auditItems = [];
@@ -90,7 +91,7 @@ class ActivityTimelineService {
         return [];
     }
 
-    _mapInteractionToTimelineItem(item) {
+    _mapInteractionToTimelineItem(item, businessEventType = null) {
         const targetType = item.opportunityId ? 'opportunity' : (item.companyId ? 'company' : '');
         const targetId = item.opportunityId || item.companyId || '';
 
@@ -106,29 +107,53 @@ class ActivityTimelineService {
             targetType,
             targetId,
             targetLabel: item.opportunityName || item.companyName || '',
-            businessEventType: null,
+            businessEventType,
             interactionType: item.interactionType || item.eventType || '',
             module: null,
             link: null
         };
     }
 
-    _isNoiseInteraction(item = {}) {
-        const candidateTypes = [
-            item.eventType,
-            item.interactionType
-        ].map(value => this._normalizeString(value));
+    _classifyInteraction(item = {}, enabledEventTypes = []) {
+        const mappedBusinessEventType = this._getLegacyMappedBusinessEventType(item);
 
-        if (candidateTypes.some(value => NOISE_INTERACTION_EVENT_TYPES.has(value))) {
-            return true;
+        if (mappedBusinessEventType) {
+            return {
+                include: enabledEventTypes.includes(mappedBusinessEventType),
+                item,
+                businessEventType: mappedBusinessEventType
+            };
         }
 
+        if (this._hasNoiseInteractionType(item)) {
+            return { include: false, item, businessEventType: null };
+        }
+
+        return { include: true, item, businessEventType: null };
+    }
+
+    _getLegacyMappedBusinessEventType(item = {}) {
         const candidateTitles = [
             item.eventTitle,
             item.title
         ].map(value => this._normalizeString(value));
 
-        return candidateTitles.some(value => NOISE_INTERACTION_TITLES.has(value));
+        for (const title of candidateTitles) {
+            if (LEGACY_INTERACTION_TITLE_EVENT_TYPES.has(title)) {
+                return LEGACY_INTERACTION_TITLE_EVENT_TYPES.get(title);
+            }
+        }
+
+        return null;
+    }
+
+    _hasNoiseInteractionType(item = {}) {
+        const candidateTypes = [
+            item.eventType,
+            item.interactionType
+        ].map(value => this._normalizeString(value));
+
+        return candidateTypes.some(value => NOISE_INTERACTION_EVENT_TYPES.has(value));
     }
 
     _mapAuditToTimelineItem(item) {
