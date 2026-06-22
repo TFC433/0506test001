@@ -9,6 +9,7 @@
 
 const { google } = require('googleapis');
 const fs = require('fs');
+const https = require('https');
 const path = require('path');
 
 class GoogleClientService {
@@ -18,6 +19,52 @@ class GoogleClientService {
     }
 
     // OAuth認證 (用於Sheets和Calendar)
+    async runOAuthTransportDiagnostic() {
+        const body = 'grant_type=invalid';
+        const options = {
+            hostname: 'oauth2.googleapis.com',
+            path: '/token',
+            method: 'POST',
+            timeout: 8000,
+            headers: {
+                'content-type': 'application/x-www-form-urlencoded',
+                'content-length': Buffer.byteLength(body)
+            }
+        };
+
+        console.log('🧪 [OAuthTransportDiag] Starting bare HTTPS POST test to oauth2.googleapis.com/token');
+
+        return new Promise((resolve) => {
+            const req = https.request(options, (res) => {
+                let responseBody = '';
+
+                res.setEncoding('utf8');
+                res.on('data', (chunk) => {
+                    responseBody += chunk;
+                    if (responseBody.length > 300) {
+                        responseBody = responseBody.slice(0, 300);
+                    }
+                });
+                res.on('end', () => {
+                    console.log(`🧪 [OAuthTransportDiag] status=${res.statusCode} body=${responseBody.slice(0, 300)}`);
+                    resolve();
+                });
+            });
+
+            req.on('timeout', () => {
+                req.destroy(new Error('OAuth transport diagnostic timeout after 8000ms'));
+            });
+
+            req.on('error', (error) => {
+                console.error(`❌ [OAuthTransportDiag] error name=${error.name} code=${error.code || 'unknown'} message=${error.message}`);
+                resolve();
+            });
+
+            req.write(body);
+            req.end();
+        });
+    }
+
     async getOAuthClient() {
         if (this.oauthClient) return this.oauthClient;
 

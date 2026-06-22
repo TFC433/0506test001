@@ -97,6 +97,7 @@ async function initializeServices() {
     try {
         // 1. Infrastructure
         const googleClientService = new GoogleClientService();
+        await googleClientService.runOAuthTransportDiagnostic();
         const sheets = await googleClientService.getSheetsClient();
         const drive = await googleClientService.getDriveClient();
         const calendar = await googleClientService.getCalendarClient();
