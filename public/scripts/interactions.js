@@ -94,8 +94,8 @@ function renderInteractionOverviewTabs(activeTab) {
     return `
         <div class="action-buttons-container" style="margin-bottom: 1rem;">
             ${tabs.map(tab => {
-                const activeStyle = tab.id === activeTab ? 'border-color: var(--accent-blue); color: var(--text-primary);' : '';
-                return `<button type="button" class="action-btn small secondary" style="${activeStyle}" data-interactions-tab="${tab.id}">${tab.label}</button>`;
+                const tabClass = tab.id === activeTab ? 'action-btn small primary' : 'action-btn small secondary';
+                return `<button type="button" class="${tabClass}" data-interactions-tab="${tab.id}">${tab.label}</button>`;
             }).join('')}
         </div>
     `;
@@ -115,7 +115,7 @@ function renderInteractionOverviewShell(query = '', activeTab = 'crm') {
             ${isCrmTab ? `
                 <div class="search-pagination" style="padding: 0 1.5rem 1rem;">
                     ${isLegacyCrmTab ? `<input type="text" class="search-box" id="all-interactions-search" placeholder="搜尋內容、機會名稱、記錄人..." value="${query}">` : ''}
-                    ${isCrmTab && !isLegacyCrmTab ? '<div id="activity-timeline-range" style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 0.5rem;"></div>' : ''}
+                    ${isCrmTab && !isLegacyCrmTab ? '<div id="activity-timeline-range" class="text-muted"></div>' : ''}
                     <div class="pagination" id="all-interactions-pagination"></div>
                 </div>
             ` : ''}
@@ -257,12 +257,12 @@ function renderActivityDisplaySettingsContent(enabledEventTypes, message = null)
             ${ACTIVITY_TIMELINE_OPTION_GROUPS.map(group => `
                 <div class="form-group">
                     <div class="form-label">${escapeActivitySettingsHtml(group.label)}</div>
-                    <div style="display: grid; gap: 0.5rem;">
+                    <div>
                         ${group.options.map(option => `
-                            <label style="display: flex; align-items: center; gap: 0.5rem;">
+                            <label>
                                 <input type="checkbox" name="activity-event-type" value="${escapeActivitySettingsHtml(option.value)}" ${enabledSet.has(option.value) ? 'checked' : ''}>
                                 <span>${escapeActivitySettingsHtml(option.label)}</span>
-                                <code style="font-size: 0.85em;">${escapeActivitySettingsHtml(option.value)}</code>
+                                <code class="text-muted">${escapeActivitySettingsHtml(option.value)}</code>
                             </label>
                         `).join('')}
                     </div>
@@ -270,8 +270,8 @@ function renderActivityDisplaySettingsContent(enabledEventTypes, message = null)
             `).join('')}
         </div>
         <div class="action-buttons-container">
-            <button type="button" class="action-btn secondary small" id="select-all-activity-settings">&#20840;&#36984;</button>
-            <button type="button" class="action-btn secondary small" id="unselect-all-activity-settings">&#21462;&#28040;&#20840;&#36984;</button>
+            <button type="button" class="action-btn small secondary" id="select-all-activity-settings">&#20840;&#36984;</button>
+            <button type="button" class="action-btn small secondary" id="unselect-all-activity-settings">&#21462;&#28040;&#20840;&#36984;</button>
             <button type="button" class="action-btn primary" id="save-activity-settings">儲存設定</button>
         </div>
     `;
@@ -545,7 +545,7 @@ function renderActivityTimelineTable(items, page = 1, limit = ACTIVITY_TIMELINE_
             ? (item.module || item.businessEventType || '')
             : (item.interactionType || '');
         const eventHtml = secondaryText && secondaryText !== titleText
-            ? `${escapeActivitySettingsHtml(titleText)}<div style="font-size: 0.85em; opacity: 0.75;">${escapeActivitySettingsHtml(secondaryText)}</div>`
+            ? `${escapeActivitySettingsHtml(titleText)}<div class="text-muted">${escapeActivitySettingsHtml(secondaryText)}</div>`
             : escapeActivitySettingsHtml(titleText);
         const actorText = item.actorName || item.actorUsername || '-';
         const rowNumber = (page - 1) * limit + rowIndex + 1;
