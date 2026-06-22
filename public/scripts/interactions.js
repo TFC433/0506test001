@@ -9,6 +9,7 @@ let currentInteractionOverviewTab = 'crm';
 let currentInteractionOverviewQuery = '';
 
 const ACTIVITY_TIMELINE_PREF_ITEM = 'activity_timeline_enabled_event_types';
+const ACTIVITY_TIMELINE_PAGE_SIZE = 50;
 
 const ACTIVITY_TIMELINE_OPTION_GROUPS = [
     {
@@ -114,6 +115,7 @@ function renderInteractionOverviewShell(query = '', activeTab = 'crm') {
             ${isCrmTab ? `
                 <div class="search-pagination" style="padding: 0 1.5rem 1rem;">
                     ${isLegacyCrmTab ? `<input type="text" class="search-box" id="all-interactions-search" placeholder="搜尋內容、機會名稱、記錄人..." value="${query}">` : ''}
+                    ${isCrmTab && !isLegacyCrmTab ? '<div id="activity-timeline-range" style="font-size: 0.9em; color: var(--text-secondary); margin-bottom: 0.5rem;"></div>' : ''}
                     <div class="pagination" id="all-interactions-pagination"></div>
                 </div>
             ` : ''}
@@ -248,7 +250,7 @@ function renderActivityDisplaySettingsContent(enabledEventTypes, message = null)
 
     return `
         <div class="alert alert-info" style="margin-bottom: 1rem;">
-            此設定會決定未來 CRM 活動時間軸可顯示哪些系統事件。本階段只儲存設定，不會改變現有互動總覽資料。
+            &#36984;&#25799;&#35201;&#22312; CRM &#27963;&#21205;&#26178;&#38291;&#27969;&#20013;&#39023;&#31034;&#30340;&#31995;&#32113;&#20107;&#20214;&#39006;&#22411;&#12290;&#25163;&#21205;&#20114;&#21205;&#32000;&#37636;&#26371;&#25345;&#32396;&#39023;&#31034;&#65307;&#21462;&#28040;&#21246;&#36984;&#21482;&#26371;&#38577;&#34255;&#23565;&#25033;&#30340;&#31995;&#32113;&#31293;&#26680;&#20107;&#20214;&#12290;
         </div>
         ${messageHtml}
         <div id="activity-display-settings-form">
@@ -268,9 +270,37 @@ function renderActivityDisplaySettingsContent(enabledEventTypes, message = null)
             `).join('')}
         </div>
         <div class="action-buttons-container">
+            <button type="button" class="action-btn secondary small" id="select-all-activity-settings">&#20840;&#36984;</button>
+            <button type="button" class="action-btn secondary small" id="unselect-all-activity-settings">&#21462;&#28040;&#20840;&#36984;</button>
             <button type="button" class="action-btn primary" id="save-activity-settings">儲存設定</button>
         </div>
     `;
+}
+
+function bindActivityDisplaySettingsControls(query = '') {
+    const selectAllButton = document.getElementById('select-all-activity-settings');
+    const unselectAllButton = document.getElementById('unselect-all-activity-settings');
+    const saveButton = document.getElementById('save-activity-settings');
+
+    if (selectAllButton) {
+        selectAllButton.addEventListener('click', () => {
+            document.querySelectorAll('input[name="activity-event-type"]').forEach(input => {
+                input.checked = true;
+            });
+        });
+    }
+
+    if (unselectAllButton) {
+        unselectAllButton.addEventListener('click', () => {
+            document.querySelectorAll('input[name="activity-event-type"]').forEach(input => {
+                input.checked = false;
+            });
+        });
+    }
+
+    if (saveButton) {
+        saveButton.addEventListener('click', () => saveActivityTimelineDisplaySettings(query));
+    }
 }
 
 async function renderActivityDisplaySettingsTab(query = '', message = null) {
@@ -290,10 +320,7 @@ async function renderActivityDisplaySettingsTab(query = '', message = null) {
     await ensureActivityTimelineSystemConfig();
 
     content.innerHTML = renderActivityDisplaySettingsContent(getSavedActivityTimelineEnabledEventTypes(), message);
-    const saveButton = document.getElementById('save-activity-settings');
-    if (saveButton) {
-        saveButton.addEventListener('click', () => saveActivityTimelineDisplaySettings(query));
-    }
+    bindActivityDisplaySettingsControls(query);
 }
 
 function getSelectedActivityTimelineEventTypes() {
@@ -351,10 +378,7 @@ async function saveActivityTimelineDisplaySettings(query = '') {
                 type: 'error',
                 text: `儲存失敗：${error.message}`
             });
-            const retryButton = document.getElementById('save-activity-settings');
-            if (retryButton) {
-                retryButton.addEventListener('click', () => saveActivityTimelineDisplaySettings(query));
-            }
+            bindActivityDisplaySettingsControls(query);
         }
     }
 }
@@ -463,9 +487,6 @@ async function loadActivityTimelinePage(page = 1) {
     try {
         const result = await authedFetch(`/api/activity-timeline?page=${page}&limit=50`);
         const timelineItems = result.data || [];
-
-        content.innerHTML = renderActivityTimelineTable(timelineItems);
-
         const pagination = result.pagination || {
             current: page,
             total: 1,
@@ -473,14 +494,30 @@ async function loadActivityTimelinePage(page = 1) {
             hasNext: false,
             hasPrev: page > 1
         };
+        const currentPage = pagination.current || page;
 
+        content.innerHTML = renderActivityTimelineTable(timelineItems, currentPage, ACTIVITY_TIMELINE_PAGE_SIZE);
+        renderActivityTimelineRangeText(currentPage, ACTIVITY_TIMELINE_PAGE_SIZE, pagination.totalItems || 0);
         renderPagination('all-interactions-pagination', pagination, 'loadActivityTimelinePage');
     } catch (error) {
         content.innerHTML = `<div class="alert alert-error">載入 CRM 活動時間流失敗: ${escapeActivitySettingsHtml(error.message)}</div>`;
     }
 }
 
-function renderActivityTimelineTable(items) {
+function renderActivityTimelineRangeText(page, limit, totalItems) {
+    const rangeElement = document.getElementById('activity-timeline-range');
+    if (!rangeElement) return;
+
+    const total = Number(totalItems) || 0;
+    const start = total === 0 ? 0 : (page - 1) * limit + 1;
+    const end = Math.min(page * limit, total);
+
+    rangeElement.textContent = total === 0
+        ? '\u5171 0 \u7b46'
+        : `\u986f\u793a ${start}-${end} \u7b46\uff0c\u5171 ${total} \u7b46`;
+}
+
+function renderActivityTimelineTable(items, page = 1, limit = ACTIVITY_TIMELINE_PAGE_SIZE) {
     if (!items || items.length === 0) {
         return '<div class="alert alert-info" style="text-align:center;">目前沒有 CRM 活動時間流紀錄</div>';
     }
@@ -488,6 +525,7 @@ function renderActivityTimelineTable(items) {
     let tableHTML = `<table class="data-table">
                         <thead>
                             <tr>
+                                <th>#</th>
                                 <th>時間</th>
                                 <th>關聯對象</th>
                                 <th>事件類型</th>
@@ -497,7 +535,7 @@ function renderActivityTimelineTable(items) {
                         </thead>
                         <tbody>`;
 
-    items.forEach(item => {
+    items.forEach((item, rowIndex) => {
         const targetHtml = renderActivityTimelineTarget(item);
         const summaryHtml = item.source === 'interaction'
             ? renderInteractionSummaryWithEventReportLinks(item.summary || '-')
@@ -510,9 +548,11 @@ function renderActivityTimelineTable(items) {
             ? `${escapeActivitySettingsHtml(titleText)}<div style="font-size: 0.85em; opacity: 0.75;">${escapeActivitySettingsHtml(secondaryText)}</div>`
             : escapeActivitySettingsHtml(titleText);
         const actorText = item.actorName || item.actorUsername || '-';
+        const rowNumber = (page - 1) * limit + rowIndex + 1;
 
         tableHTML += `
             <tr>
+                <td data-label="#">${rowNumber}</td>
                 <td data-label="時間">${escapeActivitySettingsHtml(formatAuditLogDate(item.time))}</td>
                 <td data-label="關聯對象">${targetHtml}</td>
                 <td data-label="事件類型">${eventHtml}</td>
