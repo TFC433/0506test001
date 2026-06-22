@@ -132,7 +132,7 @@ class SystemController {
     getAuditLogs = async (req, res) => {
         try {
             const page = this._normalizePositiveInt(req.query.page, 1);
-            const limit = Math.min(this._normalizePositiveInt(req.query.limit, 50), 100);
+            const limit = Math.min(this._normalizePositiveInt(req.query.limit, 50), 300);
             const filters = { page, limit };
 
             AUDIT_LOG_FILTER_KEYS.forEach(key => {
@@ -166,7 +166,7 @@ class SystemController {
         try {
             const filters = {
                 page: this._normalizePositiveInt(req.query.page, 1),
-                limit: Math.min(this._normalizePositiveInt(req.query.limit, 50), 100)
+                limit: Math.min(this._normalizePositiveInt(req.query.limit, 50), 300)
             };
 
             if (typeof req.query.target_type === 'string' && req.query.target_type.trim()) {

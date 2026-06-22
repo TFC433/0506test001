@@ -131,6 +131,50 @@
     background-color: var(--accent-red); 
 }
 
+.lightweight-action-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+}
+
+.lightweight-action-btn {
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--card-bg);
+    color: var(--text-secondary);
+    padding: 3px 8px;
+    min-height: 24px;
+    height: auto;
+    font-size: 0.76rem;
+    font-weight: 600;
+    line-height: 1.25;
+    box-shadow: none;
+    transform: none;
+    margin: 0;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.lightweight-action-btn:hover {
+    color: var(--text-primary);
+    border-color: color-mix(in srgb, var(--border-color) 70%, var(--text-secondary));
+    background: color-mix(in srgb, var(--primary-bg) 68%, transparent);
+}
+
+.lightweight-action-btn.is-active {
+    color: var(--accent-blue, #2563eb);
+    border-color: color-mix(in srgb, var(--accent-blue, #2563eb) 28%, var(--border-color));
+    background: color-mix(in srgb, var(--accent-blue, #2563eb) 7%, var(--card-bg));
+    font-weight: 600;
+}
+
+.lightweight-action-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
 /* 統計卡片 */
 .stats-grid {
     display: grid;
@@ -303,6 +347,40 @@
 
 .data-table tr:last-child td { 
     border-bottom: none; 
+}
+
+.compact-data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.compact-data-table th {
+    background-color: var(--secondary-bg);
+    font-weight: 600;
+    color: var(--text-secondary);
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border-color);
+    text-align: left;
+    font-size: 0.8rem;
+    letter-spacing: 0;
+    white-space: nowrap;
+}
+
+.compact-data-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border-color);
+    text-align: left;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    vertical-align: middle;
+}
+
+.compact-data-table tr:last-child td {
+    border-bottom: none;
+}
+
+.compact-data-table tr:hover {
+    background-color: var(--glass-bg);
 }
 
 /* ==================== 特殊按鈕樣式 (含動畫與亮色模式優化) ==================== */

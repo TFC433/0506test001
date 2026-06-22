@@ -27,7 +27,7 @@ class AuditLogSqlReader {
     async getAuditLogs(filters = {}) {
         try {
             const page = this._normalizePositiveInt(filters.page, 1);
-            const limit = Math.min(this._normalizePositiveInt(filters.limit, 50), 100);
+            const limit = Math.min(this._normalizePositiveInt(filters.limit, 50), 300);
             const from = (page - 1) * limit;
             const to = from + limit - 1;
 

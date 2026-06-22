@@ -7,9 +7,11 @@
  */
 let currentInteractionOverviewTab = 'crm';
 let currentInteractionOverviewQuery = '';
+let activityTimelinePageSize = 50;
+let auditLogsPageSize = 50;
 
 const ACTIVITY_TIMELINE_PREF_ITEM = 'activity_timeline_enabled_event_types';
-const ACTIVITY_TIMELINE_PAGE_SIZE = 50;
+const SUPER_ADMIN_PAGE_SIZE_OPTIONS = [50, 100, 300];
 
 const ACTIVITY_TIMELINE_OPTION_GROUPS = [
     {
@@ -92,12 +94,22 @@ function renderInteractionOverviewTabs(activeTab) {
     ];
 
     return `
-        <div class="action-buttons-container" style="margin-bottom: 1rem;">
+        <div class="lightweight-action-group">
             ${tabs.map(tab => {
-                const tabClass = tab.id === activeTab ? 'action-btn small primary' : 'action-btn small secondary';
+                const tabClass = tab.id === activeTab ? 'lightweight-action-btn is-active' : 'lightweight-action-btn';
                 return `<button type="button" class="${tabClass}" data-interactions-tab="${tab.id}">${tab.label}</button>`;
             }).join('')}
         </div>
+    `;
+}
+
+function renderPageSizeQuickButtons(kind, activeSize) {
+    return `
+        <span class="text-muted">&#27599;&#38913;&#39023;&#31034;&#65306;</span>
+        ${SUPER_ADMIN_PAGE_SIZE_OPTIONS.map(size => {
+            const buttonClass = size === activeSize ? 'lightweight-action-btn is-active' : 'lightweight-action-btn';
+            return `<button type="button" class="${buttonClass}" data-${kind}-page-size="${size}">${size}</button>`;
+        }).join('')}
     `;
 }
 
@@ -115,12 +127,13 @@ function renderInteractionOverviewShell(query = '', activeTab = 'crm') {
             ${isCrmTab ? `
                 <div class="search-pagination" style="padding: 0 1.5rem 1rem;">
                     ${isLegacyCrmTab ? `<input type="text" class="search-box" id="all-interactions-search" placeholder="搜尋內容、機會名稱、記錄人..." value="${query}">` : ''}
-                    ${isCrmTab && !isLegacyCrmTab ? '<div id="activity-timeline-range" class="text-muted"></div>' : ''}
+                    ${isCrmTab && !isLegacyCrmTab ? `<div class="lightweight-action-group"><span id="activity-timeline-range" class="text-muted"></span>${renderPageSizeQuickButtons('activity-timeline', activityTimelinePageSize)}</div>` : ''}
                     <div class="pagination" id="all-interactions-pagination"></div>
                 </div>
             ` : ''}
             ${isAuditTab ? `
                 <div class="search-pagination" style="padding: 0 1.5rem 1rem;">
+                    <div class="lightweight-action-group"><span id="audit-logs-range" class="text-muted"></span>${renderPageSizeQuickButtons('audit-logs', auditLogsPageSize)}</div>
                     <div class="pagination" id="audit-logs-pagination"></div>
                 </div>
             ` : ''}
@@ -161,6 +174,20 @@ function bindInteractionOverviewControls(query = '') {
             }
 
             renderInteractionOverviewPlaceholder(selectedTab, query);
+        });
+    });
+
+    document.querySelectorAll('[data-activity-timeline-page-size]').forEach(sizeButton => {
+        sizeButton.addEventListener('click', () => {
+            activityTimelinePageSize = Number.parseInt(sizeButton.dataset.activityTimelinePageSize, 10) || 50;
+            loadActivityTimelinePage(1);
+        });
+    });
+
+    document.querySelectorAll('[data-audit-logs-page-size]').forEach(sizeButton => {
+        sizeButton.addEventListener('click', () => {
+            auditLogsPageSize = Number.parseInt(sizeButton.dataset.auditLogsPageSize, 10) || 50;
+            loadAuditLogsPage(1);
         });
     });
 }
@@ -249,30 +276,30 @@ function renderActivityDisplaySettingsContent(enabledEventTypes, message = null)
         : '';
 
     return `
-        <div class="alert alert-info" style="margin-bottom: 1rem;">
-            &#36984;&#25799;&#35201;&#22312; CRM &#27963;&#21205;&#26178;&#38291;&#27969;&#20013;&#39023;&#31034;&#30340;&#31995;&#32113;&#20107;&#20214;&#39006;&#22411;&#12290;&#25163;&#21205;&#20114;&#21205;&#32000;&#37636;&#26371;&#25345;&#32396;&#39023;&#31034;&#65307;&#21462;&#28040;&#21246;&#36984;&#21482;&#26371;&#38577;&#34255;&#23565;&#25033;&#30340;&#31995;&#32113;&#31293;&#26680;&#20107;&#20214;&#12290;
-        </div>
+        <p class="text-muted">&#36984;&#25799;&#35201;&#22312; CRM &#27963;&#21205;&#26178;&#38291;&#27969;&#20013;&#39023;&#31034;&#30340;&#31995;&#32113;&#20107;&#20214;&#985e;&#22411;&#12290;&#25163;&#21205;&#20114;&#21205;&#32000;&#37636;&#26371;&#25345;&#32396;&#39023;&#31034;&#65307;&#21462;&#28040;&#21246;&#36984;&#21482;&#26371;&#38577;&#34255;&#23565;&#25033;&#30340;&#31995;&#32113;&#31293;&#26680;&#20107;&#20214;&#12290;</p>
         ${messageHtml}
+        <div class="lightweight-action-group">
+            <button type="button" class="lightweight-action-btn" id="select-all-activity-settings">&#20840;&#36984;</button>
+            <button type="button" class="lightweight-action-btn" id="unselect-all-activity-settings">&#21462;&#28040;&#20840;&#36984;</button>
+            <button type="button" class="lightweight-action-btn is-active" id="save-activity-settings">&#20786;&#23384;&#35373;&#23450;</button>
+        </div>
         <div id="activity-display-settings-form">
             ${ACTIVITY_TIMELINE_OPTION_GROUPS.map(group => `
                 <div class="form-group">
                     <div class="form-label">${escapeActivitySettingsHtml(group.label)}</div>
                     <div>
                         ${group.options.map(option => `
-                            <label>
-                                <input type="checkbox" name="activity-event-type" value="${escapeActivitySettingsHtml(option.value)}" ${enabledSet.has(option.value) ? 'checked' : ''}>
-                                <span>${escapeActivitySettingsHtml(option.label)}</span>
-                                <code class="text-muted">${escapeActivitySettingsHtml(option.value)}</code>
-                            </label>
+                            <div>
+                                <label>
+                                    <input type="checkbox" name="activity-event-type" value="${escapeActivitySettingsHtml(option.value)}" ${enabledSet.has(option.value) ? 'checked' : ''}>
+                                    <span>${escapeActivitySettingsHtml(option.label)}</span>
+                                    <code class="text-muted">${escapeActivitySettingsHtml(option.value)}</code>
+                                </label>
+                            </div>
                         `).join('')}
                     </div>
                 </div>
             `).join('')}
-        </div>
-        <div class="action-buttons-container">
-            <button type="button" class="action-btn small secondary" id="select-all-activity-settings">&#20840;&#36984;</button>
-            <button type="button" class="action-btn small secondary" id="unselect-all-activity-settings">&#21462;&#28040;&#20840;&#36984;</button>
-            <button type="button" class="action-btn primary" id="save-activity-settings">儲存設定</button>
         </div>
     `;
 }
@@ -398,11 +425,8 @@ async function loadAuditLogsPage(page = 1) {
     content.innerHTML = '<div class="loading show"><div class="spinner"></div><p>載入系統稽核紀錄中...</p></div>';
 
     try {
-        const result = await authedFetch(`/api/audit-logs?page=${page}&limit=50`);
+        const result = await authedFetch(`/api/audit-logs?page=${page}&limit=${auditLogsPageSize}`);
         const auditLogs = result.data || [];
-
-        content.innerHTML = renderAuditLogsTable(auditLogs);
-
         const pagination = result.pagination || {
             current: page,
             total: 1,
@@ -410,7 +434,10 @@ async function loadAuditLogsPage(page = 1) {
             hasNext: false,
             hasPrev: page > 1
         };
+        const currentPage = pagination.current || page;
 
+        content.innerHTML = renderAuditLogsTable(auditLogs);
+        renderAuditLogsRangeText(currentPage, auditLogsPageSize, pagination.totalItems || 0);
         renderPagination('audit-logs-pagination', pagination, 'loadAuditLogsPage');
     } catch (error) {
         content.innerHTML = `<div class="alert alert-error">載入系統稽核紀錄失敗: ${escapeActivitySettingsHtml(error.message)}</div>`;
@@ -427,10 +454,10 @@ function formatAuditLogDate(value) {
 
 function renderAuditLogsTable(auditLogs) {
     if (!auditLogs || auditLogs.length === 0) {
-        return '<div class="alert alert-info" style="text-align:center;">目前沒有系統稽核紀錄</div>';
+        return '<div class="text-muted">目前沒有系統稽核紀錄</div>';
     }
 
-    let tableHTML = `<table class="data-table">
+    let tableHTML = `<table class="compact-data-table">
                         <thead>
                             <tr>
                                 <th>時間</th>
@@ -447,7 +474,7 @@ function renderAuditLogsTable(auditLogs) {
         const eventText = item.eventTitle || item.businessEventType || item.action || '-';
         const moduleText = item.module || '-';
         const businessEventType = item.businessEventType && item.businessEventType !== eventText
-            ? `<div style="font-size: 0.85em; opacity: 0.75;">${escapeActivitySettingsHtml(item.businessEventType)}</div>`
+            ? `<div class="text-muted">${escapeActivitySettingsHtml(item.businessEventType)}</div>`
             : '';
         const actorText = item.actorName && item.actorUsername
             ? `${item.actorName} (${item.actorUsername})`
@@ -485,7 +512,7 @@ async function loadActivityTimelinePage(page = 1) {
     content.innerHTML = '<div class="loading show"><div class="spinner"></div><p>載入 CRM 活動時間流中...</p></div>';
 
     try {
-        const result = await authedFetch(`/api/activity-timeline?page=${page}&limit=50`);
+        const result = await authedFetch(`/api/activity-timeline?page=${page}&limit=${activityTimelinePageSize}`);
         const timelineItems = result.data || [];
         const pagination = result.pagination || {
             current: page,
@@ -496,8 +523,8 @@ async function loadActivityTimelinePage(page = 1) {
         };
         const currentPage = pagination.current || page;
 
-        content.innerHTML = renderActivityTimelineTable(timelineItems, currentPage, ACTIVITY_TIMELINE_PAGE_SIZE);
-        renderActivityTimelineRangeText(currentPage, ACTIVITY_TIMELINE_PAGE_SIZE, pagination.totalItems || 0);
+        content.innerHTML = renderActivityTimelineTable(timelineItems, currentPage, activityTimelinePageSize);
+        renderActivityTimelineRangeText(currentPage, activityTimelinePageSize, pagination.totalItems || 0);
         renderPagination('all-interactions-pagination', pagination, 'loadActivityTimelinePage');
     } catch (error) {
         content.innerHTML = `<div class="alert alert-error">載入 CRM 活動時間流失敗: ${escapeActivitySettingsHtml(error.message)}</div>`;
@@ -505,7 +532,15 @@ async function loadActivityTimelinePage(page = 1) {
 }
 
 function renderActivityTimelineRangeText(page, limit, totalItems) {
-    const rangeElement = document.getElementById('activity-timeline-range');
+    renderResultRangeText('activity-timeline-range', page, limit, totalItems);
+}
+
+function renderAuditLogsRangeText(page, limit, totalItems) {
+    renderResultRangeText('audit-logs-range', page, limit, totalItems);
+}
+
+function renderResultRangeText(elementId, page, limit, totalItems) {
+    const rangeElement = document.getElementById(elementId);
     if (!rangeElement) return;
 
     const total = Number(totalItems) || 0;
@@ -517,12 +552,12 @@ function renderActivityTimelineRangeText(page, limit, totalItems) {
         : `\u986f\u793a ${start}-${end} \u7b46\uff0c\u5171 ${total} \u7b46`;
 }
 
-function renderActivityTimelineTable(items, page = 1, limit = ACTIVITY_TIMELINE_PAGE_SIZE) {
+function renderActivityTimelineTable(items, page = 1, limit = activityTimelinePageSize) {
     if (!items || items.length === 0) {
-        return '<div class="alert alert-info" style="text-align:center;">目前沒有 CRM 活動時間流紀錄</div>';
+        return '<div class="text-muted">目前沒有 CRM 活動時間流紀錄</div>';
     }
 
-    let tableHTML = `<table class="data-table">
+    let tableHTML = `<table class="compact-data-table">
                         <thead>
                             <tr>
                                 <th>#</th>
