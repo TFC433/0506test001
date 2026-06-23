@@ -830,6 +830,88 @@
     line-height: 1.25;
 }
 
+.interactions-compact-theme .interactions-user-activity-table th.user-activity-col-number,
+.interactions-compact-theme .interactions-user-activity-table td.user-activity-col-number {
+    width: 40px;
+    min-width: 40px;
+    max-width: 44px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.interactions-compact-theme .interactions-user-activity-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--surface-color, #ffffff);
+    box-shadow: 0 1px 0 var(--border-color);
+}
+
+.interactions-compact-theme .interactions-user-activity-table th.user-activity-col-user,
+.interactions-compact-theme .interactions-user-activity-table td.user-activity-col-user {
+    width: 12%;
+    min-width: 108px;
+    max-width: 136px;
+    overflow-wrap: anywhere;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.interactions-compact-theme .interactions-user-activity-table .user-activity-col-user .text-muted {
+    display: block;
+    margin-top: 2px;
+}
+
+.interactions-compact-theme .interactions-user-activity-table th.user-activity-col-role,
+.interactions-compact-theme .interactions-user-activity-table td.user-activity-col-role {
+    width: 72px;
+    max-width: 72px;
+    white-space: nowrap;
+}
+
+.interactions-compact-theme .interactions-user-activity-table th.user-activity-col-status,
+.interactions-compact-theme .interactions-user-activity-table td.user-activity-col-status {
+    width: 108px;
+    max-width: 118px;
+    white-space: nowrap;
+}
+
+.interactions-compact-theme .interactions-user-activity-table .user-activity-status-note {
+    margin-top: 3px;
+    white-space: nowrap;
+}
+
+.interactions-compact-theme .interactions-user-activity-table th.user-activity-col-login,
+.interactions-compact-theme .interactions-user-activity-table td.user-activity-col-login,
+.interactions-compact-theme .interactions-user-activity-table th.user-activity-col-last-seen,
+.interactions-compact-theme .interactions-user-activity-table td.user-activity-col-last-seen,
+.interactions-compact-theme .interactions-user-activity-table th.user-activity-col-logout,
+.interactions-compact-theme .interactions-user-activity-table td.user-activity-col-logout {
+    width: 132px;
+    white-space: nowrap;
+    font-size: 12px;
+}
+
+.interactions-compact-theme .interactions-user-activity-table th.user-activity-col-ip,
+.interactions-compact-theme .interactions-user-activity-table td.user-activity-col-ip {
+    width: 112px;
+    max-width: 112px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+}
+
+.interactions-compact-theme .interactions-user-activity-table th.user-activity-col-device,
+.interactions-compact-theme .interactions-user-activity-table td.user-activity-col-device {
+    width: 118px;
+    max-width: 118px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+}
+
 .interactions-compact-theme .interactions-status-badge {
     display: inline-flex;
     align-items: center;

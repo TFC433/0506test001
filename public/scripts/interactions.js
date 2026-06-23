@@ -16,6 +16,7 @@ const ACTIVITY_TIMELINE_PREF_ITEM = 'activity_timeline_enabled_event_types';
 const ACTIVITY_TIMELINE_PAGE_SIZE_OPTIONS = [50, 100];
 const SUPER_ADMIN_PAGE_SIZE_OPTIONS = [50, 100, 300];
 const USER_SESSION_PERIOD_OPTIONS = [7, 30, 90];
+const USER_SESSION_TIMEOUT_HOURS = 8;
 
 const ACTIVITY_TIMELINE_OPTION_GROUPS = [
     {
@@ -161,8 +162,6 @@ function renderInteractionOverviewShell(query = '', activeTab = 'crm') {
                         <span class="interactions-meta-separator">|</span>
                         ${renderPageSizeQuickButtons('user-sessions', userSessionsPageSize)}
                         <span class="interactions-meta-separator">|</span>
-                        ${renderUserSessionPeriodButtons(userSessionsPeriodDays)}
-                        <span class="interactions-meta-separator">|</span>
                     </div>
                     <div class="pagination interactions-pagination" id="user-sessions-pagination"></div>
                 </div>
@@ -233,12 +232,6 @@ function bindInteractionOverviewControls(query = '') {
         });
     });
 
-    document.querySelectorAll('[data-user-sessions-period-days]').forEach(periodButton => {
-        periodButton.addEventListener('click', () => {
-            userSessionsPeriodDays = Number.parseInt(periodButton.dataset.userSessionsPeriodDays, 10) || 30;
-            loadUserActivityPage(1);
-        });
-    });
 }
 
 function renderInteractionOverviewPlaceholder(activeTab, query = '') {
@@ -502,6 +495,123 @@ function formatAuditLogDate(value) {
     return value;
 }
 
+function formatUserActivityDevice(userAgent) {
+    const normalizedUserAgent = String(userAgent || '').trim();
+    if (!normalizedUserAgent) return '-';
+
+    let os = 'Unknown';
+    if (/iPhone|iPod/i.test(normalizedUserAgent)) {
+        os = 'iPhone';
+    } else if (/iPad/i.test(normalizedUserAgent)) {
+        os = 'iOS';
+    } else if (/Android/i.test(normalizedUserAgent)) {
+        os = 'Android';
+    } else if (/Macintosh|Mac OS X/i.test(normalizedUserAgent)) {
+        os = 'Mac';
+    } else if (/Windows/i.test(normalizedUserAgent)) {
+        os = 'Windows';
+    } else if (/Linux/i.test(normalizedUserAgent)) {
+        os = 'Linux';
+    }
+
+    let browser = 'Unknown';
+    if (/Edg\//i.test(normalizedUserAgent)) {
+        browser = 'Edge';
+    } else if (/Firefox\//i.test(normalizedUserAgent)) {
+        browser = 'Firefox';
+    } else if (/Chrome\/|CriOS\//i.test(normalizedUserAgent)) {
+        browser = 'Chrome';
+    } else if (/Safari\//i.test(normalizedUserAgent)) {
+        browser = 'Safari';
+    }
+
+    return `${os} / ${browser}`;
+}
+
+function formatUserActivityDateTime(value) {
+    if (!value) return '-';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '-';
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}`;
+}
+
+function formatUserActivityTime(value) {
+    const formattedDateTime = formatUserActivityDateTime(value);
+    return formattedDateTime === '-' ? '-' : formattedDateTime.slice(-5);
+}
+
+function getUserSessionStatusKey(session) {
+    const status = String(session?.status || '').toLowerCase();
+    if (['active', 'logged_out', 'timeout', 'unknown'].includes(status)) {
+        return status;
+    }
+
+    const statusLabel = String(session?.statusLabel || '').trim();
+    if (statusLabel === '進行中') return 'active';
+    if (statusLabel === '已登出') return 'logged_out';
+    if (statusLabel.includes('逾時')) return 'timeout';
+    return 'unknown';
+}
+
+function formatUserSessionLogoutReason(logoutReason) {
+    const reason = String(logoutReason || '').trim();
+    const reasonLabels = {
+        manual_logout: '手動登出',
+        timeout: '逾時',
+        system: '系統登出',
+        unknown: '未知原因'
+    };
+
+    return reasonLabels[reason] || reason || '';
+}
+
+function formatUserSessionInferredTimeout(lastSeenAt) {
+    if (!lastSeenAt) return '';
+    const lastSeenDate = new Date(lastSeenAt);
+    if (Number.isNaN(lastSeenDate.getTime())) return '';
+
+    const timeoutDate = new Date(lastSeenDate.getTime() + USER_SESSION_TIMEOUT_HOURS * 60 * 60 * 1000);
+    return formatUserActivityDateTime(timeoutDate);
+}
+
+function renderUserSessionStatusCell(session) {
+    const statusKey = getUserSessionStatusKey(session);
+    const statusLabels = {
+        active: '進行中',
+        logged_out: '已登出',
+        timeout: '逾時',
+        unknown: '未知'
+    };
+    const primaryLabel = statusLabels[statusKey] || statusLabels.unknown;
+    let secondaryText = '';
+
+    if (statusKey === 'active' && session.lastSeenAt) {
+        const lastSeenTime = formatUserActivityTime(session.lastSeenAt);
+        if (lastSeenTime !== '-') {
+            secondaryText = `最後活動 ${lastSeenTime}`;
+        }
+    } else if (statusKey === 'logged_out') {
+        secondaryText = formatUserSessionLogoutReason(session.logoutReason);
+    } else if (statusKey === 'timeout') {
+        const inferredTimeout = formatUserSessionInferredTimeout(session.lastSeenAt);
+        secondaryText = inferredTimeout ? `推定逾時 ${inferredTimeout}` : '資料不足判斷';
+    } else {
+        secondaryText = '資料不足判斷';
+    }
+
+    const secondaryHtml = secondaryText
+        ? `<div class="text-muted user-activity-status-note">${escapeActivitySettingsHtml(secondaryText)}</div>`
+        : '';
+
+    return `<span class="interactions-status-badge">${escapeActivitySettingsHtml(primaryLabel)}</span>${secondaryHtml}`;
+}
+
 function renderAuditLogsTable(auditLogs, page = 1, limit = auditLogsPageSize) {
     if (!auditLogs || auditLogs.length === 0) {
         return '<div class="text-muted">目前沒有系統稽核紀錄</div>';
@@ -565,7 +675,7 @@ async function loadUserActivityPage(page = 1) {
     content.innerHTML = '<div class="loading show"><div class="spinner"></div><p>載入使用者活動中...</p></div>';
 
     try {
-        const result = await authedFetch(`/api/user-sessions?page=${page}&limit=${userSessionsPageSize}&period_days=${userSessionsPeriodDays}`);
+        const result = await authedFetch(`/api/user-sessions?page=${page}&limit=${userSessionsPageSize}`);
         const sessions = result.data || [];
         const pagination = result.pagination || {
             current: page,
@@ -593,14 +703,15 @@ function renderUserActivityTable(sessions, page = 1, pageSize = userSessionsPage
     let tableHTML = `<table class="compact-data-table interactions-table interactions-user-activity-table">
                         <thead>
                             <tr>
-                                <th>#</th>
-                                <th>使用者</th>
-                                <th>角色</th>
-                                <th>登入時間</th>
-                                <th>登出時間</th>
-                                <th>最後活動</th>
-                                <th>狀態</th>
-                                <th>停留時間</th>
+                                <th class="user-activity-col-number">#</th>
+                                <th class="user-activity-col-user">使用者</th>
+                                <th class="user-activity-col-role">角色</th>
+                                <th class="user-activity-col-login">登入時間</th>
+                                <th class="user-activity-col-last-seen">最後活動</th>
+                                <th class="user-activity-col-logout">登出時間</th>
+                                <th class="user-activity-col-status">狀態</th>
+                                <th class="user-activity-col-ip">IP</th>
+                                <th class="user-activity-col-device">裝置</th>
                             </tr>
                         </thead>
                         <tbody>`;
@@ -609,20 +720,23 @@ function renderUserActivityTable(sessions, page = 1, pageSize = userSessionsPage
         const rowNumber = (page - 1) * pageSize + index + 1;
         const username = session.username || '-';
         const displayName = session.displayName || username;
+        const deviceText = formatUserActivityDevice(session.userAgent);
+        const userAgentTitle = session.userAgent ? ` title="${escapeActivitySettingsHtml(session.userAgent)}"` : '';
 
         tableHTML += `
             <tr>
-                <td data-label="#">${rowNumber}</td>
-                <td data-label="使用者">
+                <td class="user-activity-col-number" data-label="#">${rowNumber}</td>
+                <td class="user-activity-col-user" data-label="使用者">
                     <div>${escapeActivitySettingsHtml(displayName)}</div>
                     <div class="text-muted">${escapeActivitySettingsHtml(username)}</div>
                 </td>
-                <td data-label="角色">${escapeActivitySettingsHtml(session.role || '-')}</td>
-                <td data-label="登入時間">${escapeActivitySettingsHtml(formatAuditLogDate(session.loginTime))}</td>
-                <td data-label="登出時間">${escapeActivitySettingsHtml(session.logoutTime ? formatAuditLogDate(session.logoutTime) : '-')}</td>
-                <td data-label="最後活動">${escapeActivitySettingsHtml(session.lastSeenAt ? formatAuditLogDate(session.lastSeenAt) : '-')}</td>
-                <td data-label="狀態"><span class="interactions-status-badge">${escapeActivitySettingsHtml(session.statusLabel || session.status || '-')}</span></td>
-                <td data-label="停留時間">${escapeActivitySettingsHtml(formatSessionDuration(session.durationSeconds))}</td>
+                <td class="user-activity-col-role" data-label="角色"><span class="interactions-status-badge">${escapeActivitySettingsHtml(session.role || '-')}</span></td>
+                <td class="user-activity-col-login" data-label="登入時間">${escapeActivitySettingsHtml(formatAuditLogDate(session.loginTime))}</td>
+                <td class="user-activity-col-last-seen" data-label="最後活動">${escapeActivitySettingsHtml(session.lastSeenAt ? formatAuditLogDate(session.lastSeenAt) : '-')}</td>
+                <td class="user-activity-col-logout" data-label="登出時間">${escapeActivitySettingsHtml(session.logoutTime ? formatAuditLogDate(session.logoutTime) : '-')}</td>
+                <td class="user-activity-col-status" data-label="狀態">${renderUserSessionStatusCell(session)}</td>
+                <td class="user-activity-col-ip" data-label="IP">${escapeActivitySettingsHtml(session.ipAddress || '-')}</td>
+                <td class="user-activity-col-device" data-label="裝置"${userAgentTitle}>${escapeActivitySettingsHtml(deviceText)}</td>
             </tr>
         `;
     });
