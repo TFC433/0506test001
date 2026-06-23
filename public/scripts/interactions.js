@@ -135,19 +135,21 @@ function renderInteractionOverviewShell(query = '', activeTab = 'crm') {
     return `
         <div class="dashboard-widget interactions-compact-theme">
             <div class="widget-header">
-                <h2 class="widget-title">所有互動紀錄</h2>
+                <div class="interactions-title-block">
+                    <h2 class="widget-title">所有互動紀錄</h2>
+                </div>
+                ${renderInteractionOverviewTabs(activeTab)}
             </div>
-            ${renderInteractionOverviewTabs(activeTab)}
             ${isCrmTab ? `
                 <div class="search-pagination interactions-toolbar" style="padding: 0 1.5rem 1rem;">
                     ${isLegacyCrmTab ? `<input type="text" class="search-box" id="all-interactions-search" placeholder="搜尋內容、機會名稱、記錄人..." value="${query}">` : ''}
-                    ${isCrmTab && !isLegacyCrmTab ? `<div class="lightweight-action-group interactions-control-group"><span id="activity-timeline-range" class="text-muted interactions-range-text"></span>${renderPageSizeQuickButtons('activity-timeline', activityTimelinePageSize)}</div>` : ''}
+                    ${isCrmTab && !isLegacyCrmTab ? `<div class="lightweight-action-group interactions-control-group"><span id="activity-timeline-range" class="text-muted interactions-range-text"></span><span class="interactions-meta-separator">|</span>${renderPageSizeQuickButtons('activity-timeline', activityTimelinePageSize)}<span class="interactions-meta-separator">|</span></div>` : ''}
                     <div class="pagination interactions-pagination" id="all-interactions-pagination"></div>
                 </div>
             ` : ''}
             ${isAuditTab ? `
                 <div class="search-pagination interactions-toolbar" style="padding: 0 1.5rem 1rem;">
-                    <div class="lightweight-action-group interactions-control-group"><span id="audit-logs-range" class="text-muted interactions-range-text"></span>${renderPageSizeQuickButtons('audit-logs', auditLogsPageSize)}</div>
+                    <div class="lightweight-action-group interactions-control-group"><span id="audit-logs-range" class="text-muted interactions-range-text"></span><span class="interactions-meta-separator">|</span>${renderPageSizeQuickButtons('audit-logs', auditLogsPageSize)}<span class="interactions-meta-separator">|</span></div>
                     <div class="pagination interactions-pagination" id="audit-logs-pagination"></div>
                 </div>
             ` : ''}
@@ -155,8 +157,11 @@ function renderInteractionOverviewShell(query = '', activeTab = 'crm') {
                 <div class="search-pagination interactions-toolbar" style="padding: 0 1.5rem 1rem;">
                     <div class="lightweight-action-group interactions-control-group">
                         <span id="user-sessions-range" class="text-muted interactions-range-text"></span>
+                        <span class="interactions-meta-separator">|</span>
                         ${renderPageSizeQuickButtons('user-sessions', userSessionsPageSize)}
+                        <span class="interactions-meta-separator">|</span>
                         ${renderUserSessionPeriodButtons(userSessionsPeriodDays)}
+                        <span class="interactions-meta-separator">|</span>
                     </div>
                     <div class="pagination interactions-pagination" id="user-sessions-pagination"></div>
                 </div>
@@ -527,7 +532,7 @@ function renderAuditLogsTable(auditLogs) {
         tableHTML += `
             <tr>
                 <td data-label="時間">${escapeActivitySettingsHtml(formatAuditLogDate(item.createdAt))}</td>
-                <td data-label="事件">${escapeActivitySettingsHtml(eventText)}</td>
+                <td data-label="事件"><span class="interactions-status-badge">${escapeActivitySettingsHtml(eventText)}</span></td>
                 <td data-label="內容" style="white-space: pre-wrap; word-break: break-word;">${escapeActivitySettingsHtml(item.eventSummary || '-')}</td>
                 <td data-label="模組">${escapeActivitySettingsHtml(moduleText)}${businessEventType}</td>
                 <td data-label="使用者">${escapeActivitySettingsHtml(actorText)}</td>
@@ -610,7 +615,7 @@ function renderUserActivityTable(sessions, page = 1, pageSize = userSessionsPage
                 <td data-label="登入時間">${escapeActivitySettingsHtml(formatAuditLogDate(session.loginTime))}</td>
                 <td data-label="登出時間">${escapeActivitySettingsHtml(session.logoutTime ? formatAuditLogDate(session.logoutTime) : '-')}</td>
                 <td data-label="最後活動">${escapeActivitySettingsHtml(session.lastSeenAt ? formatAuditLogDate(session.lastSeenAt) : '-')}</td>
-                <td data-label="狀態">${escapeActivitySettingsHtml(session.statusLabel || session.status || '-')}</td>
+                <td data-label="狀態"><span class="interactions-status-badge">${escapeActivitySettingsHtml(session.statusLabel || session.status || '-')}</span></td>
                 <td data-label="停留時間">${escapeActivitySettingsHtml(formatSessionDuration(session.durationSeconds))}</td>
             </tr>
         `;
@@ -722,8 +727,8 @@ function renderActivityTimelineTable(items, page = 1, limit = activityTimelinePa
             ? (item.module || item.businessEventType || '')
             : (item.interactionType || '');
         const eventHtml = secondaryText && secondaryText !== titleText
-            ? `${escapeActivitySettingsHtml(titleText)}<div class="text-muted">${escapeActivitySettingsHtml(secondaryText)}</div>`
-            : escapeActivitySettingsHtml(titleText);
+            ? `<span class="interactions-status-badge">${escapeActivitySettingsHtml(titleText)}</span><div class="text-muted">${escapeActivitySettingsHtml(secondaryText)}</div>`
+            : `<span class="interactions-status-badge">${escapeActivitySettingsHtml(titleText)}</span>`;
         const actorText = item.actorName || item.actorUsername || '-';
         const rowNumber = (page - 1) * limit + rowIndex + 1;
 
@@ -865,7 +870,7 @@ function renderAllInteractionsTable(interactions) {
             <tr>
                 <td data-label="互動時間">${formatDateTime(item.interactionTime)}</td>
                 <td data-label="關聯對象">${opportunityLink}</td>
-                <td data-label="事件類型">${item.eventTitle || item.eventType}</td>
+                <td data-label="事件類型"><span class="interactions-status-badge">${item.eventTitle || item.eventType}</span></td>
                 <td data-label="內容摘要" style="white-space: pre-wrap; word-break: break-word;">${summaryHTML}</td>
                 <td data-label="記錄人">${item.recorder || '-'}</td>
             </tr>
