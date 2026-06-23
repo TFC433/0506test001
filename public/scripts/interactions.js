@@ -486,7 +486,7 @@ async function loadAuditLogsPage(page = 1) {
         const currentPage = pagination.current || page;
         const effectiveLimit = pagination.limit || auditLogsPageSize;
 
-        content.innerHTML = renderAuditLogsTable(auditLogs);
+        content.innerHTML = renderAuditLogsTable(auditLogs, currentPage, effectiveLimit);
         renderAuditLogsRangeText(currentPage, effectiveLimit, pagination.totalItems || 0);
         renderPagination('audit-logs-pagination', pagination, 'loadAuditLogsPage');
     } catch (error) {
@@ -502,7 +502,7 @@ function formatAuditLogDate(value) {
     return value;
 }
 
-function renderAuditLogsTable(auditLogs) {
+function renderAuditLogsTable(auditLogs, page = 1, limit = auditLogsPageSize) {
     if (!auditLogs || auditLogs.length === 0) {
         return '<div class="text-muted">目前沒有系統稽核紀錄</div>';
     }
@@ -510,17 +510,18 @@ function renderAuditLogsTable(auditLogs) {
     let tableHTML = `<table class="compact-data-table interactions-table interactions-audit-table">
                         <thead>
                             <tr>
-                                <th>時間</th>
-                                <th>事件</th>
-                                <th>內容</th>
-                                <th>模組</th>
-                                <th>使用者</th>
-                                <th>關聯對象</th>
+                                <th class="audit-col-number">#</th>
+                                <th class="audit-col-time">時間</th>
+                                <th class="audit-col-target">關聯對象</th>
+                                <th class="audit-col-event">事件類型</th>
+                                <th class="audit-col-summary">內容摘要</th>
+                                <th class="audit-col-module">模組</th>
+                                <th class="audit-col-user">使用者</th>
                             </tr>
                         </thead>
                         <tbody>`;
 
-    auditLogs.forEach(item => {
+    auditLogs.forEach((item, index) => {
         const eventText = item.eventTitle || item.businessEventType || item.action || '-';
         const moduleText = item.module || '-';
         const businessEventType = item.businessEventType && item.businessEventType !== eventText
@@ -530,15 +531,17 @@ function renderAuditLogsTable(auditLogs) {
             ? `${item.actorName} (${item.actorUsername})`
             : (item.actorName || item.actorUsername || '-');
         const targetText = item.targetLabel || item.targetId || '-';
+        const rowNumber = (page - 1) * limit + index + 1;
 
         tableHTML += `
             <tr>
-                <td data-label="時間">${escapeActivitySettingsHtml(formatAuditLogDate(item.createdAt))}</td>
-                <td data-label="事件"><span class="interactions-status-badge">${escapeActivitySettingsHtml(eventText)}</span></td>
-                <td data-label="內容" style="white-space: pre-wrap; word-break: break-word;">${escapeActivitySettingsHtml(item.eventSummary || '-')}</td>
-                <td data-label="模組">${escapeActivitySettingsHtml(moduleText)}${businessEventType}</td>
-                <td data-label="使用者">${escapeActivitySettingsHtml(actorText)}</td>
-                <td data-label="關聯對象">${escapeActivitySettingsHtml(targetText)}</td>
+                <td class="audit-col-number" data-label="#">${rowNumber}</td>
+                <td class="audit-col-time" data-label="時間">${escapeActivitySettingsHtml(formatAuditLogDate(item.createdAt))}</td>
+                <td class="audit-col-target" data-label="關聯對象">${escapeActivitySettingsHtml(targetText)}</td>
+                <td class="audit-col-event" data-label="事件類型"><span class="interactions-status-badge">${escapeActivitySettingsHtml(eventText)}</span></td>
+                <td class="audit-col-summary" data-label="內容摘要" style="white-space: pre-wrap; word-break: break-word;">${escapeActivitySettingsHtml(item.eventSummary || '-')}</td>
+                <td class="audit-col-module" data-label="模組"><span class="interactions-status-badge interactions-module-badge">${escapeActivitySettingsHtml(moduleText)}</span>${businessEventType}</td>
+                <td class="audit-col-user" data-label="使用者">${escapeActivitySettingsHtml(actorText)}</td>
             </tr>
         `;
     });
