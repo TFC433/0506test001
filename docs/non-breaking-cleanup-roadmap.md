@@ -96,6 +96,17 @@ No-touch reminders:
 - `ProductDetailModal` must not be deleted until separately approved.
 - `repomix-packs/**` are generated snapshots and must not be hand-edited.
 
+Google API native transport stabilization:
+
+- Completed stabilization covers OAuth refresh, Google Sheets `values.get`, and Google Calendar `events.list`.
+- Remaining legacy `googleapis` paths are intentionally unchanged:
+  - Calendar write paths such as `events.insert`.
+  - Google Sheets write paths such as append/update.
+  - Metadata reads such as `spreadsheets.get` / `getTabId`.
+  - Diagnostic-only connection tests.
+- Future phases may evaluate native transport for Google API write paths and metadata reads, but only with separate scope because writes have side effects.
+- Do not treat these remnants as emergency bugs unless Render logs show active production failures.
+
 ## 5. Candidate Classification Rules
 
 | Classification | Meaning |

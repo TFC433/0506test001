@@ -119,6 +119,37 @@ Canonical governance reference:
 
 * `docs/audit-session-log-governance.md`
 
+## 8.2 Google API Native Transport Governance
+
+Render production experienced `ERR_STREAM_PREMATURE_CLOSE` / `Premature close` failures when Google APIs were accessed through the `googleapis` / `gaxios` / `node-fetch` request path.
+
+Verified recovery path:
+
+* Node built-in `https` restored OAuth token refresh.
+* Node built-in `https` restored Google Sheets `values.get` reads.
+* Node built-in `https` restored Google Calendar `events.list` reads.
+
+Production read standards:
+
+* OAuth refresh must use the `GoogleClientService` native HTTPS refresh path.
+* Google Sheets `values.get` reads must use `GoogleClientService.getSheetValuesNative()`.
+* Google Calendar `events.list` reads must use `GoogleClientService.getCalendarEventsNative()`.
+* Do not add new direct `googleapis` / `gaxios` Google API read paths for Sheets `values.get` or Calendar `events.list` in Render production flows.
+
+Google Sheet remains part of the long-term architecture. Google Sheet and Supabase are intended to coexist long term; this governance does not remove Google Sheet usage, but standardizes Google API access through the native Google transport layer.
+
+Write-path boundary:
+
+* Google API write paths, such as Calendar `events.insert` and Google Sheets append/update, remain on legacy `googleapis` unless separately scoped and approved.
+* Do not convert write paths as part of read-transport cleanup.
+
+Render smoke-test checklist after deployment:
+
+* OAuth native refresh success log.
+* Native Sheets read success for key ranges.
+* Native Calendar `events.list` success.
+* No `GaxiosError` / `node-fetch` / `ERR_STREAM_PREMATURE_CLOSE` for active read paths.
+
 ## 9. Recommended next actions ranked by safety
 
 1. Documentation review.
