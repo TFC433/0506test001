@@ -42,12 +42,13 @@ class SystemReader extends BaseReader {
         }
 
         try {
-            const response = await this.sheets.spreadsheets.values.get({
-                spreadsheetId: this.targetSpreadsheetId, 
-                range: `${this.config.SHEETS.SYSTEM_CONFIG}!A:I`,
-            });
-            
-            const rows = response.data.values || [];
+            const range = `${this.config.SHEETS.SYSTEM_CONFIG}!A:I`;
+            const rows = this.googleClientService
+                ? await this.googleClientService.getSheetValuesNative(this.targetSpreadsheetId, range)
+                : (await this.sheets.spreadsheets.values.get({
+                    spreadsheetId: this.targetSpreadsheetId,
+                    range,
+                })).data.values || [];
             this.cache[cacheKey] = { data: rows, timestamp: now };
             return rows;
 

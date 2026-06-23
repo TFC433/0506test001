@@ -104,6 +104,7 @@ async function initializeServices() {
         // 2. Readers
         // RAW Keep
         const contactRawReader = new ContactReader(sheets, config.IDS.RAW); 
+        contactRawReader.googleClientService = googleClientService;
         
         // SQL Keep
         const contactSqlReader = new ContactSqlReader();
@@ -113,12 +114,13 @@ async function initializeServices() {
         const eventLogSqlReader = new EventLogSqlReader();
 
         // SYSTEM Keep
-        const weeklyReader = new WeeklyBusinessReader(sheets, config.IDS.CORE);
+        const weeklyReader = new WeeklyBusinessReader(sheets, config.IDS.CORE, googleClientService);
         const weeklySqlReader = new WeeklyBusinessSqlReader();
         const announcementSqlReader = new AnnouncementSqlReader();
         const systemReader = new SystemReader(sheets, config.IDS.SYSTEM, googleClientService);
-        const productReader = new ProductReader(sheets, config.IDS.PRODUCT);
+        const productReader = new ProductReader(sheets, config.IDS.PRODUCT, googleClientService);
         const internalOpsReader = new InternalOpsReader(sheets, config.IDS.INTERNAL_OPS);
+        internalOpsReader.googleClientService = googleClientService;
         const subscriptionOpsSqlReader = new SubscriptionOpsSqlReader();
         const auditLogSqlReader = new AuditLogSqlReader();
 

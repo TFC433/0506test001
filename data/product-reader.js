@@ -15,8 +15,8 @@ class ProductReader extends BaseReader {
      * @param {Object} sheets - Google Sheets API Client
      * @param {string} spreadsheetId - [Required] 指定要讀取的 Sheet ID (應為 PRODUCT_ID)
      */
-    constructor(sheets, spreadsheetId) {
-        super(sheets, spreadsheetId);
+    constructor(sheets, spreadsheetId, googleClientService = null) {
+        super(sheets, spreadsheetId, googleClientService);
         this.cacheKey = 'marketProducts';
     }
 
@@ -55,14 +55,14 @@ class ProductReader extends BaseReader {
         const fetchPromise = (async () => {
             try {
                 // 使用 _executeWithRetry 與 this.targetSpreadsheetId
-                const response = await this._executeWithRetry(() => 
-                    this.sheets.spreadsheets.values.get({
-                        spreadsheetId: this.targetSpreadsheetId, // 使用注入的 ID
-                        range: range,
-                    })
-                );
-
-                const rows = response.data.values || [];
+                const rows = this.googleClientService
+                    ? await this.googleClientService.getSheetValuesNative(this.targetSpreadsheetId, range)
+                    : (await this._executeWithRetry(() =>
+                        this.sheets.spreadsheets.values.get({
+                            spreadsheetId: this.targetSpreadsheetId,
+                            range: range,
+                        })
+                    )).data.values || [];
                 let data = [];
 
                 if (rows.length > 1) {

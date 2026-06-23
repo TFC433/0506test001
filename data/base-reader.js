@@ -195,15 +195,14 @@ class BaseReader {
      */
     async findRowByValue(range, columnIndex, value) {
         try {
-            const response = await this._executeWithRetry(() => 
-                this.sheets.spreadsheets.values.get({
-                    // ★★★ 使用注入的 targetSpreadsheetId ★★★
-                    spreadsheetId: this.targetSpreadsheetId,
-                    range: range,
-                })
-            );
-
-            const rows = response.data.values || [];
+            const rows = this.googleClientService
+                ? await this.googleClientService.getSheetValuesNative(this.targetSpreadsheetId, range)
+                : (await this._executeWithRetry(() =>
+                    this.sheets.spreadsheets.values.get({
+                        spreadsheetId: this.targetSpreadsheetId,
+                        range: range,
+                    })
+                )).data.values || [];
             if (rows.length > 0 && columnIndex >= rows[0].length) return null;
             
             for (let i = 1; i < rows.length; i++) { 

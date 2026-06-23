@@ -19,8 +19,8 @@ class WeeklyBusinessReader extends BaseReader {
      * @param {Object} sheets - Google Sheets API Client
      * @param {string} spreadsheetId - [Required] 指定要讀取的 Sheet ID
      */
-    constructor(sheets, spreadsheetId) {
-        super(sheets, spreadsheetId);
+    constructor(sheets, spreadsheetId, googleClientService = null) {
+        super(sheets, spreadsheetId, googleClientService);
     }
 
     /**
@@ -30,12 +30,12 @@ class WeeklyBusinessReader extends BaseReader {
     async getWeeklySummary() {
         try {
             const range = `${this.config.SHEETS.WEEKLY_BUSINESS}!B:F`;
-            const response = await this.sheets.spreadsheets.values.get({
-                spreadsheetId: this.targetSpreadsheetId,
-                range: range,
-            });
-
-            const rows = response.data.values || [];
+            const rows = this.googleClientService
+                ? await this.googleClientService.getSheetValuesNative(this.targetSpreadsheetId, range)
+                : (await this.sheets.spreadsheets.values.get({
+                    spreadsheetId: this.targetSpreadsheetId,
+                    range: range,
+                })).data.values || [];
             if (rows.length <= 1) return [];
 
             return rows.slice(1).map(row => ({
