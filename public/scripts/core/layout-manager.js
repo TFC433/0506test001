@@ -185,7 +185,8 @@ const LayoutManager = {
     },
 
     injectAdminFeatures() {
-        if (this.currentUserRole !== 'admin') return;
+        const adminLevelRoles = ['admin', 'super_admin'];
+        if (!adminLevelRoles.includes(this.currentUserRole)) return;
 
         const sidebarNav = document.querySelector('.sidebar-nav ul') || document.querySelector('.sidebar-menu');
         if (!sidebarNav) return;

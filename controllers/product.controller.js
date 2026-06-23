@@ -11,6 +11,8 @@
 
 const config = require('../config');
 
+const ADMIN_LEVEL_ROLES = new Set(['admin', 'super_admin']);
+
 class ProductController {
     /**
      * @param {ProductService} productService - 注入的服務實例
@@ -26,7 +28,7 @@ class ProductController {
     async getProducts(req, res) {
         try {
             // 權限檢查 (Controller 職責)
-            if (req.user.role !== 'admin') {
+            if (!ADMIN_LEVEL_ROLES.has(req.user.role)) {
                 return res.status(403).json({ success: false, error: config.ERROR_MESSAGES.ADMIN_ONLY });
             }
 
@@ -60,7 +62,7 @@ class ProductController {
      */
     async refresh(req, res) {
         try {
-            if (req.user.role !== 'admin') {
+            if (!ADMIN_LEVEL_ROLES.has(req.user.role)) {
                 return res.status(403).json({ success: false, error: 'Forbidden' });
             }
             await this.productService.refreshCache();
@@ -76,7 +78,7 @@ class ProductController {
      */
     async batchUpdate(req, res) {
         try {
-            if (req.user.role !== 'admin') {
+            if (!ADMIN_LEVEL_ROLES.has(req.user.role)) {
                 return res.status(403).json({ success: false, error: '權限不足' });
             }
             const { products } = req.body;
@@ -108,7 +110,7 @@ class ProductController {
      */
     async saveCategoryOrder(req, res) {
         try {
-            if (req.user.role !== 'admin') return res.status(403).json({ success: false, error: '權限不足' });
+            if (!ADMIN_LEVEL_ROLES.has(req.user.role)) return res.status(403).json({ success: false, error: '權限不足' });
             
             const { order } = req.body;
             await this.productService.saveCategoryOrder(order, req.user);
