@@ -623,12 +623,27 @@
     align-items: center;
     justify-content: flex-end;
     gap: 5px;
+    margin-top: 0 !important;
     flex-wrap: wrap;
 }
 
+.interactions-compact-theme .interactions-pagination .pagination,
+.interactions-compact-theme .interactions-pagination .pagination-wrap {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 5px !important;
+    margin-top: 0 !important;
+}
+
+.interactions-compact-theme .interactions-pagination .pagination-btn,
 .interactions-compact-theme .interactions-pagination button,
 .interactions-compact-theme .interactions-pagination .page-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     min-height: 24px;
+    height: 24px;
     padding: 3px 8px;
     border: 1px solid color-mix(in srgb, var(--border-color) 85%, var(--text-muted));
     border-radius: 6px;
@@ -636,14 +651,36 @@
     color: var(--text-secondary);
     font-size: 12px;
     line-height: 1.2;
+    font-weight: 500;
+    vertical-align: middle;
 }
 
+.interactions-compact-theme .interactions-pagination .pagination-btn:hover:not(:disabled),
+.interactions-compact-theme .interactions-pagination button:hover:not(:disabled),
+.interactions-compact-theme .interactions-pagination .page-btn:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--accent-blue) 35%, var(--border-color));
+    background: color-mix(in srgb, var(--accent-blue) 7%, var(--primary-bg));
+    color: var(--accent-blue);
+}
+
+.interactions-compact-theme .interactions-pagination .pagination-btn:disabled,
 .interactions-compact-theme .interactions-pagination button:disabled,
 .interactions-compact-theme .interactions-pagination .page-btn:disabled,
 .interactions-compact-theme .interactions-pagination .disabled {
     opacity: 0.55;
     background: transparent;
     color: var(--text-muted);
+    border-color: var(--border-color);
+    cursor: not-allowed;
+}
+
+.interactions-compact-theme .interactions-pagination .pagination-info {
+    color: var(--text-muted);
+    font-size: 12px;
+    line-height: 24px;
+    margin: 0 3px;
+    white-space: nowrap;
+    vertical-align: middle;
 }
 
 .interactions-compact-theme .interactions-table {
