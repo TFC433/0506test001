@@ -152,6 +152,7 @@ class SystemController {
                 pagination: {
                     current: page,
                     total,
+                    limit,
                     totalItems,
                     hasNext: page < total,
                     hasPrev: page > 1
@@ -180,6 +181,7 @@ class SystemController {
                 pagination: {
                     current: page,
                     total,
+                    limit,
                     totalItems,
                     hasNext: page < total,
                     hasPrev: page > 1
@@ -214,6 +216,7 @@ class SystemController {
                 pagination: result.pagination || {
                     current: filters.page,
                     total: 1,
+                    limit: Math.min(filters.limit, 100),
                     totalItems: 0,
                     hasNext: false,
                     hasPrev: false

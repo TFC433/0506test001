@@ -58,6 +58,7 @@ class ActivityTimelineService {
             pagination: {
                 current: page,
                 total,
+                limit,
                 totalItems,
                 hasNext: page < total,
                 hasPrev: page > 1

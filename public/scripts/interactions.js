@@ -13,6 +13,7 @@ let userSessionsPageSize = 50;
 let userSessionsPeriodDays = 30;
 
 const ACTIVITY_TIMELINE_PREF_ITEM = 'activity_timeline_enabled_event_types';
+const ACTIVITY_TIMELINE_PAGE_SIZE_OPTIONS = [50, 100];
 const SUPER_ADMIN_PAGE_SIZE_OPTIONS = [50, 100, 300];
 const USER_SESSION_PERIOD_OPTIONS = [7, 30, 90];
 
@@ -106,10 +107,10 @@ function renderInteractionOverviewTabs(activeTab) {
     `;
 }
 
-function renderPageSizeQuickButtons(kind, activeSize) {
+function renderPageSizeQuickButtons(kind, activeSize, options = SUPER_ADMIN_PAGE_SIZE_OPTIONS) {
     return `
         <span class="text-muted interactions-control-label">&#27599;&#38913;&#39023;&#31034;&#65306;</span>
-        ${SUPER_ADMIN_PAGE_SIZE_OPTIONS.map(size => {
+        ${options.map(size => {
             const buttonClass = size === activeSize ? 'lightweight-action-btn interactions-size-btn is-active' : 'lightweight-action-btn interactions-size-btn';
             return `<button type="button" class="${buttonClass}" data-${kind}-page-size="${size}">${size}</button>`;
         }).join('')}
@@ -143,7 +144,7 @@ function renderInteractionOverviewShell(query = '', activeTab = 'crm') {
             ${isCrmTab ? `
                 <div class="search-pagination interactions-toolbar" style="padding: 0 1.5rem 1rem;">
                     ${isLegacyCrmTab ? `<input type="text" class="search-box" id="all-interactions-search" placeholder="搜尋內容、機會名稱、記錄人..." value="${query}">` : ''}
-                    ${isCrmTab && !isLegacyCrmTab ? `<div class="lightweight-action-group interactions-control-group"><span id="activity-timeline-range" class="text-muted interactions-range-text"></span><span class="interactions-meta-separator">|</span>${renderPageSizeQuickButtons('activity-timeline', activityTimelinePageSize)}<span class="interactions-meta-separator">|</span></div>` : ''}
+                    ${isCrmTab && !isLegacyCrmTab ? `<div class="lightweight-action-group interactions-control-group"><span id="activity-timeline-range" class="text-muted interactions-range-text"></span><span class="interactions-meta-separator">|</span>${renderPageSizeQuickButtons('activity-timeline', activityTimelinePageSize, ACTIVITY_TIMELINE_PAGE_SIZE_OPTIONS)}<span class="interactions-meta-separator">|</span></div>` : ''}
                     <div class="pagination interactions-pagination" id="all-interactions-pagination"></div>
                 </div>
             ` : ''}
@@ -483,9 +484,10 @@ async function loadAuditLogsPage(page = 1) {
             hasPrev: page > 1
         };
         const currentPage = pagination.current || page;
+        const effectiveLimit = pagination.limit || auditLogsPageSize;
 
         content.innerHTML = renderAuditLogsTable(auditLogs);
-        renderAuditLogsRangeText(currentPage, auditLogsPageSize, pagination.totalItems || 0);
+        renderAuditLogsRangeText(currentPage, effectiveLimit, pagination.totalItems || 0);
         renderPagination('audit-logs-pagination', pagination, 'loadAuditLogsPage');
     } catch (error) {
         content.innerHTML = `<div class="alert alert-error">載入系統稽核紀錄失敗: ${escapeActivitySettingsHtml(error.message)}</div>`;
@@ -570,9 +572,10 @@ async function loadUserActivityPage(page = 1) {
             hasPrev: page > 1
         };
         const currentPage = pagination.current || page;
+        const effectiveLimit = pagination.limit || userSessionsPageSize;
 
-        content.innerHTML = renderUserActivityTable(sessions, currentPage, userSessionsPageSize);
-        renderUserSessionsRangeText(currentPage, userSessionsPageSize, pagination.totalItems || 0);
+        content.innerHTML = renderUserActivityTable(sessions, currentPage, effectiveLimit);
+        renderUserSessionsRangeText(currentPage, effectiveLimit, pagination.totalItems || 0);
         renderPagination('user-sessions-pagination', pagination, 'loadUserActivityPage');
     } catch (error) {
         content.innerHTML = `<div class="alert alert-error">載入使用者活動失敗，請稍後再試: ${escapeActivitySettingsHtml(error.message)}</div>`;
@@ -665,9 +668,10 @@ async function loadActivityTimelinePage(page = 1) {
             hasPrev: page > 1
         };
         const currentPage = pagination.current || page;
+        const effectiveLimit = pagination.limit || activityTimelinePageSize;
 
-        content.innerHTML = renderActivityTimelineTable(timelineItems, currentPage, activityTimelinePageSize);
-        renderActivityTimelineRangeText(currentPage, activityTimelinePageSize, pagination.totalItems || 0);
+        content.innerHTML = renderActivityTimelineTable(timelineItems, currentPage, effectiveLimit);
+        renderActivityTimelineRangeText(currentPage, effectiveLimit, pagination.totalItems || 0);
         renderPagination('all-interactions-pagination', pagination, 'loadActivityTimelinePage');
     } catch (error) {
         content.innerHTML = `<div class="alert alert-error">載入 CRM 活動時間流失敗: ${escapeActivitySettingsHtml(error.message)}</div>`;
