@@ -145,7 +145,7 @@ async function initializeServices() {
         const auditLogSqlWriter = new AuditLogSqlWriter();
 
         // 4. Domain Services
-        const calendarService = new CalendarService(calendar);
+        const calendarService = new CalendarService(calendar, googleClientService);
         const auditLoggerService = new AuditLoggerService(auditLogSqlWriter, auditLogSqlReader);
         const authService = new AuthService(systemReader, systemWriter, auditLoggerService);
 

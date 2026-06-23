@@ -13,10 +13,11 @@ class CalendarService {
     /**
      * @param {Object} calendarClient - 已認證的 Google Calendar API 實例
      */
-    constructor(calendarClient) {
+    constructor(calendarClient, googleClientService = null) {
         if (!calendarClient) throw new Error('CalendarService 初始化失敗：需要 calendarClient');
         
         this.calendar = calendarClient;
+        this.googleClientService = googleClientService;
         this.config = config;
         this.holidayCalendarId = 'zh-TW.taiwan#holiday@group.v.calendar.google.com';
 
@@ -61,20 +62,27 @@ class CalendarService {
      */
     async getEventsForPeriod(startDate, endDate, calendarId = 'primary') {
         try {
-            const response = await this._executeWithRetry(() => 
+            if (this.googleClientService) {
+                return await this.googleClientService.getCalendarEventsNative(
+                    calendarId,
+                    startDate.toISOString(),
+                    endDate.toISOString()
+                );
+            }
+
+            const response = await this._executeWithRetry(() =>
                 this.calendar.events.list({
                     calendarId: calendarId,
                     timeMin: startDate.toISOString(),
                     timeMax: endDate.toISOString(),
-                    singleEvents: true, // 展開循環事件
+                    singleEvents: true,
                     orderBy: 'startTime',
                 })
             );
 
             return response.data.items || [];
         } catch (error) {
-            console.error(`❌ [CalendarService] 讀取期間活動失敗 (${calendarId}):`, error.message);
-            // 回傳空陣列避免業務層崩潰
+            console.error(`[CalendarService] Failed to read calendar events (${calendarId}):`, error.message);
             return [];
         }
     }
@@ -149,20 +157,26 @@ class CalendarService {
      */
     async getHolidaysForPeriod(startDate, endDate) {
         try {
-            const response = await this._executeWithRetry(() => 
-                this.calendar.events.list({
-                    calendarId: this.holidayCalendarId,
-                    timeMin: startDate.toISOString(),
-                    timeMax: endDate.toISOString(),
-                    singleEvents: true,
-                    orderBy: 'startTime',
-                })
-            );
+            const items = this.googleClientService
+                ? await this.googleClientService.getCalendarEventsNative(
+                    this.holidayCalendarId,
+                    startDate.toISOString(),
+                    endDate.toISOString()
+                )
+                : (await this._executeWithRetry(() =>
+                    this.calendar.events.list({
+                        calendarId: this.holidayCalendarId,
+                        timeMin: startDate.toISOString(),
+                        timeMax: endDate.toISOString(),
+                        singleEvents: true,
+                        orderBy: 'startTime',
+                    })
+                )).data.items || [];
 
             const holidays = new Map();
-            if (response.data.items) {
-                response.data.items.forEach(event => {
-                    const holidayDate = event.start.date; 
+            if (items) {
+                items.forEach(event => {
+                    const holidayDate = event.start.date;
                     if (holidayDate) {
                         holidays.set(holidayDate, event.summary);
                     }
@@ -170,7 +184,7 @@ class CalendarService {
             }
             return holidays;
         } catch (error) {
-            console.error('❌ [CalendarService] 獲取國定假日失敗:', error.message);
+            console.error('[CalendarService] Failed to read holiday calendar:', error.message);
             return new Map();
         }
     }

@@ -297,6 +297,136 @@ class GoogleClientService {
             message.includes('fetch failed');
     }
 
+    async getCalendarEventsNative(calendarId, timeMin, timeMax, options = {}) {
+        if (!calendarId) {
+            const error = new Error('Calendar ID is required for native Calendar events.list');
+            error.code = 'MISSING_CALENDAR_ID';
+            throw error;
+        }
+
+        const delays = [500, 1000, 2000];
+        let lastError;
+
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                const accessToken = await this.getNativeAccessToken();
+                const response = await this.getCalendarEventsNativeOnce(calendarId, timeMin, timeMax, options, accessToken);
+
+                if (response.statusCode >= 200 && response.statusCode < 300) {
+                    let parsed;
+                    try {
+                        parsed = JSON.parse(response.body);
+                    } catch (parseError) {
+                        const error = new Error(`Native Calendar response JSON parse failed: ${parseError.message}`);
+                        error.code = 'CALENDAR_RESPONSE_PARSE_FAILED';
+                        throw error;
+                    }
+
+                    console.log(`[GoogleClient] Native Calendar events.list succeeded for calendar=${this.maskCalendarId(calendarId)}`);
+                    return parsed.items || [];
+                }
+
+                const safeBody = response.body.slice(0, 300);
+                const statusError = new Error(`Native Calendar events.list returned status ${response.statusCode}`);
+                statusError.statusCode = response.statusCode;
+                statusError.responseBody = safeBody;
+
+                if (this.shouldRetryNativeCalendarError(statusError) && attempt < 3) {
+                    console.warn(`[GoogleClient] Native Calendar events.list failed attempt ${attempt}/3 for calendar=${this.maskCalendarId(calendarId)}: ${statusError.message}`);
+                    await this.delay(delays[attempt - 1]);
+                    continue;
+                }
+
+                console.error(`[GoogleClient] Native Calendar events.list failed status=${response.statusCode} calendar=${this.maskCalendarId(calendarId)} body=${safeBody}`);
+                throw statusError;
+            } catch (error) {
+                lastError = error;
+
+                if (this.shouldRetryNativeCalendarError(error) && attempt < 3) {
+                    console.warn(`[GoogleClient] Native Calendar events.list failed attempt ${attempt}/3 for calendar=${this.maskCalendarId(calendarId)}: ${error.message}`);
+                    await this.delay(delays[attempt - 1]);
+                    continue;
+                }
+
+                if (!error.statusCode) {
+                    console.error(`[GoogleClient] Native Calendar events.list failed error name=${error.name} code=${error.code || 'unknown'} message=${error.message}`);
+                }
+                throw error;
+            }
+        }
+
+        throw lastError;
+    }
+
+    getCalendarEventsNativeOnce(calendarId, timeMin, timeMax, options, accessToken) {
+        const query = new URLSearchParams({
+            timeMin,
+            timeMax,
+            singleEvents: 'true',
+            orderBy: 'startTime'
+        });
+
+        ['maxResults', 'q', 'timeZone'].forEach(key => {
+            if (options[key] !== undefined && options[key] !== null) {
+                query.set(key, String(options[key]));
+            }
+        });
+
+        const requestOptions = {
+            hostname: 'www.googleapis.com',
+            path: `/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${query.toString()}`,
+            method: 'GET',
+            timeout: 8000,
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/json'
+            }
+        };
+
+        return new Promise((resolve, reject) => {
+            const req = https.request(requestOptions, (res) => {
+                let responseBody = '';
+
+                res.setEncoding('utf8');
+                res.on('data', (chunk) => {
+                    responseBody += chunk;
+                });
+                res.on('end', () => {
+                    resolve({
+                        statusCode: res.statusCode,
+                        body: responseBody
+                    });
+                });
+            });
+
+            req.on('timeout', () => {
+                req.destroy(new Error('Native Calendar events.list timeout after 8000ms'));
+            });
+
+            req.on('error', reject);
+            req.end();
+        });
+    }
+
+    shouldRetryNativeCalendarError(error) {
+        const retryableCodes = new Set(['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN']);
+        const message = String(error && error.message || '').toLowerCase();
+
+        if (error && (error.statusCode === 429 || error.statusCode >= 500)) return true;
+        if (error && error.code === 'CALENDAR_RESPONSE_PARSE_FAILED') return true;
+        if (error && retryableCodes.has(error.code)) return true;
+        return message.includes('premature close') ||
+            message.includes('invalid response body') ||
+            message.includes('socket hang up') ||
+            message.includes('fetch failed');
+    }
+
+    maskCalendarId(calendarId) {
+        if (!calendarId || calendarId === 'primary') return calendarId || '';
+        if (calendarId.length <= 12) return calendarId;
+        return `${calendarId.slice(0, 6)}...${calendarId.slice(-6)}`;
+    }
+
     installNativeOAuthRefreshHooks(oauthClient, credentials) {
         oauthClient.refreshToken = async (refreshToken) => {
             const refreshedCredentials = await this.refreshOAuthTokenWithNativeHttps({
