@@ -284,6 +284,278 @@ class GoogleClientService {
         });
     }
 
+    async updateSheetValuesNative(spreadsheetId, range, values, options = {}) {
+        if (!spreadsheetId) {
+            const error = new Error('Spreadsheet ID is required for native Sheets values.update');
+            error.code = 'MISSING_SPREADSHEET_ID';
+            throw error;
+        }
+
+        const valueInputOption = options.valueInputOption || 'USER_ENTERED';
+        const delays = [500, 1000, 2000];
+        let lastError;
+
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                const accessToken = await this.getNativeAccessToken();
+                const response = await this.updateSheetValuesNativeOnce(spreadsheetId, range, values, valueInputOption, accessToken);
+
+                if (response.statusCode >= 200 && response.statusCode < 300) {
+                    let parsed;
+                    try {
+                        parsed = JSON.parse(response.body);
+                    } catch (parseError) {
+                        const error = new Error(`Native Sheets values.update response JSON parse failed: ${parseError.message}`);
+                        error.code = 'SHEETS_RESPONSE_PARSE_FAILED';
+                        throw error;
+                    }
+
+                    console.log(`[GoogleClient] Native Sheets values.update succeeded for range=${range}`);
+                    return parsed;
+                }
+
+                const safeBody = response.body.slice(0, 300);
+                const statusError = new Error(`Native Sheets values.update returned status ${response.statusCode}`);
+                statusError.statusCode = response.statusCode;
+                statusError.responseBody = safeBody;
+
+                if (this.shouldRetryNativeSheetsError(statusError) && attempt < 3) {
+                    console.warn(`[GoogleClient] Native Sheets values.update failed attempt ${attempt}/3 for range=${range}: ${statusError.message}`);
+                    await this.delay(delays[attempt - 1]);
+                    continue;
+                }
+
+                console.error(`[GoogleClient] Native Sheets values.update failed status=${response.statusCode} range=${range} body=${safeBody}`);
+                throw statusError;
+            } catch (error) {
+                lastError = error;
+
+                if (this.shouldRetryNativeSheetsError(error) && attempt < 3) {
+                    console.warn(`[GoogleClient] Native Sheets values.update failed attempt ${attempt}/3 for range=${range}: ${error.message}`);
+                    await this.delay(delays[attempt - 1]);
+                    continue;
+                }
+
+                if (!error.statusCode) {
+                    console.error(`[GoogleClient] Native Sheets values.update failed error name=${error.name} code=${error.code || 'unknown'} message=${error.message}`);
+                }
+                throw error;
+            }
+        }
+
+        throw lastError;
+    }
+
+    updateSheetValuesNativeOnce(spreadsheetId, range, values, valueInputOption, accessToken) {
+        const query = new URLSearchParams({
+            valueInputOption
+        });
+        const body = JSON.stringify({ values });
+        const options = {
+            hostname: 'sheets.googleapis.com',
+            path: `/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?${query.toString()}`,
+            method: 'PUT',
+            timeout: 8000,
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(body)
+            }
+        };
+
+        return new Promise((resolve, reject) => {
+            const req = https.request(options, (res) => {
+                let responseBody = '';
+
+                res.setEncoding('utf8');
+                res.on('data', (chunk) => {
+                    responseBody += chunk;
+                });
+                res.on('end', () => {
+                    resolve({
+                        statusCode: res.statusCode,
+                        body: responseBody
+                    });
+                });
+            });
+
+            req.on('timeout', () => {
+                req.destroy(new Error('Native Sheets values.update timeout after 8000ms'));
+            });
+
+            req.on('error', reject);
+            req.write(body);
+            req.end();
+        });
+    }
+
+    async appendSheetValuesNative(spreadsheetId, range, values, options = {}) {
+        if (!spreadsheetId) {
+            const error = new Error('Spreadsheet ID is required for native Sheets values.append');
+            error.code = 'MISSING_SPREADSHEET_ID';
+            throw error;
+        }
+
+        const valueInputOption = options.valueInputOption || 'USER_ENTERED';
+        const insertDataOption = options.insertDataOption || 'INSERT_ROWS';
+
+        try {
+            const accessToken = await this.getNativeAccessToken();
+            const response = await this.appendSheetValuesNativeOnce(
+                spreadsheetId,
+                range,
+                values,
+                valueInputOption,
+                insertDataOption,
+                accessToken
+            );
+
+            if (response.statusCode >= 200 && response.statusCode < 300) {
+                let parsed;
+                try {
+                    parsed = JSON.parse(response.body);
+                } catch (parseError) {
+                    throw new Error(`Native Sheets values.append response JSON parse failed: ${parseError.message}`);
+                }
+
+                console.log(`[GoogleClient] Native Sheets values.append succeeded for range=${range}`);
+                return parsed;
+            }
+
+            const safeBody = response.body.slice(0, 300);
+            const statusError = new Error(`Native Sheets values.append returned status ${response.statusCode}`);
+            statusError.statusCode = response.statusCode;
+            statusError.responseBody = safeBody;
+            console.error(`[GoogleClient] Native Sheets values.append failed status=${response.statusCode} range=${range} body=${safeBody}`);
+            throw statusError;
+        } catch (error) {
+            console.error(`[GoogleClient] Native Sheets values.append failed for range=${range}: ${error.message}`);
+            throw error;
+        }
+    }
+
+    appendSheetValuesNativeOnce(spreadsheetId, range, values, valueInputOption, insertDataOption, accessToken) {
+        const query = new URLSearchParams({
+            valueInputOption,
+            insertDataOption
+        });
+        const body = JSON.stringify({ values });
+        const options = {
+            hostname: 'sheets.googleapis.com',
+            path: `/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?${query.toString()}`,
+            method: 'POST',
+            timeout: 8000,
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(body)
+            }
+        };
+
+        return new Promise((resolve, reject) => {
+            const req = https.request(options, (res) => {
+                let responseBody = '';
+
+                res.setEncoding('utf8');
+                res.on('data', (chunk) => {
+                    responseBody += chunk;
+                });
+                res.on('end', () => {
+                    resolve({
+                        statusCode: res.statusCode,
+                        body: responseBody
+                    });
+                });
+            });
+
+            req.on('timeout', () => {
+                req.destroy(new Error('Native Sheets values.append timeout after 8000ms'));
+            });
+
+            req.on('error', reject);
+            req.write(body);
+            req.end();
+        });
+    }
+
+    async batchUpdateSpreadsheetNative(spreadsheetId, requests, options = {}) {
+        if (!spreadsheetId) {
+            const error = new Error('Spreadsheet ID is required for native Sheets spreadsheets.batchUpdate');
+            error.code = 'MISSING_SPREADSHEET_ID';
+            throw error;
+        }
+
+        try {
+            const accessToken = await this.getNativeAccessToken();
+            const response = await this.batchUpdateSpreadsheetNativeOnce(spreadsheetId, requests, accessToken);
+
+            if (response.statusCode >= 200 && response.statusCode < 300) {
+                let parsed;
+                try {
+                    parsed = JSON.parse(response.body);
+                } catch (parseError) {
+                    throw new Error(`Native Sheets spreadsheets.batchUpdate response JSON parse failed: ${parseError.message}`);
+                }
+
+                console.log(`[GoogleClient] Native Sheets spreadsheets.batchUpdate succeeded for requests=${requests.length}`);
+                return parsed;
+            }
+
+            const safeBody = response.body.slice(0, 300);
+            const statusError = new Error(`Native Sheets spreadsheets.batchUpdate returned status ${response.statusCode}`);
+            statusError.statusCode = response.statusCode;
+            statusError.responseBody = safeBody;
+            console.error(`[GoogleClient] Native Sheets spreadsheets.batchUpdate failed status=${response.statusCode} requests=${requests.length} body=${safeBody}`);
+            throw statusError;
+        } catch (error) {
+            console.error(`[GoogleClient] Native Sheets spreadsheets.batchUpdate failed: ${error.message}`);
+            throw error;
+        }
+    }
+
+    batchUpdateSpreadsheetNativeOnce(spreadsheetId, requests, accessToken) {
+        const body = JSON.stringify({ requests });
+        const options = {
+            hostname: 'sheets.googleapis.com',
+            path: `/v4/spreadsheets/${spreadsheetId}:batchUpdate`,
+            method: 'POST',
+            timeout: 8000,
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(body)
+            }
+        };
+
+        return new Promise((resolve, reject) => {
+            const req = https.request(options, (res) => {
+                let responseBody = '';
+
+                res.setEncoding('utf8');
+                res.on('data', (chunk) => {
+                    responseBody += chunk;
+                });
+                res.on('end', () => {
+                    resolve({
+                        statusCode: res.statusCode,
+                        body: responseBody
+                    });
+                });
+            });
+
+            req.on('timeout', () => {
+                req.destroy(new Error('Native Sheets spreadsheets.batchUpdate timeout after 8000ms'));
+            });
+
+            req.on('error', reject);
+            req.write(body);
+            req.end();
+        });
+    }
+
     shouldRetryNativeSheetsError(error) {
         const retryableCodes = new Set(['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN']);
         const message = String(error && error.message || '').toLowerCase();

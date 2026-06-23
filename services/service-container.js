@@ -139,8 +139,8 @@ async function initializeServices() {
         const weeklySqlWriter = new WeeklyBusinessSqlWriter();
         const announcementSqlWriter = new AnnouncementSqlWriter();
         const systemWriter = new SystemWriter(sheets, config.IDS.SYSTEM, systemReader);
-        const productWriter = new ProductWriter(sheets, config.IDS.PRODUCT, productReader);
-        const internalOpsWriter = new InternalOpsWriter(sheets, config.IDS.INTERNAL_OPS, internalOpsReader);
+        const productWriter = new ProductWriter(sheets, config.IDS.PRODUCT, productReader, googleClientService);
+        const internalOpsWriter = new InternalOpsWriter(sheets, config.IDS.INTERNAL_OPS, internalOpsReader, googleClientService);
         const subscriptionOpsSqlWriter = new SubscriptionOpsSqlWriter();
         const auditLogSqlWriter = new AuditLogSqlWriter();
 

@@ -11,27 +11,32 @@
 const config = require('../config');
 
 class InternalOpsWriter {
-    constructor(sheets, spreadsheetId, reader = null) {
+    constructor(sheets, spreadsheetId, reader = null, googleClientService = null) {
         this.sheets = sheets;
         this.targetSpreadsheetId = config.IDS.INTERNAL_OPS || spreadsheetId;
         this.reader = reader;
+        this.googleClientService = googleClientService;
     }
 
     async appendRow(sheetName, values) {
-        await this.sheets.spreadsheets.values.append({
-            spreadsheetId: this.targetSpreadsheetId,
-            range: `${sheetName}!A:Z`,
+        if (!this.googleClientService || !this.googleClientService.appendSheetValuesNative) {
+            throw new Error('InternalOpsWriter native GoogleClientService is required for appendRow');
+        }
+
+        await this.googleClientService.appendSheetValuesNative(this.targetSpreadsheetId, `${sheetName}!A:Z`, [values], {
             valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [values] }
+            insertDataOption: 'INSERT_ROWS'
         });
     }
 
     async updateRow(sheetName, rowIndex, values, endCol = 'Z') {
-        await this.sheets.spreadsheets.values.update({
-            spreadsheetId: this.targetSpreadsheetId,
-            range: `${sheetName}!A${rowIndex}:${endCol}${rowIndex}`,
-            valueInputOption: 'USER_ENTERED',
-            requestBody: { values: [values] }
+        if (!this.googleClientService || !this.googleClientService.updateSheetValuesNative) {
+            throw new Error('InternalOpsWriter native GoogleClientService is required for updateRow');
+        }
+
+        const range = `${sheetName}!A${rowIndex}:${endCol}${rowIndex}`;
+        await this.googleClientService.updateSheetValuesNative(this.targetSpreadsheetId, range, [values], {
+            valueInputOption: 'USER_ENTERED'
         });
     }
 }

@@ -557,7 +557,8 @@ window.ProductManager = {
                 body: JSON.stringify({products: payload})
             });
 
-            if(res.success) {
+            const resultErrors = res && res.result ? Number(res.result.errors) : 0;
+            if(res.success && !resultErrors) {
                 // 儲存成功後，重新讀取資料以確保同步
                 const refreshRes = await authedFetch('/api/products');
                 if(refreshRes.success) {
@@ -565,7 +566,7 @@ window.ProductManager = {
                 }
                 this.setEditMode(false, true);
             } else {
-                throw new Error(res.error);
+                throw new Error(res.error || '商品儲存失敗，請重新整理後再試');
             }
         } catch(e) {
             alert('儲存失敗: ' + e.message);

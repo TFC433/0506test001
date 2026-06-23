@@ -140,6 +140,7 @@ class ProductService {
 
         const modifier = user.displayName || user.username || 'System';
         const stats = { updated: 0, appended: 0, skipped: 0, errors: 0 };
+        const failures = [];
         
         console.log(`🔄 [ProductService] 開始批次處理 ${products.length} 筆資料...`);
 
@@ -184,10 +185,21 @@ class ProductService {
             } catch (err) {
                 console.error(`❌ [ProductService] Batch update failed for ID ${item.id}:`, err);
                 stats.errors++;
+                failures.push({
+                    id: item.id,
+                    message: err.message
+                });
             }
         }
         
         console.log(`✅ [ProductService] 批次處理完成: 更新=${stats.updated}, 新增=${stats.appended}, 跳過=${stats.skipped}, 失敗=${stats.errors}`);
+
+        if (stats.errors > 0) {
+            const error = new Error(`Product batch update failed for ${stats.errors} item(s)`);
+            error.stats = stats;
+            error.details = failures;
+            throw error;
+        }
 
         // 操作完成後再次清除快取，確保下次讀取正確
         await this.refreshCache();

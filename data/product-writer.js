@@ -15,12 +15,13 @@ class ProductWriter extends BaseWriter {
      * @param {string} spreadsheetId - [Required] 指定要寫入的 Sheet ID (應為 PRODUCT_ID)
      * @param {Object} productReader - 用於清除快取的 Reader 實例
      */
-    constructor(sheets, spreadsheetId, productReader) {
+    constructor(sheets, spreadsheetId, productReader, googleClientService = null) {
         super(sheets, spreadsheetId);
         if (!productReader) {
             throw new Error('ProductWriter 需要 ProductReader 的實例');
         }
         this.productReader = productReader;
+        this.googleClientService = googleClientService;
         this.cacheKey = 'marketProducts';
     }
 
@@ -66,11 +67,13 @@ class ProductWriter extends BaseWriter {
         newRow[F.LAST_UPDATE_TIME] = now;
 
         // ★★★ 使用 this.targetSpreadsheetId ★★★
-        await this.sheets.spreadsheets.values.append({
-            spreadsheetId: this.targetSpreadsheetId,
-            range: `${this.config.SHEETS.MARKET_PRODUCTS}!A:V`,
+        if (!this.googleClientService || !this.googleClientService.appendSheetValuesNative) {
+            throw new Error('ProductWriter native GoogleClientService is required for createProduct');
+        }
+
+        await this.googleClientService.appendSheetValuesNative(this.targetSpreadsheetId, `${this.config.SHEETS.MARKET_PRODUCTS}!A:V`, [newRow], {
             valueInputOption: 'USER_ENTERED',
-            resource: { values: [newRow] }
+            insertDataOption: 'INSERT_ROWS'
         });
 
         this.productReader.invalidateCache(this.cacheKey);
@@ -90,12 +93,12 @@ class ProductWriter extends BaseWriter {
         // 1. 讀取舊資料
         // ★★★ 使用 this.targetSpreadsheetId ★★★
         const range = `${this.config.SHEETS.MARKET_PRODUCTS}!A${rowIndex}:V${rowIndex}`;
-        const response = await this.sheets.spreadsheets.values.get({
-            spreadsheetId: this.targetSpreadsheetId,
-            range: range
-        });
+        if (!this.googleClientService || !this.googleClientService.getSheetValuesNative || !this.googleClientService.updateSheetValuesNative) {
+            throw new Error('ProductWriter native GoogleClientService is required for updateProduct');
+        }
 
-        const currentRow = response.data.values ? response.data.values[0] : [];
+        const values = await this.googleClientService.getSheetValuesNative(this.targetSpreadsheetId, range);
+        const currentRow = values ? values[0] : [];
         if (currentRow.length === 0) throw new Error('找不到該筆商品資料');
 
         // 補齊長度
@@ -127,11 +130,8 @@ class ProductWriter extends BaseWriter {
 
         // 3. 寫回
         // ★★★ 使用 this.targetSpreadsheetId ★★★
-        await this.sheets.spreadsheets.values.update({
-            spreadsheetId: this.targetSpreadsheetId,
-            range: range,
-            valueInputOption: 'USER_ENTERED',
-            resource: { values: [currentRow] }
+        await this.googleClientService.updateSheetValuesNative(this.targetSpreadsheetId, range, [currentRow], {
+            valueInputOption: 'USER_ENTERED'
         });
 
         this.productReader.invalidateCache(this.cacheKey);
@@ -149,7 +149,23 @@ class ProductWriter extends BaseWriter {
         // 由於 BaseWriter 的 cacheKeyMap 可能沒有 'MARKET_PRODUCTS'，我們直接在這裡呼叫 invalidate
         
         try {
-            await this._deleteRow(this.config.SHEETS.MARKET_PRODUCTS, rowIndex, this.productReader);
+            if (!this.googleClientService || !this.googleClientService.batchUpdateSpreadsheetNative) {
+                throw new Error('ProductWriter native GoogleClientService is required for deleteProduct');
+            }
+
+            const sheetId = await this._getSheetIdByName(this.config.SHEETS.MARKET_PRODUCTS);
+            await this.googleClientService.batchUpdateSpreadsheetNative(this.targetSpreadsheetId, [{
+                deleteDimension: {
+                    range: {
+                        sheetId: sheetId,
+                        dimension: 'ROWS',
+                        startIndex: rowIndex - 1,
+                        endIndex: rowIndex
+                    }
+                }
+            }]);
+
+            this.productReader.invalidateCache(this.cacheKey);
         } catch (error) {
             // 如果 BaseWriter 沒設定 Product 的 Cache Key，我們手動清
             this.productReader.invalidateCache(this.cacheKey);
