@@ -535,3 +535,178 @@
 .interaction-history-section {
     /* padding-right: var(--spacing-4); */ /* <-- 【*** 程式碼修改點：移除此行 ***】 */
 }
+.interactions-compact-theme {
+    --interactions-table-font-size: 12.5px;
+    --interactions-muted-font-size: 11.5px;
+}
+
+.interactions-compact-theme .widget-header {
+    padding-bottom: 0.75rem;
+}
+
+.interactions-compact-theme .interactions-tab-group {
+    padding: 0 1.5rem 0.75rem;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.interactions-compact-theme .lightweight-action-btn {
+    min-height: 26px;
+    padding: 4px 9px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.2;
+}
+
+.interactions-compact-theme .interactions-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 34px;
+    padding: 0 1.5rem 0.75rem !important;
+}
+
+.interactions-compact-theme .interactions-control-group {
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.interactions-compact-theme .interactions-control-label,
+.interactions-compact-theme .interactions-range-text {
+    font-size: 12px;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.interactions-compact-theme .interactions-size-btn {
+    min-width: 36px;
+    min-height: 24px;
+    padding: 3px 8px;
+}
+
+.interactions-compact-theme .search-box {
+    min-height: 30px;
+    padding: 5px 10px;
+    font-size: 12.5px;
+}
+
+.interactions-compact-theme .interactions-pagination {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    flex-wrap: wrap;
+}
+
+.interactions-compact-theme .interactions-pagination button,
+.interactions-compact-theme .interactions-pagination .page-btn {
+    min-height: 24px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    line-height: 1.2;
+}
+
+.interactions-compact-theme .interactions-table {
+    width: 100%;
+    table-layout: fixed;
+    font-size: var(--interactions-table-font-size);
+}
+
+.interactions-compact-theme .interactions-table th {
+    padding: 7px 9px;
+    font-size: 12px;
+    line-height: 1.25;
+    white-space: nowrap;
+}
+
+.interactions-compact-theme .interactions-table td {
+    padding: 7px 9px;
+    line-height: 1.35;
+    vertical-align: top;
+}
+
+.interactions-compact-theme .interactions-table .text-muted {
+    font-size: var(--interactions-muted-font-size);
+    line-height: 1.3;
+}
+
+.interactions-compact-theme .interactions-table td:nth-child(1),
+.interactions-compact-theme .interactions-table th:nth-child(1) {
+    white-space: nowrap;
+}
+
+.interactions-compact-theme .interactions-activity-timeline-table th:nth-child(1),
+.interactions-compact-theme .interactions-activity-timeline-table td:nth-child(1),
+.interactions-compact-theme .interactions-user-activity-table th:nth-child(1),
+.interactions-compact-theme .interactions-user-activity-table td:nth-child(1) {
+    width: 42px;
+    text-align: center;
+}
+
+.interactions-compact-theme .interactions-activity-timeline-table th:nth-child(2),
+.interactions-compact-theme .interactions-activity-timeline-table td:nth-child(2),
+.interactions-compact-theme .interactions-audit-table th:nth-child(1),
+.interactions-compact-theme .interactions-audit-table td:nth-child(1),
+.interactions-compact-theme .interactions-legacy-crm-table th:nth-child(1),
+.interactions-compact-theme .interactions-legacy-crm-table td:nth-child(1),
+.interactions-compact-theme .interactions-user-activity-table th:nth-child(4),
+.interactions-compact-theme .interactions-user-activity-table td:nth-child(4),
+.interactions-compact-theme .interactions-user-activity-table th:nth-child(5),
+.interactions-compact-theme .interactions-user-activity-table td:nth-child(5),
+.interactions-compact-theme .interactions-user-activity-table th:nth-child(6),
+.interactions-compact-theme .interactions-user-activity-table td:nth-child(6),
+.interactions-compact-theme .interactions-user-activity-table th:nth-child(8),
+.interactions-compact-theme .interactions-user-activity-table td:nth-child(8) {
+    white-space: nowrap;
+    width: 150px;
+    font-size: 12px;
+}
+
+.interactions-compact-theme .interactions-activity-timeline-table th:nth-child(3),
+.interactions-compact-theme .interactions-activity-timeline-table td:nth-child(3),
+.interactions-compact-theme .interactions-audit-table th:nth-child(6),
+.interactions-compact-theme .interactions-audit-table td:nth-child(6),
+.interactions-compact-theme .interactions-legacy-crm-table th:nth-child(2),
+.interactions-compact-theme .interactions-legacy-crm-table td:nth-child(2),
+.interactions-compact-theme .interactions-user-activity-table th:nth-child(2),
+.interactions-compact-theme .interactions-user-activity-table td:nth-child(2) {
+    width: 18%;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.interactions-compact-theme .interactions-activity-timeline-table th:nth-child(4),
+.interactions-compact-theme .interactions-activity-timeline-table td:nth-child(4),
+.interactions-compact-theme .interactions-audit-table th:nth-child(2),
+.interactions-compact-theme .interactions-audit-table td:nth-child(2),
+.interactions-compact-theme .interactions-legacy-crm-table th:nth-child(3),
+.interactions-compact-theme .interactions-legacy-crm-table td:nth-child(3) {
+    width: 15%;
+}
+
+.interactions-compact-theme .interactions-activity-timeline-table th:nth-child(6),
+.interactions-compact-theme .interactions-activity-timeline-table td:nth-child(6),
+.interactions-compact-theme .interactions-legacy-crm-table th:nth-child(5),
+.interactions-compact-theme .interactions-legacy-crm-table td:nth-child(5) {
+    width: 96px;
+}
+
+@media (max-width: 900px) {
+    .interactions-compact-theme .interactions-toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .interactions-compact-theme .interactions-pagination {
+        margin-left: 0;
+        justify-content: flex-start;
+    }
+
+    .interactions-compact-theme .interactions-table {
+        table-layout: auto;
+    }
+}

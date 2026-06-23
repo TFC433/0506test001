@@ -97,7 +97,7 @@ function renderInteractionOverviewTabs(activeTab) {
     ];
 
     return `
-        <div class="lightweight-action-group">
+        <div class="lightweight-action-group interactions-tab-group">
             ${tabs.map(tab => {
                 const tabClass = tab.id === activeTab ? 'lightweight-action-btn is-active' : 'lightweight-action-btn';
                 return `<button type="button" class="${tabClass}" data-interactions-tab="${tab.id}">${tab.label}</button>`;
@@ -108,9 +108,9 @@ function renderInteractionOverviewTabs(activeTab) {
 
 function renderPageSizeQuickButtons(kind, activeSize) {
     return `
-        <span class="text-muted">&#27599;&#38913;&#39023;&#31034;&#65306;</span>
+        <span class="text-muted interactions-control-label">&#27599;&#38913;&#39023;&#31034;&#65306;</span>
         ${SUPER_ADMIN_PAGE_SIZE_OPTIONS.map(size => {
-            const buttonClass = size === activeSize ? 'lightweight-action-btn is-active' : 'lightweight-action-btn';
+            const buttonClass = size === activeSize ? 'lightweight-action-btn interactions-size-btn is-active' : 'lightweight-action-btn interactions-size-btn';
             return `<button type="button" class="${buttonClass}" data-${kind}-page-size="${size}">${size}</button>`;
         }).join('')}
     `;
@@ -118,9 +118,9 @@ function renderPageSizeQuickButtons(kind, activeSize) {
 
 function renderUserSessionPeriodButtons(activeDays) {
     return `
-        <span class="text-muted">&#26399;&#38291;&#65306;</span>
+        <span class="text-muted interactions-control-label">&#26399;&#38291;&#65306;</span>
         ${USER_SESSION_PERIOD_OPTIONS.map(days => {
-            const buttonClass = days === activeDays ? 'lightweight-action-btn is-active' : 'lightweight-action-btn';
+            const buttonClass = days === activeDays ? 'lightweight-action-btn interactions-size-btn is-active' : 'lightweight-action-btn interactions-size-btn';
             return `<button type="button" class="${buttonClass}" data-user-sessions-period-days="${days}">${days}&#22825;</button>`;
         }).join('')}
     `;
@@ -133,32 +133,32 @@ function renderInteractionOverviewShell(query = '', activeTab = 'crm') {
     const isLegacyCrmTab = isCrmTab && !isCurrentUserSuperAdmin();
 
     return `
-        <div class="dashboard-widget">
+        <div class="dashboard-widget interactions-compact-theme">
             <div class="widget-header">
                 <h2 class="widget-title">所有互動紀錄</h2>
             </div>
             ${renderInteractionOverviewTabs(activeTab)}
             ${isCrmTab ? `
-                <div class="search-pagination" style="padding: 0 1.5rem 1rem;">
+                <div class="search-pagination interactions-toolbar" style="padding: 0 1.5rem 1rem;">
                     ${isLegacyCrmTab ? `<input type="text" class="search-box" id="all-interactions-search" placeholder="搜尋內容、機會名稱、記錄人..." value="${query}">` : ''}
-                    ${isCrmTab && !isLegacyCrmTab ? `<div class="lightweight-action-group"><span id="activity-timeline-range" class="text-muted"></span>${renderPageSizeQuickButtons('activity-timeline', activityTimelinePageSize)}</div>` : ''}
-                    <div class="pagination" id="all-interactions-pagination"></div>
+                    ${isCrmTab && !isLegacyCrmTab ? `<div class="lightweight-action-group interactions-control-group"><span id="activity-timeline-range" class="text-muted interactions-range-text"></span>${renderPageSizeQuickButtons('activity-timeline', activityTimelinePageSize)}</div>` : ''}
+                    <div class="pagination interactions-pagination" id="all-interactions-pagination"></div>
                 </div>
             ` : ''}
             ${isAuditTab ? `
-                <div class="search-pagination" style="padding: 0 1.5rem 1rem;">
-                    <div class="lightweight-action-group"><span id="audit-logs-range" class="text-muted"></span>${renderPageSizeQuickButtons('audit-logs', auditLogsPageSize)}</div>
-                    <div class="pagination" id="audit-logs-pagination"></div>
+                <div class="search-pagination interactions-toolbar" style="padding: 0 1.5rem 1rem;">
+                    <div class="lightweight-action-group interactions-control-group"><span id="audit-logs-range" class="text-muted interactions-range-text"></span>${renderPageSizeQuickButtons('audit-logs', auditLogsPageSize)}</div>
+                    <div class="pagination interactions-pagination" id="audit-logs-pagination"></div>
                 </div>
             ` : ''}
             ${isActivityTab ? `
-                <div class="search-pagination" style="padding: 0 1.5rem 1rem;">
-                    <div class="lightweight-action-group">
-                        <span id="user-sessions-range" class="text-muted"></span>
+                <div class="search-pagination interactions-toolbar" style="padding: 0 1.5rem 1rem;">
+                    <div class="lightweight-action-group interactions-control-group">
+                        <span id="user-sessions-range" class="text-muted interactions-range-text"></span>
                         ${renderPageSizeQuickButtons('user-sessions', userSessionsPageSize)}
                         ${renderUserSessionPeriodButtons(userSessionsPeriodDays)}
                     </div>
-                    <div class="pagination" id="user-sessions-pagination"></div>
+                    <div class="pagination interactions-pagination" id="user-sessions-pagination"></div>
                 </div>
             ` : ''}
             <div id="all-interactions-content" class="widget-content">
@@ -500,7 +500,7 @@ function renderAuditLogsTable(auditLogs) {
         return '<div class="text-muted">目前沒有系統稽核紀錄</div>';
     }
 
-    let tableHTML = `<table class="compact-data-table">
+    let tableHTML = `<table class="compact-data-table interactions-table interactions-audit-table">
                         <thead>
                             <tr>
                                 <th>時間</th>
@@ -579,7 +579,7 @@ function renderUserActivityTable(sessions, page = 1, pageSize = userSessionsPage
         return '<div class="text-muted">目前沒有使用者 session 活動紀錄</div>';
     }
 
-    let tableHTML = `<table class="compact-data-table">
+    let tableHTML = `<table class="compact-data-table interactions-table interactions-user-activity-table">
                         <thead>
                             <tr>
                                 <th>#</th>
@@ -699,7 +699,7 @@ function renderActivityTimelineTable(items, page = 1, limit = activityTimelinePa
         return '<div class="text-muted">目前沒有 CRM 活動時間流紀錄</div>';
     }
 
-    let tableHTML = `<table class="compact-data-table">
+    let tableHTML = `<table class="compact-data-table interactions-table interactions-activity-timeline-table">
                         <thead>
                             <tr>
                                 <th>#</th>
@@ -823,7 +823,7 @@ function renderAllInteractionsTable(interactions) {
     }
 
     // --- 替換為表格 Table HTML ---
-    let tableHTML = `<table class="data-table">
+    let tableHTML = `<table class="data-table interactions-table interactions-legacy-crm-table">
                         <thead>
                             <tr>
                                 <th>互動時間</th>
