@@ -11,16 +11,123 @@ const { google } = require('googleapis');
 const fs = require('fs');
 const https = require('https');
 const path = require('path');
+const querystring = require('querystring');
 
 class GoogleClientService {
     constructor() {
         this.oauthClient = null;
         this.serviceClient = null;
+        this.oauthCredentials = null;
     }
 
     // OAuth認證 (用於Sheets和Calendar)
-    async runOAuthTransportDiagnostic() {
-        const body = 'grant_type=invalid';
+
+    getOAuthCredentialConfig(credentials) {
+        const source = credentials.installed || credentials.web || credentials;
+        return {
+            client_id: source.client_id,
+            client_secret: source.client_secret,
+            redirect_uris: source.redirect_uris || []
+        };
+    }
+
+    getOAuthTokenExpiryState(token) {
+        if (!token || !token.access_token) return 'missing_access_token';
+        if (!token.expiry_date) return 'missing_expiry';
+
+        const expiryDate = Number(token.expiry_date);
+        if (!Number.isFinite(expiryDate)) return 'missing_expiry';
+
+        const refreshThresholdMs = 5 * 60 * 1000;
+        const now = Date.now();
+        if (expiryDate <= now) return 'expired';
+        if (expiryDate <= now + refreshThresholdMs) return 'near_expiry';
+        return 'not_expired';
+    }
+
+    isOAuthTokenExpiredOrExpiring(token) {
+        return this.getOAuthTokenExpiryState(token) !== 'not_expired';
+    }
+
+    async refreshOAuthTokenWithNativeHttps(token, credentials) {
+        const oauthConfig = this.getOAuthCredentialConfig(credentials);
+
+        if (!oauthConfig.client_id || !oauthConfig.client_secret) {
+            throw new Error('OAuth client_id/client_secret missing');
+        }
+        if (!token || !token.refresh_token) {
+            throw new Error('OAuth refresh_token missing');
+        }
+
+        const body = querystring.stringify({
+            client_id: oauthConfig.client_id,
+            client_secret: oauthConfig.client_secret,
+            refresh_token: token.refresh_token,
+            grant_type: 'refresh_token'
+        });
+
+        const delays = [500, 1000, 2000];
+        let lastError;
+
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                const response = await this.postOAuthTokenRequestWithNativeHttps(body);
+                if (response.statusCode < 200 || response.statusCode >= 300) {
+                    const safeBody = response.body.slice(0, 300);
+                    const statusError = new Error(`OAuth token endpoint returned status ${response.statusCode}`);
+                    statusError.statusCode = response.statusCode;
+                    statusError.responseBody = safeBody;
+                    console.error(`[GoogleClient] Native OAuth refresh failed status=${response.statusCode} body=${safeBody}`);
+
+                    if (response.statusCode >= 500 && attempt < 3) {
+                        await this.delay(delays[attempt - 1]);
+                        continue;
+                    }
+
+                    throw statusError;
+                }
+
+                let parsed;
+                try {
+                    parsed = JSON.parse(response.body);
+                } catch (parseError) {
+                    throw new Error(`OAuth token endpoint returned invalid JSON: ${parseError.message}`);
+                }
+
+                if (!parsed.access_token || !parsed.expires_in) {
+                    throw new Error('OAuth token endpoint response missing access_token/expires_in');
+                }
+
+                return {
+                    ...token,
+                    access_token: parsed.access_token,
+                    token_type: parsed.token_type || token.token_type || 'Bearer',
+                    expiry_date: Date.now() + (Number(parsed.expires_in) * 1000),
+                    scope: parsed.scope || token.scope,
+                    id_token: parsed.id_token || token.id_token
+                };
+            } catch (error) {
+                lastError = error;
+                const isTransportError = !error.statusCode;
+                const isRetryableStatus = error.statusCode >= 500;
+
+                if ((isTransportError || isRetryableStatus) && attempt < 3) {
+                    console.warn(`[GoogleClient] Native OAuth refresh attempt ${attempt} failed; retrying. name=${error.name} code=${error.code || 'unknown'} message=${error.message}`);
+                    await this.delay(delays[attempt - 1]);
+                    continue;
+                }
+
+                if (isTransportError) {
+                    console.error(`[GoogleClient] Native OAuth refresh failed error name=${error.name} code=${error.code || 'unknown'} message=${error.message}`);
+                }
+                throw error;
+            }
+        }
+
+        throw lastError;
+    }
+
+    postOAuthTokenRequestWithNativeHttps(body) {
         const options = {
             hostname: 'oauth2.googleapis.com',
             path: '/token',
@@ -32,37 +139,60 @@ class GoogleClientService {
             }
         };
 
-        console.log('🧪 [OAuthTransportDiag] Starting bare HTTPS POST test to oauth2.googleapis.com/token');
-
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             const req = https.request(options, (res) => {
                 let responseBody = '';
 
                 res.setEncoding('utf8');
                 res.on('data', (chunk) => {
                     responseBody += chunk;
-                    if (responseBody.length > 300) {
-                        responseBody = responseBody.slice(0, 300);
-                    }
                 });
                 res.on('end', () => {
-                    console.log(`🧪 [OAuthTransportDiag] status=${res.statusCode} body=${responseBody.slice(0, 300)}`);
-                    resolve();
+                    resolve({
+                        statusCode: res.statusCode,
+                        body: responseBody
+                    });
                 });
             });
 
             req.on('timeout', () => {
-                req.destroy(new Error('OAuth transport diagnostic timeout after 8000ms'));
+                req.destroy(new Error('OAuth token request timeout after 8000ms'));
             });
 
-            req.on('error', (error) => {
-                console.error(`❌ [OAuthTransportDiag] error name=${error.name} code=${error.code || 'unknown'} message=${error.message}`);
-                resolve();
-            });
-
+            req.on('error', reject);
             req.write(body);
             req.end();
         });
+    }
+
+    installNativeOAuthRefreshHooks(oauthClient, credentials) {
+        oauthClient.refreshToken = async (refreshToken) => {
+            const refreshedCredentials = await this.refreshOAuthTokenWithNativeHttps({
+                ...oauthClient.credentials,
+                refresh_token: oauthClient.credentials.refresh_token || refreshToken
+            }, credentials);
+            oauthClient.setCredentials(refreshedCredentials);
+            return {
+                tokens: refreshedCredentials,
+                res: { status: 200 }
+            };
+        };
+
+        oauthClient.refreshAccessTokenAsync = async () => {
+            const refreshedCredentials = await this.refreshOAuthTokenWithNativeHttps(
+                oauthClient.credentials,
+                credentials
+            );
+            oauthClient.setCredentials(refreshedCredentials);
+            return {
+                credentials: refreshedCredentials,
+                res: { status: 200 }
+            };
+        };
+    }
+
+    delay(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     async getOAuthClient() {
@@ -71,48 +201,48 @@ class GoogleClientService {
         try {
             let token, credentials;
 
-            // 優先從環境變數讀取 (for Render)
+            // Prefer Render/env OAuth credentials when both values are present.
             if (process.env.GOOGLE_OAUTH_TOKEN && process.env.GOOGLE_OAUTH_CREDENTIALS) {
-                console.log('🔑 [GoogleClient] 從環境變數載入 OAuth 憑證...');
+                console.log('[GoogleClient] Loading OAuth credentials from environment.');
                 token = JSON.parse(process.env.GOOGLE_OAUTH_TOKEN);
                 credentials = JSON.parse(process.env.GOOGLE_OAUTH_CREDENTIALS);
-            } else { 
-                // 本地開發從檔案讀取
-                console.log('🔑 [GoogleClient] 從本地檔案載入 OAuth 憑證...');
+            } else {
+                console.log('[GoogleClient] Loading OAuth credentials from local files.');
                 const TOKEN_PATH = path.join(__dirname, '..', 'oauth-token.json');
                 const CREDENTIALS_PATH = path.join(__dirname, '..', 'oauth-credentials.json');
-                
+
                 if (!fs.existsSync(TOKEN_PATH) || !fs.existsSync(CREDENTIALS_PATH)) {
-                    throw new Error('OAuth憑證檔案不存在，請確認目錄中有相關檔案');
+                    throw new Error('OAuth credential files are missing');
                 }
-                
+
                 token = JSON.parse(fs.readFileSync(TOKEN_PATH));
                 credentials = JSON.parse(fs.readFileSync(CREDENTIALS_PATH));
             }
-            
-            const { client_secret, client_id, redirect_uris } = credentials.installed;
+
+            this.oauthCredentials = credentials;
+            const { client_secret, client_id, redirect_uris } = this.getOAuthCredentialConfig(credentials);
             this.oauthClient = new google.auth.OAuth2(
-                client_id, 
-                client_secret, 
-                redirect_uris ? redirect_uris[0] : 'urn:ietf:wg:oauth:2.0:oob'
+                client_id,
+                client_secret,
+                redirect_uris && redirect_uris[0] ? redirect_uris[0] : 'urn:ietf:wg:oauth:2.0:oob'
             );
-            
-            this.oauthClient.setCredentials(token);
-            
-            // 測試認證是否有效
-            try {
-                await this.oauthClient.getAccessToken();
-                console.log('✅ [GoogleClient] OAuth認證驗證成功');
-            } catch (authError) {
-                console.warn('⚠️ [GoogleClient] OAuth Token可能已過期:', authError.message);
-                // 不拋出錯誤，讓後續流程嘗試重新整理token
+            this.installNativeOAuthRefreshHooks(this.oauthClient, credentials);
+
+            const expiryState = this.getOAuthTokenExpiryState(token);
+            if (this.isOAuthTokenExpiredOrExpiring(token)) {
+                console.log(`[GoogleClient] OAuth access token state=${expiryState}; refreshing via native https...`);
+                token = await this.refreshOAuthTokenWithNativeHttps(token, credentials);
+                console.log('[GoogleClient] OAuth token refreshed successfully via native https.');
+            } else {
+                console.log('[GoogleClient] OAuth access token state=not_expired; native refresh skipped.');
             }
-            
+
+            this.oauthClient.setCredentials(token);
             return this.oauthClient;
-            
+
         } catch (error) {
-            console.error('❌ [GoogleClient] OAuth認證失敗:', error.message);
-            throw new Error(`OAuth認證失敗: ${error.message}`);
+            console.error('[GoogleClient] OAuth token validation/refresh failed:', error.message);
+            throw new Error(`OAuth token validation/refresh failed: ${error.message}`);
         }
     }
 
@@ -202,27 +332,29 @@ class GoogleClientService {
 
     // 刷新OAuth Token
     async refreshOAuthToken() {
-        if (!this.oauthClient) {
-            throw new Error('OAuth客戶端未初始化');
+        if (!this.oauthClient || !this.oauthCredentials) {
+            throw new Error('OAuth client is not initialized');
         }
 
         try {
-            console.log('🔄 刷新OAuth Token...');
-            const { credentials } = await this.oauthClient.refreshAccessToken();
+            console.log('[GoogleClient] Refreshing OAuth token via native https...');
+            const credentials = await this.refreshOAuthTokenWithNativeHttps(
+                this.oauthClient.credentials,
+                this.oauthCredentials
+            );
             this.oauthClient.setCredentials(credentials);
-            
-            // 如果在本地環境，更新token檔案
+
             if (!process.env.GOOGLE_OAUTH_TOKEN) {
                 const TOKEN_PATH = path.join(__dirname, '..', 'oauth-token.json');
                 fs.writeFileSync(TOKEN_PATH, JSON.stringify(credentials, null, 2));
-                console.log('✅ Token檔案已更新');
+                console.log('[GoogleClient] OAuth token file updated.');
             }
-            
-            console.log('✅ OAuth Token刷新成功');
+
+            console.log('[GoogleClient] OAuth token refreshed successfully via native https.');
             return credentials;
-            
+
         } catch (error) {
-            console.error('❌ 刷新Token失敗:', error.message);
+            console.error('[GoogleClient] Native OAuth refresh failed:', error.message);
             throw error;
         }
     }
