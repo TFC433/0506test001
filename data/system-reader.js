@@ -16,8 +16,8 @@ class SystemReader extends BaseReader {
      * @param {Object} sheets - Google Sheets API Client
      * @param {string} spreadsheetId - [Required] 指定要讀取的 Sheet ID
      */
-    constructor(sheets, spreadsheetId) {
-        super(sheets, spreadsheetId);
+    constructor(sheets, spreadsheetId, googleClientService = null) {
+        super(sheets, spreadsheetId, googleClientService);
     }
 
     /**
@@ -137,24 +137,24 @@ class SystemReader extends BaseReader {
      */
     async getUsers() {
         const cacheKey = 'users';
-        const range = '使用者名冊!A:D';
+        const range = '\u4f7f\u7528\u8005\u540d\u518a!A:D';
         const targetSheetId = this.config.IDS.AUTH || this.targetSpreadsheetId;
         const now = Date.now();
-        
+
         if (this.cache[cacheKey] && this.cache[cacheKey].data && (now - this.cache[cacheKey].timestamp < this.CACHE_DURATION)) {
             return this.cache[cacheKey].data;
         }
 
-        console.log(`🔐 [Auth] 讀取使用者名冊 (Sheet ID: ...${targetSheetId.slice(-6)})...`);
+        console.log(`[Auth] Reading user roster (Sheet ID: ...${targetSheetId.slice(-6)})...`);
 
         try {
-            const response = await this.sheets.spreadsheets.values.get({
-                spreadsheetId: targetSheetId,
-                range: range,
-            });
+            const rows = this.googleClientService
+                ? await this.googleClientService.getSheetValuesNative(targetSheetId, range)
+                : (await this.sheets.spreadsheets.values.get({
+                    spreadsheetId: targetSheetId,
+                    range: range,
+                })).data.values || [];
 
-            const rows = response.data.values || [];
-            
             const allUsers = rows.map((row, index) => {
                 const username = row[0] ? row[0].trim() : '';
                 const passwordHash = row[1] ? row[1].trim() : '';
@@ -174,8 +174,11 @@ class SystemReader extends BaseReader {
             return allUsers;
 
         } catch (error) {
-            console.error('❌ [SystemReader] 讀取使用者名冊失敗:', error.message);
-            return [];
+            console.error('[SystemReader] User roster read failed:', error.message);
+            const operationalError = new Error('\u4f7f\u7528\u8005\u540d\u518a\u8b80\u53d6\u5931\u6557\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66\u6216\u806f\u7d61\u7ba1\u7406\u54e1');
+            operationalError.code = 'USER_ROSTER_READ_FAILED';
+            operationalError.cause = error;
+            throw operationalError;
         }
     }
 

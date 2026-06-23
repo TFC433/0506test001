@@ -116,7 +116,7 @@ async function initializeServices() {
         const weeklyReader = new WeeklyBusinessReader(sheets, config.IDS.CORE);
         const weeklySqlReader = new WeeklyBusinessSqlReader();
         const announcementSqlReader = new AnnouncementSqlReader();
-        const systemReader = new SystemReader(sheets, config.IDS.SYSTEM);
+        const systemReader = new SystemReader(sheets, config.IDS.SYSTEM, googleClientService);
         const productReader = new ProductReader(sheets, config.IDS.PRODUCT);
         const internalOpsReader = new InternalOpsReader(sheets, config.IDS.INTERNAL_OPS);
         const subscriptionOpsSqlReader = new SubscriptionOpsSqlReader();

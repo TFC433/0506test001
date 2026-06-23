@@ -92,7 +92,19 @@ class AuthService {
             throw new Error('請輸入帳號和密碼');
         }
 
-        const user = await this._findUser(username);
+        let user;
+        try {
+            user = await this._findUser(username);
+        } catch (error) {
+            if (error.code === 'USER_ROSTER_READ_FAILED') {
+                console.error('[Auth] User roster dependency failure:', error.message);
+                const authDependencyError = new Error('\u4f7f\u7528\u8005\u540d\u518a\u8b80\u53d6\u5931\u6557\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66\u6216\u806f\u7d61\u7ba1\u7406\u54e1');
+                authDependencyError.code = 'USER_ROSTER_READ_FAILED';
+                authDependencyError.cause = error;
+                throw authDependencyError;
+            }
+            throw error;
+        }
 
         if (!user) {
             console.warn(`[Auth] 登入失敗：找不到使用者 ${username}`);

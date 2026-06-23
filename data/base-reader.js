@@ -44,7 +44,7 @@ class BaseReader {
      * @param {string} spreadsheetId - [Required] 指定要讀取的 Sheet ID。嚴格模式下不可為空。
      * @throws {Error} 若未提供 spreadsheetId 則拋出致命錯誤
      */
-    constructor(sheets, spreadsheetId) {
+    constructor(sheets, spreadsheetId, googleClientService = null) {
         if (!sheets) throw new Error('BaseReader 初始化失敗: 需要 Sheets API 實例');
         
         // ★★★ Strict Mode Check ★★★
@@ -54,6 +54,7 @@ class BaseReader {
         }
 
         this.sheets = sheets;
+        this.googleClientService = googleClientService;
         this.targetSpreadsheetId = spreadsheetId; // 綁定目標 ID
         this.config = config;
         this.cache = cache;
@@ -145,15 +146,14 @@ class BaseReader {
         // 4. 發起請求
         const fetchPromise = (async () => {
             try {
-                const response = await this._executeWithRetry(() => 
-                    this.sheets.spreadsheets.values.get({
-                        // ★★★ 使用注入的 targetSpreadsheetId ★★★
-                        spreadsheetId: this.targetSpreadsheetId,
-                        range: range,
-                    })
-                );
-
-                const rows = response.data.values || [];
+                const rows = this.googleClientService
+                    ? await this.googleClientService.getSheetValuesNative(this.targetSpreadsheetId, range)
+                    : (await this._executeWithRetry(() =>
+                        this.sheets.spreadsheets.values.get({
+                            spreadsheetId: this.targetSpreadsheetId,
+                            range: range,
+                        })
+                    )).data.values || [];
                 let data = [];
                 
                 if (rows.length > 1) {

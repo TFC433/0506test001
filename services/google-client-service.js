@@ -18,6 +18,7 @@ class GoogleClientService {
         this.oauthClient = null;
         this.serviceClient = null;
         this.oauthCredentials = null;
+        this.currentOAuthToken = null;
     }
 
     // OAuth認證 (用於Sheets和Calendar)
@@ -165,6 +166,137 @@ class GoogleClientService {
         });
     }
 
+    async getNativeAccessToken() {
+        const oauthClient = await this.getOAuthClient();
+        let token = this.currentOAuthToken || oauthClient.credentials;
+
+        if (this.isOAuthTokenExpiredOrExpiring(token)) {
+            const expiryState = this.getOAuthTokenExpiryState(token);
+            console.log(`[GoogleClient] Native access token state=${expiryState}; refreshing via native https...`);
+            token = await this.refreshOAuthTokenWithNativeHttps(token, this.oauthCredentials);
+            oauthClient.setCredentials(token);
+            this.currentOAuthToken = token;
+            console.log('[GoogleClient] Native access token refreshed successfully.');
+        }
+
+        if (!token || !token.access_token) {
+            throw new Error('OAuth access_token missing after native refresh check');
+        }
+
+        return token.access_token;
+    }
+
+    async getSheetValuesNative(spreadsheetId, range) {
+        if (!spreadsheetId) {
+            const error = new Error('Spreadsheet ID is required for native Sheets values.get');
+            error.code = 'MISSING_SPREADSHEET_ID';
+            throw error;
+        }
+
+        const delays = [500, 1000, 2000];
+        let lastError;
+
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                const accessToken = await this.getNativeAccessToken();
+                const response = await this.getSheetValuesNativeOnce(spreadsheetId, range, accessToken);
+
+                if (response.statusCode >= 200 && response.statusCode < 300) {
+                    let parsed;
+                    try {
+                        parsed = JSON.parse(response.body);
+                    } catch (parseError) {
+                        const error = new Error(`Native Sheets response JSON parse failed: ${parseError.message}`);
+                        error.code = 'SHEETS_RESPONSE_PARSE_FAILED';
+                        throw error;
+                    }
+
+                    console.log(`[GoogleClient] Native Sheets values.get succeeded for range=${range}`);
+                    return parsed.values || [];
+                }
+
+                const safeBody = response.body.slice(0, 300);
+                const statusError = new Error(`Native Sheets values.get returned status ${response.statusCode}`);
+                statusError.statusCode = response.statusCode;
+                statusError.responseBody = safeBody;
+
+                if (this.shouldRetryNativeSheetsError(statusError) && attempt < 3) {
+                    console.warn(`[GoogleClient] Native Sheets values.get failed attempt ${attempt}/3 for range=${range}; error=${statusError.message}`);
+                    await this.delay(delays[attempt - 1]);
+                    continue;
+                }
+
+                console.error(`[GoogleClient] Native Sheets values.get failed status=${response.statusCode} range=${range} body=${safeBody}`);
+                throw statusError;
+            } catch (error) {
+                lastError = error;
+
+                if (this.shouldRetryNativeSheetsError(error) && attempt < 3) {
+                    console.warn(`[GoogleClient] Native Sheets values.get failed attempt ${attempt}/3 for range=${range}; error=${error.message}`);
+                    await this.delay(delays[attempt - 1]);
+                    continue;
+                }
+
+                if (!error.statusCode) {
+                    console.error(`[GoogleClient] Native Sheets values.get failed error name=${error.name} code=${error.code || 'unknown'} message=${error.message}`);
+                }
+                throw error;
+            }
+        }
+
+        throw lastError;
+    }
+
+    getSheetValuesNativeOnce(spreadsheetId, range, accessToken) {
+        const options = {
+            hostname: 'sheets.googleapis.com',
+            path: `/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`,
+            method: 'GET',
+            timeout: 8000,
+            headers: {
+                Authorization: `Bearer ${accessToken}`,
+                Accept: 'application/json'
+            }
+        };
+
+        return new Promise((resolve, reject) => {
+            const req = https.request(options, (res) => {
+                let responseBody = '';
+
+                res.setEncoding('utf8');
+                res.on('data', (chunk) => {
+                    responseBody += chunk;
+                });
+                res.on('end', () => {
+                    resolve({
+                        statusCode: res.statusCode,
+                        body: responseBody
+                    });
+                });
+            });
+
+            req.on('timeout', () => {
+                req.destroy(new Error('Native Sheets values.get timeout after 8000ms'));
+            });
+
+            req.on('error', reject);
+            req.end();
+        });
+    }
+
+    shouldRetryNativeSheetsError(error) {
+        const retryableCodes = new Set(['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'EAI_AGAIN']);
+        const message = String(error && error.message || '').toLowerCase();
+
+        if (error && (error.statusCode === 429 || error.statusCode >= 500)) return true;
+        if (error && error.code === 'SHEETS_RESPONSE_PARSE_FAILED') return true;
+        if (error && retryableCodes.has(error.code)) return true;
+        return message.includes('premature close') ||
+            message.includes('invalid response body') ||
+            message.includes('socket hang up') ||
+            message.includes('fetch failed');
+    }
+
     installNativeOAuthRefreshHooks(oauthClient, credentials) {
         oauthClient.refreshToken = async (refreshToken) => {
             const refreshedCredentials = await this.refreshOAuthTokenWithNativeHttps({
@@ -172,6 +304,7 @@ class GoogleClientService {
                 refresh_token: oauthClient.credentials.refresh_token || refreshToken
             }, credentials);
             oauthClient.setCredentials(refreshedCredentials);
+            this.currentOAuthToken = refreshedCredentials;
             return {
                 tokens: refreshedCredentials,
                 res: { status: 200 }
@@ -184,6 +317,7 @@ class GoogleClientService {
                 credentials
             );
             oauthClient.setCredentials(refreshedCredentials);
+            this.currentOAuthToken = refreshedCredentials;
             return {
                 credentials: refreshedCredentials,
                 res: { status: 200 }
@@ -238,6 +372,7 @@ class GoogleClientService {
             }
 
             this.oauthClient.setCredentials(token);
+            this.currentOAuthToken = token;
             return this.oauthClient;
 
         } catch (error) {
@@ -343,6 +478,7 @@ class GoogleClientService {
                 this.oauthCredentials
             );
             this.oauthClient.setCredentials(credentials);
+            this.currentOAuthToken = credentials;
 
             if (!process.env.GOOGLE_OAUTH_TOKEN) {
                 const TOKEN_PATH = path.join(__dirname, '..', 'oauth-token.json');
