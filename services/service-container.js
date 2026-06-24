@@ -126,7 +126,7 @@ async function initializeServices() {
 
         // 3. Writers
         // RAW Keep
-        const contactWriter = new ContactWriter(sheets, config.IDS.RAW, contactRawReader);
+        const contactWriter = new ContactWriter(sheets, config.IDS.RAW, contactRawReader, googleClientService);
         
         // SQL Keep
         const contactSqlWriter = new ContactSqlWriter();
@@ -273,7 +273,8 @@ async function initializeServices() {
         const workflowService = new WorkflowService(
             opportunityService,
             interactionService,
-            contactService
+            contactService,
+            googleClientService
         );
 
         const eventService = new EventService(

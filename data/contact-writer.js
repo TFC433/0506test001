@@ -22,9 +22,10 @@ class ContactWriter extends BaseWriter {
      * @param {string} spreadsheetId - 目標 Spreadsheet ID
      * @param {Object} contactReader - 用於清除快取 (Optional)
      */
-    constructor(sheets, spreadsheetId, contactReader) {
+    constructor(sheets, spreadsheetId, contactReader, googleClientService) {
         super(sheets, spreadsheetId);
         this.contactReader = contactReader;
+        this.googleClientService = googleClientService;
         
         this.SHEET_OFFICIAL = this.config.SHEETS.CONTACT_LIST || 'Contact_List';
         this.SHEET_POTENTIAL = this.config.SHEETS.CONTACTS || 'Raw_Data'; 
@@ -115,13 +116,11 @@ class ContactWriter extends BaseWriter {
         }
 
         if (updates.length > 0) {
-             await this.sheets.spreadsheets.values.batchUpdate({
-                spreadsheetId: this.targetSpreadsheetId,
-                resource: {
-                    valueInputOption: 'USER_ENTERED',
-                    data: updates
-                }
-            });
+             await this.googleClientService.batchUpdateSheetValuesNative(
+                this.targetSpreadsheetId,
+                updates,
+                { valueInputOption: 'USER_ENTERED' }
+            );
         }
         
         console.log(`✅ [ContactWriter] Wrote potential contact row ${rowIndex}`);
@@ -179,10 +178,11 @@ class ContactWriter extends BaseWriter {
         updates.push({ range: `${this.SHEET_OFFICIAL}!M${rowIndex}`, values: [[modifier]] });
 
         if (updates.length > 0) {
-             await this.sheets.spreadsheets.values.batchUpdate({
-                spreadsheetId: this.targetSpreadsheetId,
-                resource: { valueInputOption: 'USER_ENTERED', data: updates }
-            });
+             await this.googleClientService.batchUpdateSheetValuesNative(
+                this.targetSpreadsheetId,
+                updates,
+                { valueInputOption: 'USER_ENTERED' }
+            );
         }
         
         return true;

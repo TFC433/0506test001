@@ -23,11 +23,13 @@ class WorkflowService {
      * @param {OpportunityService} opportunityService
      * @param {InteractionService} interactionService
      * @param {ContactService} contactService
+     * @param {GoogleClientService} googleClientService
      */
-    constructor(opportunityService, interactionService, contactService) {
+    constructor(opportunityService, interactionService, contactService, googleClientService) {
         this.opportunityService = opportunityService;
         this.interactionService = interactionService;
         this.contactService = contactService;
+        this.googleClientService = googleClientService;
     }
 
     _resolveModifier(user) {
@@ -63,18 +65,16 @@ class WorkflowService {
         if (statusIndex === undefined || isNaN(parsedRowIndex) || parsedRowIndex <= 1) return;
 
         const columnLetter = String.fromCharCode(65 + statusIndex);
-        await writer.sheets.spreadsheets.values.batchUpdate({
-            spreadsheetId: writer.targetSpreadsheetId,
-            resource: {
-                valueInputOption: 'USER_ENTERED',
-                data: [
-                    {
-                        range: `${writer.SHEET_POTENTIAL}!${columnLetter}${parsedRowIndex}`,
-                        values: [[status]]
-                    }
-                ]
-            }
-        });
+        await this.googleClientService.batchUpdateSheetValuesNative(
+            writer.targetSpreadsheetId,
+            [
+                {
+                    range: `${writer.SHEET_POTENTIAL}!${columnLetter}${parsedRowIndex}`,
+                    values: [[status]]
+                }
+            ],
+            { valueInputOption: 'USER_ENTERED' }
+        );
 
         if (this.contactService.contactRawReader && this.contactService.contactRawReader.invalidateCache) {
             this.contactService.contactRawReader.invalidateCache('contacts');
