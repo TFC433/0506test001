@@ -549,7 +549,9 @@ class OpportunitySqlReader {
             stageHistory: row.stage_history,
             createdTime: row.created_time,
             lastUpdateTime: row.updated_time, 
-            updatedBy: row.updated_by
+            updatedBy: row.updated_by,
+            rowActivityTime: row.row_activity_time ? new Date(row.row_activity_time).getTime() : null,
+            lineageGroupLatestActivity: row.lineage_group_latest_activity ? new Date(row.lineage_group_latest_activity).getTime() : null
         };
 
         if (row.effective_last_activity) {

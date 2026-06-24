@@ -463,7 +463,10 @@ function renderOpportunityRows(opportunities) {
         const channelBadge = salesMode === '直接販售' || channelText === '-'
             ? ''
             : `<span class="opp-channel-chip" title="${channelText}">${channelText}</span>`;
-        const lastActivityDate = opp.effectiveLastActivity ? new Date(opp.effectiveLastActivity).toLocaleDateString('zh-TW') : '-';
+        const displayLastActivity =
+            opp.rowActivityTime ||
+            opp.effectiveLastActivity;
+        const lastActivityDate = displayLastActivity ? new Date(displayLastActivity).toLocaleDateString('zh-TW') : '-';
 
         const oppParams = JSON.stringify({ opportunityId: opp.opportunityId }).replace(/"/g, '&quot;');
         const safeOppName = (opp.opportunityName || '').replace(/"/g, '&quot;');
