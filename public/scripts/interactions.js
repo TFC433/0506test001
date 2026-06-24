@@ -640,14 +640,14 @@ function renderAuditLogsTable(auditLogs, page = 1, limit = auditLogsPageSize) {
         const actorText = item.actorName && item.actorUsername
             ? `${item.actorName} (${item.actorUsername})`
             : (item.actorName || item.actorUsername || '-');
-        const targetText = item.targetLabel || item.targetId || '-';
+        const targetHtml = renderBusinessAnchorTarget(item);
         const rowNumber = (page - 1) * limit + index + 1;
 
         tableHTML += `
             <tr>
                 <td class="audit-col-number" data-label="#">${rowNumber}</td>
                 <td class="audit-col-time" data-label="時間">${escapeActivitySettingsHtml(formatAuditLogDate(item.createdAt))}</td>
-                <td class="audit-col-target" data-label="關聯對象">${escapeActivitySettingsHtml(targetText)}</td>
+                <td class="audit-col-target" data-label="關聯對象">${targetHtml}</td>
                 <td class="audit-col-event" data-label="事件類型"><span class="interactions-status-badge">${escapeActivitySettingsHtml(eventText)}</span></td>
                 <td class="audit-col-summary" data-label="內容摘要" style="white-space: pre-wrap; word-break: break-word;">${escapeActivitySettingsHtml(item.eventSummary || '-')}</td>
                 <td class="audit-col-module" data-label="模組"><span class="interactions-status-badge interactions-module-badge">${escapeActivitySettingsHtml(moduleText)}</span>${businessEventType}</td>
@@ -870,26 +870,65 @@ function renderActivityTimelineTable(items, page = 1, limit = activityTimelinePa
 }
 
 function renderActivityTimelineTarget(item) {
-    const targetText = item.targetLabel || item.targetId || '-';
+    const targetText = getBusinessAnchorDisplayText(item);
+    const secondaryHtml = renderTargetLabelSecondaryContext(item);
 
     if (item.source !== 'interaction') {
-        return escapeActivitySettingsHtml(targetText);
+        return `${escapeActivitySettingsHtml(targetText)}${secondaryHtml}`;
     }
 
     if (item.targetType === 'opportunity' && item.targetId) {
         return `<a href="#" class="text-link" onclick="event.preventDefault(); CRM_APP.navigateTo('opportunity-details', { opportunityId: '${escapeActivitySettingsJsString(item.targetId)}' })">
                     ${escapeActivitySettingsHtml(targetText)}
-                </a>`;
+                </a>${secondaryHtml}`;
     }
 
     if (item.targetType === 'company' && targetText !== '-') {
         const encodedCompanyName = encodeURIComponent(item.targetLabel || item.targetId);
         return `<a href="#" class="text-link" onclick="event.preventDefault(); CRM_APP.navigateTo('company-details', { companyName: '${escapeActivitySettingsJsString(encodedCompanyName)}' })">
                     ${escapeActivitySettingsHtml(targetText)}
-                </a>`;
+                </a>${secondaryHtml}`;
     }
 
-    return escapeActivitySettingsHtml(targetText);
+    return `${escapeActivitySettingsHtml(targetText)}${secondaryHtml}`;
+}
+
+function renderBusinessAnchorTarget(item) {
+    const targetText = getBusinessAnchorDisplayText(item);
+    const secondaryHtml = shouldSuppressAuditTargetSecondaryContext(item)
+        ? ''
+        : renderTargetLabelSecondaryContext(item);
+
+    return `${escapeActivitySettingsHtml(targetText)}${secondaryHtml}`;
+}
+
+function getBusinessAnchorDisplayText(item = {}) {
+    return item.businessAnchor || item.targetLabel || item.targetId || '-';
+}
+
+function shouldSuppressAuditTargetSecondaryContext(item = {}) {
+    if (!item.businessAnchor) return false;
+    return isInteractionAuditRow(item);
+}
+
+function isInteractionAuditRow(item = {}) {
+    const moduleName = String(item.module || '').trim();
+    const targetType = String(item.targetType || '').trim();
+    const businessEventType = String(item.businessEventType || '').trim();
+    const action = String(item.action || '').trim();
+
+    return moduleName === 'interactions'
+        || targetType === 'interaction'
+        || businessEventType.startsWith('interaction_')
+        || action.startsWith('interaction_');
+}
+
+function renderTargetLabelSecondaryContext(item = {}) {
+    const businessAnchor = item.businessAnchor || '';
+    const targetLabel = item.targetLabel || '';
+
+    if (!businessAnchor || !targetLabel || businessAnchor === targetLabel) return '';
+    return `<div class="text-muted">${escapeActivitySettingsHtml(targetLabel)}</div>`;
 }
 
 function renderInteractionSummaryWithEventReportLinks(summary) {

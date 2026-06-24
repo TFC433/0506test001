@@ -168,6 +168,24 @@ class OpportunitySqlReader {
         }
     }
 
+    async getOpportunityNamesByIds(opportunityIds = []) {
+        const ids = Array.from(new Set((opportunityIds || []).filter(Boolean)));
+        if (ids.length === 0) return new Map();
+
+        try {
+            const { data, error } = await supabase
+                .from(this.tableName)
+                .select('opportunity_id, opportunity_name')
+                .in('opportunity_id', ids);
+
+            if (error) throw new Error(`[OpportunitySqlReader] DB Error: ${error.message}`);
+            return new Map((data || []).map(row => [row.opportunity_id, row.opportunity_name]));
+        } catch (error) {
+            console.error('[OpportunitySqlReader] getOpportunityNamesByIds Error:', error);
+            throw error;
+        }
+    }
+
     async getOpportunitiesByParentId(parentId) {
         if (!parentId) throw new Error('OpportunitySqlReader: parentId is required');
 

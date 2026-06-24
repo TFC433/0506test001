@@ -143,6 +143,11 @@ class SystemController {
             });
 
             const result = await this.auditLoggerService.getAuditLogs(filters);
+            if (this.activityTimelineService && typeof this.activityTimelineService.enrichBusinessAnchors === 'function') {
+                result.data = await this.activityTimelineService.enrichBusinessAnchors(result.data || [], {
+                    includeInteractionAuditRows: true
+                });
+            }
             const totalItems = result.totalItems || 0;
             const total = Math.max(Math.ceil(totalItems / limit), 1);
 

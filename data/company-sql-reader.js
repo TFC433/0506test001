@@ -102,6 +102,24 @@ class CompanySqlReader {
         }
     }
 
+    async getCompanyNamesByIds(companyIds = []) {
+        const ids = Array.from(new Set((companyIds || []).filter(Boolean)));
+        if (ids.length === 0) return new Map();
+
+        try {
+            const { data, error } = await supabase
+                .from(this.tableName)
+                .select('company_id, company_name')
+                .in('company_id', ids);
+
+            if (error) throw new Error(`[CompanySqlReader] DB Error: ${error.message}`);
+            return new Map((data || []).map(row => [row.company_id, row.company_name]));
+        } catch (error) {
+            console.error('[CompanySqlReader] getCompanyNamesByIds Error:', error);
+            throw error;
+        }
+    }
+
     /**
      * [Performance Optimization]
      * Cross-domain projection: Fetches ONLY minimal activity timestamps from event_logs

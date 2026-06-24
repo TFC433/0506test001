@@ -296,7 +296,9 @@ async function initializeServices() {
         const activityTimelineService = new ActivityTimelineService({
             interactionService,
             auditLoggerService,
-            systemService
+            systemService,
+            opportunitySqlReader,
+            companySqlReader
         });
 
         // 5. Controllers

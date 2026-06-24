@@ -15,10 +15,12 @@ const LEGACY_INTERACTION_TITLE_EVENT_TYPES = new Map([
 ]);
 
 class ActivityTimelineService {
-    constructor({ interactionService, auditLoggerService, systemService }) {
+    constructor({ interactionService, auditLoggerService, systemService, opportunitySqlReader = null, companySqlReader = null }) {
         this.interactionService = interactionService;
         this.auditLoggerService = auditLoggerService;
         this.systemService = systemService;
+        this.opportunitySqlReader = opportunitySqlReader;
+        this.companySqlReader = companySqlReader;
     }
 
     async getActivityTimeline(options = {}) {
@@ -41,7 +43,8 @@ class ActivityTimelineService {
         let auditItems = [];
         if (enabledEventTypes.length > 0) {
             const auditLogs = await this._fetchEnabledAuditLogs(enabledEventTypes, targetType, targetId, page, limit);
-            auditItems = auditLogs.map(item => this._mapAuditToTimelineItem(item));
+            const enrichedAuditLogs = await this.enrichBusinessAnchors(auditLogs);
+            auditItems = enrichedAuditLogs.map(item => this._mapAuditToTimelineItem(item));
         }
 
         const mergedItems = interactionItems
@@ -108,6 +111,7 @@ class ActivityTimelineService {
             targetType,
             targetId,
             targetLabel: item.opportunityName || item.companyName || '',
+            businessAnchor: item.opportunityName || item.companyName || '',
             businessEventType,
             interactionType: item.interactionType || item.eventType || '',
             module: null,
@@ -170,11 +174,94 @@ class ActivityTimelineService {
             targetType: item.targetType || '',
             targetId: item.targetId || '',
             targetLabel: item.targetLabel || '',
+            businessAnchor: item.businessAnchor || '',
             businessEventType: item.businessEventType || '',
             interactionType: null,
             module: item.module || '',
             link: null
         };
+    }
+
+    async enrichBusinessAnchors(items = [], options = {}) {
+        if (!Array.isArray(items) || items.length === 0) return items;
+
+        const enrichableItems = items.filter(item => this._isBusinessAnchorEnrichableAuditItem(item, options));
+        if (enrichableItems.length === 0) return items;
+
+        const opportunityIds = enrichableItems
+            .map(item => this._getRelatedOpportunityId(item))
+            .filter(Boolean);
+        const companyIds = enrichableItems
+            .map(item => this._getRelatedCompanyId(item))
+            .filter(Boolean);
+
+        const [opportunityNames, companyNames] = await Promise.all([
+            this._fetchOpportunityNameMap(opportunityIds),
+            this._fetchCompanyNameMap(companyIds)
+        ]);
+
+        return items.map(item => {
+            if (!this._isBusinessAnchorEnrichableAuditItem(item, options)) return item;
+
+            const opportunityId = this._getRelatedOpportunityId(item);
+            const companyId = this._getRelatedCompanyId(item);
+            const businessAnchor = opportunityNames.get(opportunityId)
+                || companyNames.get(companyId)
+                || '';
+
+            return businessAnchor ? { ...item, businessAnchor } : item;
+        });
+    }
+
+    _isBusinessAnchorEnrichableAuditItem(item = {}, options = {}) {
+        return this._isEventLogDerivedAuditItem(item)
+            || (options.includeInteractionAuditRows === true && this._isInteractionAuditItem(item));
+    }
+
+    _isEventLogDerivedAuditItem(item = {}) {
+        const businessEventType = this._normalizeString(item.businessEventType);
+        return item.module === 'event_logs'
+            || item.targetType === 'event_log'
+            || businessEventType.startsWith('event_log_');
+    }
+
+    _isInteractionAuditItem(item = {}) {
+        const businessEventType = this._normalizeString(item.businessEventType);
+        return item.module === 'interactions'
+            || item.targetType === 'interaction'
+            || businessEventType.startsWith('interaction_');
+    }
+
+    _getRelatedOpportunityId(item = {}) {
+        const metadata = item.metadata && typeof item.metadata === 'object' ? item.metadata : {};
+        return this._normalizeString(metadata.related_opportunity_id || item.opportunityId || item.opportunity_id);
+    }
+
+    _getRelatedCompanyId(item = {}) {
+        const metadata = item.metadata && typeof item.metadata === 'object' ? item.metadata : {};
+        return this._normalizeString(metadata.related_company_id || item.companyId || item.company_id);
+    }
+
+    async _fetchOpportunityNameMap(opportunityIds = []) {
+        const ids = Array.from(new Set(opportunityIds.filter(Boolean)));
+        if (ids.length === 0 || !this.opportunitySqlReader) return new Map();
+
+        if (typeof this.opportunitySqlReader.getOpportunityNamesByIds === 'function') {
+            return this.opportunitySqlReader.getOpportunityNamesByIds(ids);
+        }
+
+        return new Map();
+    }
+
+    async _fetchCompanyNameMap(companyIds = []) {
+        const ids = Array.from(new Set(companyIds.filter(Boolean)));
+        if (ids.length === 0 || !this.companySqlReader) return new Map();
+
+        if (typeof this.companySqlReader.getCompanyNamesByIds === 'function') {
+            return this.companySqlReader.getCompanyNamesByIds(ids);
+        }
+
+        return new Map();
     }
 
     _matchesTargetFilter(item, targetType, targetId) {
