@@ -629,6 +629,27 @@ class OpportunityService {
 
                 return null;
             };
+            const resolveSourceRowIndex = (sourceId) => {
+                if (sourceId === null || sourceId === undefined) return null;
+
+                const raw = String(sourceId).trim();
+                if (!raw || raw.toUpperCase() === 'MANUAL') return null;
+
+                const businessCardMatch = raw.match(/^BC-(\d+)$/i);
+                if (businessCardMatch) return businessCardMatch[1];
+
+                if (/^\d+$/.test(raw)) return raw;
+
+                return null;
+            };
+            const findRawBySourceId = (linkedContact, rawPool) => {
+                if (!linkedContact || !Array.isArray(rawPool) || rawPool.length === 0) return null;
+
+                const sourceRowIndex = resolveSourceRowIndex(linkedContact.sourceId || linkedContact.source_id);
+                if (!sourceRowIndex) return null;
+
+                return rawPool.find(rawContact => String(rawContact.rowIndex || '') === String(sourceRowIndex)) || null;
+            };
 
             let potentialContacts = [];
             if (matchedCompany && this.contactSqlReader) {
@@ -677,7 +698,8 @@ class OpportunityService {
                 const rawPotentialContacts = rawSameCompanyContacts;
 
                 linkedContacts.forEach(linkedContact => {
-                    const matchedRaw = findGlobalRawMatchForLinkedContact(linkedContact, mappedRawContacts);
+                    const matchedRaw = findRawBySourceId(linkedContact, mappedRawContacts)
+                        || findGlobalRawMatchForLinkedContact(linkedContact, mappedRawContacts);
                     if (matchedRaw) {
                         if (!linkedContact.driveLink && matchedRaw.driveLink) linkedContact.driveLink = matchedRaw.driveLink;
                         if (!linkedContact.rowIndex && matchedRaw.rowIndex) linkedContact.rowIndex = matchedRaw.rowIndex;
