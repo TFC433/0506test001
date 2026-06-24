@@ -1280,6 +1280,28 @@ Do not replace the current stepper with a heavier modal-first, card-heavy, or be
 
 ---
 
+## 26.1.8 Opportunity List Sorting and Display Baseline
+
+Accepted behavior:
+
+* Opportunity list sorting is parent-child lineage group based.
+* Parent-child groups must not be flattened to solve sorting.
+* If any opportunity inside the same `lineage_root_id` group has the newest direct business-related activity, the whole group moves to the top.
+* Group sorting uses `lineage_group_latest_activity` / `lineageGroupLatestActivity`.
+* Each visible row displays its own `row_activity_time` / `rowActivityTime`.
+* Parent rows must not display child row activity time unless the parent row itself has that activity time.
+* The display fallback is `effectiveLastActivity` only when `rowActivityTime` is unavailable.
+* `effectiveLastActivity` must not be globally overwritten to mean group latest activity.
+* `audit_logs` must not be used as the opportunity list sorting source.
+
+Data model notes:
+
+* `row_activity_time` is the per-opportunity business activity timestamp.
+* `lineage_group_latest_activity` is the max `row_activity_time` within the same parent-child lineage group.
+* Related activity tables must be pre-aggregated before joining into the opportunity view to avoid duplicate opportunity rows.
+
+---
+
 # 27. Current Workspace Productization Status (2026-05)
 
 Current Activity Hub status:
@@ -1768,6 +1790,12 @@ and disciplined data lifecycle governance.
 ---
 
 # Changelog
+
+## 2026-06-24
+
+* Recorded Phase 8C/8D Opportunity List sorting/display baseline.
+* Clarified distinction between group sorting key `lineageGroupLatestActivity` and per-row display key `rowActivityTime`.
+* Added anti-pattern: do not use `audit_logs` as a business activity sorting source.
 
 ## 2026-06-18
 

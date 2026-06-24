@@ -8,6 +8,14 @@ Audit instrumentation is backend-owned and is attached to meaningful CRM mutatio
 
 `system_audit_logs` is the backend foundation for future admin or manager log viewers. No frontend audit viewer or manager log viewer was implemented in this chapter.
 
+### Audit Logs Are Not Business Sorting Sources
+
+`audit_logs` are governance evidence and operational traceability records. They must not be used as the Opportunity List sorting source or as a general business activity sorting model.
+
+Opportunity business activity sorting should be based only on direct opportunity-related business tables with `opportunity_id`, such as opportunity records, interactions, opportunity-contact links, and approved event log tables.
+
+Do not count read/view/search/login/session/audit-query events as opportunity business activity.
+
 ## 2. Architecture Rules
 
 Controllers build compact `auditContext` objects from `req.user` and request metadata. Services receive optional `auditContext`.

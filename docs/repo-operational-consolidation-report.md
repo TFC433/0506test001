@@ -119,6 +119,26 @@ Canonical governance reference:
 
 * `docs/audit-session-log-governance.md`
 
+## 8.1.1 Phase 8C/8D Opportunity List Sorting Consolidation
+
+Status: PASS
+
+Completed behavior:
+
+* `public.opportunities_lineage_grouped_view` now provides a per-row `row_activity_time` that aggregates direct opportunity-related business activity.
+* The view keeps `lineage_group_latest_activity` as the parent-child group sorting timestamp.
+* Parent-child group order remains intact; groups are not flattened.
+* Backend DTO exposes `rowActivityTime` and `lineageGroupLatestActivity` while preserving `effectiveLastActivity`.
+* Opportunity List frontend displays `rowActivityTime || effectiveLastActivity` for the `?敺暑??` column.
+* The list sorting can use group latest activity while each row still displays its own activity timestamp.
+
+Protected anti-patterns:
+
+* Do not direct-join activity tables into the view without pre-aggregation.
+* Do not use `audit_logs` as the sorting source.
+* Do not overwrite `effectiveLastActivity` globally.
+* Do not display `lineageGroupLatestActivity` as every row's visible `?敺暑??` value.
+
 ## 8.2 Google API Native Transport Governance
 
 Render production experienced `ERR_STREAM_PREMATURE_CLOSE` / `Premature close` failures when Google APIs were accessed through the `googleapis` / `gaxios` / `node-fetch` request path.

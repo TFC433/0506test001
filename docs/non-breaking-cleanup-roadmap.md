@@ -30,6 +30,11 @@ This document does not authorize deletion or runtime changes by itself. Any futu
 - Product-id possible-spec pricing must not fall back to `systemConfig` value2.
 - Opportunity Detail Activity Hub and event report flow.
 - Opportunity Detail current stepper UI.
+- Opportunity list sorting baseline: parent-child groups must remain grouped; group order is driven by `lineageGroupLatestActivity` / `lineage_group_latest_activity`.
+- Opportunity list row display baseline: the `?敺暑??` column displays each row's own `rowActivityTime` / `row_activity_time`, falling back to `effectiveLastActivity`.
+- Do not replace row display time with group latest time. Parent rows must not display child activity time unless the parent itself has that activity time.
+- Do not flatten opportunity parent-child groups during cleanup.
+- Do not overwrite `effectiveLastActivity` globally to implement group sorting.
 - Sales Analysis ECharts direction.
 - Sales Analysis `成交類型` donut chart is a standard professional donut with no rounded slice corners, no thick transparent border gaps, and subtle `padAngle: 1` separation.
 - Sales Analysis `成交類型` donut must not be documented as fully gapless.
