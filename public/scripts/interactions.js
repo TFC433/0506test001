@@ -132,7 +132,6 @@ function renderInteractionOverviewShell(query = '', activeTab = 'crm') {
     const isCrmTab = activeTab === 'crm';
     const isAuditTab = activeTab === 'audit';
     const isActivityTab = activeTab === 'activity';
-    const isLegacyCrmTab = isCrmTab && !isCurrentUserSuperAdmin();
 
     return `
         <div class="dashboard-widget interactions-compact-theme">
@@ -144,8 +143,7 @@ function renderInteractionOverviewShell(query = '', activeTab = 'crm') {
             </div>
             ${isCrmTab ? `
                 <div class="search-pagination interactions-toolbar" style="padding: 0 1.5rem 1rem;">
-                    ${isLegacyCrmTab ? `<input type="text" class="search-box" id="all-interactions-search" placeholder="搜尋內容、機會名稱、記錄人..." value="${query}">` : ''}
-                    ${isCrmTab && !isLegacyCrmTab ? `<div class="lightweight-action-group interactions-control-group"><span id="activity-timeline-range" class="text-muted interactions-range-text"></span><span class="interactions-meta-separator">|</span>${renderPageSizeQuickButtons('activity-timeline', activityTimelinePageSize, ACTIVITY_TIMELINE_PAGE_SIZE_OPTIONS)}<span class="interactions-meta-separator">|</span></div>` : ''}
+                    <div class="lightweight-action-group interactions-control-group"><span id="activity-timeline-range" class="text-muted interactions-range-text"></span><span class="interactions-meta-separator">|</span>${renderPageSizeQuickButtons('activity-timeline', activityTimelinePageSize, ACTIVITY_TIMELINE_PAGE_SIZE_OPTIONS)}<span class="interactions-meta-separator">|</span></div>
                     <div class="pagination interactions-pagination" id="all-interactions-pagination"></div>
                 </div>
             ` : ''}
@@ -1096,9 +1094,7 @@ async function loadAllInteractionsPage(page = 1, query = '') {
     const container = document.getElementById('page-interactions');
     if (!container) return;
 
-    if (isCurrentUserSuperAdmin()) {
-        return loadActivityTimelinePage(page);
-    }
+    return loadActivityTimelinePage(page);
 
     currentInteractionOverviewTab = 'crm';
     currentInteractionOverviewQuery = query;

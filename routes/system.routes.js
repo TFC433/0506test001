@@ -60,7 +60,7 @@ router.get('/user-sessions', requireRole('super_admin'), (req, res, next) => {
 });
 
 // GET /api/activity-timeline
-router.get('/activity-timeline', requireRole('super_admin'), (req, res, next) => {
+router.get('/activity-timeline', (req, res, next) => {
     getController(req).getActivityTimeline(req, res, next);
 });
 
