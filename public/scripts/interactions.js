@@ -495,6 +495,66 @@ function formatAuditLogDate(value) {
     return value;
 }
 
+function getAuditMetadataValue(item = {}, key) {
+    const metadata = item.metadata;
+    if (!metadata || typeof metadata !== 'object') return '';
+    const value = metadata[key];
+    if (value === null || value === undefined || typeof value === 'object') return '';
+    return String(value).trim();
+}
+
+function getAuditInteractionActionLabels() {
+    return {
+        interaction_created: '新增互動紀錄',
+        interaction_updated: '編輯互動紀錄',
+        interaction_deleted: '刪除互動紀錄'
+    };
+}
+
+function isInvalidSemanticInteractionTypeLabel(value, item = {}) {
+    const label = String(value || '').trim();
+    if (!label || label === '[object Object]') return true;
+    if (label === 'interactions') return true;
+    if (label.startsWith('interaction_')) return true;
+    if (label.includes('互動紀錄')) return true;
+    if (label === String(item.businessEventType || '').trim()) return true;
+    if (label === String(item.action || '').trim()) return true;
+    if (label === String(item.module || '').trim()) return true;
+    return Object.values(getAuditInteractionActionLabels()).includes(label);
+}
+
+function getSemanticInteractionTypeLabel(item = {}) {
+    const candidates = [
+        item.interactionType,
+        getAuditMetadataValue(item, 'interaction_type'),
+        getAuditMetadataValue(item, 'event_type'),
+        item.eventType,
+        item.eventTitle
+    ];
+
+    return candidates.find(value => !isInvalidSemanticInteractionTypeLabel(value, item)) || '';
+}
+
+function getAuditInteractionBadgeDisplay(item = {}, fallbackText = '-') {
+    if (!isInteractionAuditRow(item)) {
+        return { title: fallbackText, subtitle: '' };
+    }
+
+    const actionCode = String(item.businessEventType || item.action || '').trim();
+    const actionLabels = getAuditInteractionActionLabels();
+    const title = actionLabels[actionCode] || fallbackText;
+    const subtitle = getAuditInteractionTypeSubtitle(item, title);
+
+    return { title, subtitle };
+}
+
+function getAuditInteractionTypeSubtitle(item = {}, title = '') {
+    const subtitle = getSemanticInteractionTypeLabel(item);
+    if (!subtitle || subtitle === title) return '';
+
+    return subtitle;
+}
+
 function formatUserActivityDevice(userAgent) {
     const normalizedUserAgent = String(userAgent || '').trim();
     if (!normalizedUserAgent) return '-';
@@ -633,6 +693,10 @@ function renderAuditLogsTable(auditLogs, page = 1, limit = auditLogsPageSize) {
 
     auditLogs.forEach((item, index) => {
         const eventText = item.eventTitle || item.businessEventType || item.action || '-';
+        const eventDisplay = getAuditInteractionBadgeDisplay(item, eventText);
+        const eventSubtitle = eventDisplay.subtitle
+            ? `<div class="text-muted">${escapeActivitySettingsHtml(eventDisplay.subtitle)}</div>`
+            : '';
         const moduleText = item.module || '-';
         const businessEventType = item.businessEventType && item.businessEventType !== eventText
             ? `<div class="text-muted">${escapeActivitySettingsHtml(item.businessEventType)}</div>`
@@ -648,7 +712,7 @@ function renderAuditLogsTable(auditLogs, page = 1, limit = auditLogsPageSize) {
                 <td class="interactions-col-number audit-col-number" data-label="#">${rowNumber}</td>
                 <td class="interactions-col-time audit-col-time" data-label="時間">${escapeActivitySettingsHtml(formatAuditLogDate(item.createdAt))}</td>
                 <td class="interactions-col-target audit-col-target" data-label="關聯對象">${targetHtml}</td>
-                <td class="interactions-col-event audit-col-event" data-label="事件類型"><span class="interactions-status-badge">${escapeActivitySettingsHtml(eventText)}</span></td>
+                <td class="interactions-col-event audit-col-event" data-label="事件類型"><span class="interactions-status-badge">${escapeActivitySettingsHtml(eventDisplay.title)}</span>${eventSubtitle}</td>
                 <td class="interactions-col-summary audit-col-summary" data-label="內容摘要" style="white-space: pre-wrap; word-break: break-word;">${escapeActivitySettingsHtml(item.eventSummary || '-')}</td>
                 <td class="audit-col-module" data-label="模組"><span class="interactions-status-badge interactions-module-badge">${escapeActivitySettingsHtml(moduleText)}</span>${businessEventType}</td>
                 <td class="audit-col-user" data-label="使用者">${escapeActivitySettingsHtml(actorText)}</td>
@@ -843,8 +907,15 @@ function renderActivityTimelineTable(items, page = 1, limit = activityTimelinePa
         const summaryHtml = item.source === 'interaction'
             ? renderInteractionSummaryWithEventReportLinks(item.summary || '-')
             : escapeActivitySettingsHtml(item.summary || '-');
-        const titleText = item.title || item.businessEventType || item.interactionType || item.module || '-';
-        const secondaryText = item.source === 'audit'
+        const semanticInteractionType = getSemanticInteractionTypeLabel(item);
+        const isCrmInteractionRow = item.source === 'interaction'
+            || (item.source === 'audit' && isInteractionAuditRow(item));
+        const titleText = isCrmInteractionRow && semanticInteractionType
+            ? semanticInteractionType
+            : (item.title || item.businessEventType || item.interactionType || item.module || '-');
+        const secondaryText = isCrmInteractionRow
+            ? ''
+            : item.source === 'audit'
             ? (item.module || item.businessEventType || '')
             : (item.interactionType || '');
         const eventHtml = secondaryText && secondaryText !== titleText
@@ -1031,12 +1102,14 @@ function renderAllInteractionsTable(interactions, page = 1, limit = interactions
         }
         // --- 修正結束 ---
 
+        const eventText = getSemanticInteractionTypeLabel(item) || item.eventTitle || item.eventType || '-';
+
         tableHTML += `
             <tr>
                 <td class="interactions-col-number" data-label="#">${(page - 1) * limit + index + 1}</td>
                 <td class="interactions-col-time" data-label="互動時間">${formatDateTime(item.interactionTime)}</td>
                 <td class="interactions-col-target" data-label="關聯對象">${opportunityLink}</td>
-                <td class="interactions-col-event" data-label="事件類型"><span class="interactions-status-badge">${item.eventTitle || item.eventType}</span></td>
+                <td class="interactions-col-event" data-label="事件類型"><span class="interactions-status-badge">${escapeActivitySettingsHtml(eventText)}</span></td>
                 <td class="interactions-col-summary" data-label="內容摘要" style="white-space: pre-wrap; word-break: break-word;">${summaryHTML}</td>
                 <td data-label="記錄人">${item.recorder || '-'}</td>
             </tr>
