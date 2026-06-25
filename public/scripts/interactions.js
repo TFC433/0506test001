@@ -17,6 +17,16 @@ const ACTIVITY_TIMELINE_PAGE_SIZE_OPTIONS = [50, 100];
 const SUPER_ADMIN_PAGE_SIZE_OPTIONS = [50, 100, 300];
 const USER_SESSION_PERIOD_OPTIONS = [7, 30, 90];
 const USER_SESSION_TIMEOUT_HOURS = 8;
+const CRM_ENGINEERING_SUBTITLES = new Set([
+    'event_logs',
+    'interactions',
+    'internal_ops',
+    'interaction_created',
+    'interaction_updated',
+    'event_log_updated',
+    'company_updated',
+    'opportunity_value_changed'
+]);
 
 const ACTIVITY_TIMELINE_OPTION_GROUPS = [
     {
@@ -495,6 +505,48 @@ function formatAuditLogDate(value) {
     return value;
 }
 
+function isEngineeringCrmSubtitle(value) {
+    const normalizedValue = String(value || '').trim();
+    return CRM_ENGINEERING_SUBTITLES.has(normalizedValue);
+}
+
+function getCrmActivitySecondaryText(item = {}) {
+    const candidates = item.source === 'audit'
+        ? [item.interactionType, item.eventTitle, item.businessEventType, item.module]
+        : [item.interactionType];
+
+    return candidates.find(value => value && !isEngineeringCrmSubtitle(value)) || '';
+}
+
+function getAuditInteractionAction(item = {}) {
+    return String(item.businessEventType || item.action || '').trim();
+}
+
+function getAuditInteractionEventDisplay(item = {}) {
+    const fallbackTitle = item.eventTitle || item.businessEventType || item.action || '-';
+
+    if (!isInteractionAuditRow(item)) {
+        return { title: fallbackTitle, subtitle: '' };
+    }
+
+    const action = getAuditInteractionAction(item);
+    let title = fallbackTitle;
+
+    if (action.includes('interaction_created')) {
+        title = '新增互動紀錄';
+    } else if (action.includes('interaction_updated')) {
+        title = '修改互動紀錄';
+    }
+
+    const subtitle = item.eventTitle
+        && item.eventTitle !== title
+        && !isEngineeringCrmSubtitle(item.eventTitle)
+        ? item.eventTitle
+        : '';
+
+    return { title, subtitle };
+}
+
 function formatUserActivityDevice(userAgent) {
     const normalizedUserAgent = String(userAgent || '').trim();
     if (!normalizedUserAgent) return '-';
@@ -632,7 +684,11 @@ function renderAuditLogsTable(auditLogs, page = 1, limit = auditLogsPageSize) {
                         <tbody>`;
 
     auditLogs.forEach((item, index) => {
-        const eventText = item.eventTitle || item.businessEventType || item.action || '-';
+        const eventDisplay = getAuditInteractionEventDisplay(item);
+        const eventText = eventDisplay.title;
+        const eventSubtitle = eventDisplay.subtitle
+            ? `<div class="text-muted">${escapeActivitySettingsHtml(eventDisplay.subtitle)}</div>`
+            : '';
         const moduleText = item.module || '-';
         const businessEventType = item.businessEventType && item.businessEventType !== eventText
             ? `<div class="text-muted">${escapeActivitySettingsHtml(item.businessEventType)}</div>`
@@ -648,7 +704,7 @@ function renderAuditLogsTable(auditLogs, page = 1, limit = auditLogsPageSize) {
                 <td class="audit-col-number" data-label="#">${rowNumber}</td>
                 <td class="audit-col-time" data-label="時間">${escapeActivitySettingsHtml(formatAuditLogDate(item.createdAt))}</td>
                 <td class="audit-col-target" data-label="關聯對象">${targetHtml}</td>
-                <td class="audit-col-event" data-label="事件類型"><span class="interactions-status-badge">${escapeActivitySettingsHtml(eventText)}</span></td>
+                <td class="audit-col-event" data-label="事件類型"><span class="interactions-status-badge">${escapeActivitySettingsHtml(eventText)}</span>${eventSubtitle}</td>
                 <td class="audit-col-summary" data-label="內容摘要" style="white-space: pre-wrap; word-break: break-word;">${escapeActivitySettingsHtml(item.eventSummary || '-')}</td>
                 <td class="audit-col-module" data-label="模組"><span class="interactions-status-badge interactions-module-badge">${escapeActivitySettingsHtml(moduleText)}</span>${businessEventType}</td>
                 <td class="audit-col-user" data-label="使用者">${escapeActivitySettingsHtml(actorText)}</td>
@@ -844,9 +900,7 @@ function renderActivityTimelineTable(items, page = 1, limit = activityTimelinePa
             ? renderInteractionSummaryWithEventReportLinks(item.summary || '-')
             : escapeActivitySettingsHtml(item.summary || '-');
         const titleText = item.title || item.businessEventType || item.interactionType || item.module || '-';
-        const secondaryText = item.source === 'audit'
-            ? (item.module || item.businessEventType || '')
-            : (item.interactionType || '');
+        const secondaryText = getCrmActivitySecondaryText(item);
         const eventHtml = secondaryText && secondaryText !== titleText
             ? `<span class="interactions-status-badge">${escapeActivitySettingsHtml(titleText)}</span><div class="text-muted">${escapeActivitySettingsHtml(secondaryText)}</div>`
             : `<span class="interactions-status-badge">${escapeActivitySettingsHtml(titleText)}</span>`;
@@ -966,7 +1020,11 @@ async function loadAllInteractionsPage(page = 1, query = '') {
     try {
         const result = await authedFetch(`/api/interactions/all?page=${page}&q=${encodeURIComponent(query)}`);
         
-        document.getElementById('all-interactions-content').innerHTML = renderAllInteractionsTable(result.data || []);
+        document.getElementById('all-interactions-content').innerHTML = renderAllInteractionsTable(
+            result.data || [],
+            result.pagination?.current || page,
+            result.pagination?.limit || result.data?.length || 50
+        );
         renderPagination('all-interactions-pagination', result.pagination, 'loadAllInteractionsPage');
 
     } catch (error) {
@@ -982,15 +1040,16 @@ async function loadAllInteractionsPage(page = 1, query = '') {
  * @param {Array<object>} interactions - 互動紀錄資料陣列
  * @returns {string} HTML 表格字串
  */
-function renderAllInteractionsTable(interactions) {
+function renderAllInteractionsTable(interactions, page = 1, limit = interactions.length || 50) {
     if (!interactions || interactions.length === 0) {
         return '<div class="alert alert-info" style="text-align:center;">找不到符合條件的互動紀錄</div>';
     }
 
     // --- 替換為表格 Table HTML ---
-    let tableHTML = `<table class="data-table interactions-table interactions-legacy-crm-table">
+    let tableHTML = `<table class="compact-data-table interactions-table interactions-legacy-crm-table">
                         <thead>
                             <tr>
+                                <th>#</th>
                                 <th>互動時間</th>
                                 <th>關聯對象</th>
                                 <th>事件類型</th>
@@ -1000,7 +1059,7 @@ function renderAllInteractionsTable(interactions) {
                         </thead>
                         <tbody>`;
 
-    interactions.forEach(item => {
+    interactions.forEach((item, index) => {
         let summaryHTML = item.contentSummary || '';
         // 讓摘要中的報告連結可以點擊
         const linkRegex = /\[(.*?)\]\(event_log_id=([a-zA-Z0-9]+)\)/g; // 修正 Regex
@@ -1028,6 +1087,7 @@ function renderAllInteractionsTable(interactions) {
 
         tableHTML += `
             <tr>
+                <td data-label="#">${(page - 1) * limit + index + 1}</td>
                 <td data-label="互動時間">${formatDateTime(item.interactionTime)}</td>
                 <td data-label="關聯對象">${opportunityLink}</td>
                 <td data-label="事件類型"><span class="interactions-status-badge">${item.eventTitle || item.eventType}</span></td>

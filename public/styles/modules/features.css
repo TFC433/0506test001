@@ -715,6 +715,8 @@
 
 .interactions-compact-theme .interactions-activity-timeline-table th:nth-child(1),
 .interactions-compact-theme .interactions-activity-timeline-table td:nth-child(1),
+.interactions-compact-theme .interactions-legacy-crm-table th:nth-child(1),
+.interactions-compact-theme .interactions-legacy-crm-table td:nth-child(1),
 .interactions-compact-theme .interactions-user-activity-table th:nth-child(1),
 .interactions-compact-theme .interactions-user-activity-table td:nth-child(1) {
     width: 42px;
@@ -725,8 +727,8 @@
 .interactions-compact-theme .interactions-activity-timeline-table td:nth-child(2),
 .interactions-compact-theme .interactions-audit-table th:nth-child(1),
 .interactions-compact-theme .interactions-audit-table td:nth-child(1),
-.interactions-compact-theme .interactions-legacy-crm-table th:nth-child(1),
-.interactions-compact-theme .interactions-legacy-crm-table td:nth-child(1),
+.interactions-compact-theme .interactions-legacy-crm-table th:nth-child(2),
+.interactions-compact-theme .interactions-legacy-crm-table td:nth-child(2),
 .interactions-compact-theme .interactions-user-activity-table th:nth-child(4),
 .interactions-compact-theme .interactions-user-activity-table td:nth-child(4),
 .interactions-compact-theme .interactions-user-activity-table th:nth-child(5),
@@ -742,7 +744,7 @@
 
 .interactions-compact-theme .interactions-activity-timeline-table td:nth-child(5),
 .interactions-compact-theme .interactions-audit-table td:nth-child(3),
-.interactions-compact-theme .interactions-legacy-crm-table td:nth-child(4) {
+.interactions-compact-theme .interactions-legacy-crm-table td:nth-child(5) {
     color: var(--text-secondary);
     font-size: 12px;
     line-height: 1.4;
@@ -752,8 +754,8 @@
 .interactions-compact-theme .interactions-activity-timeline-table td:nth-child(3),
 .interactions-compact-theme .interactions-audit-table th:nth-child(6),
 .interactions-compact-theme .interactions-audit-table td:nth-child(6),
-.interactions-compact-theme .interactions-legacy-crm-table th:nth-child(2),
-.interactions-compact-theme .interactions-legacy-crm-table td:nth-child(2),
+.interactions-compact-theme .interactions-legacy-crm-table th:nth-child(3),
+.interactions-compact-theme .interactions-legacy-crm-table td:nth-child(3),
 .interactions-compact-theme .interactions-user-activity-table th:nth-child(2),
 .interactions-compact-theme .interactions-user-activity-table td:nth-child(2) {
     width: 18%;
@@ -765,15 +767,15 @@
 .interactions-compact-theme .interactions-activity-timeline-table td:nth-child(4),
 .interactions-compact-theme .interactions-audit-table th:nth-child(2),
 .interactions-compact-theme .interactions-audit-table td:nth-child(2),
-.interactions-compact-theme .interactions-legacy-crm-table th:nth-child(3),
-.interactions-compact-theme .interactions-legacy-crm-table td:nth-child(3) {
+.interactions-compact-theme .interactions-legacy-crm-table th:nth-child(4),
+.interactions-compact-theme .interactions-legacy-crm-table td:nth-child(4) {
     width: 15%;
 }
 
 .interactions-compact-theme .interactions-activity-timeline-table th:nth-child(6),
 .interactions-compact-theme .interactions-activity-timeline-table td:nth-child(6),
-.interactions-compact-theme .interactions-legacy-crm-table th:nth-child(5),
-.interactions-compact-theme .interactions-legacy-crm-table td:nth-child(5) {
+.interactions-compact-theme .interactions-legacy-crm-table th:nth-child(6),
+.interactions-compact-theme .interactions-legacy-crm-table td:nth-child(6) {
     width: 96px;
 }
 
