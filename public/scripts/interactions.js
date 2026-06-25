@@ -535,9 +535,26 @@ function getSemanticInteractionTypeLabel(item = {}) {
     return candidates.find(value => !isInvalidSemanticInteractionTypeLabel(value, item)) || '';
 }
 
+function getAuditEventTypeSubtitle(item = {}, title = '') {
+    if (isInteractionAuditRow(item)) {
+        return getAuditInteractionTypeSubtitle(item, title);
+    }
+
+    const candidates = [
+        item.module,
+        item.businessEventType,
+        item.action
+    ];
+
+    return candidates.find(value => {
+        const subtitle = String(value || '').trim();
+        return subtitle && subtitle !== title && subtitle !== '[object Object]';
+    }) || '';
+}
+
 function getAuditInteractionBadgeDisplay(item = {}, fallbackText = '-') {
     if (!isInteractionAuditRow(item)) {
-        return { title: fallbackText, subtitle: '' };
+        return { title: fallbackText, subtitle: getAuditEventTypeSubtitle(item, fallbackText) };
     }
 
     const actionCode = String(item.businessEventType || item.action || '').trim();
@@ -913,14 +930,13 @@ function renderActivityTimelineTable(items, page = 1, limit = activityTimelinePa
         const titleText = isCrmInteractionRow && semanticInteractionType
             ? semanticInteractionType
             : (item.title || item.businessEventType || item.interactionType || item.module || '-');
-        const secondaryText = isCrmInteractionRow
-            ? ''
-            : item.source === 'audit'
-            ? (item.module || item.businessEventType || '')
-            : (item.interactionType || '');
-        const eventHtml = secondaryText && secondaryText !== titleText
-            ? `<span class="interactions-status-badge">${escapeActivitySettingsHtml(titleText)}</span><div class="text-muted">${escapeActivitySettingsHtml(secondaryText)}</div>`
-            : `<span class="interactions-status-badge">${escapeActivitySettingsHtml(titleText)}</span>`;
+        const eventDisplay = isCrmInteractionRow
+            ? getAuditInteractionBadgeDisplay(item, titleText)
+            : { title: titleText, subtitle: '' };
+        const eventSubtitle = eventDisplay.subtitle
+            ? `<div class="text-muted">${escapeActivitySettingsHtml(eventDisplay.subtitle)}</div>`
+            : '';
+        const eventHtml = `<span class="interactions-status-badge">${escapeActivitySettingsHtml(eventDisplay.title)}</span>${eventSubtitle}`;
         const actorText = item.actorName || item.actorUsername || '-';
         const rowNumber = (page - 1) * limit + rowIndex + 1;
 
@@ -1103,13 +1119,19 @@ function renderAllInteractionsTable(interactions, page = 1, limit = interactions
         // --- 修正結束 ---
 
         const eventText = getSemanticInteractionTypeLabel(item) || item.eventTitle || item.eventType || '-';
+        const eventDisplay = isInteractionAuditRow(item)
+            ? getAuditInteractionBadgeDisplay(item, eventText)
+            : { title: eventText, subtitle: '' };
+        const eventSubtitle = eventDisplay.subtitle
+            ? `<div class="text-muted">${escapeActivitySettingsHtml(eventDisplay.subtitle)}</div>`
+            : '';
 
         tableHTML += `
             <tr>
                 <td class="interactions-col-number" data-label="#">${(page - 1) * limit + index + 1}</td>
                 <td class="interactions-col-time" data-label="互動時間">${formatDateTime(item.interactionTime)}</td>
                 <td class="interactions-col-target" data-label="關聯對象">${opportunityLink}</td>
-                <td class="interactions-col-event" data-label="事件類型"><span class="interactions-status-badge">${escapeActivitySettingsHtml(eventText)}</span></td>
+                <td class="interactions-col-event" data-label="事件類型"><span class="interactions-status-badge">${escapeActivitySettingsHtml(eventDisplay.title)}</span>${eventSubtitle}</td>
                 <td class="interactions-col-summary" data-label="內容摘要" style="white-space: pre-wrap; word-break: break-word;">${summaryHTML}</td>
                 <td data-label="記錄人">${item.recorder || '-'}</td>
             </tr>
