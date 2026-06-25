@@ -17,16 +17,6 @@ const ACTIVITY_TIMELINE_PAGE_SIZE_OPTIONS = [50, 100];
 const SUPER_ADMIN_PAGE_SIZE_OPTIONS = [50, 100, 300];
 const USER_SESSION_PERIOD_OPTIONS = [7, 30, 90];
 const USER_SESSION_TIMEOUT_HOURS = 8;
-const CRM_ENGINEERING_SUBTITLES = new Set([
-    'event_logs',
-    'interactions',
-    'internal_ops',
-    'interaction_created',
-    'interaction_updated',
-    'event_log_updated',
-    'company_updated',
-    'opportunity_value_changed'
-]);
 
 const ACTIVITY_TIMELINE_OPTION_GROUPS = [
     {
@@ -505,48 +495,6 @@ function formatAuditLogDate(value) {
     return value;
 }
 
-function isEngineeringCrmSubtitle(value) {
-    const normalizedValue = String(value || '').trim();
-    return CRM_ENGINEERING_SUBTITLES.has(normalizedValue);
-}
-
-function getCrmActivitySecondaryText(item = {}) {
-    const candidates = item.source === 'audit'
-        ? [item.interactionType, item.eventTitle, item.businessEventType, item.module]
-        : [item.interactionType];
-
-    return candidates.find(value => value && !isEngineeringCrmSubtitle(value)) || '';
-}
-
-function getAuditInteractionAction(item = {}) {
-    return String(item.businessEventType || item.action || '').trim();
-}
-
-function getAuditInteractionEventDisplay(item = {}) {
-    const fallbackTitle = item.eventTitle || item.businessEventType || item.action || '-';
-
-    if (!isInteractionAuditRow(item)) {
-        return { title: fallbackTitle, subtitle: '' };
-    }
-
-    const action = getAuditInteractionAction(item);
-    let title = fallbackTitle;
-
-    if (action.includes('interaction_created')) {
-        title = '新增互動紀錄';
-    } else if (action.includes('interaction_updated')) {
-        title = '修改互動紀錄';
-    }
-
-    const subtitle = item.eventTitle
-        && item.eventTitle !== title
-        && !isEngineeringCrmSubtitle(item.eventTitle)
-        ? item.eventTitle
-        : '';
-
-    return { title, subtitle };
-}
-
 function formatUserActivityDevice(userAgent) {
     const normalizedUserAgent = String(userAgent || '').trim();
     if (!normalizedUserAgent) return '-';
@@ -672,11 +620,11 @@ function renderAuditLogsTable(auditLogs, page = 1, limit = auditLogsPageSize) {
     let tableHTML = `<table class="compact-data-table interactions-table interactions-audit-table">
                         <thead>
                             <tr>
-                                <th class="audit-col-number">#</th>
-                                <th class="audit-col-time">時間</th>
-                                <th class="audit-col-target">關聯對象</th>
-                                <th class="audit-col-event">事件類型</th>
-                                <th class="audit-col-summary">內容摘要</th>
+                                <th class="interactions-col-number audit-col-number">#</th>
+                                <th class="interactions-col-time audit-col-time">時間</th>
+                                <th class="interactions-col-target audit-col-target">關聯對象</th>
+                                <th class="interactions-col-event audit-col-event">事件類型</th>
+                                <th class="interactions-col-summary audit-col-summary">內容摘要</th>
                                 <th class="audit-col-module">模組</th>
                                 <th class="audit-col-user">使用者</th>
                             </tr>
@@ -684,11 +632,7 @@ function renderAuditLogsTable(auditLogs, page = 1, limit = auditLogsPageSize) {
                         <tbody>`;
 
     auditLogs.forEach((item, index) => {
-        const eventDisplay = getAuditInteractionEventDisplay(item);
-        const eventText = eventDisplay.title;
-        const eventSubtitle = eventDisplay.subtitle
-            ? `<div class="text-muted">${escapeActivitySettingsHtml(eventDisplay.subtitle)}</div>`
-            : '';
+        const eventText = item.eventTitle || item.businessEventType || item.action || '-';
         const moduleText = item.module || '-';
         const businessEventType = item.businessEventType && item.businessEventType !== eventText
             ? `<div class="text-muted">${escapeActivitySettingsHtml(item.businessEventType)}</div>`
@@ -701,11 +645,11 @@ function renderAuditLogsTable(auditLogs, page = 1, limit = auditLogsPageSize) {
 
         tableHTML += `
             <tr>
-                <td class="audit-col-number" data-label="#">${rowNumber}</td>
-                <td class="audit-col-time" data-label="時間">${escapeActivitySettingsHtml(formatAuditLogDate(item.createdAt))}</td>
-                <td class="audit-col-target" data-label="關聯對象">${targetHtml}</td>
-                <td class="audit-col-event" data-label="事件類型"><span class="interactions-status-badge">${escapeActivitySettingsHtml(eventText)}</span>${eventSubtitle}</td>
-                <td class="audit-col-summary" data-label="內容摘要" style="white-space: pre-wrap; word-break: break-word;">${escapeActivitySettingsHtml(item.eventSummary || '-')}</td>
+                <td class="interactions-col-number audit-col-number" data-label="#">${rowNumber}</td>
+                <td class="interactions-col-time audit-col-time" data-label="時間">${escapeActivitySettingsHtml(formatAuditLogDate(item.createdAt))}</td>
+                <td class="interactions-col-target audit-col-target" data-label="關聯對象">${targetHtml}</td>
+                <td class="interactions-col-event audit-col-event" data-label="事件類型"><span class="interactions-status-badge">${escapeActivitySettingsHtml(eventText)}</span></td>
+                <td class="interactions-col-summary audit-col-summary" data-label="內容摘要" style="white-space: pre-wrap; word-break: break-word;">${escapeActivitySettingsHtml(item.eventSummary || '-')}</td>
                 <td class="audit-col-module" data-label="模組"><span class="interactions-status-badge interactions-module-badge">${escapeActivitySettingsHtml(moduleText)}</span>${businessEventType}</td>
                 <td class="audit-col-user" data-label="使用者">${escapeActivitySettingsHtml(actorText)}</td>
             </tr>
@@ -884,11 +828,11 @@ function renderActivityTimelineTable(items, page = 1, limit = activityTimelinePa
     let tableHTML = `<table class="compact-data-table interactions-table interactions-activity-timeline-table">
                         <thead>
                             <tr>
-                                <th>#</th>
-                                <th>時間</th>
-                                <th>關聯對象</th>
-                                <th>事件類型</th>
-                                <th>內容摘要</th>
+                                <th class="interactions-col-number">#</th>
+                                <th class="interactions-col-time">時間</th>
+                                <th class="interactions-col-target">關聯對象</th>
+                                <th class="interactions-col-event">事件類型</th>
+                                <th class="interactions-col-summary">內容摘要</th>
                                 <th>記錄人</th>
                             </tr>
                         </thead>
@@ -900,7 +844,9 @@ function renderActivityTimelineTable(items, page = 1, limit = activityTimelinePa
             ? renderInteractionSummaryWithEventReportLinks(item.summary || '-')
             : escapeActivitySettingsHtml(item.summary || '-');
         const titleText = item.title || item.businessEventType || item.interactionType || item.module || '-';
-        const secondaryText = getCrmActivitySecondaryText(item);
+        const secondaryText = item.source === 'audit'
+            ? (item.module || item.businessEventType || '')
+            : (item.interactionType || '');
         const eventHtml = secondaryText && secondaryText !== titleText
             ? `<span class="interactions-status-badge">${escapeActivitySettingsHtml(titleText)}</span><div class="text-muted">${escapeActivitySettingsHtml(secondaryText)}</div>`
             : `<span class="interactions-status-badge">${escapeActivitySettingsHtml(titleText)}</span>`;
@@ -909,11 +855,11 @@ function renderActivityTimelineTable(items, page = 1, limit = activityTimelinePa
 
         tableHTML += `
             <tr>
-                <td data-label="#">${rowNumber}</td>
-                <td data-label="時間">${escapeActivitySettingsHtml(formatAuditLogDate(item.time))}</td>
-                <td data-label="關聯對象">${targetHtml}</td>
-                <td data-label="事件類型">${eventHtml}</td>
-                <td data-label="內容摘要" style="white-space: pre-wrap; word-break: break-word;">${summaryHtml}</td>
+                <td class="interactions-col-number" data-label="#">${rowNumber}</td>
+                <td class="interactions-col-time" data-label="時間">${escapeActivitySettingsHtml(formatAuditLogDate(item.time))}</td>
+                <td class="interactions-col-target" data-label="關聯對象">${targetHtml}</td>
+                <td class="interactions-col-event" data-label="事件類型">${eventHtml}</td>
+                <td class="interactions-col-summary" data-label="內容摘要" style="white-space: pre-wrap; word-break: break-word;">${summaryHtml}</td>
                 <td data-label="記錄人">${escapeActivitySettingsHtml(actorText)}</td>
             </tr>
         `;
@@ -1049,11 +995,11 @@ function renderAllInteractionsTable(interactions, page = 1, limit = interactions
     let tableHTML = `<table class="compact-data-table interactions-table interactions-legacy-crm-table">
                         <thead>
                             <tr>
-                                <th>#</th>
-                                <th>互動時間</th>
-                                <th>關聯對象</th>
-                                <th>事件類型</th>
-                                <th>內容摘要</th>
+                                <th class="interactions-col-number">#</th>
+                                <th class="interactions-col-time">互動時間</th>
+                                <th class="interactions-col-target">關聯對象</th>
+                                <th class="interactions-col-event">事件類型</th>
+                                <th class="interactions-col-summary">內容摘要</th>
                                 <th>記錄人</th>
                             </tr>
                         </thead>
@@ -1087,11 +1033,11 @@ function renderAllInteractionsTable(interactions, page = 1, limit = interactions
 
         tableHTML += `
             <tr>
-                <td data-label="#">${(page - 1) * limit + index + 1}</td>
-                <td data-label="互動時間">${formatDateTime(item.interactionTime)}</td>
-                <td data-label="關聯對象">${opportunityLink}</td>
-                <td data-label="事件類型"><span class="interactions-status-badge">${item.eventTitle || item.eventType}</span></td>
-                <td data-label="內容摘要" style="white-space: pre-wrap; word-break: break-word;">${summaryHTML}</td>
+                <td class="interactions-col-number" data-label="#">${(page - 1) * limit + index + 1}</td>
+                <td class="interactions-col-time" data-label="互動時間">${formatDateTime(item.interactionTime)}</td>
+                <td class="interactions-col-target" data-label="關聯對象">${opportunityLink}</td>
+                <td class="interactions-col-event" data-label="事件類型"><span class="interactions-status-badge">${item.eventTitle || item.eventType}</span></td>
+                <td class="interactions-col-summary" data-label="內容摘要" style="white-space: pre-wrap; word-break: break-word;">${summaryHTML}</td>
                 <td data-label="記錄人">${item.recorder || '-'}</td>
             </tr>
         `;
