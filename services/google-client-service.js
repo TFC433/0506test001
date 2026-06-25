@@ -675,6 +675,7 @@ class GoogleClientService {
         if (error && (error.statusCode === 429 || error.statusCode >= 500)) return true;
         if (error && error.code === 'SHEETS_RESPONSE_PARSE_FAILED') return true;
         if (error && retryableCodes.has(error.code)) return true;
+        if (message.startsWith('native sheets values.get timeout')) return true;
         return message.includes('premature close') ||
             message.includes('invalid response body') ||
             message.includes('socket hang up') ||
