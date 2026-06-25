@@ -511,6 +511,73 @@ function getAuditInteractionActionLabels() {
     };
 }
 
+const CRM_ENGINEERING_EVENT_SUBTITLE_CODES = new Set([
+    'event_log_updated',
+    'internal_ops',
+    'companies',
+    'event_logs',
+    'interactions',
+    'interaction_created',
+    'interaction_updated',
+    'interaction_deleted'
+]);
+
+function normalizeCrmEventDisplayText(value) {
+    if (value === null || value === undefined || typeof value === 'object') return '';
+    return String(value).trim();
+}
+
+function getRecognizedCrmInteractionActionCode(item = {}) {
+    const actionLabels = getAuditInteractionActionLabels();
+    const candidates = [
+        item.businessEventType,
+        item.action
+    ];
+
+    return candidates
+        .map(normalizeCrmEventDisplayText)
+        .find(code => Object.prototype.hasOwnProperty.call(actionLabels, code)) || '';
+}
+
+function isValidCrmInteractionActionRow(item = {}) {
+    return Boolean(getRecognizedCrmInteractionActionCode(item));
+}
+
+function isCrmEngineeringEventSubtitle(value) {
+    const subtitle = normalizeCrmEventDisplayText(value);
+    return CRM_ENGINEERING_EVENT_SUBTITLE_CODES.has(subtitle)
+        || subtitle.startsWith('event_log_')
+        || subtitle.startsWith('interaction_');
+}
+
+function suppressCrmEngineeringEventSubtitle(display = {}, item = {}) {
+    const title = normalizeCrmEventDisplayText(display.title) || '-';
+    const subtitle = normalizeCrmEventDisplayText(display.subtitle);
+
+    if (!subtitle || subtitle === title || isInvalidSemanticInteractionTypeLabel(subtitle, item)) {
+        return { title, subtitle: '' };
+    }
+
+    if (isCrmEngineeringEventSubtitle(subtitle)) {
+        return { title, subtitle: '' };
+    }
+
+    return { title, subtitle };
+}
+
+function getCrmEventBadgeDisplay(item = {}, fallbackText = '-') {
+    const actionCode = getRecognizedCrmInteractionActionCode(item);
+    if (!actionCode) {
+        return suppressCrmEngineeringEventSubtitle({ title: fallbackText, subtitle: '' }, item);
+    }
+
+    const actionLabels = getAuditInteractionActionLabels();
+    return suppressCrmEngineeringEventSubtitle({
+        title: actionLabels[actionCode] || fallbackText,
+        subtitle: getSemanticInteractionTypeLabel(item)
+    }, item);
+}
+
 function isInvalidSemanticInteractionTypeLabel(value, item = {}) {
     const label = String(value || '').trim();
     if (!label || label === '[object Object]') return true;
@@ -924,15 +991,8 @@ function renderActivityTimelineTable(items, page = 1, limit = activityTimelinePa
         const summaryHtml = item.source === 'interaction'
             ? renderInteractionSummaryWithEventReportLinks(item.summary || '-')
             : escapeActivitySettingsHtml(item.summary || '-');
-        const semanticInteractionType = getSemanticInteractionTypeLabel(item);
-        const isCrmInteractionRow = item.source === 'interaction'
-            || (item.source === 'audit' && isInteractionAuditRow(item));
-        const titleText = isCrmInteractionRow && semanticInteractionType
-            ? semanticInteractionType
-            : (item.title || item.businessEventType || item.interactionType || item.module || '-');
-        const eventDisplay = isCrmInteractionRow
-            ? getAuditInteractionBadgeDisplay(item, titleText)
-            : { title: titleText, subtitle: '' };
+        const titleText = item.title || item.eventTitle || item.businessEventType || item.interactionType || item.module || '-';
+        const eventDisplay = getCrmEventBadgeDisplay(item, titleText);
         const eventSubtitle = eventDisplay.subtitle
             ? `<div class="text-muted">${escapeActivitySettingsHtml(eventDisplay.subtitle)}</div>`
             : '';
@@ -1118,10 +1178,8 @@ function renderAllInteractionsTable(interactions, page = 1, limit = interactions
         }
         // --- 修正結束 ---
 
-        const eventText = getSemanticInteractionTypeLabel(item) || item.eventTitle || item.eventType || '-';
-        const eventDisplay = isInteractionAuditRow(item)
-            ? getAuditInteractionBadgeDisplay(item, eventText)
-            : { title: eventText, subtitle: '' };
+        const eventText = item.eventTitle || item.title || item.businessEventType || item.eventType || item.interactionType || item.module || '-';
+        const eventDisplay = getCrmEventBadgeDisplay(item, eventText);
         const eventSubtitle = eventDisplay.subtitle
             ? `<div class="text-muted">${escapeActivitySettingsHtml(eventDisplay.subtitle)}</div>`
             : '';
