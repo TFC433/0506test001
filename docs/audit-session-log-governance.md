@@ -96,6 +96,7 @@ Sensitive or long fields must be redacted before entering `system_audit_logs.cha
 Do not store full raw values for:
 
 * notes
+* todoItems / todo_items
 * customNote
 * content
 * description
@@ -111,6 +112,8 @@ Do not store full raw values for:
 * raw payloads
 * tokens/secrets
 * long strings
+
+`todoItems` / `todo_items` may contain long or sensitive meeting follow-up text. It must not store full raw content in `system_audit_logs.changes` and follows the same redaction principle as notes, content, description, and detail-style fields.
 
 Safe labels may be used for summaries:
 

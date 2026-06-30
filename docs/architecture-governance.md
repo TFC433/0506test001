@@ -1653,6 +1653,54 @@ Pending cleanup targets:
 
 ---
 
+# 28.4 Event Log todoItems Governance Addendum (2026-06-30)
+
+The event log common field addition `todoItems` / `todo_items` is completed with User UI/Product PASS.
+
+Accepted semantics:
+
+* UI label is exactly `待辦事項`.
+* API / DTO field name is `todoItems`.
+* DB column name is `todo_items`.
+* DB type is nullable `text`.
+* The field applies only to the four physical event log tables:
+  * `event_logs_general`
+  * `event_logs_dt`
+  * `event_logs_iot`
+  * `event_logs_dx`
+* The field is event-log record text only.
+* The field is not a follow-up, task, reminder, subscription reminder, or global task-system record.
+* The field follows the existing event log create/edit/read/display flow only.
+
+Deliberate boundaries:
+
+* `event_logs_summary` was deliberately untouched.
+* `public/scripts/interactions.js` was deliberately untouched.
+* Activity Hub timeline logic was deliberately untouched.
+* Task, follow-up, reminder, and subscription systems were deliberately untouched.
+
+Final common long-text field order:
+
+```text
+eventContent -> clientQuestions -> clientIntelligence -> eventNotes -> todoItems
+```
+
+Patch outcome:
+
+* E1 DB PASS added `todo_items text` to the four physical event log tables.
+* E2 Backend CODE PASS added writer whitelist, service create/update mapping, dynamic payload exclusion, reader DTO mapping, and audit redaction/label support.
+* E3 initial CODE NG occurred because the label became mojibake and the field was placed before `eventNotes`.
+* E3-FIX CODE PASS corrected the label to exactly `待辦事項` and moved `todoItems` after `eventNotes`.
+
+AI collaboration boundary remains unchanged:
+
+* Gemini is evidence-only repo/docs forensics and must not own phase planning or patch strategy.
+* ChatGPT owns scope and phase judgment.
+* The user owns product semantics and final PASS / NG.
+* Codex executes frozen minimal patches only.
+
+---
+
 # 29. Internal Ops Governance Baseline
 
 ## 29.1 Internal Ops Dev Projects Governance Baseline
@@ -1790,6 +1838,13 @@ and disciplined data lifecycle governance.
 ---
 
 # Changelog
+
+## 2026-06-30
+
+* Recorded completed event log common field `todoItems` / `todo_items` with User UI/Product PASS.
+* Documented final label `待辦事項`, four-table scope, event-log-only semantics, `event_logs_summary` no-touch boundary, interactions/timeline no-touch boundary, and final field order `eventContent -> clientQuestions -> clientIntelligence -> eventNotes -> todoItems`.
+* Recorded E3 initial CODE NG due to mojibake/wrong placement and E3-FIX CODE PASS correcting the label and placement.
+* Reconfirmed AI collaboration boundaries: Gemini evidence-only forensics, ChatGPT scope/phase judgment, user product semantics/final PASS/NG, Codex frozen minimal patch execution.
 
 ## 2026-06-24
 
