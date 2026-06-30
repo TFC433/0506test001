@@ -78,6 +78,7 @@ const EventEditorStandalone = (() => {
             content: document.getElementById('standalone-content'),
             questions: document.getElementById('standalone-questions'),
             intelligence: document.getElementById('standalone-intelligence'),
+            todoItems: document.getElementById('standalone-todoItems'),
             notes: document.getElementById('standalone-notes'),
 
             ourContainer: document.getElementById('standalone-our-participants-container'),
@@ -250,9 +251,10 @@ const EventEditorStandalone = (() => {
         _inputs.questions.value = eventData.clientQuestions || '';
         _inputs.intelligence.value = eventData.clientIntelligence || '';
         _inputs.notes.value = eventData.eventNotes || '';
+        _inputs.todoItems.value = eventData.todoItems || '';
 
         // Trigger resize. If hidden, observer will catch it later.
-        [_inputs.content, _inputs.questions, _inputs.intelligence, _inputs.notes].forEach(el => {
+        [_inputs.content, _inputs.questions, _inputs.intelligence, _inputs.notes, _inputs.todoItems].forEach(el => {
             if (el) _autoResize(el);
         });
 

@@ -27,6 +27,7 @@ const EVENT_LOG_FIELD_LABELS = {
   eventContent: '內容',
   notes: '備註',
   eventNotes: '備註',
+  todoItems: '待辦事項',
   participants: '參與人員',
   ourParticipants: '我方參與人員',
   clientParticipants: '客戶參與人員',
@@ -66,6 +67,8 @@ function isLongOrSensitiveEventField(key) {
   const normalized = String(key || '').toLowerCase();
   return normalized.includes('content') ||
     normalized.includes('notes') ||
+    normalized.includes('todoitems') ||
+    normalized.includes('todo_items') ||
     normalized.includes('participant') ||
     normalized.includes('detail') ||
     normalized.includes('spec') ||

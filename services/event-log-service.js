@@ -91,6 +91,7 @@ class EventLogService {
       'clientQuestions',
       'clientIntelligence',
       'eventNotes',
+      'todoItems',
       'editCount',
       'eventType',
       // misc flags
@@ -164,6 +165,7 @@ class EventLogService {
       client_questions: data.clientQuestions ?? null,
       client_intelligence: data.clientIntelligence ?? null,
       event_notes: data.eventNotes ?? null,
+      todo_items: data.todoItems ?? null,
 
       edit_count: editCount,
       event_type: data.eventType ?? null,
@@ -381,6 +383,7 @@ ${lines.join('\n')}
       ...(data?.clientQuestions !== undefined ? { client_questions: data.clientQuestions } : {}),
       ...(data?.clientIntelligence !== undefined ? { client_intelligence: data.clientIntelligence } : {}),
       ...(data?.eventNotes !== undefined ? { event_notes: data.eventNotes } : {}),
+      ...(data?.todoItems !== undefined ? { todo_items: data.todoItems } : {}),
 
       // ALWAYS bump these
       last_modified_time: lastModified,

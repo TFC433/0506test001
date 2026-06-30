@@ -209,6 +209,7 @@ class EventLogSqlReader {
             visitPlace: row.visit_place,
             eventContent: row.event_content,
             eventNotes: row.event_notes,
+            todoItems: row.todo_items,
             ourParticipants: row.our_participants,
             clientParticipants: row.client_participants,
             clientQuestions: row.client_questions,

@@ -41,6 +41,7 @@ class EventLogSqlWriter {
         'client_questions',
         'client_intelligence',
         'event_notes',
+        'todo_items',
         'edit_count'
       ];
 
@@ -181,6 +182,7 @@ class EventLogSqlWriter {
         'client_questions',
         'client_intelligence',
         'event_notes',
+        'todo_items',
         'edit_count'
       ];
 

@@ -231,7 +231,8 @@ function renderOperationalWorkspaceHTML(event, contextContacts = []) {
         { key: 'eventContent', label: '會議內容', type: 'textarea', placeholder: '請輸入會議紀錄...' },
         { key: 'clientQuestions', label: '客戶提問', type: 'textarea', placeholder: '客戶提出的問題...' },
         { key: 'clientIntelligence', label: '客戶情報', type: 'textarea', placeholder: '收集到的情報...' },
-        { key: 'eventNotes', label: '備註', type: 'textarea', placeholder: '其他備註事項...' }
+        { key: 'eventNotes', label: '備註', type: 'textarea', placeholder: '其他備註事項...' },
+        { key: 'todoItems', label: '待辦事項', type: 'textarea', placeholder: '待辦事項...' }
     ];
     const domainFieldsByType = {
         iot: [
@@ -427,7 +428,8 @@ function renderOperationalWorkspaceEditHTML(event, contextContacts = []) {
         { key: 'eventContent', label: '會議內容', type: 'textarea', placeholder: '請輸入會議紀錄...' },
         { key: 'clientQuestions', label: '客戶提問', type: 'textarea', placeholder: '客戶提出的問題...' },
         { key: 'clientIntelligence', label: '客戶情報', type: 'textarea', placeholder: '收集到的情報...' },
-        { key: 'eventNotes', label: '備註', type: 'textarea', placeholder: '其他備註事項...' }
+        { key: 'eventNotes', label: '備註', type: 'textarea', placeholder: '其他備註事項...' },
+        { key: 'todoItems', label: '待辦事項', type: 'textarea', placeholder: '待辦事項...' }
     ];
     const domainFieldsByType = {
         iot: [
@@ -561,7 +563,8 @@ function renderEventLogReportHTML(event, contextContacts = [], options = {}) {
                 { key: 'eventContent', label: '會議內容', type: 'text' },
                 { key: 'clientQuestions', label: '客戶提問', type: 'text' },
                 { key: 'clientIntelligence', label: '客戶情報', type: 'text' },
-                { key: 'eventNotes', label: '備註', type: 'text' }
+                { key: 'eventNotes', label: '備註', type: 'text' },
+                { key: 'todoItems', label: '待辦事項', type: 'text' }
             ]
         },
         iot: {
@@ -598,6 +601,7 @@ function renderEventLogReportHTML(event, contextContacts = [], options = {}) {
         clientQuestions: 'narrative',
         clientIntelligence: 'narrative',
         eventNotes: 'narrative',
+        todoItems: 'narrative',
         iot_deviceScale: 'meta',
         iot_lineFeatures: 'meta',
         iot_productionStatus: 'meta',
