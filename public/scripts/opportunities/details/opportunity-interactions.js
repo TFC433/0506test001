@@ -1856,6 +1856,13 @@ const OpportunityInteractions = (() => {
             .interaction-layout > .activity-hub-header .sub-tab-link[data-tab="activity"] {
                 display: none;
             }
+            .activity-hub-helper-hint {
+                color: var(--text-muted);
+                flex: 1 1 220px;
+                font-size: 12px;
+                line-height: 1.4;
+                min-width: 0;
+            }
             .activity-hub-header-actions {
                 display: flex;
                 flex-wrap: wrap;
