@@ -963,22 +963,25 @@ const OpportunityInteractions = (() => {
 
         // 鎖定邏輯（必須與 showForEditing 證據一致）
         const isLocked = _isLockedInteraction(interaction);
+        const isSystemRecordInteraction = interaction.eventType === '系統事件';
 
         const renderWeight = _getRenderWeight(interaction);
 
         let buttonsHtml = '';
         if (rowId) {
             const isEventReport = isEventReportInteraction;
-            const editAction = isEventReport
-                ? `OpportunityInteractions.toggleInlineReport('${rowId}', '${reportEventId}')`
-                : !isLocked && renderWeight === 'micro'
-                ? `OpportunityInteractions.startInlineEdit('${rowId}')`
-                : `OpportunityInteractions.showForEditing('${rowId}')`;
-            buttonsHtml += `
-                <button type="button" class="stream-action-btn" ${isEventReport ? 'data-inline-report-toggle' : ''} onclick="${editAction}" title="${isEventReport ? '展開' : isLocked ? 'View' : 'Edit'}">
-                    ${isEventReport ? '展開' : isLocked ? 'View' : '&#9998;'}
-                </button>
-            `;
+            if (!isSystemRecordInteraction) {
+                const editAction = isEventReport
+                    ? `OpportunityInteractions.toggleInlineReport('${rowId}', '${reportEventId}')`
+                    : !isLocked && renderWeight === 'micro'
+                    ? `OpportunityInteractions.startInlineEdit('${rowId}')`
+                    : `OpportunityInteractions.showForEditing('${rowId}')`;
+                buttonsHtml += `
+                    <button type="button" class="stream-action-btn" ${isEventReport ? 'data-inline-report-toggle' : ''} onclick="${editAction}" title="${isEventReport ? '展開' : isLocked ? 'View' : 'Edit'}">
+                        ${isEventReport ? '展開' : isLocked ? 'View' : '&#9998;'}
+                    </button>
+                `;
+            }
 
             if (_isDeletableLightweightInteraction(interaction)) {
                 buttonsHtml += `
@@ -1007,7 +1010,7 @@ const OpportunityInteractions = (() => {
                         ${nextActionHtml}
                         <span class="stream-recorder-action">
                             <span class="stream-recorder">${recorder}</span>
-                            <span class="stream-actions">${buttonsHtml}</span>
+                            ${buttonsHtml ? `<span class="stream-actions">${buttonsHtml}</span>` : ''}
                         </span>
                     </div>
                 </div>
