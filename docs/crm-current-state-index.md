@@ -1,6 +1,6 @@
 # CRM Current State Index
 
-Last Updated: 2026-06-30
+Last Updated: 2026-07-01
 
 ## 1. Global Rules & Index Usage
 
@@ -31,9 +31,9 @@ Last Updated: 2026-06-30
 
 ### Opportunity Detail / Activity Hub
 
-* Docs: `docs/tfc-crm-ui-style-governance.md`, `docs/architecture-governance.md`, `docs/repo-operational-consolidation-report.md`
+* Docs: `docs/architecture-governance.md`, `docs/tfc-crm-ui-style-governance.md`, `docs/non-breaking-cleanup-roadmap.md`, `docs/repo-operational-consolidation-report.md`
 * Owners: `public/views/opportunity-detail.html`, `public/scripts/opportunities/opportunity-details.js`, `public/scripts/opportunities/details/*`
-* Baseline: Opportunity Detail is the operational workflow / high-density CRM / Activity Hub / relationship context / inline editing baseline.
+* Baseline: Opportunity Detail is the operational workflow / high-density CRM / Activity Hub / relationship context / inline editing baseline. Activity Wall / Event Report timeline time, management-mode live sync, helper hint, and system-record View cleanup governance lives in `docs/architecture-governance.md`; cleanup boundaries are routed through `docs/non-breaking-cleanup-roadmap.md`.
 
 ### Event Logs
 

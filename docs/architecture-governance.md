@@ -863,6 +863,16 @@ visible only through 顯示系統紀錄
 viewable but not deletable
 ```
 
+System-record rows must remain readable audit rows. They must show their content, time, and recorder, but must not render the generic locked-row `View` action in Activity Hub. This cleanup is render-level removal, not CSS hiding.
+
+Do NOT:
+
+* hide the generic `View` action with CSS.
+* globally remove or change `showForEditing()`.
+* remove Event Report inline `撅?`.
+* remove or change normal interaction edit behavior.
+* delete shared modal code, `showEventLogReport()`, or backend endpoints.
+
 ---
 
 # 21. Activity Hub Management Mode Governance
@@ -910,6 +920,35 @@ Rules:
 * exiting management mode resets system records visibility to hidden.
 * management button should use restrained warning/danger styling when active.
 * management mode must not rerender unnecessarily if that destroys expanded state, unless scoped rerender is explicitly safe.
+
+## 21.2 Live State Sync
+
+Management mode is live UI state, not a page rerender contract.
+
+If an Event Report edit form is already open, entering management mode must immediately make `?潛???` editable. Leaving management mode must immediately make `?潛???` readonly again.
+
+Rules:
+
+* live sync is DOM-only.
+* unsaved draft fields must be preserved.
+* do not rerender the inline report solely to toggle this state.
+* do not change save behavior, permission logic, or void behavior as part of this toggle.
+
+## 21.3 Header Helper Hint
+
+Activity Hub may show this helper hint inside `.activity-hub-header-actions`, immediately before `?啣?鈭?`:
+
+```text
+?亥?雿誥鈭辣?勗??楊頛舐????隢??脣蝞∠?蝬剛風璅∪??
+```
+
+The hint is guidance text only. It must not become permission logic.
+
+Rules:
+
+* keep it single-line / no-wrap.
+* vertically align it with toolbar buttons.
+* preserve the existing toolbar action order.
 
 ---
 
@@ -1028,6 +1067,45 @@ Backend must:
 * remove event_ref / event_log_id marker
 * avoid fake wrappers
 * avoid duplicate system interaction unless explicitly governed
+
+## 23.5 Timeline Time And Sorting Source
+
+Event Report rows use the child Event Report `createdTime` as the timeline / occurrence time. Normal interaction rows use the parent `interactionTime || createdTime`.
+
+Header time, expanded detail time, date grouping, and sorting must align to the same timeline-time source. Event Report expanded detail labels this time as `?潛???`.
+
+Activity Wall sorting policy:
+
+* sort local row copies by `_getInteractionTimelineTime()`.
+* Event Report rows sort by child event `createdTime`.
+* normal rows sort by parent `interactionTime || createdTime`.
+* do not mutate the source row collection just to display timeline order.
+
+Do NOT solve this policy with:
+
+* a DB view.
+* backend DTO enrichment for data already available to the Activity Wall.
+* syncing child Event Report `createdTime` into parent `interactionTime`.
+
+## 23.6 Timestamp Contract
+
+Chronological CRM timeline ordering is the primary product goal for Activity Wall Event Report handling.
+
+For this context, Event Report `createdTime` is a timeline timestamp. It is not governed as customer-site wall-clock preservation.
+
+Timestamp rules:
+
+* DB `timestamp without time zone` is treated as UTC-naive for timeline / system timestamps.
+* frontend display uses the viewer/browser local timezone.
+* `<input type="datetime-local">` shows local time to the user.
+* inline Event Report create/update must convert datetime-local values to UTC ISO before sending.
+* existing bad historical rows are not migrated or backfilled by this frontend governance work; known bad rows may be manually corrected.
+
+Do NOT:
+
+* change global `formatDateTime` for this issue.
+* add an Event Report wall-clock-specific formatter for this completed policy.
+* add migration/backfill as part of this frontend governance work.
 
 ---
 
@@ -1592,6 +1670,7 @@ Completed cleanup:
 * Service container unused Sheet DI cleanup removed unused active DI imports / objects from `services/service-container.js`: `AnnouncementReader`, `AnnouncementWriter`, `WeeklyBusinessWriter`, `announcementReader`, `announcementWriter`, `weeklyWriter`, and `weeklyBusinessWriter`.
 * Follow-up orphan SPA page module cleanup removed unreachable `loadFollowUpPage()` and `window.CRM_APP.pageModules['follow-up']` from `public/scripts/opportunities/opportunities.js`.
 * Product Cost hidden chip-wall frontend cleanup removed hidden chip-wall markup and unreachable drag/reorder helpers from `public/scripts/products/products.js` and `public/views/product-list.html`.
+* Activity Wall system-record cleanup removed the generic locked-row `View` action at render level while preserving system-record content, time, recorder, Event Report inline `撅?`, normal interaction edit behavior, `showForEditing()`, `showEventLogReport()`, shared modal code, and backend endpoints.
 
 The cleanup above did not authorize broader deletion. Protected areas remain protected:
 
@@ -1608,6 +1687,8 @@ The cleanup above did not authorize broader deletion. Protected areas remain pro
 * Dashboard follow-up logic and `/api/dashboard`
 * Opportunity List, Opportunity Detail, and Activity Hub
 * compatibility aliases such as `eventLogReader` and `contactCoreReader`
+* shared modal code, `showEventLogReport()`, and Event Report backend endpoints
+* `showForEditing()` global behavior
 
 Future cleanup must follow this order:
 
@@ -1643,6 +1724,7 @@ Pending cleanup targets:
 * `ProductDetailModal` reachability / removal-readiness
 * final Product Cost `loadCategoryOrder()` / `categoryOrder` / `openDetailModal()` dependency review
 * backend `/api/products/category-order` cleanup only after frontend no longer calls it
+* Opportunity Detail Event Reports rail / old modal duplicate behavior, requiring separate product decision
 * Meeting / Calendar hidden workflow ownership decision
 * LINE leads standalone page ownership decision
 * System status modal / API trigger audit
@@ -1838,6 +1920,12 @@ and disciplined data lifecycle governance.
 ---
 
 # Changelog
+
+## 2026-07-01
+
+* Archived completed Opportunity Detail Activity Wall / Event Report PASS state as docs-only governance.
+* Added primary Activity Hub / Event Report governance for timeline time source, Activity Wall sorting, UTC-naive timestamp handling, datetime-local UTC write normalization, management-mode live sync, helper hint placement, and system-record View render-level cleanup.
+* Recorded anti-patterns / non-goals: no DB view, no parent `interactionTime` synchronization, no backend DTO enrichment for already available Activity Wall data, no global `formatDateTime` change, no Event Report wall-clock formatter for this policy, no migration/backfill, no shared modal or endpoint deletion, no global `showForEditing()` removal, and no CSS hiding for system-record cleanup.
 
 ## 2026-06-30
 

@@ -29,6 +29,8 @@ This document does not authorize deletion or runtime changes by itself. Any futu
 - Product-id possible-spec pricing uses sales-model price, then `priceMtu`, then `0`.
 - Product-id possible-spec pricing must not fall back to `systemConfig` value2.
 - Opportunity Detail Activity Hub and event report flow.
+- Opportunity Detail Activity Wall timeline sorting must preserve Event Report child `createdTime` and normal interaction `interactionTime || createdTime` governance.
+- Activity Wall system-record rows must remain readable audit rows without the generic locked-row `View` action; this is render-level cleanup, not CSS hiding.
 - Opportunity Detail current stepper UI.
 - Opportunity list sorting baseline: parent-child groups must remain grouped; group order is driven by `lineageGroupLatestActivity` / `lineage_group_latest_activity`.
 - Opportunity list row display baseline: the `?敺暑??` column displays each row's own `rowActivityTime` / `row_activity_time`, falling back to `effectiveLastActivity`.
@@ -111,6 +113,29 @@ Google API native transport stabilization:
   - Diagnostic-only connection tests.
 - Future phases may evaluate native transport for Google API write paths and metadata reads, but only with separate scope because writes have side effects.
 - Do not treat these remnants as emergency bugs unless Render logs show active production failures.
+
+## 4.2 2026-07 Activity Wall Governance Cleanup Checkpoint
+
+Completed cleanup:
+
+- Activity Wall system-record `View` action was removed at render level.
+- System-record content, time, and recorder remain visible.
+- Event Report inline `撅?` remains.
+- Normal interaction edit behavior remains.
+- `showForEditing()` was not globally removed or changed.
+- `showEventLogReport()`, shared modal code, backend endpoints, routes, controllers, services, data access, DB schema, and migrations were not touched.
+
+Protected boundaries:
+
+- Do not use CSS hiding for this cleanup pattern.
+- Do not remove shared modal code or Event Report backend endpoints as part of Activity Wall cleanup.
+- Do not globally remove `showForEditing()`.
+- Do not treat system-record View removal as authorization to delete audit records, tombstones, or backend compatibility paths.
+- Do not add DB views, parent `interactionTime` synchronization, backend DTO enrichment, or migration/backfill to preserve the completed Activity Wall timeline policy.
+
+Remaining deferred cleanup requiring separate product decision:
+
+- Opportunity Detail Event Reports rail / old modal duplicate behavior remains a separate cleanup topic and is not approved for deletion by this checkpoint.
 
 ## 5. Candidate Classification Rules
 

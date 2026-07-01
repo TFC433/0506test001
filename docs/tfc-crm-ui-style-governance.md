@@ -62,6 +62,13 @@ Opportunity Detail-governed surfaces include:
 
 Opportunity Detail UI must prioritize workflow continuity, inline action clarity, and information density.
 
+Activity Wall UI baseline:
+
+* Event Reports are inline-first in Activity Wall; modal compatibility may remain but must not govern the primary workflow.
+* management-mode helper text may sit in `.activity-hub-header-actions` immediately before `?啣?鈭?`; it is compact guidance text, not a permission control.
+* management mode is live UI state for open Event Report edit forms; entering management mode makes `?潛???` editable and leaving management mode makes it readonly without discarding drafts.
+* system-record rows are readable audit rows without the generic locked-row `View` action.
+
 ## 4. Surface and card hierarchy
 
 Structural cards should use subtle borders and small radius.

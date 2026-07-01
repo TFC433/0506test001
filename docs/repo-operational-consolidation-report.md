@@ -98,6 +98,7 @@ Known caution areas:
 * Global CSS extraction is not yet authorized.
 * Product Cost visual ordering is frontend-only and must not be confused with Sheet row order or persistent category-order settings.
 * Opportunity Detail product-backed spec pricing must not use cost or `systemConfig` value2.
+* Opportunity Detail Activity Wall / Event Report detailed lifecycle, timeline timestamp, management-mode, helper hint, and system-record cleanup rules are governed by `docs/architecture-governance.md`.
 * Non-breaking cleanup planning is governed by `docs/non-breaking-cleanup-roadmap.md`.
 * `repomix-packs/**` files are generated snapshots and must not be hand-edited.
 
@@ -169,6 +170,24 @@ Render smoke-test checklist after deployment:
 * Native Sheets read success for key ranges.
 * Native Calendar `events.list` success.
 * No `GaxiosError` / `node-fetch` / `ERR_STREAM_PREMATURE_CLOSE` for active read paths.
+
+## 8.3 Opportunity Detail Activity Wall / Event Report Consolidation
+
+Status: PASS
+
+Completed behavior:
+
+* Event Report timeline time alignment is complete: Event Report rows use child Event Report `createdTime`, while normal interaction rows use parent `interactionTime || createdTime`.
+* Activity Wall local row sorting by timeline time is complete.
+* Header time, expanded detail time, date grouping, and sorting are aligned to the same timeline-time source.
+* Inline Event Report create/update write-normalizes datetime-local values to UTC ISO.
+* Management mode live sync is complete for open Event Report edit forms, including the `?潛???` readonly/editable toggle.
+* Activity Wall helper hint placement is complete inside `.activity-hub-header-actions` before `?啣?鈭?`.
+* System-record generic locked-row `View` cleanup is complete at render level.
+
+No backend, DB, schema, migration, route, controller, service, data-access, package, generated snapshot, shared modal, or endpoint change is claimed by this consolidation entry.
+
+Detailed rules live in `docs/architecture-governance.md`.
 
 ## 9. Recommended next actions ranked by safety
 
