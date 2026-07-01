@@ -1754,6 +1754,21 @@ const OpportunityInteractions = (() => {
             button.setAttribute('aria-pressed', _isManagementMode ? 'true' : 'false');
         }
         _applySystemRecordsButtonState();
+        _syncOpenInlineReportCreatedTimeEditability();
+    }
+
+    function _syncOpenInlineReportCreatedTimeEditability() {
+        if (!_container) return;
+        _container
+            .querySelectorAll('.inline-event-report input[type="datetime-local"][data-report-field="createdTime"]')
+            .forEach(input => {
+                input.readOnly = !_isManagementMode;
+                if (_isManagementMode) {
+                    input.removeAttribute('readonly');
+                } else {
+                    input.setAttribute('readonly', 'readonly');
+                }
+            });
     }
 
     function _applySystemRecordsButtonState() {
@@ -1857,11 +1872,17 @@ const OpportunityInteractions = (() => {
                 display: none;
             }
             .activity-hub-helper-hint {
+                align-items: center;
+                align-self: center;
                 color: var(--text-muted);
-                flex: 1 1 220px;
+                display: inline-flex;
+                flex: 0 0 auto;
                 font-size: 12px;
                 line-height: 1.4;
                 min-width: 0;
+                text-align: right;
+                white-space: nowrap;
+                word-break: keep-all;
             }
             .activity-hub-header-actions {
                 display: flex;
