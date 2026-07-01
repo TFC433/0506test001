@@ -68,6 +68,18 @@ const OpportunityInteractions = (() => {
             : eventIdMatch ? eventIdMatch[1] : '';
     }
 
+    function _getInteractionTimelineTime(interaction) {
+        const parentTime = interaction ? (interaction.interactionTime || interaction.createdTime || '') : '';
+        if (!_isEventReportInteraction(interaction)) return parentTime;
+
+        const eventId = _getInteractionReportEventId(interaction);
+        const cachedEvent = eventId ? _eventReportCache[eventId] : null;
+        if (cachedEvent && cachedEvent.createdTime) return cachedEvent.createdTime;
+
+        const eventMeta = Array.isArray(interaction.EventLogs) && interaction.EventLogs[0] ? interaction.EventLogs[0] : null;
+        return eventMeta && eventMeta.createdTime ? eventMeta.createdTime : parentTime;
+    }
+
     function _isDeletableLightweightInteraction(interaction) {
         return !!(
             interaction
@@ -534,6 +546,14 @@ const OpportunityInteractions = (() => {
         if (headerTitle) {
             headerTitle.innerHTML = _renderEventReportHeaderTitleHTML(nextMeta, interaction.eventTitle || interaction.eventType || '');
         }
+        const rawTime = _getInteractionTimelineTime(interaction);
+        const timeStr = (typeof formatDateTime === 'function')
+            ? formatDateTime(rawTime)
+            : rawTime;
+        const headerTime = cardItem && cardItem.querySelector('.feed-time, .stream-row-time');
+        if (headerTime) {
+            headerTime.textContent = timeStr || '';
+        }
     }
 
     function _getInlineReportDomainFieldConfigs(eventType) {
@@ -882,7 +902,7 @@ const OpportunityInteractions = (() => {
     function renderSingleInteractionItem(interaction) {
         if (!interaction) return '';
 
-        const rawTime = interaction.interactionTime || interaction.createdTime || '';
+        const rawTime = _getInteractionTimelineTime(interaction);
         const timeStr = (typeof formatDateTime === 'function')
             ? formatDateTime(rawTime)
             : rawTime;
@@ -1029,7 +1049,7 @@ const OpportunityInteractions = (() => {
         // [Polish] Removed limit and expand/collapse. Render entire list in scrollable workspace.
         let lastDivider = '';
         let listHtml = allInteractions.map(interaction => {
-            const divider = _getDateDividerLabel(interaction.interactionTime || interaction.createdTime);
+            const divider = _getDateDividerLabel(_getInteractionTimelineTime(interaction));
             const dividerHtml = divider && divider !== lastDivider
                 ? `<div class="stream-date-divider">${divider}</div>`
                 : '';
@@ -1071,8 +1091,8 @@ const OpportunityInteractions = (() => {
         });
 
         // 可選：確保排序（若後端已排序可刪）
-        // discussionInteractions.sort((a, b) => new Date(b.interactionTime || b.createdTime || 0) - new Date(a.interactionTime || a.createdTime || 0));
-        // activityLogInteractions.sort((a, b) => new Date(b.interactionTime || b.createdTime || 0) - new Date(a.interactionTime || a.createdTime || 0));
+        // discussionInteractions.sort((a, b) => new Date(_getInteractionTimelineTime(b) || 0) - new Date(_getInteractionTimelineTime(a) || 0));
+        // activityLogInteractions.sort((a, b) => new Date(_getInteractionTimelineTime(b) || 0) - new Date(_getInteractionTimelineTime(a) || 0));
 
         _renderTimelineList('#discussion-timeline', discussionInteractions);
         _renderTimelineList('#activity-log-timeline', activityLogInteractions);
@@ -1600,10 +1620,14 @@ const OpportunityInteractions = (() => {
             _eventReportCache[eventId] = Object.assign({}, cachedEvent, cachePayload, safeUpdatedEvent, {
                 eventType: safeUpdatedEvent.eventType || finalEventType
             });
-            _syncEventReportTimelineHeader(interactionId, eventId, {
+            const headerPatch = {
                 eventName: _eventReportCache[eventId].eventName,
                 eventType: _eventReportCache[eventId].eventType
-            });
+            };
+            if (_eventReportCache[eventId].createdTime) {
+                headerPatch.createdTime = _eventReportCache[eventId].createdTime;
+            }
+            _syncEventReportTimelineHeader(interactionId, eventId, headerPatch);
             delete _pendingEventTypeSwitches[eventId];
             _salvageAppliedSession.delete(eventId);
             _editingReportEventId = null;

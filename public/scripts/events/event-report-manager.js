@@ -213,7 +213,7 @@ function renderOperationalWorkspaceHTML(event, contextContacts = []) {
 
     let systemMetaHTML = createMetaRowHTML('事件種類', `<span class="inline-event-type-badge" style="--event-type-color: ${headerColor};">${formatTextValue(eventTypeLabel)}</span>`);
     if (event.createdTime) {
-        systemMetaHTML += createMetaRowHTML('建立時間', formatDateTime(event.createdTime));
+        systemMetaHTML += createMetaRowHTML('發生時間', formatDateTime(event.createdTime));
     }
     if (updatedTime) {
         systemMetaHTML += createMetaRowHTML('最後修改時間', formatDateTime(updatedTime));
@@ -423,7 +423,7 @@ function renderOperationalWorkspaceEditHTML(event, contextContacts = [], options
     let systemMetaHTML = createMetaRowHTML('事件名稱', createInputHTML('eventName', event.eventName, '請輸入事件名稱...'));
     systemMetaHTML += createMetaRowHTML('事件種類', eventTypeSelectorHTML);
     if (event.createdTime) {
-        systemMetaHTML += createMetaRowHTML('建立時間', formatDateTime(event.createdTime));
+        systemMetaHTML += createMetaRowHTML('發生時間', formatDateTime(event.createdTime));
     }
     if (updatedTime) {
         systemMetaHTML += createMetaRowHTML('最後修改時間', formatDateTime(updatedTime));
@@ -655,7 +655,7 @@ function renderEventLogReportHTML(event, contextContacts = [], options = {}) {
         ? createTopMetaItemHTML('事件種類', `<span class="inline-event-type-badge" style="--event-type-color: ${headerColor};">${formatTextValue(eventTypeLabel)}</span>`)
         : '';
     if (isInlineVariant && event.createdTime) {
-        topMetaHTML += createTopMetaItemHTML('建立時間', formatDateTime(event.createdTime));
+        topMetaHTML += createTopMetaItemHTML('發生時間', formatDateTime(event.createdTime));
     }
     if (isInlineVariant && updatedTime) {
         topMetaHTML += createTopMetaItemHTML('更新時間', formatDateTime(updatedTime));
