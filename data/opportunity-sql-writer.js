@@ -143,6 +143,9 @@ class OpportunitySqlWriter {
         if (updateData.expectedCloseDate !== undefined) {
             dbPayload.expected_close_date = (updateData.expectedCloseDate === "") ? null : updateData.expectedCloseDate;
         }
+        if (updateData.createdTime !== undefined && updateData.createdTime !== "") {
+            dbPayload.created_time = updateData.createdTime;
+        }
 
         if (updateData.opportunityValue !== undefined) dbPayload.opportunity_value = updateData.opportunityValue;
         if (updateData.orderProbability !== undefined) dbPayload.win_probability = updateData.orderProbability;
