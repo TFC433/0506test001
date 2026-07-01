@@ -363,7 +363,9 @@ const OpportunityInteractions = (() => {
                 return;
             }
 
-            const reportHTML = renderOperationalWorkspaceEditHTML(eventData, _getLinkedContactsContext());
+            const reportHTML = renderOperationalWorkspaceEditHTML(eventData, _getLinkedContactsContext(), {
+                canEditCreatedTime: _isManagementMode
+            });
             inlineContainer.innerHTML = _applyOperationalWorkspaceDomainTint(reportHTML, eventData);
             _initInlineEventTypeSwitchControl(inlineContainer, interactionId, eventId);
             _initInlineParticipantSelectors(inlineContainer);
@@ -456,6 +458,7 @@ const OpportunityInteractions = (() => {
             'visitPlace',
             'ourParticipants',
             'clientParticipants',
+            'createdTime',
             'eventContent',
             'clientQuestions',
             'clientIntelligence',
@@ -619,7 +622,9 @@ const OpportunityInteractions = (() => {
     function _renderInlineReportEditDraft(interactionId, eventId, eventDraft) {
         const inlineContainer = _getInlineReportContainer(interactionId);
         if (!inlineContainer || typeof renderOperationalWorkspaceEditHTML !== 'function') return;
-        const reportHTML = renderOperationalWorkspaceEditHTML(eventDraft, _getLinkedContactsContext());
+        const reportHTML = renderOperationalWorkspaceEditHTML(eventDraft, _getLinkedContactsContext(), {
+            canEditCreatedTime: _isManagementMode
+        });
         inlineContainer.innerHTML = _applyOperationalWorkspaceDomainTint(reportHTML, eventDraft);
         _initInlineEventTypeSwitchControl(inlineContainer, interactionId, eventId);
         _initInlineParticipantSelectors(inlineContainer);
@@ -813,7 +818,7 @@ const OpportunityInteractions = (() => {
         }
 
         const reportHTML = _applyOperationalWorkspaceDomainTint(
-            renderOperationalWorkspaceEditHTML(_inlineEventDraft, _getLinkedContactsContext()),
+            renderOperationalWorkspaceEditHTML(_inlineEventDraft, _getLinkedContactsContext(), { mode: 'create' }),
             _inlineEventDraft
         );
 
@@ -1563,6 +1568,7 @@ const OpportunityInteractions = (() => {
         inlineContainer.querySelectorAll('[data-report-field]').forEach(control => {
             const fieldName = control.getAttribute('data-report-field');
             if (!fieldName || excludedFields.has(fieldName)) return;
+            if (fieldName === 'createdTime' && !_isManagementMode) return;
             payload[fieldName] = control.value;
         });
         payload.eventType = finalEventType;

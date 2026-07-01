@@ -290,7 +290,7 @@ function renderOperationalWorkspaceHTML(event, contextContacts = []) {
  * @param {string} typeClass - 樣式類別 ('our-side' 或 'client-side')
  * @param {Array} contextContacts - 用於比對的聯絡人清單
  */
-function renderOperationalWorkspaceEditHTML(event, contextContacts = []) {
+function renderOperationalWorkspaceEditHTML(event, contextContacts = [], options = {}) {
     ensureInlineIotOptionStyles();
     const formatTextValue = (value) => {
         if (!value) return '';
@@ -306,6 +306,18 @@ function renderOperationalWorkspaceEditHTML(event, contextContacts = []) {
             <div class="report-top-meta__group${modifier ? ` report-top-meta__group--${modifier}` : ''}">${contentHTML}</div>`;
     const createInputHTML = (key, value, placeholder = '') => `
         <input class="inline-report-control inline-report-control--input" type="text" data-report-field="${key}" value="${formatAttributeValue(value)}"${placeholder ? ` placeholder="${formatAttributeValue(placeholder)}"` : ''}>`;
+    const toLocalDateTimeInputValue = (value) => {
+        let dateValue = value || new Date().toISOString();
+        if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?$/.test(dateValue)) {
+            dateValue += 'Z';
+        }
+        const date = new Date(dateValue);
+        if (Number.isNaN(date.getTime())) return '';
+        date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+        return date.toISOString().slice(0, 16);
+    };
+    const createDateTimeInputHTML = (key, value, isEditable) => `
+        <input class="inline-report-control inline-report-control--input" type="datetime-local" name="${key}" data-report-field="${key}" value="${formatAttributeValue(toLocalDateTimeInputValue(value))}"${isEditable ? '' : ' readonly'}>`;
     const createTextareaHTML = (key, value, placeholder = '') => `<textarea class="inline-report-control inline-report-control--textarea" data-report-field="${key}" rows="1"${placeholder ? ` placeholder="${formatAttributeValue(placeholder)}"` : ''}>${formatTextValue(value)}</textarea>`;
     const createWorkspaceFieldHTML = (label, contentHTML, modifier) => `
             <div class="operational-field operational-field--${modifier}">
@@ -381,6 +393,22 @@ function renderOperationalWorkspaceEditHTML(event, contextContacts = []) {
     const fallbackAccentByType = { iot: '#2563eb', dt: '#6d5bd0', dx: '#6d5bd0' };
     const headerColor = typeInfo.color || fallbackAccentByType[event.eventType] || '#6c757d';
     const updatedTime = event.updatedTime || event.updated_time || event.updatedAt || event.updated_at;
+    const isCreateMode = options && options.mode === 'create';
+    const canEditCreatedTime = isCreateMode || (options && options.canEditCreatedTime === true);
+    if (isCreateMode && !event.createdTime) {
+        event.createdTime = new Date().toISOString();
+    }
+    const formatDateTimeForDisplay = typeof window.formatDateTime === 'function'
+        ? window.formatDateTime
+        : (value) => String(value || '');
+    let createdTimeInputRendered = false;
+    const formatDateTime = (value) => {
+        if (!createdTimeInputRendered && value === event.createdTime) {
+            createdTimeInputRendered = true;
+            return createDateTimeInputHTML('createdTime', event.createdTime, canEditCreatedTime);
+        }
+        return formatDateTimeForDisplay(value);
+    };
     const eventTypeSelectorHTML = `<div class="inline-event-type-selector" data-protected-event-type-switch="true">
         <input type="hidden" data-report-field="eventType" value="${formatAttributeValue(event.eventType)}">
         ${supportedEventTypes.map(typeValue => {

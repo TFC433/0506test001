@@ -374,6 +374,9 @@ ${lines.join('\n')}
       ...(data?.opportunityId !== undefined ? { opportunity_id: data.opportunityId } : {}),
       ...(data?.companyId !== undefined ? { company_id: data.companyId } : {}),
       ...(data?.eventType !== undefined ? { event_type: data.eventType } : {}),
+      ...(data?.createdTime !== undefined && String(data.createdTime).trim()
+        ? { created_time: data.createdTime }
+        : {}),
 
       ...(data?.ourParticipants !== undefined ? { our_participants: data.ourParticipants } : {}),
       ...(data?.clientParticipants !== undefined ? { client_participants: data.clientParticipants } : {}),
