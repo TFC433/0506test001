@@ -80,6 +80,34 @@ const OpportunityInteractions = (() => {
         return eventMeta && eventMeta.createdTime ? eventMeta.createdTime : parentTime;
     }
 
+    function _parseUtcNaiveTimelineDate(rawTime) {
+        if (!rawTime) return null;
+        let value = String(rawTime).trim();
+        if (/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/.test(value)) {
+            value = value.replace(' ', 'T');
+            value += 'Z';
+        }
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? null : date;
+    }
+
+    function _getInteractionTimelineSortValue(interaction) {
+        const date = _parseUtcNaiveTimelineDate(_getInteractionTimelineTime(interaction));
+        return date ? date.getTime() : 0;
+    }
+
+    function _sortInteractionsByTimelineTime(interactions) {
+        return (Array.isArray(interactions) ? interactions : [])
+            .slice()
+            .sort((a, b) => _getInteractionTimelineSortValue(b) - _getInteractionTimelineSortValue(a));
+    }
+
+    function _convertDateTimeLocalToUtcIso(value) {
+        if (!value) return value;
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? value : date.toISOString();
+    }
+
     function _isDeletableLightweightInteraction(interaction) {
         return !!(
             interaction
@@ -739,8 +767,8 @@ const OpportunityInteractions = (() => {
 
     function _getDateDividerLabel(rawTime) {
         if (!rawTime) return '';
-        const date = new Date(rawTime);
-        if (Number.isNaN(date.getTime())) return '';
+        const date = _parseUtcNaiveTimelineDate(rawTime);
+        if (!date) return '';
 
         const today = new Date();
         const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
@@ -1090,12 +1118,12 @@ const OpportunityInteractions = (() => {
             }
         });
 
-        // 可選：確保排序（若後端已排序可刪）
-        // discussionInteractions.sort((a, b) => new Date(_getInteractionTimelineTime(b) || 0) - new Date(_getInteractionTimelineTime(a) || 0));
-        // activityLogInteractions.sort((a, b) => new Date(_getInteractionTimelineTime(b) || 0) - new Date(_getInteractionTimelineTime(a) || 0));
+        // Sort local partition copies by business timeline time before rendering date groups.
+        const sortedDiscussionInteractions = _sortInteractionsByTimelineTime(discussionInteractions);
+        const sortedActivityLogInteractions = _sortInteractionsByTimelineTime(activityLogInteractions);
 
-        _renderTimelineList('#discussion-timeline', discussionInteractions);
-        _renderTimelineList('#activity-log-timeline', activityLogInteractions);
+        _renderTimelineList('#discussion-timeline', sortedDiscussionInteractions);
+        _renderTimelineList('#activity-log-timeline', sortedActivityLogInteractions);
         _applyManagementModeState();
         _updateEventReportsToggleButton();
     }
@@ -1280,6 +1308,9 @@ const OpportunityInteractions = (() => {
             opportunityId: _context.opportunityId,
             eventName: eventNameValue
         });
+        if (payload.createdTime) {
+            payload.createdTime = _convertDateTimeLocalToUtcIso(payload.createdTime);
+        }
         if (_context.companyId) payload.companyId = _context.companyId;
 
         showLoading('Saving event report...');
@@ -1589,7 +1620,9 @@ const OpportunityInteractions = (() => {
             const fieldName = control.getAttribute('data-report-field');
             if (!fieldName || excludedFields.has(fieldName)) return;
             if (fieldName === 'createdTime' && !_isManagementMode) return;
-            payload[fieldName] = control.value;
+            payload[fieldName] = fieldName === 'createdTime'
+                ? _convertDateTimeLocalToUtcIso(control.value)
+                : control.value;
         });
         payload.eventType = finalEventType;
         if (_salvageAppliedSession.has(eventId)) {
@@ -1632,7 +1665,8 @@ const OpportunityInteractions = (() => {
             _salvageAppliedSession.delete(eventId);
             _editingReportEventId = null;
             _expandedReports.add(interactionId);
-            _renderInlineReport(interactionId, eventId, 'view');
+            _updateTimelineView();
+            await _expandInlineReport(interactionId, eventId, { forceView: true });
 
             if (window.dashboardManager && typeof window.dashboardManager.markStale === 'function') {
                 window.dashboardManager.markStale();
