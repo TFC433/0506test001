@@ -25,7 +25,7 @@ function calculateMonthlyTrend(deals, isAllHistory = false) {
         return new Date(date.getFullYear(), date.getMonth(), 1);
     };
     const addMonth = date => new Date(date.getFullYear(), date.getMonth() + 1, 1);
-    const makeBucket = label => ({ label, count: 0 });
+    const makeBucket = label => ({ label, count: 0, amount: 0 });
 
     const now = new Date();
     const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -55,6 +55,7 @@ function calculateMonthlyTrend(deals, isAllHistory = false) {
         const key = toMonthKey(wonMonth);
         if (trendMap.has(key)) {
             trendMap.get(key).count += 1;
+            trendMap.get(key).amount += deal.numericValue || 0;
         }
     });
 

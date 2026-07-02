@@ -193,7 +193,7 @@ const SalesAnalysisComponents = {
         const container = document.getElementById('sales-charts-container');
         if (!container) return;
         
-        const trendTitle = isAllHistory ? '歷史成交趨勢（件數）' : '每月成交趨勢（件數）';
+        const trendTitle = isAllHistory ? '歷史成交趨勢（件數 / 金額）' : '每月成交趨勢（件數 / 金額）';
         const activeMetrics = {
             type: 'count',
             source: 'count',
@@ -255,12 +255,18 @@ const SalesAnalysisComponents = {
                 const borderColor = rootStyle.getPropertyValue('--border-color').trim() || (isDark ? '#334155' : '#cbd5e1');
                 const cardBg = rootStyle.getPropertyValue('--card-bg').trim() || (isDark ? '#1e293b' : '#ffffff');
                 const trendColor = isDark ? '#7dd3fc' : '#3b82f6';
+                const amountColor = isDark ? '#fbbf24' : '#f59e0b';
 
                 return {
-                    legend: { show: false },
+                    legend: {
+                        show: true,
+                        top: 0,
+                        right: 8,
+                        textStyle: { color: textColorSecondary }
+                    },
                     grid: {
-                        top: 18,
-                        right: 18,
+                        top: 36,
+                        right: 48,
                         bottom: rows.length > 12 ? 56 : 34,
                         left: 12,
                         containLabel: true
@@ -280,75 +286,94 @@ const SalesAnalysisComponents = {
                             margin: 10
                         }
                     },
-                    yAxis: {
-                        type: 'value',
-                        minInterval: 1,
-                        axisLabel: {
-                            color: textColorMuted,
-                            formatter: value => `${Number(value).toFixed(0)}`
+                    yAxis: [
+                        {
+                            type: 'value',
+                            minInterval: 1,
+                            axisLabel: {
+                                color: textColorMuted,
+                                formatter: value => `${Number(value).toFixed(0)}`
+                            },
+                            splitLine: {
+                                lineStyle: { color: borderColor, type: 'dashed', opacity: isDark ? 0.28 : 0.38 }
+                            }
                         },
-                        splitLine: {
-                            lineStyle: { color: borderColor, type: 'dashed', opacity: isDark ? 0.28 : 0.38 }
+                        {
+                            type: 'value',
+                            axisLabel: {
+                                color: textColorMuted,
+                                formatter: value => formatMoneyCompact(value)
+                            },
+                            splitLine: { show: false }
                         }
-                    },
+                    ],
                     tooltip: {
                         trigger: 'axis',
-                        axisPointer: { type: 'line' },
+                        axisPointer: { type: 'shadow' },
                         backgroundColor: cardBg,
                         borderColor,
                         textStyle: { color: textColorPrimary },
                         formatter: params => {
-                            const item = Array.isArray(params) ? params[0] : params;
-                            return `${escapeChartText(item.name)}<br/>成交件數：<b>${Number(item.value || 0)}</b> 件`;
+                            const items = Array.isArray(params) ? params : [params];
+                            const label = items[0] ? items[0].name : '';
+                            const countItem = items.find(item => item.seriesName === '成交件數');
+                            const amountItem = items.find(item => item.seriesName === '成交金額');
+                            const countValue = countItem ? Number(countItem.value || 0) : 0;
+                            const amountValue = amountItem ? Number(amountItem.value || 0) : 0;
+                            return `${escapeChartText(label)}<br/>成交件數：<b>${countValue.toLocaleString()}</b> 件<br/>成交金額：<b>${formatMoneyCompact(amountValue)}</b>`;
                         }
                     },
-                    series: [{
-                        name: '成交件數',
-                        type: 'line',
-                        data: rows.map(item => ({
-                            value: item.count,
-                            symbolSize: item.label === currentMonthLabel ? 9 : (rows.length <= 18 ? 6 : 0),
-                            itemStyle: item.label === currentMonthLabel ? {
+                    series: [
+                        {
+                            name: '成交件數',
+                            type: 'bar',
+                            yAxisIndex: 0,
+                            data: rows.map(item => item.count),
+                            barMaxWidth: 18,
+                            itemStyle: {
                                 color: trendColor,
-                                borderColor: isDark ? '#0f172a' : '#ffffff',
-                                borderWidth: 2
-                            } : undefined
-                        })),
-                        smooth: false,
-                        symbol: 'circle',
-                        showSymbol: true,
-                        lineStyle: {
-                            width: 2,
-                            color: trendColor
+                                borderRadius: [3, 3, 0, 0]
+                            }
                         },
-                        areaStyle: {
-                            color: isDark ? 'rgba(125, 211, 252, 0.16)' : 'rgba(59, 130, 246, 0.14)'
-                        },
-                        itemStyle: {
-                            color: trendColor
-                        },
-                        label: {
-                            show: false,
-                            color: textColorSecondary
-                        },
-                        markLine: hasCurrentMonth ? {
-                            symbol: 'none',
-                            silent: true,
-                            label: {
-                                show: true,
-                                formatter: '本月',
-                                color: textColorMuted,
-                                fontSize: 10
-                            },
+                        {
+                            name: '成交金額',
+                            type: 'line',
+                            yAxisIndex: 1,
+                            data: rows.map(item => item.amount || 0),
+                            smooth: false,
+                            symbol: 'circle',
+                            showSymbol: true,
+                            symbolSize: value => value > 0 ? 6 : 0,
                             lineStyle: {
-                                color: trendColor,
-                                type: 'dashed',
-                                opacity: 0.45,
-                                width: 1
+                                width: 2,
+                                color: amountColor
                             },
-                            data: [{ xAxis: currentMonthLabel }]
-                        } : undefined
-                    }]
+                            itemStyle: {
+                                color: amountColor
+                            },
+                            label: {
+                                show: false,
+                                color: textColorSecondary
+                            },
+                            markLine: hasCurrentMonth ? {
+                                symbol: 'none',
+                                silent: true,
+                                label: {
+                                    show: true,
+                                    formatter: '本月',
+                                    color: textColorMuted,
+                                    fontSize: 10
+                                },
+                                lineStyle: {
+                                    color: amountColor,
+                                    type: 'dashed',
+                                    opacity: 0.45,
+                                    width: 1
+                                },
+                                data: [{ xAxis: currentMonthLabel }]
+                            } : undefined
+                        }
+                    ]
                 };
             };
             const sumValues = data => (data || []).reduce((sum, item) => sum + Number(item.y || 0), 0);
