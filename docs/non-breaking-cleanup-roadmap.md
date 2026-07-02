@@ -137,6 +137,24 @@ Remaining deferred cleanup requiring separate product decision:
 
 - Opportunity Detail Event Reports rail / old modal duplicate behavior remains a separate cleanup topic and is not approved for deletion by this checkpoint.
 
+## 4.3 2026-07 Sales Analysis Compatibility Cleanup Note
+
+Sales Analysis removed the Sales Model filter UI by product decision, but backend/API `salesModel` parameter support remains intentionally untouched.
+
+Current compatibility state:
+
+- `currentSalesModelFilter = 'all'` remains as a safe dormant/default frontend state.
+- Sales Analysis frontend fetches/defaults to all sales models.
+- Backend/API support for `salesModel` is not cleanup-approved for removal.
+
+Future cleanup may revisit this only after separate forensics confirms no callers require the parameter or compatibility state. This is not required immediate cleanup.
+
+Protected boundaries:
+
+- Do not reintroduce Sales Model filter UI without a new product decision.
+- Do not remove backend/API `salesModel` support as part of frontend UI cleanup.
+- Do not convert the completed Sales Analysis frontend patch series into backend/API/DB work.
+
 ## 5. Candidate Classification Rules
 
 | Classification | Meaning |

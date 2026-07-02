@@ -250,10 +250,9 @@ function getOpportunityTypeTabs(deals) {
         counts.set(key, (counts.get(key) || 0) + 1);
     });
 
-    const configItems = [
-        ...(Array.isArray(window.CRM_APP?.systemConfig?.['機會種類']) ? window.CRM_APP.systemConfig['機會種類'] : []),
-        ...(Array.isArray(window.CRM_APP?.systemConfig?.['璈?蝔桅?']) ? window.CRM_APP.systemConfig['璈?蝔桅?'] : [])
-    ];
+    const configItems = Array.isArray(window.CRM_APP?.systemConfig?.['機會種類'])
+        ? window.CRM_APP.systemConfig['機會種類']
+        : [];
     const configOrder = new Map();
     configItems.forEach((item, index) => {
         if (!item || typeof item !== 'object') return;

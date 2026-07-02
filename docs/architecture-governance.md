@@ -1783,6 +1783,150 @@ AI collaboration boundary remains unchanged:
 
 ---
 
+# 28.5 Sales Analysis Governance Archive (2026-07-02)
+
+The Sales Analysis / 受注分析 patch series is closed with Function PASS, UI/Product PASS, final closure audit PASS, and governance cleanup PASS.
+
+This section is the primary source of truth for the accepted Sales Analysis state after the completed frontend patch series.
+
+## 28.5.1 Owner Files And Boundary
+
+Active frontend owners:
+
+```text
+public/scripts/sales/sales-analysis.js
+public/scripts/sales/sales-analysis-components.js
+public/scripts/sales/sales-analysis-helper.js
+```
+
+Backend route/controller/service support remains in place, but this patch series did not change backend, API contract, DB schema, routes, controllers, services, data files, migrations, or global CSS.
+
+## 28.5.2 Chart Metric Toggle Policy
+
+`成交類型` and `成交來源` charts each have independent `件數 / 金額` metric toggles.
+
+Accepted semantics:
+
+* default metric is `件數`
+* `成交類型` count is computed frontend-side from filtered `displayedDeals`, grouped by `opportunityType`
+* `成交來源` count is computed frontend-side from filtered `displayedDeals`, grouped by `opportunitySource`
+* amount mode preserves backend amount arrays:
+  * `salesAnalysisData.byType`
+  * `salesAnalysisData.bySource`
+* toggles are chart-local state and must not refetch, reset date filters, reset list tabs, or change backend aggregation
+
+Do not alter backend amount aggregation to support these toggles unless a separate product/API decision is made.
+
+## 28.5.3 Monthly Trend Combo Chart Policy
+
+`calculateMonthlyTrend(displayedDeals)` produces:
+
+```text
+{ label, count, amount }
+```
+
+Accepted data semantics:
+
+* grouping uses the existing `wonDate` monthly bucket logic
+* `count` increments by one won deal in the bucket
+* `amount` sums `numericValue` in the same bucket
+* filters/date range/current all-history bucket behavior remain unchanged
+
+Accepted visual semantics:
+
+* `成交件數` renders as a straight blue line with visible circle markers and low-opacity blue area fill
+* `成交金額` renders as a restrained translucent light-purple bar
+* visual Y-axis labels, ticks, and axis lines are hidden
+* internal dual-axis scaling remains
+* tooltip is the precision-reading layer and shows both count and compact amount
+* dashed cross hover guide is enabled
+
+## 28.5.4 List-Only Opportunity Type Tabs
+
+The `成交案件列表` has list-only quick tabs by `opportunityType`.
+
+Rules:
+
+* default tab is `全部`
+* tabs are generated only from opportunity types present in current `displayedDeals`
+* missing/falsy type values use the existing `未分類` fallback
+* tabs filter only visible table rows, list count, pagination total, and page slicing
+* tabs do not mutate `displayedDeals`
+* tabs do not affect KPI cards, charts, monthly trend, CSV export, API fetches, or backend behavior
+* tab switching resets current page to 1 and pagination is clamped safely
+
+Ordering:
+
+* `全部` is fixed first
+* configured present types use `window.CRM_APP.systemConfig['機會種類']` order ascending
+* matching may use config `value` or `note`
+* unconfigured present types are appended after configured types using locale fallback sorting
+* `未分類` is last when present
+* if settings are unavailable or malformed, sorting falls back to localeCompare
+
+Anti-patterns:
+
+* do not hardcode opportunity type labels or business ordering
+* do not use mojibake or corrupted Chinese keys as fallback business logic
+* do not sort alphabetically as the primary rule when dynamic settings order is available
+* do not show all configured types if they are not present in `displayedDeals`
+
+## 28.5.5 Sales Model Filter Removal Decision
+
+The Sales Model filter UI was removed from Sales Analysis by product decision.
+
+Accepted state:
+
+* do not keep the filter in the list header
+* do not move it to top/global filters
+* `currentSalesModelFilter` remains a safe dormant compatibility/default state fixed as `all`
+* API support for the `salesModel` parameter remains untouched
+* Sales Analysis fetches/defaults to all sales models
+
+Do not reintroduce Sales Model filter UI without a new product decision. Do not remove backend/API `salesModel` support as part of this UI cleanup.
+
+## 28.5.6 Table, Channel, Direct Sales, And CSV Policy
+
+Accepted list display:
+
+* `負責業務` was replaced by `機會來源`
+* table rows display `opportunitySource`
+* direct-sales rows suppress the main channel display and show the existing empty placeholder
+
+Direct-sales detection must use shared logic:
+
+```text
+SalesAnalysisHelper.isDirectSalesModel(model)
+```
+
+Do not duplicate direct-sales detection in table and CSV paths.
+
+CSV behavior:
+
+* CSV matches the accepted table column replacement for `機會來源`
+* CSV uses the same direct-sales main-channel suppression rule
+* CSV export remains based on `displayedDeals`
+* CSV does not follow the list-only opportunity-type tabs
+
+## 28.5.7 Workflow Archive
+
+Completed workflow:
+
+```text
+forensic -> scope freeze -> minimal patch -> CODE PASS -> UI/Product PASS -> final closure audit -> governance cleanup
+```
+
+Final closure audit confirmed:
+
+* no active broken handler remains
+* list-only tabs do not affect KPI/charts/trend/CSV
+* backend/controller/routes/DB remained unchanged
+* mojibake fallback key cleanup completed
+
+Do not convert this frontend UI cleanup into backend/API/DB work.
+
+---
+
 # 29. Internal Ops Governance Baseline
 
 ## 29.1 Internal Ops Dev Projects Governance Baseline
@@ -1920,6 +2064,12 @@ and disciplined data lifecycle governance.
 ---
 
 # Changelog
+
+## 2026-07-02
+
+* Archived completed Sales Analysis / 受注分析 patch series with Function PASS, UI/Product PASS, final closure audit PASS, and governance cleanup PASS.
+* Recorded accepted Sales Analysis governance for chart metric toggles, monthly trend combo chart, list-only opportunity-type tabs, Sales Model filter removal, direct-sales main-channel suppression, CSV behavior, and no backend/API/DB change boundary.
+* Recorded anti-patterns / non-goals: no hardcoded opportunity type labels or business ordering, no mojibake fallback business keys, no list-tab mutation of `displayedDeals`, no list-tab impact on KPI/charts/trend/CSV, no Sales Model filter UI reintroduction without new product decision, no backend/API `salesModel` removal as part of UI cleanup, and no duplicated direct-sales detection.
 
 ## 2026-07-01
 

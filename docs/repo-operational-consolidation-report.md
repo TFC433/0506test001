@@ -28,6 +28,10 @@ Sales Analysis:
 * `public/scripts/sales/sales-analysis-components.js`
 * `public/scripts/sales/sales-analysis-helper.js`
 * Backend route/controller/service path includes `routes/sales.routes.js`, `controllers/sales.controller.js`, and `services/sales-analysis-service.js`.
+* Sales Analysis / 受注分析 patch series is closed with Function PASS, UI/Product PASS, final closure audit PASS, and governance cleanup PASS.
+* Patch series was frontend-only; backend/API/DB were insulated and no backend/controller/routes/DB changes are claimed.
+* Accepted state includes chart metric toggles, monthly trend combo chart, list-only opportunity-type tabs, Sales Model filter UI removal, direct-sales main-channel suppression through shared helper, CSV alignment for table source column, and mojibake fallback cleanup.
+* Primary governance reference: `docs/architecture-governance.md`.
 
 Company / Contact / Opportunity list areas:
 

@@ -29,6 +29,14 @@ Last Updated: 2026-07-01
 * Owners: `public/dashboard.html`, `public/scripts/dashboard/*`, `public/scripts/map-manager.js`
 * Baseline: Dashboard is the analytics / KPI / chart / filter tab / widget control baseline; accepted chart work uses ECharts for Dashboard trend, Sales Analysis, and Taiwan map while Highcharts cleanup remains separate.
 
+### Sales Analysis / 受注分析
+
+* Docs: `docs/architecture-governance.md`, `docs/tfc-crm-ui-style-governance.md`, `docs/repo-operational-consolidation-report.md`, `docs/non-breaking-cleanup-roadmap.md`
+* Owners: `public/scripts/sales/sales-analysis.js`, `public/scripts/sales/sales-analysis-components.js`, `public/scripts/sales/sales-analysis-helper.js`
+* Baseline: Sales Analysis patch series is Function PASS, UI/Product PASS, final closure audit PASS, and governance cleanup PASS. Full behavior governance lives in `docs/architecture-governance.md`.
+* Current behavior summary: chart metric toggles are frontend count / backend amount; monthly trend uses `{ label, count, amount }`; opportunity-type quick tabs are list-only and do not mutate `displayedDeals`.
+* Boundary: KPI cards, charts, monthly trend, and CSV remain based on full `displayedDeals`; list-only tabs affect only visible table rows, table count, pagination, and page slicing.
+
 ### Opportunity Detail / Activity Hub
 
 * Docs: `docs/architecture-governance.md`, `docs/tfc-crm-ui-style-governance.md`, `docs/non-breaking-cleanup-roadmap.md`, `docs/repo-operational-consolidation-report.md`

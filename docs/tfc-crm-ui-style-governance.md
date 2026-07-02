@@ -218,6 +218,36 @@ NG:
 
 Analytics work must preserve Dashboard stability and stale-refresh assumptions.
 
+### 9.1 Sales Analysis UI Baseline
+
+Sales Analysis follows the Dashboard analytics baseline with compact local controls.
+
+Accepted Sales Analysis chart and control conventions:
+
+* `成交類型` and `成交來源` chart metric toggles use compact `action-btn` segmented controls.
+* active metric uses primary visual weight; inactive metric uses secondary visual weight.
+* metric toggles are independent per chart and must not become global page filters.
+* monthly trend combo chart uses `成交件數` as a straight blue line with visible circle markers and low-opacity blue area fill.
+* monthly trend combo chart uses `成交金額` as a restrained translucent light-purple bar.
+* monthly trend visual Y-axis labels, ticks, and axis lines stay hidden; tooltip is the precision-reading layer.
+* monthly trend tooltip must show both count and compact amount.
+* dashed cross hover guide is accepted for precision reading.
+
+Accepted Sales Analysis list toolbar convention:
+
+* opportunity-type quick tabs belong in the `成交案件列表` header toolbar, immediately left of `每頁顯示`.
+* accepted label is `機會種類篩選：`.
+* tab buttons use the same compact visual language as page-size buttons.
+* old standalone bulky tab rows should not be reintroduced when the control belongs to the table toolbar.
+* no global CSS is required for this accepted pattern; prefer local inline style and existing `action-btn` conventions.
+
+Sales Analysis UI anti-patterns:
+
+* do not reintroduce the Sales Model filter UI without a new product decision.
+* do not make list-only opportunity-type tabs affect KPI cards, charts, monthly trend, CSV, API fetches, or backend behavior.
+* do not hardcode opportunity type labels, colors, or ordering in UI code.
+* do not use mojibake or corrupted Chinese keys as UI/business fallback logic.
+
 ## 10. Modal / preview rules
 
 Modal and preview behavior must respect the owning workflow.
