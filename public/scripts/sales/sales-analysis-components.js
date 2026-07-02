@@ -134,14 +134,17 @@ const SalesAnalysisComponents = {
                         <h2 class="widget-title">成交案件列表</h2>
                         <span style="font-size: 0.9rem; color: var(--text-muted);">共 <span id="deals-count-display">0</span> 筆</span>
                     </div>
-                    <div style="display: flex; gap: 15px; align-items: center;">
+                    <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap; justify-content: flex-end;">
+                        <div id="opportunity-type-tabs-container" style="display:flex; gap: 5px; align-items:center; flex-wrap:wrap;">
+                             <span style="font-size:0.85rem; color:var(--text-muted);">機會種類篩選：</span>
+                             <div id="opportunity-type-tabs" style="display:flex; gap:5px; align-items:center; flex-wrap:wrap;"></div>
+                        </div>
                         <div id="rows-per-page-container" style="display:flex; gap: 5px; align-items:center;">
                              <span style="font-size:0.85rem; color:var(--text-muted);">每頁顯示：</span>
                              <div id="rows-per-page-buttons" style="display:flex; gap:5px;"></div>
                         </div>
                     </div>
                 </div>
-                <div id="opportunity-type-tabs" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; padding: 0 0 12px 0;"></div>
                 
                 <div id="won-deals-content" class="widget-content" style="padding: 0;"></div>
                 
@@ -635,7 +638,7 @@ const SalesAnalysisComponents = {
         container.innerHTML = (tabs || []).map(tab => {
             const isActive = tab.value === activeValue;
             const encodedValue = encodeURIComponent(tab.value);
-            return `<button type="button" class="action-btn ${isActive ? 'primary' : 'secondary'}" style="padding: 4px 10px; font-size: 0.8rem;" onclick="handleListOpportunityTypeTabChange(decodeURIComponent('${encodedValue}'))">${escapeHtml(tab.label)} (${tab.count})</button>`;
+            return `<button type="button" class="action-btn ${isActive ? 'primary' : 'secondary'}" style="padding: 4px 8px; font-size: 0.8rem;" onclick="handleListOpportunityTypeTabChange(decodeURIComponent('${encodedValue}'))">${escapeHtml(tab.label)} (${tab.count})</button>`;
         }).join('');
     },
 

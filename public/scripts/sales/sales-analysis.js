@@ -250,9 +250,33 @@ function getOpportunityTypeTabs(deals) {
         counts.set(key, (counts.get(key) || 0) + 1);
     });
 
+    const configItems = [
+        ...(Array.isArray(window.CRM_APP?.systemConfig?.['機會種類']) ? window.CRM_APP.systemConfig['機會種類'] : []),
+        ...(Array.isArray(window.CRM_APP?.systemConfig?.['璈?蝔桅?']) ? window.CRM_APP.systemConfig['璈?蝔桅?'] : [])
+    ];
+    const configOrder = new Map();
+    configItems.forEach((item, index) => {
+        if (!item || typeof item !== 'object') return;
+        const order = Number.isFinite(Number(item.order)) ? Number(item.order) : index;
+        [item.value, item.note].filter(Boolean).forEach(key => {
+            if (!configOrder.has(key)) configOrder.set(key, order);
+        });
+    });
+
     const typeTabs = Array.from(counts.entries())
         .map(([value, count]) => ({ value, label: value, count }))
-        .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hant'));
+        .sort((a, b) => {
+            const aIsFallback = a.value === '未分類';
+            const bIsFallback = b.value === '未分類';
+            if (aIsFallback !== bIsFallback) return aIsFallback ? 1 : -1;
+
+            const aOrder = configOrder.get(a.value);
+            const bOrder = configOrder.get(b.value);
+            if (aOrder !== undefined && bOrder !== undefined && aOrder !== bOrder) return aOrder - bOrder;
+            if (aOrder !== undefined && bOrder === undefined) return -1;
+            if (aOrder === undefined && bOrder !== undefined) return 1;
+            return a.label.localeCompare(b.label, 'zh-Hant');
+        });
 
     return [{ value: 'all', label: '全部', count: (deals || []).length }].concat(typeTabs);
 }
