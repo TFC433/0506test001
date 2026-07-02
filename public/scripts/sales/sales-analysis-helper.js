@@ -7,6 +7,11 @@
  */
 
 const SalesAnalysisHelper = {
+    isDirectSalesModel: function(model) {
+        const normalizedModel = (model || '').trim();
+        return ['直販', '直接販售'].some(keyword => normalizedModel.includes(keyword));
+    },
+
     calculateOverview: function(deals) {
         let totalVal = 0, totalDays = 0, cycleCount = 0;
         deals.forEach(d => {
@@ -25,20 +30,25 @@ const SalesAnalysisHelper = {
     },
 
     calculateKpis: function(deals) {
-        const calcUnique = (keywords) => {
+        const calcUnique = (matchesModel) => {
             const unique = new Set();
             deals.forEach(d => {
-                const m = (d.salesModel || '').trim();
-                if (keywords.some(kw => m.includes(kw)) && d.customerCompany) {
+                if (matchesModel(d.salesModel) && d.customerCompany) {
                     unique.add(d.customerCompany.trim());
                 }
             });
             return unique.size;
         };
         return {
-            direct: calcUnique(['直販', '直接販售']),
-            si: calcUnique(['SI', '系統整合']),
-            mtb: calcUnique(['MTB', '工具機'])
+            direct: calcUnique(this.isDirectSalesModel),
+            si: calcUnique(model => {
+                const m = (model || '').trim();
+                return ['SI', '系統整合'].some(kw => m.includes(kw));
+            }),
+            mtb: calcUnique(model => {
+                const m = (model || '').trim();
+                return ['MTB', '工具機'].some(kw => m.includes(kw));
+            })
         };
     },
 
@@ -105,12 +115,15 @@ const SalesAnalysisHelper = {
 
     generateCSV: function(deals) {
         if (!deals || !deals.length) return null;
-        const headers = ['成交日期', '機會種類', '機會名稱', '終端客戶', '銷售模式', '主要通路', '目前階段', '價值', '負責業務'];
-        const rows = deals.map(d => [
-            d.wonDate ? new Date(d.wonDate).toLocaleDateString() : '-',
-            d.opportunityType || '-', d.opportunityName || '(未命名)', d.customerCompany || '-', d.salesModel || '-',
-            d.channelDetails || d.salesChannel || '-', d.currentStage || '-', d.numericValue || 0, d.assignee || '-'
-        ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+        const headers = ['成交日期', '機會種類', '機會名稱', '終端客戶', '銷售模式', '主要通路', '目前階段', '價值', '機會來源'];
+        const rows = deals.map(d => {
+            const channelDisplay = this.isDirectSalesModel(d.salesModel) ? '-' : (d.channelDetails || d.salesChannel || '-');
+            return [
+                d.wonDate ? new Date(d.wonDate).toLocaleDateString() : '-',
+                d.opportunityType || '-', d.opportunityName || '(未命名)', d.customerCompany || '-', d.salesModel || '-',
+                channelDisplay, d.currentStage || '-', d.numericValue || 0, d.opportunitySource || '-'
+            ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+        });
         return '\ufeff' + headers.join(',') + '\n' + rows.join('\n');
     }
 };

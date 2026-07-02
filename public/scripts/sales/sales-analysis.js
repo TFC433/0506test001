@@ -99,7 +99,9 @@ async function loadSalesAnalysisPage(startDateISO, endDateISO) {
         salesEndDate = endDateISO || '';
     }
 
-    currentSalesModelFilter = 'all';
+    if (currentSalesModelFilter === undefined || currentSalesModelFilter === null || currentSalesModelFilter === '') {
+        currentSalesModelFilter = 'all';
+    }
 
     // 1. 注入 CSS
     SalesAnalysisComponents.injectStyles();

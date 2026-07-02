@@ -602,19 +602,20 @@ const SalesAnalysisComponents = {
         let html = `<div class="table-container" style="overflow-x:auto;"><table class="data-table sticky-header"><thead><tr style="white-space:nowrap;">
             <th>項次</th><th class="${getCls('wonDate')}" onclick="handleSortTable('wonDate')">成交日期 ${getIcon('wonDate')}</th>
             <th>機會種類</th><th>機會名稱</th><th>終端客戶</th><th>銷售模式</th><th>主要通路</th><th>階段</th>
-            <th style="text-align:right;" class="${getCls('numericValue')}" onclick="handleSortTable('numericValue')">機會價值 ${getIcon('numericValue')}</th><th>負責業務</th></tr></thead><tbody>`;
+            <th style="text-align:right;" class="${getCls('numericValue')}" onclick="handleSortTable('numericValue')">機會價值 ${getIcon('numericValue')}</th><th>機會來源</th></tr></thead><tbody>`;
 
         deals.forEach((d, i) => {
             const idx = ((page - 1) * perPage) + i + 1;
             const modelHtml = d.salesModel ? `<span class="sales-chip" style="background:${modelColors[d.salesModel] || '#6b7280'}">${d.salesModel}</span>` : '-';
             const typeHtml = d.opportunityType ? `<span class="type-chip" style="background:${typeColors[d.opportunityType] || '#6b7280'}">${d.opportunityType}</span>` : '-';
-            const chanHtml = (d.channelDetails || d.salesChannel || '-') === '-' ? '-' : `<span class="channel-chip">${d.channelDetails || d.salesChannel}</span>`;
+            const channelDisplay = SalesAnalysisHelper.isDirectSalesModel(d.salesModel) ? '-' : (d.channelDetails || d.salesChannel || '-');
+            const chanHtml = channelDisplay === '-' ? '-' : `<span class="channel-chip">${channelDisplay}</span>`;
             
             html += `<tr><td>${idx}</td><td>${new Date(d.wonDate).toLocaleDateString()}</td><td>${typeHtml}</td>
                 <td><a href="#" class="text-link" onclick="event.preventDefault();CRM_APP.navigateTo('opportunity-details',{opportunityId:'${d.opportunityId}'})"><strong>${d.opportunityName}</strong></a></td>
                 <td>${d.customerCompany || '-'}</td><td>${modelHtml}</td><td>${chanHtml}</td>
                 <td><span class="status-badge status-won">${d.currentStage}</span></td>
-                <td style="text-align:right;font-weight:600;">$${(d.numericValue||0).toLocaleString()}</td><td>${d.assignee || '-'}</td></tr>`;
+                <td style="text-align:right;font-weight:600;">$${(d.numericValue||0).toLocaleString()}</td><td>${d.opportunitySource || '-'}</td></tr>`;
         });
         container.innerHTML = html + '</tbody></table></div>';
     },
