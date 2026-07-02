@@ -244,9 +244,6 @@ const SalesAnalysisComponents = {
 
             const trendBarOpt = data => {
                 const rows = data || [];
-                const now = new Date();
-                const currentMonthLabel = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-                const hasCurrentMonth = rows.some(item => item.label === currentMonthLabel);
                 const rootStyle = getComputedStyle(document.documentElement);
                 const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
                 const textColorPrimary = rootStyle.getPropertyValue('--text-primary').trim() || (isDark ? '#f8fafc' : '#0f172a');
@@ -255,7 +252,7 @@ const SalesAnalysisComponents = {
                 const borderColor = rootStyle.getPropertyValue('--border-color').trim() || (isDark ? '#334155' : '#cbd5e1');
                 const cardBg = rootStyle.getPropertyValue('--card-bg').trim() || (isDark ? '#1e293b' : '#ffffff');
                 const trendColor = isDark ? '#7dd3fc' : '#3b82f6';
-                const amountColor = isDark ? '#fbbf24' : '#f59e0b';
+                const amountColor = isDark ? 'rgba(196, 181, 253, 0.58)' : 'rgba(167, 139, 250, 0.42)';
 
                 return {
                     legend: {
@@ -290,9 +287,10 @@ const SalesAnalysisComponents = {
                         {
                             type: 'value',
                             minInterval: 1,
+                            axisLine: { show: false },
+                            axisTick: { show: false },
                             axisLabel: {
-                                color: textColorMuted,
-                                formatter: value => `${Number(value).toFixed(0)}`
+                                show: false
                             },
                             splitLine: {
                                 lineStyle: { color: borderColor, type: 'dashed', opacity: isDark ? 0.28 : 0.38 }
@@ -300,16 +298,21 @@ const SalesAnalysisComponents = {
                         },
                         {
                             type: 'value',
+                            axisLine: { show: false },
+                            axisTick: { show: false },
                             axisLabel: {
-                                color: textColorMuted,
-                                formatter: value => formatMoneyCompact(value)
+                                show: false
                             },
                             splitLine: { show: false }
                         }
                     ],
                     tooltip: {
                         trigger: 'axis',
-                        axisPointer: { type: 'shadow' },
+                        axisPointer: {
+                            type: 'cross',
+                            lineStyle: { type: 'dashed' },
+                            label: { show: false }
+                        },
                         backgroundColor: cardBg,
                         borderColor,
                         textStyle: { color: textColorPrimary },
@@ -326,52 +329,36 @@ const SalesAnalysisComponents = {
                     series: [
                         {
                             name: '成交件數',
-                            type: 'bar',
+                            type: 'line',
                             yAxisIndex: 0,
                             data: rows.map(item => item.count),
-                            barMaxWidth: 18,
-                            itemStyle: {
-                                color: trendColor,
-                                borderRadius: [3, 3, 0, 0]
-                            }
-                        },
-                        {
-                            name: '成交金額',
-                            type: 'line',
-                            yAxisIndex: 1,
-                            data: rows.map(item => item.amount || 0),
                             smooth: false,
                             symbol: 'circle',
                             showSymbol: true,
-                            symbolSize: value => value > 0 ? 6 : 0,
+                            symbolSize: 6,
                             lineStyle: {
-                                width: 2,
-                                color: amountColor
+                                width: 3,
+                                color: trendColor
+                            },
+                            areaStyle: {
+                                color: isDark ? 'rgba(125, 211, 252, 0.16)' : 'rgba(59, 130, 246, 0.14)'
                             },
                             itemStyle: {
-                                color: amountColor
+                                color: trendColor
                             },
-                            label: {
-                                show: false,
-                                color: textColorSecondary
+                            z: 4
+                        },
+                        {
+                            name: '成交金額',
+                            type: 'bar',
+                            yAxisIndex: 1,
+                            data: rows.map(item => item.amount || 0),
+                            barMaxWidth: 18,
+                            itemStyle: {
+                                color: amountColor,
+                                borderRadius: [3, 3, 0, 0]
                             },
-                            markLine: hasCurrentMonth ? {
-                                symbol: 'none',
-                                silent: true,
-                                label: {
-                                    show: true,
-                                    formatter: '本月',
-                                    color: textColorMuted,
-                                    fontSize: 10
-                                },
-                                lineStyle: {
-                                    color: amountColor,
-                                    type: 'dashed',
-                                    opacity: 0.45,
-                                    width: 1
-                                },
-                                data: [{ xAxis: currentMonthLabel }]
-                            } : undefined
+                            z: 1
                         }
                     ]
                 };
