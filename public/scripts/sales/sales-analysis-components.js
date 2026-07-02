@@ -189,17 +189,35 @@ const SalesAnalysisComponents = {
     },
 
     // [Semantic UI Patch] 根據 isAllHistory 切換顯示標題
-    renderAllCharts: function(typeData, sourceData, productData, channelData, trendData, isAllHistory = false) {
+    renderAllCharts: function(typeData, sourceData, productData, channelData, trendData, isAllHistory = false, metricState) {
         const container = document.getElementById('sales-charts-container');
         if (!container) return;
         
         const trendTitle = isAllHistory ? '歷史成交趨勢（件數）' : '每月成交趨勢（件數）';
+        const activeMetrics = {
+            type: 'count',
+            source: 'count',
+            ...(window.SalesAnalysisChartMetrics || {}),
+            ...(metricState || {})
+        };
+        const metricToggleHtml = (chartKey) => {
+            const activeMetric = activeMetrics[chartKey] || 'count';
+            const btnClass = (metric) => `action-btn ${activeMetric === metric ? 'primary' : 'secondary'}`;
+            return `
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <button type="button" class="${btnClass('count')}" style="padding: 4px 10px; font-size: 0.8rem;" onclick="handleSalesChartMetricChange('${chartKey}', 'count')">件數</button>
+                    <button type="button" class="${btnClass('amount')}" style="padding: 4px 10px; font-size: 0.8rem;" onclick="handleSalesChartMetricChange('${chartKey}', 'amount')">金額</button>
+                </div>
+            `;
+        };
+        const typeTitle = `成交類型 (${activeMetrics.type === 'count' ? '依件數計' : '依金額計'})`;
+        const sourceTitle = `成交來源 (${activeMetrics.source === 'count' ? '依件數占比' : '依金額占比'})`;
         
         container.innerHTML = `
             <div class="three-charts-row">
                 <div class="dashboard-widget"><div class="widget-header sales-chart-header"><h2 class="widget-title">${trendTitle}</h2><button type="button" class="sales-chart-expand-btn" title="放大成交趨勢圖表" aria-label="放大成交趨勢圖表" onclick="SalesAnalysisComponents.openChartPreview('trend', '${trendTitle}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"></path><path d="M21 3l-7 7"></path><path d="M9 21H3v-6"></path><path d="M3 21l7-7"></path></svg></button></div><div id="chart-area-trend" style="height: 300px;"></div></div>
-                <div class="dashboard-widget"><div class="widget-header sales-chart-header"><h2 class="widget-title">成交類型 (依金額計)</h2><button type="button" class="sales-chart-expand-btn" title="放大成交類型圖表" aria-label="放大成交類型圖表" onclick="SalesAnalysisComponents.openChartPreview('type', '成交類型（依金額計）')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"></path><path d="M21 3l-7 7"></path><path d="M9 21H3v-6"></path><path d="M3 21l7-7"></path></svg></button></div><div id="chart-pie-type" style="height: 300px;"></div></div>
-                <div class="dashboard-widget"><div class="widget-header sales-chart-header"><h2 class="widget-title">成交來源 (依金額占比)</h2><button type="button" class="sales-chart-expand-btn" title="放大成交來源圖表" aria-label="放大成交來源圖表" onclick="SalesAnalysisComponents.openChartPreview('source', '成交來源（依金額占比）')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"></path><path d="M21 3l-7 7"></path><path d="M9 21H3v-6"></path><path d="M3 21l7-7"></path></svg></button></div><div id="chart-pie-source" style="height: 300px;"></div></div>
+                <div class="dashboard-widget"><div class="widget-header sales-chart-header"><h2 class="widget-title">${typeTitle}</h2><div style="display: flex; gap: 6px; align-items: center;">${metricToggleHtml('type')}<button type="button" class="sales-chart-expand-btn" title="放大成交類型圖表" aria-label="放大成交類型圖表" onclick="SalesAnalysisComponents.openChartPreview('type', '${typeTitle}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"></path><path d="M21 3l-7 7"></path><path d="M9 21H3v-6"></path><path d="M3 21l7-7"></path></svg></button></div></div><div id="chart-pie-type" style="height: 300px;"></div></div>
+                <div class="dashboard-widget"><div class="widget-header sales-chart-header"><h2 class="widget-title">${sourceTitle}</h2><div style="display: flex; gap: 6px; align-items: center;">${metricToggleHtml('source')}<button type="button" class="sales-chart-expand-btn" title="放大成交來源圖表" aria-label="放大成交來源圖表" onclick="SalesAnalysisComponents.openChartPreview('source', '${sourceTitle}')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6"></path><path d="M21 3l-7 7"></path><path d="M9 21H3v-6"></path><path d="M3 21l7-7"></path></svg></button></div></div><div id="chart-pie-source" style="height: 300px;"></div></div>
             </div>
         `;
 
@@ -218,6 +236,10 @@ const SalesAnalysisComponents = {
                 if (Math.abs(amount) >= 100000000) return `${(amount / 100000000).toFixed(1).replace(/\.0$/, '')}億`;
                 if (Math.abs(amount) >= 10000) return `${(amount / 10000).toFixed(1).replace(/\.0$/, '')}萬`;
                 return amount.toLocaleString();
+            };
+            const formatMetricValue = (value, metric) => {
+                const numericValue = Number(value || 0);
+                return metric === 'count' ? `${numericValue.toLocaleString()} 件` : formatMoneyCompact(numericValue);
             };
 
             const trendBarOpt = data => {
@@ -331,7 +353,7 @@ const SalesAnalysisComponents = {
             };
             const sumValues = data => (data || []).reduce((sum, item) => sum + Number(item.y || 0), 0);
 
-            const typeDonutOpt = (name, data) => {
+            const typeDonutOpt = (name, data, metric) => {
                 const realTotal = sumValues(data);
                 const roseData = (data || []).map(item => {
                     const realValue = Number(item.y || 0);
@@ -357,7 +379,7 @@ const SalesAnalysisComponents = {
                             const safeName = escapeChartText(params.name);
                             const realValue = params.data && params.data.realValue !== undefined ? params.data.realValue : params.value;
                             const realPercent = params.data && params.data.realPercent !== undefined ? params.data.realPercent : params.percent;
-                            return `${params.marker || ''}${safeName}<br/><b>${formatMoneyCompact(realValue)}</b><br/>${realPercent.toFixed(2)}%`;
+                            return `${params.marker || ''}${safeName}<br/><b>${formatMetricValue(realValue, metric)}</b><br/>${realPercent.toFixed(2)}%`;
                         }
                     },
                     series: [{
@@ -390,7 +412,7 @@ const SalesAnalysisComponents = {
                 };
             };
 
-            const sourceBarOpt = data => {
+            const sourceBarOpt = (data, metric) => {
                 const sourceItems = (data || []).map(item => ({
                     name: item.name,
                     y: Number(item.y || 0)
@@ -469,7 +491,7 @@ const SalesAnalysisComponents = {
                         formatter: params => {
                             const realValue = params.data && params.data.realValue !== undefined ? params.data.realValue : 0;
                             const realPercent = params.data && params.data.realPercent !== undefined ? params.data.realPercent : Number(params.value || 0);
-                            return `${params.marker || ''}${escapeChartText(params.name)}<br/>金額：<b>${formatMoneyCompact(realValue)}</b><br/>占比：${realPercent.toFixed(1)}%`;
+                            return `${params.marker || ''}${escapeChartText(params.name)}<br/>${metric === 'count' ? '件數' : '金額'}：<b>${formatMetricValue(realValue, metric)}</b><br/>占比：${realPercent.toFixed(1)}%`;
                         }
                     },
                     series: [{
@@ -500,8 +522,8 @@ const SalesAnalysisComponents = {
             };
 
             const trendOption = trendBarOpt(trendData);
-            const typeOption = typeDonutOpt('類型', typeData);
-            const sourceOption = sourceBarOpt(sourceData);
+            const typeOption = typeDonutOpt('類型', typeData, activeMetrics.type);
+            const sourceOption = sourceBarOpt(sourceData, activeMetrics.source);
             this._latestEChartsOptions = {
                 trend: trendOption,
                 type: typeOption,

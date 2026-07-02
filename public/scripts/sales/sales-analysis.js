@@ -68,6 +68,11 @@ let salesEndDate = null;
 let allWonDeals = [];         
 let displayedDeals = [];      
 let currentSalesModelFilter = 'all';
+let salesChartMetrics = {
+    type: 'count',
+    source: 'count'
+};
+window.SalesAnalysisChartMetrics = salesChartMetrics;
 
 // 列表狀態
 let currentSortState = { field: 'wonDate', direction: 'desc' };
@@ -191,12 +196,18 @@ async function fetchAndRenderSalesData(startDate, endDate) {
         // [Semantic UI Patch] 偵測是否為全歷史資料
         const isAllHistory = (sParam === '' && eParam === '');
         const trendData = calculateMonthlyTrend(displayedDeals, isAllHistory);
+        const typeChartData = salesChartMetrics.type === 'count'
+            ? SalesAnalysisHelper.calculateGroupCountStats(displayedDeals, 'opportunityType')
+            : salesAnalysisData.byType || [];
+        const sourceChartData = salesChartMetrics.source === 'count'
+            ? SalesAnalysisHelper.calculateGroupCountStats(displayedDeals, 'opportunitySource')
+            : salesAnalysisData.bySource || [];
 
         if (salesAnalysisData.overview && salesAnalysisData.kpis && salesAnalysisData.byType) {
             SalesAnalysisComponents.renderSalesOverviewAndKpis(salesAnalysisData.overview, salesAnalysisData.kpis);
             SalesAnalysisComponents.renderAllCharts(
-                salesAnalysisData.byType || [], 
-                salesAnalysisData.bySource || [], 
+                typeChartData,
+                sourceChartData,
                 salesAnalysisData.byProduct || [], 
                 salesAnalysisData.byChannel || [],
                 trendData,
@@ -247,7 +258,15 @@ function updateDashboard(deals) {
     const isAllHistory = (salesStartDate === '' && salesEndDate === '');
     const trendData = calculateMonthlyTrend(deals, isAllHistory);
 
-    SalesAnalysisComponents.renderAllCharts(typeData, sourceData, productData, channelData, trendData, isAllHistory);
+    SalesAnalysisComponents.renderAllCharts(
+        salesChartMetrics.type === 'count' ? SalesAnalysisHelper.calculateGroupCountStats(deals, 'opportunityType') : typeData,
+        salesChartMetrics.source === 'count' ? SalesAnalysisHelper.calculateGroupCountStats(deals, 'opportunitySource') : sourceData,
+        productData,
+        channelData,
+        trendData,
+        isAllHistory,
+        salesChartMetrics
+    );
 }
 
 function renderPaginatedTable() {
@@ -300,6 +319,40 @@ window.handleRowsPerPageChange = function(value) {
         SalesAnalysisComponents.initPaginationOptions([50, 100, 500], rowsPerPage);
         renderPaginatedTable();
     }
+};
+
+window.handleSalesChartMetricChange = function(chartKey, metric) {
+    if (!['type', 'source'].includes(chartKey) || !['count', 'amount'].includes(metric)) return;
+    if (salesChartMetrics[chartKey] === metric) return;
+
+    salesChartMetrics = {
+        ...salesChartMetrics,
+        [chartKey]: metric
+    };
+    window.SalesAnalysisChartMetrics = salesChartMetrics;
+
+    const typeAmountData = salesAnalysisData && Array.isArray(salesAnalysisData.byType)
+        ? salesAnalysisData.byType
+        : SalesAnalysisHelper.calculateGroupStats(displayedDeals, 'opportunityType', 'value');
+    const sourceAmountData = salesAnalysisData && Array.isArray(salesAnalysisData.bySource)
+        ? salesAnalysisData.bySource
+        : SalesAnalysisHelper.calculateGroupStats(displayedDeals, 'opportunitySource', 'value');
+    const typeData = salesChartMetrics.type === 'count'
+        ? SalesAnalysisHelper.calculateGroupCountStats(displayedDeals, 'opportunityType')
+        : typeAmountData;
+    const sourceData = salesChartMetrics.source === 'count'
+        ? SalesAnalysisHelper.calculateGroupCountStats(displayedDeals, 'opportunitySource')
+        : sourceAmountData;
+    const productData = salesAnalysisData && Array.isArray(salesAnalysisData.byProduct)
+        ? salesAnalysisData.byProduct
+        : SalesAnalysisHelper.calculateProductStats(displayedDeals);
+    const channelData = salesAnalysisData && Array.isArray(salesAnalysisData.byChannel)
+        ? salesAnalysisData.byChannel
+        : SalesAnalysisHelper.calculateChannelStats(displayedDeals);
+    const isAllHistory = (salesStartDate === '' && salesEndDate === '');
+    const trendData = calculateMonthlyTrend(displayedDeals, isAllHistory);
+
+    SalesAnalysisComponents.renderAllCharts(typeData, sourceData, productData, channelData, trendData, isAllHistory, salesChartMetrics);
 };
 
 window.changePage = function(delta) {

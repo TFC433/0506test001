@@ -52,6 +52,16 @@ const SalesAnalysisHelper = {
         return Object.entries(stats).map(([name, val]) => ({ name, y: val })).sort((a, b) => b.y - a.y);
     },
 
+    calculateGroupCountStats: function(deals, fieldKey) {
+        const stats = {};
+        deals.forEach(deal => {
+            const key = deal[fieldKey] || '未分類';
+            if (!stats[key]) stats[key] = 0;
+            stats[key] += 1;
+        });
+        return Object.entries(stats).map(([name, count]) => ({ name, y: count })).sort((a, b) => b.y - a.y);
+    },
+
     calculateProductStats: function(deals) {
         const productCounts = {};
         deals.forEach(deal => {
