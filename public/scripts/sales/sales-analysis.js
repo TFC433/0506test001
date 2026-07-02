@@ -79,6 +79,7 @@ window.SalesAnalysisChartMetrics = salesChartMetrics;
 let currentSortState = { field: 'wonDate', direction: 'desc' };
 let currentPage = 1;
 let rowsPerPage = 100;
+let currentListOpportunityTypeTab = 'all';
 
 /**
  * 入口函數
@@ -99,9 +100,7 @@ async function loadSalesAnalysisPage(startDateISO, endDateISO) {
         salesEndDate = endDateISO || '';
     }
 
-    if (currentSalesModelFilter === undefined || currentSalesModelFilter === null || currentSalesModelFilter === '') {
-        currentSalesModelFilter = 'all';
-    }
+    currentSalesModelFilter = 'all';
 
     // 1. 注入 CSS
     SalesAnalysisComponents.injectStyles();
@@ -176,7 +175,8 @@ async function fetchAndRenderSalesData(startDate, endDate) {
     try {
         const sParam = startDate ?? '';
         const eParam = endDate ?? '';
-        const mParam = currentSalesModelFilter || 'all'; 
+        currentSalesModelFilter = 'all';
+        const mParam = 'all';
 
         const result = await authedFetch(`/api/sales-analysis?startDate=${sParam}&endDate=${eParam}&salesModel=${encodeURIComponent(mParam)}`);
         if (!result.success || !result.data) throw new Error(result.error || '無法獲取分析數據');
@@ -184,12 +184,6 @@ async function fetchAndRenderSalesData(startDate, endDate) {
         salesAnalysisData = result.data;
         
         allWonDeals = salesAnalysisData.allWonDeals || [];
-        
-        SalesAnalysisComponents.initSalesModelFilterOptions(allWonDeals);
-        const select = document.getElementById('sales-model-filter');
-        if (select && currentSalesModelFilter) {
-            select.value = currentSalesModelFilter;
-        }
         
         SalesAnalysisComponents.initPaginationOptions([50, 100, 500], rowsPerPage);
 
@@ -245,6 +239,29 @@ function sortDeals(field, direction, sortDisplayedOnly = false) {
     if (!sortDisplayedOnly) displayedDeals = [...allWonDeals];
 }
 
+function getOpportunityTypeTabValue(deal) {
+    return (deal && deal.opportunityType) || '未分類';
+}
+
+function getOpportunityTypeTabs(deals) {
+    const counts = new Map();
+    (deals || []).forEach(deal => {
+        const key = getOpportunityTypeTabValue(deal);
+        counts.set(key, (counts.get(key) || 0) + 1);
+    });
+
+    const typeTabs = Array.from(counts.entries())
+        .map(([value, count]) => ({ value, label: value, count }))
+        .sort((a, b) => a.label.localeCompare(b.label, 'zh-Hant'));
+
+    return [{ value: 'all', label: '全部', count: (deals || []).length }].concat(typeTabs);
+}
+
+function getListFilteredDeals() {
+    if (currentListOpportunityTypeTab === 'all') return displayedDeals;
+    return displayedDeals.filter(deal => getOpportunityTypeTabValue(deal) === currentListOpportunityTypeTab);
+}
+
 function updateDashboard(deals) {
     if (typeof SalesAnalysisHelper.calculateOverview !== 'function') return;
 
@@ -273,11 +290,22 @@ function updateDashboard(deals) {
 }
 
 function renderPaginatedTable() {
+    const tabs = getOpportunityTypeTabs(displayedDeals);
+    if (currentListOpportunityTypeTab !== 'all' && !tabs.some(tab => tab.value === currentListOpportunityTypeTab)) {
+        currentListOpportunityTypeTab = 'all';
+        currentPage = 1;
+    }
+
+    SalesAnalysisComponents.renderOpportunityTypeTabs(tabs, currentListOpportunityTypeTab);
+    const listFilteredDeals = getListFilteredDeals();
+    const totalPages = Math.ceil(listFilteredDeals.length / rowsPerPage) || 1;
+    if (currentPage > totalPages) currentPage = totalPages;
+
     const countDisplay = document.getElementById('deals-count-display');
-    if (countDisplay) countDisplay.textContent = displayedDeals.length;
+    if (countDisplay) countDisplay.textContent = listFilteredDeals.length;
 
     const startIndex = (currentPage - 1) * rowsPerPage;
-    const pageDeals = displayedDeals.slice(startIndex, startIndex + rowsPerPage);
+    const pageDeals = listFilteredDeals.slice(startIndex, startIndex + rowsPerPage);
 
     SalesAnalysisComponents.renderWonDealsTable(
         pageDeals, 
@@ -287,21 +315,13 @@ function renderPaginatedTable() {
         salesAnalysisData.salesModelColors || {},
         salesAnalysisData.eventTypeColors || {}
     );
-    SalesAnalysisComponents.updatePaginationControls(currentPage, displayedDeals.length, rowsPerPage);
+    SalesAnalysisComponents.updatePaginationControls(currentPage, listFilteredDeals.length, rowsPerPage);
 }
 
-window.handleSalesModelFilterChange = async function() {
-    const select = document.getElementById('sales-model-filter');
-    currentSalesModelFilter = select ? select.value : 'all';
-    
-    document.getElementById('sales-overview-content').innerHTML = '<div class="loading show"><div class="spinner"></div></div>';
-    const wonDealsContent = document.getElementById('won-deals-content');
-    if(wonDealsContent) {
-        wonDealsContent.innerHTML = '<div class="loading show" style="padding: 20px;"><div class="spinner"></div></div>';
-    }
-    
+window.handleListOpportunityTypeTabChange = function(value) {
+    currentListOpportunityTypeTab = value || 'all';
     currentPage = 1;
-    await fetchAndRenderSalesData(salesStartDate, salesEndDate);
+    renderPaginatedTable();
 };
 
 window.handleSortTable = function(field) {
@@ -359,7 +379,7 @@ window.handleSalesChartMetricChange = function(chartKey, metric) {
 };
 
 window.changePage = function(delta) {
-    const totalPages = Math.ceil(displayedDeals.length / rowsPerPage);
+    const totalPages = Math.ceil(getListFilteredDeals().length / rowsPerPage);
     const newPage = currentPage + delta;
     if (newPage >= 1 && newPage <= totalPages) {
         currentPage = newPage;

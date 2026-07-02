@@ -139,9 +139,9 @@ const SalesAnalysisComponents = {
                              <span style="font-size:0.85rem; color:var(--text-muted);">每頁顯示：</span>
                              <div id="rows-per-page-buttons" style="display:flex; gap:5px;"></div>
                         </div>
-                        <select id="sales-model-filter" class="custom-select-control" style="padding: 4px 8px; font-size: 0.85rem;" onchange="handleSalesModelFilterChange()"><option value="all">全部商流</option></select>
                     </div>
                 </div>
+                <div id="opportunity-type-tabs" style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; padding: 0 0 12px 0;"></div>
                 
                 <div id="won-deals-content" class="widget-content" style="padding: 0;"></div>
                 
@@ -620,11 +620,23 @@ const SalesAnalysisComponents = {
         container.innerHTML = html + '</tbody></table></div>';
     },
 
-    initSalesModelFilterOptions: function(deals) {
-        const select = document.getElementById('sales-model-filter');
-        if (!select) return;
-        const models = [...new Set(deals.map(d => d.salesModel).filter(Boolean))];
-        select.innerHTML = '<option value="all">通路 - 篩選</option>' + models.sort().map(m => `<option value="${m}">${m}</option>`).join('');
+    renderOpportunityTypeTabs: function(tabs, activeValue) {
+        const container = document.getElementById('opportunity-type-tabs');
+        if (!container) return;
+
+        const escapeHtml = value => String(value || '').replace(/[&<>"']/g, ch => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;'
+        })[ch]);
+
+        container.innerHTML = (tabs || []).map(tab => {
+            const isActive = tab.value === activeValue;
+            const encodedValue = encodeURIComponent(tab.value);
+            return `<button type="button" class="action-btn ${isActive ? 'primary' : 'secondary'}" style="padding: 4px 10px; font-size: 0.8rem;" onclick="handleListOpportunityTypeTabChange(decodeURIComponent('${encodedValue}'))">${escapeHtml(tab.label)} (${tab.count})</button>`;
+        }).join('');
     },
 
     initPaginationOptions: function(options, current) {
