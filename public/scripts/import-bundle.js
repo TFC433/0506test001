@@ -44,7 +44,6 @@ const scripts = [
     "scripts/opportunities/opportunity-details-events.js",
     "scripts/opportunities/opportunity-details.js",
     "scripts/opportunities/opportunity-modals.js",
-    "scripts/events/event-charts.js",
     "scripts/events/event-list.js",
     "scripts/events/event-report-manager.js",
     "scripts/events/event-wizard.js",

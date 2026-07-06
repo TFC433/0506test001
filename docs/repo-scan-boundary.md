@@ -54,7 +54,7 @@ Read these only when the task matches the topic:
 * `docs/echarts-migration-record.md`
   Use for chart, ECharts, Dashboard analytics, Sales Analysis chart, Taiwan map, or chart style migration work.
 * `docs/highcharts-highmaps-remaining-references-audit.md`
-  Use for Highcharts, Highmaps, Event chart dependencies, chart vendor cleanup, or vendor removal work.
+  Historical Highcharts / Highmaps audit. Use only when reviewing the completed retirement history or verifying `DOC_HISTORY_ONLY` references. Do not treat docs-only Highcharts mentions as active runtime/package/vendor evidence.
 * `docs/schema/audit-logs-v1.sql`
   Keep available for audit/session schema-related tasks when schema evidence is explicitly required.
 
@@ -83,6 +83,7 @@ Default no-read areas:
 * `public/assets/maps/taiwan.json`
   Reason: large static map data.
   Exception: path/reference checks for map widget, 404, missing map, or explicit map geometry/data task.
+  Active dependency: preserved for the ECharts Taiwan map and must not be classified as removable Highcharts cleanup residue.
 * `package-lock.json`
   Reason: generated dependency lockfile.
   Exception: npm install issue, dependency resolution, security audit, lockfile corruption, or version mismatch.
@@ -157,6 +158,13 @@ Before treating a path as irrelevant for a task, use targeted search when needed
 * asset references
 * vendor references
 * config loaders
+
+Highcharts / Highmaps retirement rule:
+
+* Highcharts references in docs are `DOC_HISTORY_ONLY` unless future runtime/package evidence proves otherwise.
+* No active Highcharts should exist in public scripts, package files, vendor assets, setup scripts, or `node_modules`.
+* Future scans must not classify docs-only Highcharts mentions as active source.
+* ECharts and `public/assets/maps/taiwan.json` remain active scan targets.
 
 ## 8. Unknown / Need User Decision
 
@@ -247,6 +255,7 @@ Report inspected files and intentionally skipped files.
 
 ### 2026-07-06
 
+* Recorded completed Highcharts / Highmaps retirement scan rule: docs-only Highcharts mentions are `DOC_HISTORY_ONLY`, while ECharts and `public/assets/maps/taiwan.json` remain active scan targets.
 * Classified `docs/forensics/wknd/results/**` as archived Weekend Forensics planning evidence, not mandatory baseline reading or patch target content.
 * Clarified that Weekend Forensics archive consultation is conditional and does not authorize cleanup or deletion.
 

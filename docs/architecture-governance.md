@@ -1671,6 +1671,7 @@ Completed cleanup:
 * Follow-up orphan SPA page module cleanup removed unreachable `loadFollowUpPage()` and `window.CRM_APP.pageModules['follow-up']` from `public/scripts/opportunities/opportunities.js`.
 * Product Cost hidden chip-wall frontend cleanup removed hidden chip-wall markup and unreachable drag/reorder helpers from `public/scripts/products/products.js` and `public/views/product-list.html`.
 * Activity Wall system-record cleanup removed the generic locked-row `View` action at render level while preserving system-record content, time, recorder, Event Report inline `撅?`, normal interaction edit behavior, `showForEditing()`, `showEventLogReport()`, shared modal code, and backend endpoints.
+* Highcharts / Highmaps full retirement completed on 2026-07-06 with UI/Product PASS. Event charts dormant module removal, source-level Highcharts cleanup, Highcharts module removal, residual `@highcharts` cleanup, and browser smoke all passed. Highcharts is no longer an active runtime, loader, vendor, npm package, setup script, or `node_modules` dependency.
 
 The cleanup above did not authorize broader deletion. Protected areas remain protected:
 
@@ -1713,7 +1714,7 @@ Current Sheet-backed / compatibility domains that must remain protected:
 * Internal Ops
 * event-log legacy adapters unless separately proven removable
 
-Highcharts remnants must not be deleted until event charts are migrated and all Highcharts callers are proven removed.
+Highcharts / Highmaps retirement is complete. Historical Highcharts mentions in docs are `DOC_HISTORY_ONLY` unless future runtime/package evidence proves otherwise. Do not reintroduce Highcharts without an explicit new product/architecture decision.
 
 `ProductDetailModal` must not be deleted until separately approved.
 
@@ -1730,7 +1731,6 @@ Pending cleanup targets:
 * Meeting / Calendar hidden workflow ownership decision
 * LINE leads standalone page ownership decision
 * System status modal / API trigger audit
-* Event charts Highcharts to ECharts migration forensic
 * `services/index.js` retired factory audit
 * `data/index.js` legacy export audit
 * Google Sheet fallback domain-by-domain SQL replacement roadmap
@@ -1960,6 +1960,38 @@ Runtime UNKNOWNs remain preserved and must not be treated as resolved by this ar
 
 ---
 
+# 28.7 Highcharts / Highmaps Retirement Governance Archive (2026-07-06)
+
+Highcharts / Highmaps full retirement is completed with UI/Product PASS.
+
+Current charting source of truth:
+
+* Active chart stack is ECharts.
+* Dashboard trend uses ECharts.
+* Sales Analysis charts use ECharts.
+* Taiwan map uses ECharts with `public/assets/maps/taiwan.json`.
+* `public/assets/maps/taiwan.json` is active and must be preserved for the ECharts Taiwan map.
+
+Completed retirement scope:
+
+* Event charts dormant module was removed after being confirmed loaded but UI-unreachable.
+* Source-level Highcharts cleanup removed `createThemedChart()`, `getHighchartsThemeOptions()`, and Highcharts-only helper/theme code.
+* Dashboard Highcharts / Highmaps loader scripts were removed.
+* `public/assets/vendor/highcharts/**` was deleted.
+* `scripts/setup-highcharts-vendor.js` was deleted.
+* `highcharts` and `@highcharts/map-collection` were removed from npm metadata and local dependency state.
+* Stale `scripts/shared/pack-shared-highcharts-vendor.ps1` and empty local `node_modules/@highcharts` residue were removed.
+
+Governance rules:
+
+* Highcharts is no longer active runtime, loader, vendor, npm package, setup script, or `node_modules` dependency.
+* Historical Highcharts references in docs are `DOC_HISTORY_ONLY`.
+* Future agents must not classify docs-only Highcharts mentions as active source.
+* Do not reintroduce Highcharts without an explicit new product/architecture decision.
+* Do not remove ECharts or `public/assets/maps/taiwan.json` as part of any Highcharts cleanup.
+
+---
+
 # 29. Internal Ops Governance Baseline
 
 ## 29.1 Internal Ops Dev Projects Governance Baseline
@@ -2100,6 +2132,9 @@ and disciplined data lifecycle governance.
 
 ## 2026-07-06
 
+* Archived completed Highcharts / Highmaps full retirement with UI/Product PASS.
+* Recorded ECharts as the active chart stack and `public/assets/maps/taiwan.json` as active preserved map data for the ECharts Taiwan map.
+* Classified remaining Highcharts documentation references as `DOC_HISTORY_ONLY` and prohibited reintroducing Highcharts without explicit new product/architecture approval.
 * Archived completed Weekend Forensics campaign as planning-quality governance evidence only.
 * Recorded 15 completed Codex reports, Gemini final QA completion, `ACCEPT_FOR_PLANNING_WITH_CAUTION`, archive path `docs/forensics/wknd/results/`, and mandatory consultation of `docs/forensics/wknd/results/17-weekend-planning-baseline.md` for future Weekend Forensics-derived planning.
 * Reconfirmed that the archive does not authorize cleanup, patching, deletion, refactor, migration, or PR creation, and that runtime UNKNOWNs remain unresolved.

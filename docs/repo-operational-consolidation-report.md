@@ -81,9 +81,15 @@ Sales Analysis, Dashboard trend, and Taiwan map have accepted ECharts baselines.
 
 Sales Analysis `成交類型` uses the accepted standard donut style: no rounded slice corners, no thick artificial transparent gaps, and subtle separation through `padAngle: 1`. Do not describe it as fully gapless and do not revert Sales Analysis to Highcharts.
 
-Highcharts / Highmaps are not removed yet. Remaining references are documented in:
+Highcharts / Highmaps full retirement completed on 2026-07-06 with UI/Product PASS. Patch-series closure:
 
-* `docs/highcharts-highmaps-remaining-references-audit.md`
+* Event charts dormant module removal completed after the module was confirmed loaded but UI-unreachable.
+* Source-level Highcharts cleanup completed.
+* Highcharts module removal completed.
+* Residual `@highcharts` cleanup completed.
+* Browser smoke reached UI/Product PASS.
+* ECharts and `public/assets/maps/taiwan.json` are preserved and active.
+* Remaining Highcharts references in docs are historical / `DOC_HISTORY_ONLY`.
 
 ## 7. Current security / Supabase posture
 
@@ -95,10 +101,8 @@ The current decision is no immediate DB permission change and no broad grants to
 
 Known caution areas:
 
-* Highcharts cleanup is not done yet.
 * UI style governance exists but is not fully rolled out everywhere.
 * Future module UI migrations should be module-by-module.
-* Event charts still appear to rely on Highcharts.
 * Global CSS extraction is not yet authorized.
 * Product Cost visual ordering is frontend-only and must not be confused with Sheet row order or persistent category-order settings.
 * Opportunity Detail product-backed spec pricing must not use cost or `systemConfig` value2.
@@ -302,7 +306,6 @@ Remaining cleanup targets are pending forensic and approval:
 * Meeting / Calendar hidden workflow ownership decision.
 * LINE leads standalone page ownership decision.
 * System status modal / API trigger audit.
-* Event charts Highcharts to ECharts migration forensic.
 * `services/index.js` retired factory audit.
 * `data/index.js` legacy export audit.
 * Google Sheet fallback domain-by-domain SQL replacement roadmap.
@@ -315,7 +318,7 @@ Explicit no-touch reminders:
 * System Config / Auth still depends on Sheet-backed system config and users.
 * Weekly Business read fallback remains protected.
 * Internal Ops remains Sheet-backed.
-* Highcharts remnants must not be deleted until event charts are migrated.
+* Do not remove ECharts or `public/assets/maps/taiwan.json` as part of any historical Highcharts cleanup follow-up.
 * `ProductDetailModal` must not be deleted until separately approved.
 * `repomix-packs/**` are generated and must not be hand-edited.
 

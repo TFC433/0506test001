@@ -439,61 +439,6 @@ const DashboardWidgets = {
         return;
         }
 
-        if (typeof Highcharts === 'undefined') return;
-
-        const viewLabel = currentView === 'cumulative' ? '（累積）' : '（月增）';
-
-        const renderChart = typeof createThemedChart === 'function'
-            ? createThemedChart
-            : (elementId, options) => Highcharts.chart(elementId, options);
-
-        renderChart('trend-chart-container', {
-            chart: { type: 'areaspline', backgroundColor: 'transparent', style: { fontFamily: 'inherit' } },
-            title: { text: null },
-            xAxis: { categories: categories, crosshair: true },
-            yAxis: [
-                { title: { text: null }, min: 0, labels: { enabled: false } },
-                { title: { text: null }, min: 0, labels: { enabled: false }, opposite: true }
-            ],
-            tooltip: { shared: true },
-            plotOptions: {
-                areaspline: { 
-                    fillOpacity: 0.2, 
-                    marker: { enabled: false, symbol: 'circle', radius: 3, states: { hover: { enabled: true } } } 
-                }
-            },
-            series: [
-                { 
-                    name: `成交金額${viewLabel}`, 
-                    type: 'column', 
-                    data: revenueData, 
-                    color: '#3b82f6', 
-                    yAxis: 1,
-                    zIndex: 0,
-                    opacity: 0.35,
-                    pointPadding: 0.2,
-                    groupPadding: 0.3,
-                    borderWidth: 0,
-                    legendIndex: 99,
-                    tooltip: {
-                        pointFormatter: function () {
-                            return '<span style="color:' + this.series.color + '">●</span> ' +
-                                   this.series.name + ': <b>' +
-                                   (this.y ? this.y.toLocaleString() : '0') +
-                                   '</b><br/>';
-                        }
-                    }
-                },
-                { name: `機會案件${viewLabel}`, data: oppData, color: '#10b981', yAxis: 0, zIndex: 3 },
-                { name: `事件紀錄${viewLabel}`, data: eventData, color: '#f59e0b', yAxis: 0, zIndex: 3, fillOpacity: 0.1 },
-                { name: `成交案件${viewLabel}`, data: wonData, color: '#8b5cf6', yAxis: 0, zIndex: 3, lineWidth: 3 }
-            ],
-            credits: { enabled: false },
-            legend: { align: 'center', verticalAlign: 'top', borderWidth: 0 }
-        });
-        
-        // 注入樣式
-        this._ensureStyles();
     },
 
     _ensureTrendPreviewControls() {

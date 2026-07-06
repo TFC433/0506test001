@@ -40,6 +40,7 @@ This document does not authorize deletion or runtime changes by itself. Any futu
 - Sales Analysis ECharts direction.
 - Sales Analysis `成交類型` donut chart is a standard professional donut with no rounded slice corners, no thick transparent border gaps, and subtle `padAngle: 1` separation.
 - Sales Analysis `成交類型` donut must not be documented as fully gapless.
+- Highcharts / Highmaps retirement is completed. ECharts and `public/assets/maps/taiwan.json` remain active and must not be removed as part of Highcharts cleanup.
 - Current governance docs:
   - `docs/architecture-governance.md`
   - `docs/tfc-crm-ui-style-governance.md`
@@ -54,7 +55,7 @@ The repo has cleanup opportunities, but most of the obvious historical residue i
 
 Major residue areas:
 
-- Highcharts/Highmaps leftovers remain in script loading, vendor assets, package metadata, shared chart helpers, and event chart rendering.
+- Highcharts/Highmaps retirement is completed. Former script loading, vendor assets, package metadata, shared chart helpers, event chart dependency, and local `@highcharts` residue were removed through the completed patch series.
 - Product Cost still contains a product detail modal path beside the accepted compact inline-edit table.
 - Opportunity Detail contains legacy and fallback paths, including event-report legacy render blocks and possible-spec fallbacks.
 - `systemConfig`, RAW/Sheet readers and writers, and compatibility adapters still support SQL-first migration and legacy data visibility.
@@ -86,7 +87,6 @@ Pending cleanup targets that are not approved for deletion:
 - Meeting / Calendar hidden workflow ownership decision.
 - LINE leads standalone page ownership decision.
 - System status modal / API trigger audit.
-- Event charts Highcharts to ECharts migration forensic.
 - `services/index.js` retired factory audit.
 - `data/index.js` legacy export audit.
 - Google Sheet fallback domain-by-domain SQL replacement roadmap.
@@ -99,7 +99,7 @@ No-touch reminders:
 - System Config / Auth still depends on Sheet-backed system config and users.
 - Weekly Business read fallback remains protected.
 - Internal Ops remains Sheet-backed.
-- Highcharts remnants must not be deleted until event charts are migrated.
+- Do not remove ECharts or `public/assets/maps/taiwan.json` as part of completed Highcharts cleanup.
 - `ProductDetailModal` must not be deleted until separately approved.
 - `repomix-packs/**` is generated local AI context output and must not be restored as tracked source. Generator scripts remain intentionally kept for now.
 
@@ -185,11 +185,11 @@ Consult `docs/forensics/wknd/results/17-weekend-planning-baseline.md` before usi
 
 | ID | Area | File/path | Classification | Reason | Recommended action |
 | --- | --- | --- | --- | --- | --- |
-| C01 | Highcharts script loading | `public/dashboard.html` | High-risk / do-not-touch | Dashboard still loads Highcharts/Highmaps vendor scripts before ECharts. Active event charts still depend on Highcharts. | Keep until event charts are migrated and all callers are removed. |
-| C02 | Highcharts vendor/package dependencies | `public/assets/vendor/highcharts/*`, `package.json`, `package-lock.json` | High-risk / do-not-touch | Vendor files and dependencies remain required while active Highcharts callers exist. | Do not remove without complete Highcharts caller audit and approval. |
-| C03 | Event charts Highcharts usage | `public/scripts/events/event-charts.js` | High-risk / do-not-touch | Event trend/type/size charts still call the Highcharts wrapper. | Schedule separate ECharts migration forensic before any patch. |
-| C04 | Shared chart helper | `public/scripts/services/charting.js` | High-risk / do-not-touch | Contains both Highcharts and ECharts helpers; active event charts call `createThemedChart`. | Keep until Highcharts runtime dependency is fully eliminated. |
-| C05 | Dashboard Highcharts fallback | `public/scripts/dashboard/dashboard_widgets.js` | Medium-risk candidate | A Highcharts block appears after the current ECharts trend path returns. It may be unreachable, but may also be rollback residue. | Document only; verify reachability before removal. |
+| C01 | Highcharts script loading | `public/dashboard.html` | Completed / retired | Dashboard Highcharts/Highmaps loader scripts were removed after callers were eliminated. | Historical record only; do not treat as pending cleanup. |
+| C02 | Highcharts vendor/package dependencies | `public/assets/vendor/highcharts/*`, `package.json`, `package-lock.json` | Completed / retired | Highcharts vendor assets and npm dependencies were removed. ECharts remains active. | Historical record only; do not remove ECharts or `public/assets/maps/taiwan.json`. |
+| C03 | Event charts Highcharts usage | `public/scripts/events/event-charts.js` | Completed / retired | Event charts legacy module was loaded but UI-unreachable and was removed. | Historical record only. |
+| C04 | Shared chart helper | `public/scripts/services/charting.js` | Completed / retired | Highcharts-only helper/theme code and `createThemedChart()` were removed. ECharts helper remains active. | Historical record only. |
+| C05 | Dashboard Highcharts fallback | `public/scripts/dashboard/dashboard_widgets.js` | Completed / retired | Unreachable Highcharts fallback block was removed. Dashboard trend uses ECharts. | Historical record only. |
 | C06 | Product Cost detail modal class | `public/scripts/products/product-detail-modal.js` | High-risk / do-not-touch | Looks historical beside inline edit, but `products.js` still instantiates `ProductDetailModal`. | Do not delete without separate Product Cost modal reachability approval. |
 | C07 | Product Cost modal markup/styles | `public/views/product-list.html` | High-risk / do-not-touch | `#product-detail-modal` markup and modal selectors are still queried by the modal class. | Preserve unless a focused forensic proves it is unreachable and user approves. |
 | C08 | Opportunity event reports legacy render block | `public/scripts/opportunities/details/opportunity-event-reports.js` | Medium-risk candidate | Current rail render path returns before older tab/table render code, but Activity Hub/event report flow is active. | Do not touch without Opportunity Detail event-report forensic. |
@@ -204,7 +204,6 @@ Consult `docs/forensics/wknd/results/17-weekend-planning-baseline.md` before usi
 
 ## 7. Safe Next Tasks
 
-- Event charts ECharts migration forensic, no patch.
 - Product Cost modal reachability audit, no patch.
 - Debug-log inventory and gating policy, no patch.
 - `systemConfig` dependency map, no patch.
@@ -214,7 +213,8 @@ Consult `docs/forensics/wknd/results/17-weekend-planning-baseline.md` before usi
 
 Do not delete or modify these without separate approval:
 
-- Highcharts vendor/package/script loading.
+- Reintroducing Highcharts vendor/package/script loading without explicit new product/architecture approval.
+- Removing ECharts or `public/assets/maps/taiwan.json` as part of historical Highcharts cleanup.
 - `ProductDetailModal`.
 - Product Cost modal markup in `public/views/product-list.html`.
 - Opportunity specs fallback logic.
