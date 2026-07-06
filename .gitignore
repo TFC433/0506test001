@@ -1,6 +1,7 @@
 # 忽略相依性套件
 # (對應您專案中的 node_modules/ 資料夾)
 node_modules/
+repomix-packs/
 
 # 忽略日誌檔案
 # (預防未來可能產生的日誌檔)

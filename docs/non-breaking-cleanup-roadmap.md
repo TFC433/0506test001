@@ -59,7 +59,7 @@ Major residue areas:
 - Opportunity Detail contains legacy and fallback paths, including event-report legacy render blocks and possible-spec fallbacks.
 - `systemConfig`, RAW/Sheet readers and writers, and compatibility adapters still support SQL-first migration and legacy data visibility.
 - Debug and forensics logs remain in active event and backend flows.
-- `repomix-packs/**` are generated snapshots and may contain historical references that should not be hand-edited.
+- `repomix-packs/**` was generated AI context output. It is not source-of-truth, not runtime source, and should not be version-controlled. Regenerate it locally through `scripts/**/pack-*.ps1` only when needed.
 
 ## 4.1 2026-06 Cleanup Checkpoint
 
@@ -101,7 +101,7 @@ No-touch reminders:
 - Internal Ops remains Sheet-backed.
 - Highcharts remnants must not be deleted until event charts are migrated.
 - `ProductDetailModal` must not be deleted until separately approved.
-- `repomix-packs/**` are generated snapshots and must not be hand-edited.
+- `repomix-packs/**` is generated local AI context output and must not be restored as tracked source. Generator scripts remain intentionally kept for now.
 
 Google API native transport stabilization:
 
@@ -179,7 +179,7 @@ Consult `docs/forensics/wknd/results/17-weekend-planning-baseline.md` before usi
 | Low-risk future cleanup candidate | No obvious static runtime dependency, or likely console/comment-only cleanup. Still requires explicit approval before patch. |
 | Medium-risk candidate | Appears historical or inactive, but dynamic references, fallback usage, or rollback value are possible. Needs focused forensic before patch. |
 | High-risk / do-not-touch | Connected to active UI, API, schema, fallback logic, globals, inline handlers, accepted baselines, or rollback paths. |
-| Keep intentionally | Known compatibility or generated artifact that should remain unless project policy changes. |
+| Keep intentionally | Known compatibility or generation tooling that should remain unless project policy changes. |
 
 ## 6. Candidate Inventory
 
@@ -200,7 +200,7 @@ Consult `docs/forensics/wknd/results/17-weekend-planning-baseline.md` before usi
 | C13 | Legacy event reader | `data/event-log-reader.js` | High-risk / do-not-touch | Reads legacy event data and merges it with newer event tables. | Keep to preserve historical event visibility. |
 | C14 | Event debug/forensics logs | `public/scripts/events/event-report-manager.js`, `public/scripts/events/event-editor-standalone.js`, `controllers/event.controller.js` | Low-risk future cleanup candidate | Console and trace logs appear cleanup-friendly, but they sit in active flows. | Inventory first; later gate or remove with approval. |
 | C15 | Internal Ops TODO placeholders | `public/scripts/internal-ops/internal-ops-subscriptions.js`, `public/scripts/internal-ops/internal-ops.js` | Medium-risk candidate | Placeholder buttons and TODO alerts may be visible product stubs. | Confirm product status before changing. |
-| C16 | Generated repomix snapshots | `repomix-packs/**` | Keep intentionally | Generated packed snapshots may contain historical references and should not be hand-edited. | Regenerate through governed scripts only. |
+| C16 | Generated repomix snapshots | `repomix-packs/**` | Removed generated output | Generated AI context output is not source-of-truth, not runtime source, and should not be version-controlled. | Keep `scripts/**/pack-*.ps1`; regenerate packs locally only when needed. |
 
 ## 7. Safe Next Tasks
 
@@ -208,7 +208,7 @@ Consult `docs/forensics/wknd/results/17-weekend-planning-baseline.md` before usi
 - Product Cost modal reachability audit, no patch.
 - Debug-log inventory and gating policy, no patch.
 - `systemConfig` dependency map, no patch.
-- `repomix-packs/**` generated-file policy note.
+- `repomix-packs/**` generated-output removal is complete; keep generator scripts for local regeneration only.
 
 ## 8. Explicit Do-Not-Touch List
 
@@ -221,7 +221,9 @@ Do not delete or modify these without separate approval:
 - `systemConfig` adapters.
 - RAW/Sheet compatibility readers and writers.
 - Legacy event reader paths that preserve historical event visibility.
-- `repomix-packs/**` by hand.
+- Restoring `repomix-packs/**` as tracked source. Local regeneration is allowed through `scripts/**/pack-*.ps1` when explicit context packs are needed.
+
+This generated-output deletion does not authorize runtime source cleanup, docs archive deletion, fallback removal, charting cleanup, CSS cleanup, route cleanup, SQL-only migration, or removal of other generated/vendor/archive areas.
 
 Internal Ops Dev Projects compatibility is protected during cleanup:
 

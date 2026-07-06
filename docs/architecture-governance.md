@@ -1717,7 +1717,9 @@ Highcharts remnants must not be deleted until event charts are migrated and all 
 
 `ProductDetailModal` must not be deleted until separately approved.
 
-`repomix-packs/**` are generated snapshots and must not be hand-edited.
+`repomix-packs/**` was generated AI context output. It is not source-of-truth, not runtime source, and should not be version-controlled. Regenerate it locally through `scripts/**/pack-*.ps1` only when needed; keep generator scripts for now.
+
+Removing tracked `repomix-packs/**` does not authorize runtime source cleanup, docs archive deletion, fallback removal, charting cleanup, CSS cleanup, route cleanup, SQL-only migration, or removal of other generated/vendor/archive areas.
 
 Pending cleanup targets:
 

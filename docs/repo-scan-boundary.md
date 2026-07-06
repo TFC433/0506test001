@@ -75,8 +75,8 @@ Default No-Read means:
 Default no-read areas:
 
 * `repomix-packs/**`
-  Reason: generated markdown snapshots and duplicated source context.
-  Exception: only when explicitly auditing or modifying repomix/context-pack generation.
+  Reason: generated local AI context output and duplicated source context. It is not source-of-truth, not runtime source, and should not be version-controlled.
+  Exception: only when explicitly auditing or modifying repomix/context-pack generation. If needed, regenerate locally with `scripts/**/pack-*.ps1`; keep generator scripts for now.
 * `public/assets/vendor/**`
   Reason: third-party/minified vendor libraries.
   Exception: path/reference checks for Highcharts/ECharts cleanup, chart dependency audits, or explicit library linkage verification.
