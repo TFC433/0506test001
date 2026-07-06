@@ -193,6 +193,20 @@ No backend, DB, schema, migration, route, controller, service, data-access, pack
 
 Detailed rules live in `docs/architecture-governance.md`.
 
+## 8.4 Weekend Forensics Planning Evidence Archive (2026-07-06)
+
+Weekend Forensics completed and its reports are archived under `docs/forensics/wknd/results/`.
+
+Decision:
+
+```text
+ACCEPT_FOR_PLANNING_WITH_CAUTION
+```
+
+This evidence may guide future planning, but it does not authorize source changes, cleanup, deletion, refactor, migration, patching, or PR creation.
+
+Future Weekend Forensics-derived planning must consult `docs/forensics/wknd/results/17-weekend-planning-baseline.md`.
+
 ## 9. Recommended next actions ranked by safety
 
 1. Documentation review.

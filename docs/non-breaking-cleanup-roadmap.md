@@ -155,6 +155,22 @@ Protected boundaries:
 - Do not remove backend/API `salesModel` support as part of frontend UI cleanup.
 - Do not convert the completed Sales Analysis frontend patch series into backend/API/DB work.
 
+## 4.4 2026-07 Weekend Forensics Planning Baseline Caution
+
+Weekend Forensics is planning-quality evidence only.
+
+It does not approve:
+
+- cleanup
+- deletion
+- refactor
+- migration
+- patching
+
+Cleanup candidates still require targeted evidence, explicit scope, and human approval before any future patch.
+
+Consult `docs/forensics/wknd/results/17-weekend-planning-baseline.md` before using Weekend Forensics-derived planning.
+
 ## 5. Candidate Classification Rules
 
 | Classification | Meaning |

@@ -1,6 +1,6 @@
 # CRM Current State Index
 
-Last Updated: 2026-07-01
+Last Updated: 2026-07-06
 
 ## 1. Global Rules & Index Usage
 
@@ -11,6 +11,7 @@ Last Updated: 2026-07-01
 * ChatGPT = architecture, scope freeze, and CODE PASS / NG judgment.
 * Gemini = evidence-only repo/docs forensics.
 * Codex = frozen minimal patch executor.
+* Weekend Forensics routing: use `docs/forensics/wknd/results/17-weekend-planning-baseline.md` and `docs/forensics/wknd/results/16-gemini-final-qa-summary.md` only as routing references for Weekend Forensics-derived planning; this index remains non-authoritative and does not authorize cleanup.
 
 ## 2. Protected Boundaries
 

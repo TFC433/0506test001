@@ -58,6 +58,11 @@ Read these only when the task matches the topic:
 * `docs/schema/audit-logs-v1.sql`
   Keep available for audit/session schema-related tasks when schema evidence is explicitly required.
 
+Weekend Forensics archive:
+
+* `docs/forensics/wknd/results/**`
+  Archived planning-evidence area for the completed Weekend Forensics campaign. It is not mandatory baseline reading for every task. Consult it only when a task uses Weekend Forensics-derived planning, repo-wide LLM safety, source/generated/vendor/archive boundaries, or high-risk planning assumptions. It is not source code, not generated source, not patch target content, and does not authorize cleanup or deletion.
+
 ## 5. Default No-Read Content
 
 Default No-Read means:
@@ -239,6 +244,11 @@ Report inspected files and intentionally skipped files.
 ```
 
 ## 13. Changelog
+
+### 2026-07-06
+
+* Classified `docs/forensics/wknd/results/**` as archived Weekend Forensics planning evidence, not mandatory baseline reading or patch target content.
+* Clarified that Weekend Forensics archive consultation is conditional and does not authorize cleanup or deletion.
 
 ### 2026-06-18
 

@@ -1927,6 +1927,37 @@ Do not convert this frontend UI cleanup into backend/API/DB work.
 
 ---
 
+# 28.6 Weekend Forensics Governance Archive (2026-07-06)
+
+The Weekend Forensics campaign is completed and archived as planning-quality evidence only.
+
+Completed archive scope:
+
+* 15 Codex forensic reports completed.
+* Gemini final QA completed.
+* Planning baseline accepted with caution: `ACCEPT_FOR_PLANNING_WITH_CAUTION`.
+* Results archived under `docs/forensics/wknd/results/`.
+* Future Weekend Forensics-derived planning must consult `docs/forensics/wknd/results/17-weekend-planning-baseline.md`.
+
+This archive does not authorize:
+
+* cleanup
+* patching
+* deletion
+* refactor
+* migration
+* PR creation
+
+Runtime UNKNOWNs remain preserved and must not be treated as resolved by this archive:
+
+* production fallback traffic
+* browser CSS / DOM cascade
+* controller internal role logic
+* runtime chart rendering
+* non-JSON API response behavior
+
+---
+
 # 29. Internal Ops Governance Baseline
 
 ## 29.1 Internal Ops Dev Projects Governance Baseline
@@ -2064,6 +2095,12 @@ and disciplined data lifecycle governance.
 ---
 
 # Changelog
+
+## 2026-07-06
+
+* Archived completed Weekend Forensics campaign as planning-quality governance evidence only.
+* Recorded 15 completed Codex reports, Gemini final QA completion, `ACCEPT_FOR_PLANNING_WITH_CAUTION`, archive path `docs/forensics/wknd/results/`, and mandatory consultation of `docs/forensics/wknd/results/17-weekend-planning-baseline.md` for future Weekend Forensics-derived planning.
+* Reconfirmed that the archive does not authorize cleanup, patching, deletion, refactor, migration, or PR creation, and that runtime UNKNOWNs remain unresolved.
 
 ## 2026-07-02
 
