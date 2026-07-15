@@ -25,6 +25,14 @@ let currentView = 'all';
 let showExhibitionOnly = false;
 let currentExhibitionConfig = null;
 
+function getRawContactIdentifier(record) {
+    if (!record) return null;
+    if (record.cardId) return String(record.cardId);
+
+    const rowIndex = Number(record.rowIndex);
+    return Number.isInteger(rowIndex) && rowIndex > 0 ? String(rowIndex) : null;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     // [ITEM 5] Start with a neutral verifying state instead of jarring login prompt
     toggleContentVisibility(false, 'verifying');
@@ -727,7 +735,7 @@ function openEdit(lead) {
         previewContainer.innerHTML = `<div class="placeholder">📇</div>`;
     }
 
-    document.getElementById('edit-rowIndex').value = lead.rowIndex;
+    document.getElementById('edit-rowIndex').value = getRawContactIdentifier(lead) || '';
     document.getElementById('edit-name').value = lead.name || '';
     document.getElementById('edit-position').value = lead.position || '';
     document.getElementById('edit-department').value = lead.department || '';
@@ -772,7 +780,7 @@ function openEdit(lead) {
     const deleteBtn = document.getElementById('delete-lead-btn');
     if (deleteBtn) {
         deleteBtn.style.display = showDeleteBtn ? 'block' : 'none';
-        deleteBtn.dataset.rowIndex = lead.rowIndex;
+        deleteBtn.dataset.rowIndex = getRawContactIdentifier(lead) || '';
     }
 
     modal.style.display = 'block';
@@ -823,7 +831,7 @@ async function handleEditSubmit(e) {
             headers['Authorization'] = `Bearer ${idToken}`;
         }
 
-        const res = await fetch(`/api/line/leads/${rowIndex}`, {
+        const res = await fetch(`/api/line/leads/${encodeURIComponent(rowIndex)}`, {
             method: 'PUT',
             headers: headers,
             body: JSON.stringify(data)
@@ -890,7 +898,7 @@ async function handleDeleteSubmit(e) {
             headers['Authorization'] = `Bearer ${idToken}`;
         }
 
-        const res = await fetch(`/api/line/leads/${rowIndex}`, {
+        const res = await fetch(`/api/line/leads/${encodeURIComponent(rowIndex)}`, {
             method: 'DELETE',
             headers: headers
         });

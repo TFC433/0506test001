@@ -51,7 +51,7 @@ let coreContactsTotal = 0;
 let currentCorePage = 1; // [Patch] CORE Page State
 let corePaginationState = { hasNext: false, hasPrev: false, totalPages: 1 }; // [Patch] CORE Pagination Metadata
 let currentContactsTab = 'list'; // 'list' | 'cards' | 'core'
-let currentEditRowIndex = null;
+let currentEditRawIdentifier = null;
 let currentCoreEditContactId = null;
 let currentCoreRailContactId = null;
 let contactsOperationMode = false;
@@ -66,6 +66,14 @@ function resolveRawSourceRowIndex(sourceId) {
 
     const businessCardMatch = value.match(/^(?:BC|BUSINESS[-_ ]?CARD)[-_ ]?(\d+)$/i);
     return businessCardMatch ? businessCardMatch[1] : null;
+}
+
+function getRawContactIdentifier(record) {
+    if (!record) return null;
+    if (record.cardId) return String(record.cardId);
+
+    const rowIndex = Number(record.rowIndex);
+    return Number.isInteger(rowIndex) && rowIndex > 0 ? String(rowIndex) : null;
 }
 
 // ==================== \u4e3b\u8981\u529f\u80fd\u51fd\u5f0f ====================
@@ -374,7 +382,7 @@ async function filterAndRenderContacts(query = '') {
 
     if (actionBar) actionBar.style.display = 'block';
 
-    currentEditRowIndex = null;
+    currentEditRawIdentifier = null;
     currentCoreEditContactId = null;
 
     let filteredData = [];
@@ -843,7 +851,7 @@ function renderContactsTable(data) {
 
         let deleteBtn = '';
         if (contactsOperationMode) {
-            deleteBtn = `<button class="crm-raw-feed-action delete" data-action="delete-raw" data-index="${safeAttr(contact.rowIndex)}" data-name="${safeAttr(contact.name || '')}" title="\u522a\u9664" aria-label="\u522a\u9664"><span>⌫</span><span>\u522a\u9664</span></button>`;
+            deleteBtn = `<button class="crm-raw-feed-action delete" data-action="delete-raw" data-index="${safeAttr(getRawContactIdentifier(contact) || '')}" data-name="${safeAttr(contact.name || '')}" title="\u522a\u9664" aria-label="\u522a\u9664"><span>⌫</span><span>\u522a\u9664</span></button>`;
         }
 
         listHTML += `
@@ -926,7 +934,7 @@ function renderBusinessCardList(data) {
 
         let deleteBtn = '';
         if (contactsOperationMode) {
-            deleteBtn = `<button class="action-btn small danger" data-action="delete-raw" data-index="${contact.rowIndex}" data-name="${contact.name || ''}" style="margin-left: 4px; background: #fee2e2; color: #ef4444; border: 1px solid #fca5a5;">\u522a\u9664</button>`;
+            deleteBtn = `<button class="action-btn small danger" data-action="delete-raw" data-index="${getRawContactIdentifier(contact) || ''}" data-name="${contact.name || ''}" style="margin-left: 4px; background: #fee2e2; color: #ef4444; border: 1px solid #fca5a5;">\u522a\u9664</button>`;
         }
 
         listHTML += `
@@ -1320,7 +1328,7 @@ function renderEditCardMode(contact) {
     if (!listContent) return;
 
     if (actionBar) actionBar.style.display = 'none';
-    currentEditRowIndex = contact.rowIndex;
+    currentEditRawIdentifier = getRawContactIdentifier(contact);
 
     let imagePreviewHtml = '';
     if (contact.driveLink) {
@@ -1484,7 +1492,7 @@ function renderCoreEditMode(contact) {
 
 // --- Save Action: RAW ---
 async function handleSaveCardEdit() {
-    if (!currentEditRowIndex) {
+    if (!currentEditRawIdentifier) {
         console.error('Missing rowIndex for save.');
         if (typeof showNotification === 'function') showNotification('\u7121\u6cd5\u5132\u5b58\uff1a\u7f3a\u5c11\u8cc7\u6599\u8b58\u5225\u78bc', 'error');
         return;
@@ -1507,7 +1515,7 @@ async function handleSaveCardEdit() {
     };
 
     try {
-        const response = await authedFetch(`/api/contacts/${currentEditRowIndex}/raw`, {
+        const response = await authedFetch(`/api/contacts/${encodeURIComponent(currentEditRawIdentifier)}/raw`, {
             method: 'PUT',
             body: JSON.stringify(payload),
             skipRefresh: true
@@ -1521,7 +1529,7 @@ async function handleSaveCardEdit() {
                 allContactsData = listResult.data;
             }
 
-            currentEditRowIndex = null;
+            currentEditRawIdentifier = null;
             const safeQuery = document.getElementById('contacts-page-search')?.value || '';
             await filterAndRenderContacts(safeQuery);
 
@@ -1546,12 +1554,12 @@ async function handleSaveCardEdit() {
 }
 
 // --- Delete Action: RAW ---
-async function handleDeleteRawContact(rowIndex, contactName) {
+async function handleDeleteRawContact(rawIdentifier, contactName) {
     const msg = `\u60a8\u78ba\u5b9a\u8981\u6c38\u4e45\u522a\u9664\u6f5b\u5ba2\u6236\u300c${contactName}\u300d\u55ce\uff1f\n\n\u6b64\u64cd\u4f5c\u5c07\u6703\u5f9e Google \u8a66\u7b97\u8868\u4e2d\u6c38\u4e45\u79fb\u9664\u8a72\u7b46\u5be6\u9ad4\u8cc7\u6599\uff0c\u4e14\u7121\u6cd5\u5fa9\u539f\u3002`;
 
     const executeDelete = async () => {
         try {
-            const response = await authedFetch(`/api/contacts/${rowIndex}/raw`, {
+            const response = await authedFetch(`/api/contacts/${encodeURIComponent(rawIdentifier)}/raw`, {
                 method: 'DELETE',
                 skipRefresh: true
             });

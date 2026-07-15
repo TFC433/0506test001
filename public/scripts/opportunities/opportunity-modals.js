@@ -79,6 +79,14 @@ function normalizeContactId(contact) {
     return id === undefined || id === null || String(id).trim() === '' ? null : id;
 }
 
+function getRawContactIdentifier(record) {
+    if (!record) return null;
+    if (record.cardId) return String(record.cardId);
+
+    const rowIndex = Number(record.rowIndex);
+    return Number.isInteger(rowIndex) && rowIndex > 0 ? String(rowIndex) : null;
+}
+
 function resolveLineageContactId(parent) {
     const directId = parent?.contactId || parent?.mainContactId;
     if (directId && String(directId).trim()) return String(directId).trim();
@@ -465,7 +473,7 @@ const NewOppWizard = {
         this.state.data.mainContact = card.name;
         this.state.data.contactPhone = card.mobile || card.phone;
         this.state.data.contactId = null;
-        this.state.data.sourceId = card.rowIndex;
+        this.state.data.sourceId = getRawContactIdentifier(card);
         
         if(card.address && typeof detectCountyFromAddress === 'function') {
             const detected = detectCountyFromAddress(card.address);
@@ -941,7 +949,7 @@ async function handleLinkContact(contactData, type) {
         mobile: contactData.mobile,
         phone: contactData.phone,
         email: contactData.email,
-        rowIndex: contactData.rowIndex, 
+        rowIndex: getRawContactIdentifier(contactData),
         company: contactData.companyName || contactData.company,
         companyName: contactData.companyName || contactData.company,
         sourceId: contactData.sourceId,
@@ -1096,7 +1104,7 @@ document.addEventListener('submit', async function(e) {
             let url = '/api/opportunities';
             if (payload.rowIndex) {
                 // Keep this path if it's for contact upgrade (Legacy RAW)
-                url = `/api/contacts/${payload.rowIndex}/upgrade`;
+                url = `/api/contacts/${encodeURIComponent(payload.rowIndex)}/upgrade`;
             }
             const result = await authedFetch(url, { method: 'POST', body: JSON.stringify(payload) });
 

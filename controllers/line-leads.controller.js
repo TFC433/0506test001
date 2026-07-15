@@ -125,7 +125,7 @@ class LineLeadsController {
             const token = authHeader && authHeader.split(' ')[1];
             if (!token) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
-            const rowIndex = parseInt(req.params.rowIndex);
+            const rawIdentifier = req.params.rowIndex;
 
             if (token !== 'TEST_LOCAL_TOKEN') {
                 const user = await this.authService.verifyLineIdToken(token);
@@ -142,7 +142,7 @@ class LineLeadsController {
                 }
 
                 // --- Ownership Authorization Gate ---
-                const targetLead = await this.contactService.getPotentialContactByRow(rowIndex);
+                const targetLead = await this.contactService.getPotentialContactByRow(rawIdentifier);
                 if (!targetLead) {
                     return res.status(404).json({ success: false, message: '找不到該名片資料' });
                 }
@@ -158,7 +158,7 @@ class LineLeadsController {
             const modifier = updateData.modifier || 'LineUser';
 
             // L2：寫入統一委派至 ContactService（移除 Writer 直接依賴）
-            await this.contactService.updatePotentialContact(rowIndex, updateData, modifier);
+            await this.contactService.updatePotentialContact(rawIdentifier, updateData, modifier);
 
             res.json({ success: true, message: '更新成功' });
 
@@ -174,7 +174,7 @@ class LineLeadsController {
             const token = authHeader && authHeader.split(' ')[1];
             if (!token) return res.status(401).json({ success: false, message: 'Unauthorized' });
 
-            const rowIndex = parseInt(req.params.rowIndex);
+            const rawIdentifier = req.params.rowIndex;
             let modifier = 'LineUser';
 
             if (token !== 'TEST_LOCAL_TOKEN') {
@@ -192,7 +192,7 @@ class LineLeadsController {
                 }
 
                 // --- Ownership Authorization Gate ---
-                const targetLead = await this.contactService.getPotentialContactByRow(rowIndex);
+                const targetLead = await this.contactService.getPotentialContactByRow(rawIdentifier);
                 if (!targetLead) {
                     return res.status(404).json({ success: false, message: '找不到該名片資料' });
                 }
@@ -205,7 +205,7 @@ class LineLeadsController {
                 modifier = 'TEST_LOCAL_USER';
             }
 
-            await this.contactService.deletePotentialContact(rowIndex, modifier);
+            await this.contactService.deletePotentialContact(rawIdentifier, modifier);
             res.json({ success: true, message: '刪除成功' });
 
         } catch (error) {

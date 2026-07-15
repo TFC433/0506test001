@@ -56,28 +56,14 @@ class WorkflowService {
             .trim();
     }
 
-    async _updateRawStatus(rowIndex, status) {
-        const writer = this.contactService && this.contactService.contactWriter;
-        if (!writer || !writer.sheets || !writer.config || !writer.SHEET_POTENTIAL) return;
+    async _updateRawStatus(identifier, status) {
+        const writer = this.contactService && this.contactService.rawContactSqlWriter;
+        if (!writer) throw new Error('[WorkflowService] rawContactSqlWriter not configured');
 
-        const statusIndex = writer.config.CONTACT_FIELDS && writer.config.CONTACT_FIELDS.STATUS;
-        const parsedRowIndex = parseInt(rowIndex, 10);
-        if (statusIndex === undefined || isNaN(parsedRowIndex) || parsedRowIndex <= 1) return;
-
-        const columnLetter = String.fromCharCode(65 + statusIndex);
-        await this.googleClientService.batchUpdateSheetValuesNative(
-            writer.targetSpreadsheetId,
-            [
-                {
-                    range: `${writer.SHEET_POTENTIAL}!${columnLetter}${parsedRowIndex}`,
-                    values: [[status]]
-                }
-            ],
-            { valueInputOption: 'USER_ENTERED' }
-        );
-
-        if (this.contactService.contactRawReader && this.contactService.contactRawReader.invalidateCache) {
-            this.contactService.contactRawReader.invalidateCache('contacts');
+        const { cardId } = await this.contactService.resolveRawSqlIdentifier(identifier);
+        const result = await writer.updateRawContactStatusByCardId(cardId, status);
+        if (!result || result.success === false) {
+            throw new Error(result && result.error ? result.error : `RAW SQL status update failed: ${cardId}`);
         }
     }
 
@@ -130,15 +116,16 @@ class WorkflowService {
         return exactMatches[0] || null;
     }
 
-    async fileContact(rowIndex, user) {
-        const rawContact = await this.contactService.getPotentialContactByRow(rowIndex);
+    async fileContact(rawIdentifier, user) {
+        const rawContact = await this.contactService.getPotentialContactByRow(rawIdentifier);
         if (!rawContact) {
-            throw new Error(`Cannot file RAW contact: row ${rowIndex} not found.`);
+            throw new Error(`Cannot file RAW contact: identifier ${rawIdentifier} not found.`);
         }
         const modifier = this._resolveModifier(user);
+        const sourceId = rawContact.cardId || String(rawIdentifier);
 
         const contactResult = await this.contactService.createContact({
-            sourceId: String(rowIndex),
+            sourceId,
             name: rawContact.name,
             company: rawContact.company,
             companyName: rawContact.company,
@@ -150,7 +137,7 @@ class WorkflowService {
             email: rawContact.email || ''
         }, modifier);
 
-        await this._updateRawStatus(rowIndex, '已建檔');
+        await this._updateRawStatus(sourceId, '已建檔');
 
         return {
             success: true,
@@ -160,16 +147,17 @@ class WorkflowService {
         };
     }
 
-    async linkBusinessCardToContact(contactId, rowIndex, user) {
+    async linkBusinessCardToContact(contactId, rawIdentifier, user) {
         const contact = await this.contactService.getContactById(contactId);
         if (!contact) {
             throw new Error(`Cannot link RAW business card: contact ${contactId} not found.`);
         }
 
-        const rawContact = await this.contactService.getPotentialContactByRow(rowIndex);
+        const rawContact = await this.contactService.getPotentialContactByRow(rawIdentifier);
         if (!rawContact) {
-            throw new Error(`Cannot link RAW business card: row ${rowIndex} not found.`);
+            throw new Error(`Cannot link RAW business card: identifier ${rawIdentifier} not found.`);
         }
+        const sourceId = rawContact.cardId || String(rawIdentifier);
 
         const updateData = {};
         const setIfPresent = (target, value) => {
@@ -189,8 +177,8 @@ class WorkflowService {
             await this.contactService.updateContact(contactId, updateData, this._resolveModifier(user));
         }
 
-        await this._updateContactSourceId(contactId, rowIndex, user);
-        await this._updateRawStatus(rowIndex, '已歸檔');
+        await this._updateContactSourceId(contactId, sourceId, user);
+        await this._updateRawStatus(sourceId, '已歸檔');
 
         return {
             success: true,
@@ -201,21 +189,21 @@ class WorkflowService {
     }
 
     async resolveAndPromoteContact(contactPayload, user) {
-        const rowIndex = contactPayload && contactPayload.rowIndex;
-        if (rowIndex === undefined || rowIndex === null || rowIndex === '') {
-            throw new Error('Cannot resolve RAW contact: missing rowIndex.');
+        const rawIdentifier = contactPayload && (contactPayload.rawIdentifier || contactPayload.rowIndex);
+        if (rawIdentifier === undefined || rawIdentifier === null || rawIdentifier === '') {
+            throw new Error('Cannot resolve RAW contact: missing RAW identifier.');
         }
 
-        const rawContact = await this.contactService.getPotentialContactByRow(rowIndex);
+        const rawContact = await this.contactService.getPotentialContactByRow(rawIdentifier);
         if (!rawContact) {
-            throw new Error(`Cannot resolve RAW contact: row ${rowIndex} not found.`);
+            throw new Error(`Cannot resolve RAW contact: identifier ${rawIdentifier} not found.`);
         }
 
         const mergedRawContact = { ...rawContact, ...contactPayload };
         const existingContact = await this._findExistingOfficialContact(mergedRawContact);
 
         if (existingContact) {
-            await this.linkBusinessCardToContact(existingContact.contactId, rowIndex, user);
+            await this.linkBusinessCardToContact(existingContact.contactId, rawContact.cardId || rawIdentifier, user);
             return {
                 success: true,
                 contactId: existingContact.contactId,
@@ -223,7 +211,7 @@ class WorkflowService {
             };
         }
 
-        return await this.fileContact(rowIndex, user);
+        return await this.fileContact(rawContact.cardId || rawIdentifier, user);
     }
 
     async createManualContact(contactData, user) {
@@ -318,9 +306,9 @@ class WorkflowService {
      * @param {Object} rawContactData 
      * @param {Object} user 
      */
-    async upgradeContactToOpportunity(rowIndex, rawContactData, user, auditContext = {}) {
+    async upgradeContactToOpportunity(rawIdentifier, rawContactData, user, auditContext = {}) {
         // 撠?rowIndex 瘜典 payload嚗Ⅱ靽?皜?Service (憒?閬? ?賣迤蝣箸?啁???
-        const dataWithRowIndex = { ...rawContactData, rowIndex };
+        const dataWithRowIndex = { ...rawContactData, rowIndex: rawIdentifier, rawIdentifier };
         return await this.upgradeContactAndCreateOpp(dataWithRowIndex, user, auditContext);
     }
 
@@ -342,13 +330,14 @@ class WorkflowService {
                 : auditContext;
 
             // 1. 撱箇?甇???舐窗鈭?
-            const rawContact = rawContactData.rowIndex
-                ? await this.contactService.getPotentialContactByRow(rawContactData.rowIndex)
+            const rawIdentifier = rawContactData.rawIdentifier || rawContactData.rowIndex || rawContactData.sourceId;
+            const rawContact = rawIdentifier
+                ? await this.contactService.getPotentialContactByRow(rawIdentifier)
                 : null;
             const hasValue = (value) => String(value || '').trim() !== '';
             const contactPayload = {
                 ...rawContactData,
-                sourceId: hasValue(rawContactData.sourceId) ? rawContactData.sourceId : String(rawContactData.rowIndex || ''),
+                sourceId: hasValue(rawContactData.sourceId) ? rawContactData.sourceId : (rawContact && rawContact.cardId ? rawContact.cardId : String(rawIdentifier || '')),
                 name: hasValue(rawContactData.name) ? rawContactData.name : (rawContactData.mainContact || (rawContact && rawContact.name)),
                 company: hasValue(rawContactData.company) ? rawContactData.company : ((rawContact && rawContact.company) || rawContactData.customerCompany),
                 department: hasValue(rawContactData.department) ? rawContactData.department : ((rawContact && rawContact.department) || ''),

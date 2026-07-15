@@ -95,7 +95,8 @@ class OpportunityService {
         companySqlReader,  
         interactionSqlReader, 
         contactSqlReader,
-        contactSqlWriter 
+        contactSqlWriter,
+        rawContactSqlReader
     }) {
         this.config = config;
         
@@ -109,6 +110,7 @@ class OpportunityService {
         this.companySqlReader = companySqlReader;   
         this.interactionSqlReader = interactionSqlReader; 
         this.contactSqlReader = contactSqlReader; 
+        this.rawContactSqlReader = rawContactSqlReader;
 
         // Writers
         this.opportunityWriter = opportunityWriter;
@@ -629,7 +631,7 @@ class OpportunityService {
 
                 return null;
             };
-            const resolveSourceRowIndex = (sourceId) => {
+            const resolveSourceIdentifier = (sourceId) => {
                 if (sourceId === null || sourceId === undefined) return null;
 
                 const raw = String(sourceId).trim();
@@ -640,15 +642,18 @@ class OpportunityService {
 
                 if (/^\d+$/.test(raw)) return raw;
 
-                return null;
+                return raw;
             };
             const findRawBySourceId = (linkedContact, rawPool) => {
                 if (!linkedContact || !Array.isArray(rawPool) || rawPool.length === 0) return null;
 
-                const sourceRowIndex = resolveSourceRowIndex(linkedContact.sourceId || linkedContact.source_id);
-                if (!sourceRowIndex) return null;
+                const sourceIdentifier = resolveSourceIdentifier(linkedContact.sourceId || linkedContact.source_id);
+                if (!sourceIdentifier) return null;
 
-                return rawPool.find(rawContact => String(rawContact.rowIndex || '') === String(sourceRowIndex)) || null;
+                return rawPool.find(rawContact =>
+                    String(rawContact.cardId || '') === String(sourceIdentifier) ||
+                    String(rawContact.rowIndex || '') === String(sourceIdentifier)
+                ) || null;
             };
 
             let potentialContacts = [];
@@ -661,10 +666,11 @@ class OpportunityService {
                 }));
             }
 
-            const rawReader = this.contactWriter && this.contactWriter.contactReader;
-            if (rawReader && typeof rawReader.getContacts === 'function') {
-                const rawContacts = await rawReader.getContacts();
+            const rawReader = this.rawContactSqlReader;
+            if (rawReader && typeof rawReader.getRawContacts === 'function') {
+                const rawContacts = await rawReader.getRawContacts();
                 const mapRawContact = (raw) => ({
+                    cardId: raw.cardId || raw.card_id || '',
                     name: raw.name || raw['姓名'] || '',
                     company: raw.company || raw.companyName || raw.organization || raw['公司'] || '',
                     companyName: raw.companyName || raw.company || raw.organization || raw['公司'] || '',
@@ -678,6 +684,7 @@ class OpportunityService {
                     address: raw.address || raw['地址'] || '',
                     driveLink: raw.driveLink || raw.driveUrl || raw['Drive連結'] || '',
                     rowIndex: raw.rowIndex || raw.rawId || raw['原始ID'] || '',
+                    sourceId: raw.cardId || raw.card_id || '',
                     status: raw.status || raw['狀態'] || '',
                     source: raw.source || 'RAW'
                 });
@@ -702,6 +709,7 @@ class OpportunityService {
                         || findGlobalRawMatchForLinkedContact(linkedContact, mappedRawContacts);
                     if (matchedRaw) {
                         if (!linkedContact.driveLink && matchedRaw.driveLink) linkedContact.driveLink = matchedRaw.driveLink;
+                        if (!linkedContact.cardId && matchedRaw.cardId) linkedContact.cardId = matchedRaw.cardId;
                         if (!linkedContact.rowIndex && matchedRaw.rowIndex) linkedContact.rowIndex = matchedRaw.rowIndex;
                     }
                 });
@@ -710,6 +718,7 @@ class OpportunityService {
                     const matchedRaw = rawSameCompanyContacts.find(rawContact => isLikelySamePerson(coreContact, rawContact));
                     if (matchedRaw) {
                         if (!coreContact.driveLink && matchedRaw.driveLink) coreContact.driveLink = matchedRaw.driveLink;
+                        if (!coreContact.cardId && matchedRaw.cardId) coreContact.cardId = matchedRaw.cardId;
                         if (!coreContact.rowIndex && matchedRaw.rowIndex) coreContact.rowIndex = matchedRaw.rowIndex;
                     }
                 });

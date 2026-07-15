@@ -25,7 +25,7 @@
  * - [PHASE 8.7] Refactored getLinkedContacts to use strict Supabase SQL JOIN, dropping all Google Sheet dependencies.
  * - [STRICT WRITE AUTHORITY]
  * - CORE CONTACT ZONE (Official): SQL ONLY for Create/Update/Delete. NO Sheet fallback for writes.
- * - RAW CONTACT ZONE (Potential): Sheet ONLY via rowIndex.
+ * - RAW CONTACT ZONE (Potential): SQL ONLY via raw_contact_captures.card_id.
  * - READS: Hybrid (SQL Primary -> Sheet Fallback) maintained for backward compatibility.
  */
 
@@ -40,8 +40,10 @@ class ContactService {
      * @param {ContactSqlWriter} [contactSqlWriter]
      * @param {CompanySqlReader} [companySqlReader] - Optional DI for SQL Company Maps
      * @param {SystemService} systemService         - Required DI to retrieve settings deterministically
+     * @param {RawContactSqlReader} [rawContactSqlReader]
+     * @param {RawContactSqlWriter} [rawContactSqlWriter]
      */
-    constructor(contactRawReader, contactCoreReader, contactWriter, companyReader, config, contactSqlReader, contactSqlWriter, companySqlReader, systemService) {
+    constructor(contactRawReader, contactCoreReader, contactWriter, companyReader, config, contactSqlReader, contactSqlWriter, companySqlReader, systemService, rawContactSqlReader = null, rawContactSqlWriter = null) {
         this.contactRawReader = contactRawReader;
         this.contactCoreReader = contactCoreReader;
         this.contactWriter = contactWriter;
@@ -50,6 +52,8 @@ class ContactService {
         this.contactSqlReader = contactSqlReader;
         this.contactSqlWriter = contactSqlWriter;
         this.companySqlReader = companySqlReader;
+        this.rawContactSqlReader = rawContactSqlReader;
+        this.rawContactSqlWriter = rawContactSqlWriter;
         
         // Strict deterministic injection requirement
         if (!systemService) {
@@ -112,6 +116,79 @@ class ContactService {
 
         const businessCardMatch = value.match(/^(?:BC|BUSINESS[-_ ]?CARD)[-_ ]?(\d+)$/i);
         return businessCardMatch ? businessCardMatch[1] : null;
+    }
+
+    _normalizeRawSourceIdentifier(sourceId) {
+        const value = String(sourceId || '').trim();
+        if (!value || value.toUpperCase() === 'MANUAL') return null;
+
+        const businessCardMatch = value.match(/^(?:BC|BUSINESS[-_ ]?CARD)[-_ ]?(\d+)$/i);
+        return businessCardMatch ? businessCardMatch[1] : value;
+    }
+
+    _normalizeRawIdentifier(identifier) {
+        if (identifier === null || identifier === undefined) {
+            throw new Error('RAW identifier is required');
+        }
+
+        const value = String(identifier).trim();
+        if (!value) {
+            throw new Error('RAW identifier is required');
+        }
+
+        const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+        if (uuidPattern.test(value)) {
+            return { identifierType: 'cardId', cardId: value };
+        }
+
+        if (/^\d+$/.test(value)) {
+            const legacyRowIndex = Number(value);
+            if (!Number.isInteger(legacyRowIndex) || legacyRowIndex <= 0) {
+                throw new Error(`Invalid RAW legacy row index: ${identifier}`);
+            }
+            return { identifierType: 'legacyRowIndex', legacyRowIndex };
+        }
+
+        if (/^[0-9a-f-]+$/i.test(value)) {
+            throw new Error(`Malformed RAW card UUID: ${identifier}`);
+        }
+
+        throw new Error(`Unsupported RAW identifier format: ${identifier}`);
+    }
+
+    async resolveRawSqlIdentifier(identifier) {
+        if (!this.rawContactSqlReader) {
+            throw new Error('[ContactService] rawContactSqlReader not configured');
+        }
+
+        const normalized = this._normalizeRawIdentifier(identifier);
+        let rawContact = null;
+
+        if (normalized.identifierType === 'cardId') {
+            rawContact = await this.rawContactSqlReader.getRawContactByCardId(normalized.cardId);
+        } else {
+            rawContact = await this.rawContactSqlReader.getRawContactByLegacyRowIndex(normalized.legacyRowIndex);
+        }
+
+        if (!rawContact) {
+            const err = new Error(`RAW contact not found for ${normalized.identifierType}: ${String(identifier).trim()}`);
+            err.code = 'RAW_CONTACT_NOT_FOUND';
+            err.identifierType = normalized.identifierType;
+            throw err;
+        }
+
+        return {
+            cardId: rawContact.cardId,
+            legacyRowIndex: rawContact.rowIndex,
+            rawContact,
+            identifierType: normalized.identifierType
+        };
+    }
+
+    async _resolveRawContactFromSourceId(sourceId) {
+        const identifier = this._normalizeRawSourceIdentifier(sourceId);
+        if (!identifier) return null;
+        return (await this.resolveRawSqlIdentifier(identifier)).rawContact;
     }
 
     _mapSqlContact(contact) {
@@ -207,8 +284,8 @@ class ContactService {
 
     async getDashboardStats() {
         try {
-            if (!this.contactRawReader) throw new Error('[ContactService] contactRawReader not configured');
-            const contacts = await this.contactRawReader.getContacts();
+            if (!this.rawContactSqlReader) throw new Error('[ContactService] rawContactSqlReader not configured');
+            const contacts = await this.rawContactSqlReader.getRawContacts();
             return {
                 total: contacts.length,
                 pending: contacts.filter(c => !c.status || c.status === 'Pending').length,
@@ -222,8 +299,8 @@ class ContactService {
     }
 
     async getPotentialContacts(limit = 2000) {
-        if (!this.contactRawReader) throw new Error('[ContactService] contactRawReader not configured');
-        let contacts = await this.contactRawReader.getContacts();
+        if (!this.rawContactSqlReader) throw new Error('[ContactService] rawContactSqlReader not configured');
+        let contacts = await this.rawContactSqlReader.getRawContacts();
 
         contacts = contacts.filter(c => c.name || c.company);
 
@@ -245,12 +322,15 @@ class ContactService {
             let hasUpdates = false;
             for (let c of contacts) {
                 if (this._applyExhibitionAutoTag(c, sysConfig)) {
-                    await this.contactWriter.writePotentialContactRow(c.rowIndex, c);
+                    if (!this.rawContactSqlWriter) {
+                        throw new Error('[ContactService] rawContactSqlWriter not configured');
+                    }
+                    if (!c.cardId) {
+                        throw new Error('[ContactService] RAW SQL cardId missing during auto-tag write');
+                    }
+                    await this.rawContactSqlWriter.updateRawContactByCardId(c.cardId, c);
                     hasUpdates = true;
                 }
-            }
-            if (hasUpdates && this.contactRawReader.invalidateCache) {
-                this.contactRawReader.invalidateCache('contacts');
             }
         } catch (error) {
             console.warn('[ContactService] Lazy auto-tag failed safely:', error.message);
@@ -411,12 +491,12 @@ class ContactService {
             const rawBySourceId = new Map();
             const rawSourceIds = [...new Set(linkedContacts
                 .map(contact => contact.sourceId)
-                .filter(sourceId => sourceId && sourceId !== 'MANUAL' && /^\d+$/.test(String(sourceId)))
+                .filter(sourceId => this._normalizeRawSourceIdentifier(sourceId))
             )];
 
             await Promise.all(rawSourceIds.map(async sourceId => {
                 try {
-                    const rawContact = await this.getPotentialContactByRow(sourceId);
+                    const rawContact = await this._resolveRawContactFromSourceId(sourceId);
                     if (rawContact) rawBySourceId.set(String(sourceId), rawContact);
                 } catch (error) {
                     console.warn(`[ContactService] RAW driveLink enrichment skipped for sourceId ${sourceId}: ${error.message}`);
@@ -439,6 +519,8 @@ class ContactService {
                     phone: contact.phone,
                     email: contact.email,
                     companyName,
+                    cardId: rawContact ? rawContact.cardId || '' : '',
+                    rowIndex: rawContact ? rawContact.rowIndex || '' : '',
                     driveLink: rawContact ? rawContact.driveLink || '' : ''
                 };
             });
@@ -494,13 +576,10 @@ class ContactService {
         if (!coreContact) throw new Error(`Contact not found: ${contactId}`);
 
         const sourceId = coreContact.sourceId;
-        const rawRowIndex = this._resolveRawSourceRowIndex(sourceId);
-        if (!rawRowIndex) {
+        const rawContact = await this._resolveRawContactFromSourceId(sourceId);
+        if (!rawContact) {
             throw new Error('Contact does not have a linked RAW business card source.');
         }
-
-        const rawContact = await this.getPotentialContactByRow(rawRowIndex);
-        if (!rawContact) throw new Error(`RAW business card source not found: ${sourceId}`);
 
         const fields = [
             { key: 'name', label: '姓名', core: coreContact.name, raw: rawContact.name },
@@ -569,23 +648,20 @@ class ContactService {
     }
 
     // ============================================================
-    // RAW CONTACT ZONE (POTENTIAL CONTACTS - SHEET ONLY)
+    // RAW CONTACT ZONE (POTENTIAL CONTACTS - SQL ONLY)
     // ============================================================
 
-    async getPotentialContactByRow(rowIndex) {
-        if (!this.contactRawReader) throw new Error('[ContactService] contactRawReader not configured');
-        const allContacts = await this.contactRawReader.getContacts();
-        return allContacts.find(c => c.rowIndex === parseInt(rowIndex, 10)) || null;
+    async getPotentialContactByRow(identifier) {
+        return (await this.resolveRawSqlIdentifier(identifier)).rawContact;
     }
 
-    async updatePotentialContact(rowIndex, updateData, modifier) {
+    async updatePotentialContact(identifier, updateData, modifier) {
         try {
-            if (!this.contactRawReader) throw new Error('[ContactService] contactRawReader not configured');
+            if (!this.rawContactSqlWriter) {
+                throw new Error('[ContactService] rawContactSqlWriter not configured');
+            }
             
-            const allContacts = await this.contactRawReader.getContacts();
-            const target = allContacts.find(c => c.rowIndex === parseInt(rowIndex));
-            if (!target) throw new Error(`找不到潛在客戶 Row: ${rowIndex}`);
-
+            const { cardId, rawContact: target } = await this.resolveRawSqlIdentifier(identifier);
             const mergedData = { ...target, ...updateData };
 
             // =========================================================
@@ -605,10 +681,9 @@ class ContactService {
                 mergedData.exhibition_name = '';
             }
 
-            await this.contactWriter.writePotentialContactRow(rowIndex, mergedData);
-
-            if (this.contactRawReader.invalidateCache) {
-                this.contactRawReader.invalidateCache('contacts');
+            const result = await this.rawContactSqlWriter.updateRawContactByCardId(cardId, mergedData);
+            if (!result || result.success === false) {
+                throw new Error(result && result.error ? result.error : `RAW SQL update failed: ${cardId}`);
             }
 
             return { success: true };
@@ -619,30 +694,21 @@ class ContactService {
     }
 
     /**
-     * Physically deletes a RAW contact (Sheet Row)
-     * @param {number|string} rowIndex 
+     * Physically deletes a RAW contact (SQL row)
+     * @param {number|string} identifier
      * @param {string} user 
      */
-    async deletePotentialContact(rowIndex, user) {
+    async deletePotentialContact(identifier, user) {
         try {
-            if (!this.contactWriter) {
-                throw new Error('[ContactService] CRITICAL: ContactWriter not configured. RAW Delete disallowed.');
+            if (!this.rawContactSqlWriter) {
+                throw new Error('[ContactService] CRITICAL: RawContactSqlWriter not configured. RAW Delete disallowed.');
             }
 
-            const parsedRow = parseInt(rowIndex, 10);
-            
-            // Strict guardrail: Prevent deleting header or invalid rows
-            if (isNaN(parsedRow) || parsedRow <= 1) {
-                return { success: false, error: '無效的資料列索引，禁止刪除標題列或不存在的列' };
+            const { cardId } = await this.resolveRawSqlIdentifier(identifier);
+            const result = await this.rawContactSqlWriter.deleteRawContactByCardId(cardId);
+            if (!result || result.success === false) {
+                throw new Error(result && result.error ? result.error : `RAW SQL delete failed: ${cardId}`);
             }
-
-            await this.contactWriter.deletePotentialContactRow(parsedRow);
-            
-            // [Bugfix] Explicitly invalidate the RAW reader cache so frontend gets fresh data
-            if (this.contactRawReader && this.contactRawReader.invalidateCache) {
-                this.contactRawReader.invalidateCache('contacts');
-            }
-            
             return { success: true };
         } catch (error) {
             console.error('[ContactService] deletePotentialContact Error:', error);

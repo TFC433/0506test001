@@ -589,8 +589,8 @@ class DashboardService {
         const today = new Date();
         const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
         
-        const rawContacts = (this.contactService && this.contactService.contactRawReader)
-            ? await this.contactService.contactRawReader.getContacts()
+        const rawContacts = (this.contactService && this.contactService.rawContactSqlReader)
+            ? await this.contactService.rawContactSqlReader.getRawContacts()
             : [];
             
         let rawTotal = 0;

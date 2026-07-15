@@ -66,6 +66,14 @@ const OpportunityContacts = (() => {
     let _linkedContacts = [];
     let _isManageMode = false;
 
+    function getRawContactIdentifier(record) {
+        if (!record) return null;
+        if (record.cardId) return String(record.cardId);
+
+        const rowIndex = Number(record.rowIndex);
+        return Number.isInteger(rowIndex) && rowIndex > 0 ? String(rowIndex) : null;
+    }
+
     function _normalizeContactId(contact) {
         const id = contact?.contactId ?? contact?.id ?? contact?.contact_id;
         return id === undefined || id === null || String(id).trim() === '' ? null : id;
@@ -315,7 +323,7 @@ const OpportunityContacts = (() => {
             try {
                 const result = await authedFetch(`/api/contacts/${contactId}/link-card`, {
                     method: 'POST',
-                    body: JSON.stringify({ businessCardRowIndex: businessCard.rowIndex })
+                    body: JSON.stringify({ businessCardRowIndex: getRawContactIdentifier(businessCard) })
                 });
 
                 if (result.success) {
@@ -340,7 +348,7 @@ const OpportunityContacts = (() => {
             try {
                 const result = await authedFetch(`/api/contacts/${contactId}/link-card`, {
                     method: 'POST',
-                    body: JSON.stringify({ businessCardRowIndex: businessCard.rowIndex })
+                    body: JSON.stringify({ businessCardRowIndex: getRawContactIdentifier(businessCard) })
                 });
 
                 if (result.success) {
@@ -375,7 +383,7 @@ const OpportunityContacts = (() => {
                     mobile: contact.mobile,
                     phone: contact.phone,
                     email: contact.email,
-                    rowIndex: contact.rowIndex,
+                    rowIndex: getRawContactIdentifier(contact),
                     sourceId: contact.sourceId,
                     source: contact.source,
                     driveLink: contact.driveLink
@@ -648,7 +656,7 @@ const OpportunityContacts = (() => {
                 const rawCards = Array.isArray(rawCardsSource) ? rawCardsSource : [];
                 const pendingCards = rawCards.filter(c => {
                     const status = String(c.status || c.statusText || '').trim();
-                    return c.rowIndex && !['已升級', '已歸檔', 'Dropped', '已作廢'].includes(status);
+                    return getRawContactIdentifier(c) && !['已升級', '已歸檔', 'Dropped', '已作廢'].includes(status);
                 });
 
                 if (pendingCards.length > 0) {

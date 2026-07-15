@@ -159,7 +159,9 @@ class OpportunityController {
             const { opportunityId } = req.params;
             const payload = req.body || {};
             const auditContext = this._buildAuditContext(req);
-            const hasRowIndex = payload.rowIndex !== undefined && payload.rowIndex !== null && payload.rowIndex !== '';
+            const rawIdentifier = payload.rawIdentifier || payload.rowIndex;
+            if (rawIdentifier && !payload.rowIndex) payload.rowIndex = rawIdentifier;
+            const hasRowIndex = rawIdentifier !== undefined && rawIdentifier !== null && rawIdentifier !== '';
             const hasContactId = Boolean(payload.contactId);
 
             if (hasRowIndex && !hasContactId) {
@@ -176,7 +178,7 @@ class OpportunityController {
             if (hasRowIndex && hasContactId) {
                 await this.workflowService.linkBusinessCardToContact(
                     payload.contactId,
-                    payload.rowIndex,
+                    rawIdentifier,
                     req.user
                 );
                 const result = await this.opportunityService.addContactToOpportunity(

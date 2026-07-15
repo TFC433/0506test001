@@ -27,6 +27,7 @@ const GoogleClientService = require('./google-client-service');
 // --- Import Readers ---
 const ContactReader = require('../data/contact-reader'); // EXCLUSIVELY FOR RAW
 const ContactSqlReader = require('../data/contact-sql-reader');
+const RawContactSqlReader = require('../data/raw-contact-sql-reader');
 const CompanySqlReader = require('../data/company-sql-reader');
 const OpportunitySqlReader = require('../data/opportunity-sql-reader');
 const InteractionSqlReader = require('../data/interaction-sql-reader');
@@ -43,6 +44,7 @@ const AuditLogSqlReader = require('../data/audit-log-sql-reader');
 // --- Import Writers ---
 const ContactWriter = require('../data/contact-writer'); // EXCLUSIVELY FOR RAW
 const ContactSqlWriter = require('../data/contact-sql-writer');
+const RawContactSqlWriter = require('../data/raw-contact-sql-writer');
 const CompanySqlWriter = require('../data/company-sql-writer');
 const OpportunitySqlWriter = require('../data/opportunity-sql-writer');
 const InteractionSqlWriter = require('../data/interaction-sql-writer');
@@ -108,6 +110,7 @@ async function initializeServices() {
         
         // SQL Keep
         const contactSqlReader = new ContactSqlReader();
+        const rawContactSqlReader = new RawContactSqlReader();
         const companySqlReader = new CompanySqlReader();
         const opportunitySqlReader = new OpportunitySqlReader();
         const interactionSqlReader = new InteractionSqlReader();
@@ -130,6 +133,7 @@ async function initializeServices() {
         
         // SQL Keep
         const contactSqlWriter = new ContactSqlWriter();
+        const rawContactSqlWriter = new RawContactSqlWriter();
         const companySqlWriter = new CompanySqlWriter();
         const opportunitySqlWriter = new OpportunitySqlWriter();
         const interactionSqlWriter = new InteractionSqlWriter();
@@ -183,7 +187,9 @@ async function initializeServices() {
             contactSqlReader,
             contactSqlWriter,
             companySqlReader, // Passed implicitly previously
-            systemService     // Required for strict deterministic settings resolution
+            systemService,    // Required for strict deterministic settings resolution
+            rawContactSqlReader,
+            rawContactSqlWriter
         );
 
         const companyService = new CompanyService(
@@ -223,7 +229,8 @@ async function initializeServices() {
             companySqlReader,      
             interactionSqlReader,   
             contactSqlReader,
-            contactSqlWriter // [PHASE 9.3.2] Inject for SQL contact scaffolding
+            contactSqlWriter, // [PHASE 9.3.2] Inject for SQL contact scaffolding
+            rawContactSqlReader
         });
 
         const eventLogService = new EventLogService(
@@ -344,6 +351,8 @@ async function initializeServices() {
             weeklyController,
             contactWriter,
             contactRawReader,
+            rawContactSqlReader,
+            rawContactSqlWriter,
             contactCoreReader: contactSqlReader, // Expose explicitly mapped SQL core
             weeklyBusinessReader: weeklyReader,
             systemReader, systemWriter,

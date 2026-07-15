@@ -139,7 +139,7 @@ class ContactController {
      */
     upgradeContact = async (req, res) => {
         try {
-            const rowIndex = parseInt(req.params.rowIndex);
+            const rawIdentifier = req.params.rowIndex;
             const user = this._getAuditUser(req);
 
             if (!this.workflowService) {
@@ -147,10 +147,10 @@ class ContactController {
                 throw new Error('系統內部錯誤: WorkflowService 未初始化');
             }
 
-            console.log(`[ContactController] Upgrading contact at row ${rowIndex} by ${user}`);
+            console.log(`[ContactController] Upgrading RAW contact ${rawIdentifier} by ${user}`);
 
             const result = await this.workflowService.upgradeContactToOpportunity(
-                rowIndex, 
+                rawIdentifier,
                 req.body, 
                 user,
                 this._buildAuditContext(req)
@@ -219,11 +219,11 @@ class ContactController {
      */
     updateRawContact = async (req, res) => {
         try {
-            const rowIndex = parseInt(req.params.rowIndex);
+            const rawIdentifier = req.params.rowIndex;
             const user = req.body.modifier || this._getAuditUser(req);
 
             const result = await this.contactService.updatePotentialContact(
-                rowIndex,
+                rawIdentifier,
                 req.body,
                 user
             );
@@ -244,10 +244,10 @@ class ContactController {
      */
     deleteRawContact = async (req, res) => {
         try {
-            const rowIndex = parseInt(req.params.rowIndex);
+            const rawIdentifier = req.params.rowIndex;
             const user = this._getAuditUser(req);
 
-            const result = await this.contactService.deletePotentialContact(rowIndex, user);
+            const result = await this.contactService.deletePotentialContact(rawIdentifier, user);
             res.json(result);
         } catch (error) {
             handleApiError(res, error, 'Delete Raw Contact');
@@ -270,7 +270,7 @@ class ContactController {
             
             const result = await this.workflowService.linkBusinessCardToContact(
                 contactId, 
-                parseInt(businessCardRowIndex), 
+                businessCardRowIndex,
                 user
             );
             res.json(result);
@@ -285,11 +285,11 @@ class ContactController {
      */
     fileContact = async (req, res) => {
         try {
-            const rowIndex = parseInt(req.params.rowIndex);
+            const rawIdentifier = req.params.rowIndex;
             const user = this._getAuditUser(req);
 
             const result = await this.workflowService.fileContact(
-                rowIndex, 
+                rawIdentifier,
                 user
             );
             res.json(result);

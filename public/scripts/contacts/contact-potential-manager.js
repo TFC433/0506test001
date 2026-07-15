@@ -56,6 +56,14 @@
 // 職責：共用的潛在聯絡人管理模組，處理顯示、建檔與關聯邏輯
 
 const PotentialContactsManager = (() => {
+    function getRawContactIdentifier(record) {
+        if (!record) return null;
+        if (record.cardId) return String(record.cardId);
+
+        const rowIndex = Number(record.rowIndex);
+        return Number.isInteger(rowIndex) && rowIndex > 0 ? String(rowIndex) : null;
+    }
+
     function getContactRoleText(contact) {
         const department = String(contact?.department || '').trim();
         const title = String(contact?.jobTitle || contact?.position || '').trim();
@@ -255,12 +263,17 @@ const PotentialContactsManager = (() => {
      * @param {object} contactData - 潛在聯絡人的資料 (RAW)
      */
     async function handleFileContact(contactData) {
+        const rawIdentifier = getRawContactIdentifier(contactData);
+        if (!rawIdentifier) {
+            showNotification('缺少 RAW 識別碼，無法建檔', 'error');
+            return;
+        }
         const confirmMsg = `您確定要將潛在聯絡人「${contactData.name}」建立正式檔案嗎？`;
         showConfirmDialog(confirmMsg, async () => {
             showLoading('正在建立聯絡人檔案...');
             try {
                 // [API HANDOFF] POST to backend to perform the actual SQL write.
-                const result = await authedFetch(`/api/contacts/${contactData.rowIndex}/file`, {
+                const result = await authedFetch(`/api/contacts/${encodeURIComponent(rawIdentifier)}/file`, {
                     method: 'POST'
                 });
                 
@@ -289,6 +302,7 @@ const PotentialContactsManager = (() => {
      * @param {string} opportunityId - 要關聯到的機會 ID
      */
     async function handleLinkContact(contactData, opportunityId) {
+        const rawIdentifier = getRawContactIdentifier(contactData);
         showLoading('正在關聯聯絡人...');
 
         const payload = {
@@ -297,7 +311,7 @@ const PotentialContactsManager = (() => {
             mobile: contactData.mobile,
             phone: contactData.phone,
             email: contactData.email,
-            rowIndex: contactData.rowIndex, // RAW identity passed for processing
+            rowIndex: rawIdentifier, // RAW identity passed for processing
             company: contactData.company,
         };
 
@@ -345,7 +359,7 @@ const PotentialContactsManager = (() => {
                 mobile: contactData.mobile,
                 phone: contactData.phone,
                 email: contactData.email,
-                rowIndex: contactData.rowIndex,
+                rowIndex: getRawContactIdentifier(contactData),
                 company: contactData.company,
             };
 
