@@ -41,6 +41,7 @@ This document does not authorize deletion or runtime changes by itself. Any futu
 - Sales Analysis `成交類型` donut chart is a standard professional donut with no rounded slice corners, no thick transparent border gaps, and subtle `padAngle: 1` separation.
 - Sales Analysis `成交類型` donut must not be documented as fully gapless.
 - Highcharts / Highmaps retirement is completed. ECharts and `public/assets/maps/taiwan.json` remain active and must not be removed as part of Highcharts cleanup.
+- CRM RAW Contact SQL authority workstream is closed with UI/Product PASS on 2026-07-15. `public.raw_contact_captures` is the CRM RAW runtime authority; dormant RAW Sheet compatibility code is protected until a separate retirement audit.
 - Current governance docs:
   - `docs/architecture-governance.md`
   - `docs/tfc-crm-ui-style-governance.md`
@@ -95,7 +96,8 @@ No-touch reminders:
 
 - Do not remove Google Sheet fallback broadly.
 - Product Cost Sheet remains active.
-- RAW contacts and LINE leads still depend on Sheet-backed RAW flow.
+- Dormant RAW Sheet reader/writer compatibility code remains protected; current CRM RAW runtime authority is SQL.
+- LINE leads route compatibility remains protected while accepted RAW mutations resolve through SQL.
 - System Config / Auth still depends on Sheet-backed system config and users.
 - Weekly Business read fallback remains protected.
 - Internal Ops remains Sheet-backed.
@@ -170,6 +172,36 @@ It does not approve:
 Cleanup candidates still require targeted evidence, explicit scope, and human approval before any future patch.
 
 Consult `docs/forensics/wknd/results/17-weekend-planning-baseline.md` before using Weekend Forensics-derived planning.
+
+## 4.5 2026-07 RAW Contact SQL Authority Cleanup Boundary
+
+The CRM-side RAW Contact SQL migration is closed. This roadmap records remaining cleanup candidates only; it does not authorize deletion, migration, refactor, or automatic retirement.
+
+Current accepted state:
+
+* `public.raw_contact_captures` is the CRM RAW runtime authority.
+* `cardId` is canonical.
+* positive legacy `rowIndex` remains compatibility identity through `raw_payload.legacy_row_index`.
+* numeric, UUID, and `MANUAL` `contacts.source_id` values remain supported by runtime compatibility rules.
+* Dashboard RAW stats are SQL-backed and failure-isolated from the main Dashboard render.
+
+Future cleanup candidates, all non-blocking:
+
+* dormant legacy RAW Sheet reader/writer DI or classes;
+* duplicated frontend `getRawContactIdentifier` helper logic;
+* Dashboard RAW stats full-record hydration versus future SQL aggregation/count;
+* potential later `contacts.source_id` governance or migration;
+* external OCR repository end-to-end validation;
+* final RAW Sheet retirement/deletion audit.
+
+Protected boundaries:
+
+* do not delete Sheet classes or the RAW Sheet merely because SQL runtime authority is closed;
+* do not restore CRM RAW Sheet fallback;
+* do not fabricate `rowIndex` for SQL-only records;
+* do not copy `cardId` into `rowIndex`;
+* do not bulk-migrate `contacts.source_id` without separate approval;
+* do not merge OCR validation into the completed CRM workstream.
 
 ## 5. Candidate Classification Rules
 

@@ -1707,8 +1707,8 @@ Do not remove Google Sheet fallback broadly.
 Current Sheet-backed / compatibility domains that must remain protected:
 
 * Product Cost Sheet
-* RAW contacts
-* LINE leads RAW flow
+* Dormant RAW Sheet reader/writer compatibility code until a separate retirement audit proves it removable
+* LINE leads route compatibility while CRM RAW runtime resolves through SQL
 * System Config / Auth system config and users
 * Weekly Business read fallback
 * Internal Ops
@@ -1992,6 +1992,164 @@ Governance rules:
 
 ---
 
+# 28.8 RAW Contact SQL Authority Governance Archive (2026-07-15)
+
+Status:
+
+```text
+CRM-side RAW Contact SQL authority workstream: closed with UI/Product PASS.
+OCR-side ingestion and cross-repository end-to-end closure: separate pending validation unless independently evidenced.
+```
+
+Accepted completion state:
+
+* Phase A RAW SQL Adapter + Identifier Resolver: CODE PASS.
+* Phase B RAW SQL Runtime Authority Cutover: CODE PASS.
+* Frontend / LIFF / route static repository audit: PASS.
+* Dashboard RAW Stats Concurrent Fetch Cleanup: CODE PASS.
+* UI / Product Test: PASS on 2026-07-15.
+
+## 28.8.1 RAW Runtime Authority
+
+`public.raw_contact_captures` is the sole CRM runtime authority for RAW business-card records.
+
+Active CRM RAW runtime list/read/edit/delete/status/workflow paths resolve through SQL RAW adapters:
+
+* `data/raw-contact-sql-reader.js`
+* `data/raw-contact-sql-writer.js`
+* `ContactService.rawContactSqlReader`
+* `ContactService.rawContactSqlWriter`
+* `WorkflowService` RAW status transitions through SQL card resolution
+
+No active CRM RAW runtime read/write fallback to the legacy RAW Google Sheet is part of the accepted target architecture.
+
+This does not mean the entire CRM is Google-Sheet-free. Product data, system settings/auth, calendars, Internal Ops, Weekly Business fallback, and other operational domains may still use Google services according to their own governance.
+
+## 28.8.2 Canonical RAW Identity
+
+Canonical RAW business-card identity:
+
+```text
+card_id / cardId
+```
+
+Historical compatibility remains:
+
+```text
+raw_payload.legacy_row_index
+-> runtime DTO rowIndex
+```
+
+Rules:
+
+* if `cardId` exists, frontend actions send `cardId`;
+* if `cardId` is absent, frontend actions may send a valid positive legacy `rowIndex`;
+* new SQL-only records do not require `rowIndex`;
+* `cardId` must not be copied into `rowIndex`;
+* `rowIndex` is not the canonical identity.
+
+## 28.8.3 Identifier Resolver Contract
+
+Accepted backend identifier behavior:
+
+| Input | Resolver behavior |
+| --- | --- |
+| UUID | lookup by `card_id` |
+| positive integer / numeric string | lookup by `raw_payload.legacy_row_index` |
+| invalid identifier | validation error |
+| valid but missing identifier | not-found error |
+| duplicate legacy identity | integrity error |
+
+Future changes must not parse UUID identifiers as integers and must not restore a Google Sheet fallback for CRM RAW runtime.
+
+## 28.8.4 `contacts.source_id` Compatibility
+
+Current runtime compatibility:
+
+| `contacts.source_id` value | Behavior |
+| --- | --- |
+| numeric | historical legacy `rowIndex` lookup in SQL |
+| UUID | `cardId` lookup in SQL |
+| `MANUAL` | no RAW source lookup |
+
+Existing numeric `contacts.source_id` values were not bulk migrated during this workstream. Do not document or execute a bulk source-id migration without a separate approved workstream.
+
+## 28.8.5 UI / API Boundary
+
+The workstream preserved:
+
+* no visible UI redesign;
+* no HTML/CSS changes;
+* no user-flow change;
+* no external API URL-shape change.
+
+Only invisible identifier plumbing changed where required. The project standing rule remains: no hardcoded dynamic business labels or identities.
+
+LIFF lead update/delete routes preserve ownership checks before mutation while resolving the accepted identifier through SQL.
+
+## 28.8.6 Dashboard RAW Statistics
+
+Dashboard potential-contact statistics are backed by SQL RAW data.
+
+Accepted frontend timing:
+
+```text
+/api/dashboard
+and
+/api/dashboard/contacts-stats
+
+start concurrently
+```
+
+Failure boundary:
+
+```text
+Main Dashboard does not wait for RAW contact statistics.
+RAW contact statistics failure does not fail the main Dashboard.
+```
+
+The endpoints are not merged. Current source evidence shows RAW stats are calculated from SQL record hydration through `rawContactSqlReader.getRawContacts()` with the existing five-minute cache; this archive does not claim a direct SQL COUNT implementation.
+
+## 28.8.7 Regression Anti-Patterns
+
+Future patches must not:
+
+* restore SQL-read / Sheet-write split-brain;
+* restore Google Sheet fallback for CRM RAW runtime;
+* treat `rowIndex` as the canonical identity;
+* fabricate `rowIndex` for SQL-only records;
+* copy `cardId` into `rowIndex`;
+* parse UUID identifiers as integers;
+* assume every `contacts.source_id` is numeric;
+* bulk-migrate `contacts.source_id` without a separate approved workstream;
+* merge Dashboard RAW stats into the main request if this removes failure isolation without a new product/architecture decision;
+* delete dormant RAW Sheet code solely because imports remain;
+* declare the OCR repository closed without its own end-to-end evidence;
+* declare the entire CRM Google-Sheet-free.
+
+## 28.8.8 Non-Goals And Future Boundaries
+
+This archive closes the CRM repository RAW Contact SQL migration workstream only.
+
+It does not close:
+
+* the external OCR repository;
+* the end-to-end OCR ingestion system;
+* the entire CRM SQL modernization program;
+* all Google Sheet dependencies.
+
+OCR-side validation remains separate unless independently evidenced:
+
+```text
+new scan
+-> OCR processing
+-> direct SQL insertion
+-> CRM display/actionability
+-> no required RAW Sheet dependency
+```
+
+---
+
 # 29. Internal Ops Governance Baseline
 
 ## 29.1 Internal Ops Dev Projects Governance Baseline
@@ -2129,6 +2287,12 @@ and disciplined data lifecycle governance.
 ---
 
 # Changelog
+
+## 2026-07-15
+
+* Archived completed CRM RAW Contact SQL authority cutover with UI/Product PASS.
+* Recorded `public.raw_contact_captures` as the CRM RAW runtime authority, `cardId` as canonical identity, positive legacy `rowIndex` compatibility through `raw_payload.legacy_row_index`, and numeric / UUID / `MANUAL` `contacts.source_id` compatibility.
+* Recorded Dashboard RAW stats concurrent request timing with failure isolation, and clarified that OCR-side end-to-end closure and all-CRM Google Sheet retirement are separate non-goals.
 
 ## 2026-07-06
 

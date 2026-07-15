@@ -1,6 +1,6 @@
 # CRM Current State Index
 
-Last Updated: 2026-07-06
+Last Updated: 2026-07-15
 
 ## 1. Global Rules & Index Usage
 
@@ -28,7 +28,14 @@ Last Updated: 2026-07-06
 
 * Docs: `docs/tfc-crm-ui-style-governance.md`, `docs/repo-operational-consolidation-report.md`, `docs/echarts-migration-record.md`
 * Owners: `public/dashboard.html`, `public/scripts/dashboard/*`, `public/scripts/map-manager.js`
-* Baseline: Dashboard is the analytics / KPI / chart / filter tab / widget control baseline. Dashboard trend uses ECharts. Highcharts / Highmaps are not current runtime dependencies.
+* Baseline: Dashboard is the analytics / KPI / chart / filter tab / widget control baseline. Dashboard trend uses ECharts. Highcharts / Highmaps are not current runtime dependencies. Dashboard RAW contact stats start concurrently with `/api/dashboard` and remain failure-isolated from the main Dashboard render.
+
+### RAW Contacts / Business Cards
+
+* Docs: `docs/architecture-governance.md`, `docs/tfc-crm-ui-style-governance.md`, `docs/non-breaking-cleanup-roadmap.md`, `docs/repo-operational-consolidation-report.md`
+* Owners: `data/raw-contact-sql-reader.js`, `data/raw-contact-sql-writer.js`, `services/contact-service.js`, `services/workflow-service.js`, `controllers/contact.controller.js`, `controllers/line-leads.controller.js`, `public/scripts/contacts/contacts.js`, `public/scripts/leads-view.js`, `public/scripts/opportunities/*`
+* Baseline: CRM RAW Contact SQL migration is closed with UI/Product PASS on 2026-07-15. `public.raw_contact_captures` is the CRM runtime authority for RAW business-card records; `cardId` is canonical, with positive legacy `rowIndex` compatibility through `raw_payload.legacy_row_index`.
+* Boundary: This closes the CRM-side RAW SQL workstream only. It does not declare the OCR repository closed and does not declare the entire CRM Google-Sheet-free.
 
 ### Sales Analysis / 受注分析
 
@@ -98,3 +105,4 @@ Last Updated: 2026-07-06
 * Highcharts / Highmaps retirement is complete. Remaining Highcharts mentions in docs are historical / `DOC_HISTORY_ONLY`, not current dependency evidence.
 * `ProductDetailModal` reachability / removal-readiness remains a pending cleanup target requiring separate approval.
 * Google Sheet fallback must not be removed broadly; SQL replacement remains domain-by-domain future work.
+* Dormant RAW Sheet reader/writer compatibility code and final RAW Sheet retirement/deletion audit remain future cleanup topics; current CRM RAW runtime authority is SQL per `docs/architecture-governance.md`.

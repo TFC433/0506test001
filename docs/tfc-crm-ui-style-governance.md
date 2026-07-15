@@ -522,3 +522,21 @@ The mobile reminder panel default state shows at most 3 reminders. When the curr
 Desktop zero-regression is mandatory for Mobile Dashboard work. Mobile CSS must stay inside mobile media queries unless a non-visual JS state property is required for mobile-only rendering. Mobile Dashboard content scope and global app shell header scope must remain separate: Dashboard content patches must not become header redesigns, and header overflow guards must not alter Dashboard content.
 
 M6B-2 header visual polish is deferred / backlog. V1 only accepts the mobile header overflow guard needed to prevent small-viewport squeezing or horizontal overflow.
+
+## 15.3 RAW Contact SQL Authority UI Baseline
+
+The CRM RAW Contact SQL authority workstream reached UI/Product PASS on 2026-07-15.
+
+Product-facing invariants:
+
+* no visible UI redesign;
+* no HTML/CSS change;
+* no workflow change;
+* `cardId`-first identifier plumbing is invisible to users;
+* historical positive `rowIndex` compatibility remains where records do not expose `cardId`;
+* SQL-only RAW records remain actionable without fabricated `rowIndex`;
+* Dashboard main render remains isolated from RAW stats failure.
+
+Do not introduce user-visible labels, warnings, placeholder changes, or layout changes merely to expose the RAW SQL authority cutover.
+
+Do not hardcode dynamic business labels or identities while working around RAW contact display/action flows.

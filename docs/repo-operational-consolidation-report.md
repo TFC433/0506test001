@@ -211,6 +211,44 @@ This evidence may guide future planning, but it does not authorize source change
 
 Future Weekend Forensics-derived planning must consult `docs/forensics/wknd/results/17-weekend-planning-baseline.md`.
 
+## 8.5 RAW Contact SQL Authority Closure Archive (2026-07-15)
+
+This is a governance archive, not a new runtime patch.
+
+Closed CRM-side workstream:
+
+```text
+RAW Contact SQL Authority Cutover
+UI / Product PASS
+```
+
+Patch-series closure:
+
+* Phase A RAW SQL adapter and identifier resolver foundation.
+* Phase A identifier contract fix.
+* Phase B RAW SQL runtime authority cutover.
+* Frontend / LIFF / route static alignment audits.
+* Dashboard RAW stats concurrent-fetch cleanup.
+* UI/Product PASS on 2026-07-15.
+
+Final CRM-side state:
+
+* `public.raw_contact_captures` is the CRM RAW runtime authority.
+* `cardId` is canonical, with positive legacy `rowIndex` compatibility through `raw_payload.legacy_row_index`.
+* active CRM RAW list/read/edit/delete/status/workflow paths resolve through SQL.
+* numeric, UUID, and `MANUAL` `contacts.source_id` compatibility remains.
+* Dashboard RAW contact stats are SQL-backed, start concurrently with `/api/dashboard`, and remain failure-isolated from main Dashboard rendering.
+
+Scope and non-goals:
+
+* no backend runtime patch is introduced by this archive;
+* no HTML/CSS/UI redesign is claimed;
+* no API URL-shape change is claimed;
+* no direct SQL COUNT optimization is claimed for Dashboard RAW stats;
+* no bulk `contacts.source_id` migration is claimed;
+* OCR-side ingestion and cross-repository end-to-end closure remain separate pending validation unless independently evidenced;
+* the entire CRM is not declared Google-Sheet-free.
+
 ## 9. Recommended next actions ranked by safety
 
 1. Documentation review.
@@ -314,7 +352,8 @@ Explicit no-touch reminders:
 
 * Do not remove Google Sheet fallback broadly.
 * Product Cost Sheet remains active.
-* RAW contacts and LINE leads still depend on Sheet-backed RAW flow.
+* Dormant RAW Sheet reader/writer compatibility code remains protected; current CRM RAW runtime authority is SQL.
+* LINE leads route compatibility remains protected while accepted RAW mutations resolve through SQL.
 * System Config / Auth still depends on Sheet-backed system config and users.
 * Weekly Business read fallback remains protected.
 * Internal Ops remains Sheet-backed.
