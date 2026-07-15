@@ -31,6 +31,7 @@ const dashboardManager = {
     kanbanRawData: {},
     processedOpportunities: [], 
     availableYears: [], 
+    rawContactStatsRequestId: 0,
 
     /**
      * 標記儀表板資料為過期 (Stale)
@@ -75,10 +76,18 @@ const dashboardManager = {
         const dashboardApiUrl = force ? `/api/dashboard?t=${Date.now()}` : '/api/dashboard';
 
         try {
+            const mainDashboardPromise = authedFetch(dashboardApiUrl);
+            const rawContactStatsRequestId = ++this.rawContactStatsRequestId;
+            const rawContactStatsPromise = authedFetch('/api/dashboard/contacts-stats')
+                .catch(err => {
+                    if (rawContactStatsRequestId === this.rawContactStatsRequestId) {
+                        console.error('[Dashboard] 載入潛在客戶統計失敗:', err);
+                    }
+                    return null;
+                });
+
             // 1. 併發請求資料 (已移除贅餘的 interactions/all 請求)
-            const [dashboardResult] = await Promise.all([
-                authedFetch(dashboardApiUrl)
-            ]);
+            const dashboardResult = await mainDashboardPromise;
 
             if (!dashboardResult.success) throw new Error(dashboardResult.details || '獲取儀表板資料失敗');
 
@@ -122,6 +131,17 @@ const dashboardManager = {
                 this.loadSubscriptionAlerts();
             }
 
+            rawContactStatsPromise.then(res => {
+                if (rawContactStatsRequestId !== this.rawContactStatsRequestId) return;
+                if (res && res.success && res.data) {
+                    const elCount = document.getElementById('contacts-count');
+                    if (elCount) elCount.textContent = res.data.total;
+                    if (window.DashboardWidgets && typeof window.DashboardWidgets._updateTrend === 'function') {
+                        window.DashboardWidgets._updateTrend('contacts-trend', res.data.month);
+                    }
+                }
+            });
+
             // B. 週間業務 (Weekly)
             if (window.DashboardWeekly) {
                 DashboardWeekly.render(data.weeklyBusiness || [], data.thisWeekInfo);
@@ -149,17 +169,6 @@ const dashboardManager = {
             if (window.CRM_APP && window.CRM_APP.pageConfig && window.CRM_APP.pageConfig['dashboard']) {
                 window.CRM_APP.pageConfig['dashboard'].loaded = true;
             }
-
-            // [PHASE C-2.4] Non-blocking fetch for slow RAW contacts stats (不受範圍過濾影響)
-            authedFetch('/api/dashboard/contacts-stats').then(res => {
-                if (res.success && res.data) {
-                    const elCount = document.getElementById('contacts-count');
-                    if (elCount) elCount.textContent = res.data.total;
-                    if (window.DashboardWidgets && typeof window.DashboardWidgets._updateTrend === 'function') {
-                        window.DashboardWidgets._updateTrend('contacts-trend', res.data.month);
-                    }
-                }
-            }).catch(err => console.error('[Dashboard] 載入潛在客戶統計失敗:', err));
 
         } catch (error) {
             if (error.message !== 'Unauthorized') {
