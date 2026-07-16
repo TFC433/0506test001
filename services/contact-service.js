@@ -29,6 +29,8 @@
  * - READS: Hybrid (SQL Primary -> Sheet Fallback) maintained for backward compatibility.
  */
 
+const OpportunitySqlWriter = require('../data/opportunity-sql-writer');
+
 class ContactService {
     /**
      * @param {ContactReader} contactRawReader  - bound to IDS.RAW (Potential contacts)
@@ -42,8 +44,9 @@ class ContactService {
      * @param {SystemService} systemService         - Required DI to retrieve settings deterministically
      * @param {RawContactSqlReader} [rawContactSqlReader]
      * @param {RawContactSqlWriter} [rawContactSqlWriter]
+     * @param {OpportunitySqlWriter} [opportunitySqlWriter]
      */
-    constructor(contactRawReader, contactCoreReader, contactWriter, companyReader, config, contactSqlReader, contactSqlWriter, companySqlReader, systemService, rawContactSqlReader = null, rawContactSqlWriter = null) {
+    constructor(contactRawReader, contactCoreReader, contactWriter, companyReader, config, contactSqlReader, contactSqlWriter, companySqlReader, systemService, rawContactSqlReader = null, rawContactSqlWriter = null, opportunitySqlWriter = null) {
         this.contactRawReader = contactRawReader;
         this.contactCoreReader = contactCoreReader;
         this.contactWriter = contactWriter;
@@ -54,6 +57,7 @@ class ContactService {
         this.companySqlReader = companySqlReader;
         this.rawContactSqlReader = rawContactSqlReader;
         this.rawContactSqlWriter = rawContactSqlWriter;
+        this.opportunitySqlWriter = opportunitySqlWriter || new OpportunitySqlWriter();
         
         // Strict deterministic injection requirement
         if (!systemService) {
@@ -628,13 +632,18 @@ class ContactService {
         if (!this.contactSqlReader) {
             throw new Error('[ContactService] CRITICAL: ContactSqlReader not configured. Validation disallowed.');
         }
+        if (!this.opportunitySqlWriter) {
+            throw new Error('[ContactService] CRITICAL: OpportunitySqlWriter not configured. Relationship cleanup disallowed.');
+        }
 
-        // 1. Authoritative Validation: Check for relations
-        const hasLinks = await this.contactSqlReader.checkContactHasLinks(contactId);
-        
-        if (hasLinks) {
-            // Safe Block: Return error response payload instead of throwing a raw exception
-            return { success: false, error: '無法刪除：該聯絡人已關聯至機會案件' };
+        if (!contactId) {
+            throw new Error('[ContactService] Contact ID is required. Delete disallowed.');
+        }
+
+        // 1. Remove opportunity relationship rows before deleting the formal contact.
+        const unlinkResult = await this.opportunitySqlWriter.unlinkAllOpportunitiesForContact(contactId);
+        if (unlinkResult && unlinkResult.success === false) {
+            return unlinkResult;
         }
 
         // 2. Perform Delete

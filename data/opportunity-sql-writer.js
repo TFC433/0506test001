@@ -273,6 +273,25 @@ class OpportunitySqlWriter {
          }
          return { success: true };
     }
+
+    /**
+     * Remove every opportunity relationship for one contact.
+     * @param {string} contactId
+     */
+    async unlinkAllOpportunitiesForContact(contactId) {
+         console.log(`🔗 [OpportunitySqlWriter] Unlink all opportunities for contact: ${contactId}`);
+
+         const { error } = await supabase
+            .from('opportunity_contact_links')
+            .delete()
+            .eq('contact_id', contactId);
+
+         if (error) {
+             console.error('[OpportunitySqlWriter] Unlink All For Contact Error:', error);
+             throw new Error(`Unlink All For Contact Error: ${error.message}`);
+         }
+         return { success: true };
+    }
 }
 
 module.exports = OpportunitySqlWriter;

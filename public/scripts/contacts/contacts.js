@@ -1668,7 +1668,7 @@ async function handleSaveCoreEdit() {
 
 // --- Delete Action: CORE ---
 async function handleDeleteCoreContact(contactId, contactName) {
-    const msg = `\u60a8\u78ba\u5b9a\u8981\u6c38\u4e45\u522a\u9664\u6b63\u5f0f\u806f\u7d61\u4eba\u300c${contactName}\u300d\u55ce\uff1f\n\n\u7cfb\u7d71\u5c07\u9032\u884c\u95dc\u806f\u6aa2\u67e5\uff0c\u82e5\u8a72\u806f\u7d61\u4eba\u5df2\u7d81\u5b9a\u4efb\u4f55\u6a5f\u6703\u6848\u4ef6\uff0c\u5c07\u7121\u6cd5\u522a\u9664\u3002`;
+    const msg = `\u60a8\u78ba\u5b9a\u8981\u6c38\u4e45\u522a\u9664\u6b63\u5f0f\u806f\u7d61\u4eba\u300c${contactName}\u300d\u55ce\uff1f\n\n\u6b64\u806f\u7d61\u4eba\u76ee\u524d\u5df2\u6709\u95dc\u806f\u6a5f\u6703\u3002\u522a\u9664\u5f8c\uff0c\u7cfb\u7d71\u5c07\u4e00\u4f75\u89e3\u9664\u6b64\u806f\u7d61\u4eba\u8207\u6240\u6709\u6a5f\u6703\u6848\u4ef6\u7684\u95dc\u806f\uff0c\u4f46\u4e0d\u6703\u522a\u9664\u6a5f\u6703\u6848\u4ef6\u672c\u8eab\u3002\u6b64\u64cd\u4f5c\u7121\u6cd5\u5fa9\u539f\u3002`;
 
     const executeDelete = async () => {
         try {
@@ -1709,10 +1709,36 @@ async function handleDeleteCoreContact(contactId, contactName) {
         }
     };
 
-    if (typeof showConfirmDialog === 'function') {
-        showConfirmDialog(msg, executeDelete);
-    } else if (confirm(msg)) {
-        executeDelete();
+    const showPreflightError = () => {
+        const errorMsg = '\u522a\u9664\u524d\u7121\u6cd5\u78ba\u8a8d\u806f\u7d61\u4eba\u7684\u6a5f\u6703\u95dc\u806f\uff0c\u8acb\u7a0d\u5f8c\u518d\u8a66';
+        if (typeof showNotification === 'function') {
+            showNotification(errorMsg, 'error');
+        } else {
+            alert(errorMsg);
+        }
+    };
+
+    try {
+        const preflight = await authedFetch(`/api/contacts/${contactId}/opportunities`);
+
+        if (!preflight || preflight.success !== true || !Array.isArray(preflight.data)) {
+            showPreflightError();
+            return;
+        }
+
+        if (preflight.data.length === 0) {
+            executeDelete();
+            return;
+        }
+
+        if (typeof showConfirmDialog === 'function') {
+            showConfirmDialog(msg, executeDelete);
+        } else if (confirm(msg)) {
+            executeDelete();
+        }
+    } catch (error) {
+        console.error('Delete core contact preflight failed:', error);
+        showPreflightError();
     }
 }
 if (window.CRM_APP) {
