@@ -597,52 +597,14 @@ class OpportunityService {
 
                 return true;
             };
-            const findGlobalRawMatchForLinkedContact = (linkedContact, rawPool) => {
-                if (!linkedContact || !Array.isArray(rawPool) || rawPool.length === 0) return null;
-
-                const linkedName = normalizeText(linkedContact.name);
-                if (!linkedName) return null;
-
-                const candidates = rawPool.filter(rawContact => normalizeText(rawContact.name) === linkedName);
-                if (candidates.length === 0) return null;
-
-                const linkedEmail = normalizeText(linkedContact.email);
-                const linkedPhones = getNormalizedPhones(linkedContact);
-
-                const emailMatches = linkedEmail
-                    ? candidates.filter(rawContact => normalizeText(rawContact.email) === linkedEmail)
-                    : [];
-                if (emailMatches.length === 1) return emailMatches[0];
-
-                const phoneMatches = linkedPhones.length > 0
-                    ? candidates.filter(rawContact => {
-                        const rawPhones = getNormalizedPhones(rawContact);
-                        return rawPhones.length > 0 && rawPhones.some(phone => linkedPhones.includes(phone));
-                    })
-                    : [];
-                if (phoneMatches.length === 1) return phoneMatches[0];
-
-                const linkedHasSignals = Boolean(linkedEmail) || linkedPhones.length > 0;
-                if (!linkedHasSignals && candidates.length === 1) {
-                    const onlyCandidate = candidates[0];
-                    const candidateHasSignals = Boolean(normalizeText(onlyCandidate.email)) || getNormalizedPhones(onlyCandidate).length > 0;
-                    if (!candidateHasSignals) return onlyCandidate;
-                }
-
-                return null;
-            };
             const resolveSourceIdentifier = (sourceId) => {
                 if (sourceId === null || sourceId === undefined) return null;
 
                 const raw = String(sourceId).trim();
                 if (!raw || raw.toUpperCase() === 'MANUAL') return null;
 
-                const businessCardMatch = raw.match(/^BC-(\d+)$/i);
-                if (businessCardMatch) return businessCardMatch[1];
-
-                if (/^\d+$/.test(raw)) return raw;
-
-                return raw;
+                const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+                return uuidPattern.test(raw) ? raw : null;
             };
             const findRawBySourceId = (linkedContact, rawPool) => {
                 if (!linkedContact || !Array.isArray(rawPool) || rawPool.length === 0) return null;
@@ -651,8 +613,7 @@ class OpportunityService {
                 if (!sourceIdentifier) return null;
 
                 return rawPool.find(rawContact =>
-                    String(rawContact.cardId || '') === String(sourceIdentifier) ||
-                    String(rawContact.rowIndex || '') === String(sourceIdentifier)
+                    String(rawContact.cardId || '') === String(sourceIdentifier)
                 ) || null;
             };
 
@@ -705,8 +666,7 @@ class OpportunityService {
                 const rawPotentialContacts = rawSameCompanyContacts;
 
                 linkedContacts.forEach(linkedContact => {
-                    const matchedRaw = findRawBySourceId(linkedContact, mappedRawContacts)
-                        || findGlobalRawMatchForLinkedContact(linkedContact, mappedRawContacts);
+                    const matchedRaw = findRawBySourceId(linkedContact, mappedRawContacts);
                     if (matchedRaw) {
                         if (!linkedContact.driveLink && matchedRaw.driveLink) linkedContact.driveLink = matchedRaw.driveLink;
                         if (!linkedContact.cardId && matchedRaw.cardId) linkedContact.cardId = matchedRaw.cardId;

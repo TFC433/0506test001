@@ -280,6 +280,36 @@ class ContactController {
     };
 
     /**
+     * [ZONE: CORE / SOURCE-ONLY REBIND]
+     * POST /api/contacts/:contactId/rebind-card-source
+     */
+    rebindCardSource = async (req, res) => {
+        try {
+            const { contactId } = req.params;
+            const { cardId, expectedSourceId } = req.body || {};
+            const user = this._getAuditUser(req);
+
+            const result = await this.workflowService.rebindContactCardSource(
+                contactId,
+                cardId,
+                expectedSourceId,
+                user
+            );
+            res.json(result);
+        } catch (error) {
+            const statusCode = error.statusCode || 500;
+            if (statusCode >= 400 && statusCode < 500) {
+                return res.status(statusCode).json({
+                    success: false,
+                    error: error.message,
+                    code: error.code || 'REBIND_CARD_SOURCE_FAILED'
+                });
+            }
+            handleApiError(res, error, 'Rebind Card Source');
+        }
+    };
+
+    /**
      * [ZONE: RAW / POTENTIAL]
      * POST /api/contacts/:rowIndex/file
      */

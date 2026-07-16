@@ -56,6 +56,22 @@ class WorkflowService {
             .trim();
     }
 
+    _isUuid(value) {
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim());
+    }
+
+    _isLegacyBusinessCardSource(value) {
+        const source = String(value || '').trim();
+        return /^(?:BC-\d+|\d+)$/i.test(source);
+    }
+
+    _workflowError(message, statusCode = 400, code = 'WORKFLOW_VALIDATION_ERROR') {
+        const error = new Error(message);
+        error.statusCode = statusCode;
+        error.code = code;
+        return error;
+    }
+
     async _updateRawStatus(identifier, status) {
         const writer = this.contactService && this.contactService.rawContactSqlWriter;
         if (!writer) throw new Error('[WorkflowService] rawContactSqlWriter not configured');
@@ -82,6 +98,40 @@ class WorkflowService {
         if (error) {
             throw new Error(`[WorkflowService] Update Contact Source Error: ${error.message}`);
         }
+    }
+
+    async _updateContactSourceIdGuarded(contactId, sourceId, expectedSourceId, user) {
+        const modifier = this._resolveModifier(user);
+        const now = new Date().toISOString();
+        const { error, count } = await supabase
+            .from('contacts')
+            .update({
+                source_id: String(sourceId),
+                updated_by: modifier,
+                updated_time: now
+            }, { count: 'exact' })
+            .eq('contact_id', contactId)
+            .eq('source_id', expectedSourceId);
+
+        if (error) {
+            throw new Error(`[WorkflowService] Guarded Contact Source Update Error: ${error.message}`);
+        }
+
+        return count || 0;
+    }
+
+    async _findContactBySourceId(sourceId) {
+        const { data, error } = await supabase
+            .from('contacts')
+            .select('contact_id, source_id, name')
+            .eq('source_id', sourceId)
+            .limit(2);
+
+        if (error) {
+            throw new Error(`[WorkflowService] Contact Source Collision Check Error: ${error.message}`);
+        }
+
+        return data || [];
     }
 
     async _findExistingOfficialContact(rawContactData) {
@@ -185,6 +235,73 @@ class WorkflowService {
             contactId,
             contactName: contact.name,
             data: { contactId }
+        };
+    }
+
+    async rebindContactCardSource(contactId, cardId, expectedSourceId, user) {
+        if (!contactId) {
+            throw this._workflowError('Missing contactId.', 400, 'CONTACT_ID_REQUIRED');
+        }
+
+        const selectedCardId = String(cardId || '').trim();
+        if (!selectedCardId || !this._isUuid(selectedCardId)) {
+            throw this._workflowError('Selected cardId must be a valid RAW UUID.', 400, 'INVALID_CARD_ID');
+        }
+
+        const expectedSource = String(expectedSourceId || '').trim();
+        if (!expectedSource || !this._isLegacyBusinessCardSource(expectedSource)) {
+            throw this._workflowError('Expected sourceId must be a Legacy business-card source.', 400, 'INVALID_EXPECTED_SOURCE');
+        }
+
+        const contact = await this.contactService.getContactById(contactId);
+        if (!contact) {
+            throw this._workflowError(`Contact not found: ${contactId}`, 404, 'CONTACT_NOT_FOUND');
+        }
+
+        const currentSource = String(contact.sourceId || '').trim();
+        if (currentSource !== expectedSource) {
+            throw this._workflowError('Contact source changed. Refresh and retry.', 409, 'SOURCE_STALE');
+        }
+        if (!this._isLegacyBusinessCardSource(currentSource)) {
+            throw this._workflowError('Contact is not in a Legacy source state.', 409, 'SOURCE_NOT_LEGACY');
+        }
+
+        let rawResult = null;
+        try {
+            rawResult = await this.contactService.resolveRawSqlIdentifier(selectedCardId);
+        } catch (error) {
+            if (error.code === 'RAW_CONTACT_NOT_FOUND') {
+                throw this._workflowError('Selected RAW business card was not found.', 404, 'RAW_CARD_NOT_FOUND');
+            }
+            throw error;
+        }
+        const rawContact = rawResult && rawResult.rawContact;
+        if (!rawContact || rawResult.cardId !== selectedCardId) {
+            throw this._workflowError('Selected RAW business card was not found.', 404, 'RAW_CARD_NOT_FOUND');
+        }
+
+        const driveLink = String(rawContact.driveLink || '').trim();
+        if (!driveLink) {
+            throw this._workflowError('Selected RAW business card has no Drive link.', 400, 'RAW_CARD_MISSING_DRIVE_LINK');
+        }
+
+        const collisions = await this._findContactBySourceId(selectedCardId);
+        const otherCollision = collisions.find(row => String(row.contact_id) !== String(contactId));
+        if (otherCollision) {
+            throw this._workflowError('Selected RAW business card is already linked to another contact.', 409, 'RAW_CARD_ALREADY_LINKED');
+        }
+
+        const updatedCount = await this._updateContactSourceIdGuarded(contactId, selectedCardId, expectedSource, user);
+        if (updatedCount !== 1) {
+            throw this._workflowError('Contact source changed before the update completed. Refresh and retry.', 409, 'SOURCE_STALE');
+        }
+
+        return {
+            success: true,
+            contactId,
+            sourceId: selectedCardId,
+            cardId: selectedCardId,
+            driveLink
         };
     }
 

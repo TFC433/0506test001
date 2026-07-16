@@ -79,6 +79,14 @@ const OpportunityContacts = (() => {
         return id === undefined || id === null || String(id).trim() === '' ? null : id;
     }
 
+    function isLegacyBusinessCardSource(sourceId) {
+        return /^(?:BC-\d+|\d+)$/i.test(String(sourceId || '').trim());
+    }
+
+    function isUuid(value) {
+        return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || '').trim());
+    }
+
     function getContactRoleText(contact) {
         const department = String(contact?.department || '').trim();
         const title = String(contact?.jobTitle || contact?.position || '').trim();
@@ -317,18 +325,35 @@ const OpportunityContacts = (() => {
     }
 
     // 【新增】處理最終的名片連結 API 呼叫
-    async function _handleLinkBusinessCard(contactId, businessCard) {
+    async function _handleLinkBusinessCard(contactId, businessCard, options = {}) {
         if (businessCard && businessCard.__confirmed) {
-            showLoading('甇?甇豢??????...');
+            showLoading('正在處理名片連結...');
             try {
-                const result = await authedFetch(`/api/contacts/${contactId}/link-card`, {
-                    method: 'POST',
-                    body: JSON.stringify({ businessCardRowIndex: getRawContactIdentifier(businessCard) })
-                });
+                const isRebindMode = options.mode === 'rebind';
+                const cardId = String(businessCard.cardId || '').trim();
+                if (isRebindMode && !isUuid(cardId)) {
+                    throw new Error('Selected business card is missing a canonical UUID.');
+                }
+
+                const result = isRebindMode
+                    ? await authedFetch(`/api/contacts/${contactId}/rebind-card-source`, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            cardId,
+                            expectedSourceId: options.expectedSourceId || ''
+                        })
+                    })
+                    : await authedFetch(`/api/contacts/${contactId}/link-card`, {
+                        method: 'POST',
+                        body: JSON.stringify({ businessCardRowIndex: getRawContactIdentifier(businessCard) })
+                    });
 
                 if (result.success) {
                     closeModal('link-business-card-modal');
                     _isManageMode = false;
+                    if (result.warning && typeof showNotification === 'function') {
+                        showNotification(result.warning, 'warning');
+                    }
                     if (typeof window.loadOpportunityDetailPage === 'function') {
                         await window.loadOpportunityDetailPage(_opportunityInfo.opportunityId);
                     }
@@ -448,17 +473,22 @@ const OpportunityContacts = (() => {
         let railHTML = `<div class="opp-rail-contact-list${_isManageMode ? ' is-managing' : ''}">`;
         sortedContacts.forEach(contact => {
             const isMainContact = (contact.name === _opportunityInfo.mainContact);
-            const isManual = !contact.sourceId || contact.sourceId === 'MANUAL';
+            const sourceId = String(contact.sourceId || '').trim();
+            const isManual = !sourceId || sourceId === 'MANUAL';
+            const isLegacySource = isLegacyBusinessCardSource(sourceId);
             const roleText = getContactRoleText(contact);
             const safeContactId = String(contact.contactId || '').replace(/'/g, "\\'");
             const safeContactName = String(contact.name || '').replace(/'/g, "\\'");
             const safeOpportunityId = String(_opportunityInfo.opportunityId || '').replace(/'/g, "\\'");
             const safeDriveLink = contact.driveLink ? contact.driveLink.replace(/'/g, "\\'") : '';
+            const safeSourceId = sourceId.replace(/'/g, "\\'");
             
             // [Phase B] Determine external company tag condition
             const contactCompanyNorm = _normalize(contact.companyName);
             const isExternal = contact.companyName && contactCompanyNorm && (contactCompanyNorm !== oppCompanyNorm);
-            const contactNameHTML = contact.driveLink
+            const contactNameHTML = isLegacySource
+                ? `<a href="#" class="opp-rail-contact-name-link" onclick="event.preventDefault(); OpportunityContacts.showLinkBusinessCardModal('${safeContactId}', { mode: 'rebind', expectedSourceId: '${safeSourceId}' })">${contact.name || '-'}</a>`
+                : contact.driveLink
                 ? `<a href="#" class="opp-rail-contact-name-link" onclick="event.preventDefault(); showBusinessCardPreview('${safeDriveLink}')">${contact.name || '-'}</a>`
                 : (contact.name || '-');
 
@@ -565,7 +595,7 @@ const OpportunityContacts = (() => {
     }
 
     // 【新增】顯示連結名片的 Modal
-    function showLinkBusinessCardModal(contactId) {
+    function showLinkBusinessCardModal(contactId, options = {}) {
         const existingModal = document.getElementById('link-business-card-modal');
         if (existingModal) existingModal.remove();
 
@@ -597,7 +627,9 @@ const OpportunityContacts = (() => {
         const previewStep = document.getElementById('archive-step-preview');
         const resultsContainer = document.getElementById('archive-candidate-list');
         const currentContact = (_linkedContacts || []).find(contact => String(contact.contactId) === String(contactId)) || {};
-        const displayValue = (value) => String(value || '').trim() || '—';
+        const isRebindMode = options.mode === 'rebind';
+        const expectedSourceId = String(options.expectedSourceId || currentContact.sourceId || '').trim();
+        const displayValue = (value) => String(value || '').trim() || '-';
         const renderFieldRow = (label, value) => `
             <div class="archive-preview-row">
                 <span class="archive-preview-label">${label}</span>
@@ -617,6 +649,15 @@ const OpportunityContacts = (() => {
         const showArchivePreview = (card) => {
             searchStep.style.display = 'none';
             previewStep.style.display = 'flex';
+            const selectedCardId = String(card.cardId || '').trim();
+            const canConfirmRebind = !isRebindMode || isUuid(selectedCardId);
+            const confirmDisabledAttr = canConfirmRebind ? '' : ' disabled';
+            const rebindUuidWarning = isRebindMode && !canConfirmRebind
+                ? '<div class="alert alert-error">Selected business card is missing a canonical UUID.</div>'
+                : '';
+            const previewNote = isRebindMode
+                ? '確認後會將選定名片連結至此正式聯絡人，正式聯絡人既有資料會保留，未來預覽會使用此名片。'
+                : '確認後會更新正式聯絡人資料，並將此名片標記為已歸檔。';
             previewStep.innerHTML = `
                 <div class="archive-preview-panel">
                     <div>
@@ -627,10 +668,11 @@ const OpportunityContacts = (() => {
                         ${renderArchivePreviewCard('目前正式聯絡人', currentContact)}
                         ${renderArchivePreviewCard('選取的名片資料', card)}
                     </div>
-                    <div class="archive-preview-note">確認後會更新正式聯絡人資料，並將此名片標記為已歸檔。</div>
+                    ${rebindUuidWarning}
+                    <div class="archive-preview-note">${previewNote}</div>
                     <div class="archive-preview-actions">
                         <button type="button" class="action-btn secondary" id="archive-preview-cancel-btn">取消</button>
-                        <button type="button" class="action-btn primary" id="archive-preview-confirm-btn">確認歸檔</button>
+                        <button type="button" class="action-btn primary" id="archive-preview-confirm-btn"${confirmDisabledAttr}>確認歸檔</button>
                     </div>
                 </div>
             `;
@@ -638,7 +680,16 @@ const OpportunityContacts = (() => {
                 previewStep.style.display = 'none';
                 searchStep.style.display = 'flex';
             };
-            document.getElementById('archive-preview-confirm-btn').onclick = () => _handleLinkBusinessCard(contactId, { ...card, __confirmed: true });
+            document.getElementById('archive-preview-confirm-btn').onclick = () => {
+                if (!canConfirmRebind) {
+                    if (typeof showNotification === 'function') showNotification('Selected business card is missing a canonical UUID.', 'error');
+                    return;
+                }
+                _handleLinkBusinessCard(contactId, { ...card, __confirmed: true }, {
+                    mode: isRebindMode ? 'rebind' : 'archive',
+                    expectedSourceId
+                });
+            };
         };
         
         const performSearch = async (query) => {
@@ -656,20 +707,26 @@ const OpportunityContacts = (() => {
                 const rawCards = Array.isArray(rawCardsSource) ? rawCardsSource : [];
                 const pendingCards = rawCards.filter(c => {
                     const status = String(c.status || c.statusText || '').trim();
-                    return getRawContactIdentifier(c) && !['已升級', '已歸檔', 'Dropped', '已作廢'].includes(status);
+                    const invalidStatuses = isRebindMode
+                        ? ['Dropped', '已作廢']
+                        : ['已升級', '已歸檔', 'Dropped', '已作廢'];
+                    const hasIdentifier = isRebindMode ? Boolean(c.cardId) : Boolean(getRawContactIdentifier(c));
+                    return hasIdentifier && !invalidStatuses.includes(status);
                 });
 
                 if (pendingCards.length > 0) {
                     resultsContainer.innerHTML = pendingCards.map(card => {
                         const cardJson = JSON.stringify(card).replace(/'/g, "&apos;");
                         const roleText = getContactRoleText(card);
+                        const statusText = String(card.status || card.statusText || '').trim();
+                        const statusHtml = statusText ? `<span class="archive-candidate-status">${statusText}</span>` : '';
                         return `
                             <div class="archive-candidate-row" onclick='OpportunityContacts.showArchivePreview(${cardJson})'>
                                 <div class="archive-candidate-main">
                                     <span class="archive-candidate-name">${card.name || '-'}</span>
                                     <span class="archive-candidate-position">${roleText}</span>
                                 </div>
-                                <div class="archive-candidate-company">${card.company || '公司未知'}</div>
+                                <div class="archive-candidate-company">${card.company || '公司未知'} ${statusHtml}</div>
                             </div>`;
                     }).join('');
                 } else {

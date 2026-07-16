@@ -102,6 +102,12 @@ router.delete('/:rowIndex/raw', async (req, res, next) => {
 });
 
 // POST /api/contacts/:contactId/link-card (連結名片)
+router.post('/:contactId/rebind-card-source', async (req, res, next) => {
+    try {
+        await getController(req).rebindCardSource(req, res);
+    } catch (e) { next(e); }
+});
+
 router.post('/:contactId/link-card', async (req, res, next) => {
     try {
         await getController(req).linkCardToContact(req, res);
