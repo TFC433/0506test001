@@ -327,9 +327,10 @@ const OpportunityContacts = (() => {
     // 【新增】處理最終的名片連結 API 呼叫
     async function _handleLinkBusinessCard(contactId, businessCard, options = {}) {
         if (businessCard && businessCard.__confirmed) {
+            const isRebindMode = options.mode === 'rebind';
+            const failureMessage = isRebindMode ? '重新連結失敗' : '歸檔失敗';
             showLoading('正在處理名片連結...');
             try {
-                const isRebindMode = options.mode === 'rebind';
                 const cardId = String(businessCard.cardId || '').trim();
                 if (isRebindMode && !isUuid(cardId)) {
                     throw new Error('Selected business card is missing a canonical UUID.');
@@ -358,10 +359,10 @@ const OpportunityContacts = (() => {
                         await window.loadOpportunityDetailPage(_opportunityInfo.opportunityId);
                     }
                 } else {
-                    throw new Error(result.error || '甇豢?憭望?');
+                    throw new Error(result.error || failureMessage);
                 }
             } catch (error) {
-                if (error.message !== 'Unauthorized') showNotification(`甇豢?憭望?: ${error.message}`, 'error');
+                if (error.message !== 'Unauthorized') showNotification(`${failureMessage}: ${error.message}`, 'error');
             } finally {
                 hideLoading();
             }
@@ -599,11 +600,13 @@ const OpportunityContacts = (() => {
         const existingModal = document.getElementById('link-business-card-modal');
         if (existingModal) existingModal.remove();
 
+        const isRebindMode = options.mode === 'rebind';
+        const modalTitle = isRebindMode ? '🔗 重新連結名片來源' : '🔗 連結名片歸檔';
         const modalHTML = `
             <div id="link-business-card-modal" class="modal" style="display: block;">
                 <div class="modal-content" style="max-width: 700px;">
                     <div class="modal-header">
-                        <h2 class="modal-title">🔗 連結名片歸檔</h2>
+                        <h2 class="modal-title">${modalTitle}</h2>
                         <button class="close-btn" onclick="closeModal('link-business-card-modal')">&times;</button>
                     </div>
                     <div id="archive-step-search" class="archive-step-search">
@@ -627,7 +630,6 @@ const OpportunityContacts = (() => {
         const previewStep = document.getElementById('archive-step-preview');
         const resultsContainer = document.getElementById('archive-candidate-list');
         const currentContact = (_linkedContacts || []).find(contact => String(contact.contactId) === String(contactId)) || {};
-        const isRebindMode = options.mode === 'rebind';
         const expectedSourceId = String(options.expectedSourceId || currentContact.sourceId || '').trim();
         const displayValue = (value) => String(value || '').trim() || '-';
         const renderFieldRow = (label, value) => `
@@ -658,11 +660,16 @@ const OpportunityContacts = (() => {
             const previewNote = isRebindMode
                 ? '確認後會將選定名片連結至此正式聯絡人，正式聯絡人既有資料會保留，未來預覽會使用此名片。'
                 : '確認後會更新正式聯絡人資料，並將此名片標記為已歸檔。';
+            const previewTitle = isRebindMode ? '確認重新連結名片' : '確認名片歸檔';
+            const previewHelper = isRebindMode
+                ? '將選取的名片設為此正式聯絡人的預覽來源，不會變更聯絡人既有資料。'
+                : '將選取的名片資料補充或覆蓋至目前正式聯絡人。';
+            const confirmButtonText = isRebindMode ? '確認重新連結' : '確認歸檔';
             previewStep.innerHTML = `
                 <div class="archive-preview-panel">
                     <div>
-                        <div class="archive-preview-title">確認名片歸檔</div>
-                        <div class="archive-preview-helper">將選取的名片資料補充或覆蓋至目前正式聯絡人。</div>
+                        <div class="archive-preview-title">${previewTitle}</div>
+                        <div class="archive-preview-helper">${previewHelper}</div>
                     </div>
                     <div class="archive-preview-grid">
                         ${renderArchivePreviewCard('目前正式聯絡人', currentContact)}
@@ -672,7 +679,7 @@ const OpportunityContacts = (() => {
                     <div class="archive-preview-note">${previewNote}</div>
                     <div class="archive-preview-actions">
                         <button type="button" class="action-btn secondary" id="archive-preview-cancel-btn">取消</button>
-                        <button type="button" class="action-btn primary" id="archive-preview-confirm-btn"${confirmDisabledAttr}>確認歸檔</button>
+                        <button type="button" class="action-btn primary" id="archive-preview-confirm-btn"${confirmDisabledAttr}>${confirmButtonText}</button>
                     </div>
                 </div>
             `;
