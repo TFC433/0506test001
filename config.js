@@ -301,6 +301,20 @@ module.exports = {
     },
 
     // 認證相關設定
+    LINE_LEAD: {
+        SESSION_SECRET: process.env.LINE_LEAD_SESSION_SECRET,
+        COOKIE_NAME: 'tfc_line_lead_session',
+        DEFAULT_SESSION_DAYS: 30,
+        MIN_SESSION_DAYS: 1,
+        MAX_SESSION_DAYS: 90,
+        ISSUER: 'tfc-crm',
+        AUDIENCE: 'line-lead-view',
+        SCOPE: 'line_lead_view',
+        WHITELIST_CONFIG_CATEGORY: 'LINE白名單',
+        SESSION_CONFIG_CATEGORY: 'LINE登入設定',
+        SESSION_DAYS_CONFIG_VALUE: 'line_lead_session_days'
+    },
+
     AUTH: {
         JWT_SECRET: process.env.JWT_SECRET,
         JWT_EXPIRES_IN: '8h'

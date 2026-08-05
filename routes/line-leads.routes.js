@@ -11,6 +11,12 @@
 const express = require('express');
 const router = express.Router();
 const LineLeadsController = require('../controllers/line-leads.controller');
+const {
+    getLineLeadSession,
+    createLineLeadSession,
+    deleteLineLeadSession,
+    requireLineLeadSession
+} = require('../middleware/line-lead-session.middleware');
 
 // 依賴注入：從 app 中獲取 services
 const getController = (req) => {
@@ -26,13 +32,22 @@ const getController = (req) => {
     return new LineLeadsController(contactService, authService, systemService);
 };
 
+// GET /api/line/session - validate existing Line Lead View JWT cookie
+router.get('/session', getLineLeadSession);
+
+// POST /api/line/session - exchange verified LIFF ID token for first-party session
+router.post('/session', createLineLeadSession);
+
+// DELETE /api/line/session - clear first-party session cookie
+router.delete('/session', deleteLineLeadSession);
+
 // GET /api/line/leads - 取得所有名片資料
-router.get('/leads', (req, res) => getController(req).getAllLeads(req, res));
+router.get('/leads', requireLineLeadSession, (req, res) => getController(req).getAllLeads(req, res));
 
 // PUT /api/line/leads/:rowIndex - 更新特定名片狀態/資料
-router.put('/leads/:rowIndex', (req, res) => getController(req).updateLead(req, res));
+router.put('/leads/:rowIndex', requireLineLeadSession, (req, res) => getController(req).updateLead(req, res));
 
 // DELETE /api/line/leads/:rowIndex - 刪除特定名片 (物理刪除)
-router.delete('/leads/:rowIndex', (req, res) => getController(req).deleteLead(req, res));
+router.delete('/leads/:rowIndex', requireLineLeadSession, (req, res) => getController(req).deleteLead(req, res));
 
 module.exports = router;

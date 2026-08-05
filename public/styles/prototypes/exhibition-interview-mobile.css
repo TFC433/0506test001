@@ -1,0 +1,600 @@
+/* ============================================================================
+ * Exhibition Interview Mobile Prototype Stylesheet
+ * File: public/styles/prototypes/exhibition-interview-mobile.css
+ * System: Refined Internal CRM Form UI Framework
+ * ============================================================================ */
+
+:root {
+  --page-bg: #f5f6fa;
+  --surface: #ffffff;
+  --surface-muted: #f8f9fb;
+  --surface-control: #fcfcfd;
+  --surface-control-hover: #f6f7fb;
+  --text-primary: #1f2933;
+  --text-secondary: #667085;
+  --text-muted: #8a94a6;
+  --border: #e2e6ee;
+  --border-strong: #d5dae5;
+  --border-focus: #5563d6;
+  --accent: #5563d6;
+  --accent-hover: #4855c2;
+  --accent-soft: #eef0ff;
+  --danger: #c83f49;
+
+  --radius-card: 14px;
+  --radius-control: 9px;
+  --radius-button: 10px;
+
+  --shadow-card: 0 1px 2px rgba(31, 42, 68, 0.035), 0 8px 22px rgba(31, 42, 68, 0.035);
+  --shadow-floating: 0 -8px 24px rgba(31, 42, 68, 0.08);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--page-bg);
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Page Outer Layout & Centered Column */
+.page-wrapper {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 20px 0 118px;
+}
+
+@media (min-width: 768px) {
+  .page-wrapper {
+    padding-top: 40px;
+    padding-bottom: 128px;
+  }
+}
+
+.form-column {
+  width: 100%;
+  max-width: 680px;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (max-width: 374px) {
+  .form-column {
+    padding: 0 14px;
+  }
+}
+
+/* Header Card Framework */
+.header-card {
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--accent);
+  padding: 18px 18px 16px;
+  box-shadow: var(--shadow-card);
+}
+
+@media (min-width: 768px) {
+  .header-card {
+    padding: 22px 24px 20px;
+  }
+}
+
+.header-tag {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 0;
+  margin-bottom: 5px;
+}
+
+.header-title {
+  font-size: 22px;
+  font-weight: 650;
+  color: var(--text-primary);
+  letter-spacing: 0;
+  line-height: 1.32;
+  margin-bottom: 8px;
+}
+
+@media (min-width: 768px) {
+  .header-title {
+    font-size: 25px;
+  }
+}
+
+.header-subtitle {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  line-height: 1.45;
+}
+
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+
+.meta-info-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.status-badge {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 9px;
+  border-radius: 9999px;
+  line-height: 1.1;
+}
+
+.status-badge.draft {
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.status-badge.completed {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(85, 99, 214, 0.16);
+}
+
+/* Question Card Framework */
+.question-card {
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border);
+  padding: 17px 18px;
+  box-shadow: var(--shadow-card);
+}
+
+@media (min-width: 768px) {
+  .question-card {
+    padding: 20px 22px;
+  }
+}
+
+.grouped-identity-card {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.question-title {
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0;
+  line-height: 1.52;
+  margin-bottom: 12px;
+  overflow-wrap: anywhere;
+}
+
+.question-card .question-title:last-child {
+  margin-bottom: 0;
+}
+
+/* Form Controls (Inputs, Selects, Textareas) */
+.form-field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--border);
+}
+
+.form-field-group:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.input-control,
+.select-control,
+.textarea-control {
+  width: 100%;
+  background: var(--surface-control);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 11px 12px;
+  font-size: 16px; /* 16px minimum on mobile prevents browser auto-zoom */
+  color: var(--text-primary);
+  font-family: inherit;
+  outline: none;
+  line-height: 1.35;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  min-height: 46px;
+}
+
+.input-control:hover,
+.select-control:hover,
+.textarea-control:hover,
+.other-input-field:hover {
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+
+.input-control:focus,
+.select-control:focus,
+.textarea-control:focus {
+  background: var(--surface);
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(85, 99, 214, 0.12);
+}
+
+.input-control::placeholder,
+.textarea-control::placeholder {
+  color: #9aa3b2;
+}
+
+.select-control {
+  min-height: 46px;
+  cursor: pointer;
+
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  padding-right: 42px;
+}
+
+.textarea-control {
+  min-height: 124px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+/* Checkbox and Radio Options Layout */
+.options-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.option-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  min-height: 44px;
+  padding: 8px 9px;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  user-select: none;
+  font-size: 16px;
+  color: var(--text-primary);
+  font-weight: 400;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+
+.option-row:hover,
+.option-row:active {
+  background-color: var(--surface-control-hover);
+}
+
+.option-row:has(input:checked) {
+  background-color: var(--accent-soft);
+}
+
+.option-row input[type="checkbox"],
+.option-row input[type="radio"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.option-row span {
+  line-height: 1.48;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.other-option-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 10px;
+  min-height: 44px;
+  padding: 8px 9px;
+  border-radius: var(--radius-control);
+  transition: background-color 0.12s ease;
+}
+
+.other-option-row:hover,
+.other-option-row:focus-within {
+  background-color: var(--surface-control-hover);
+}
+
+.other-option-row:has(input[type="checkbox"]:checked) {
+  background-color: var(--accent-soft);
+}
+
+.other-option-label {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 11px;
+  min-height: 30px;
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text-primary);
+  cursor: pointer;
+  flex-shrink: 0;
+  line-height: 1.48;
+}
+
+.other-option-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.other-input-field {
+  flex: 1;
+  min-width: min(100%, 220px);
+  min-height: 46px;
+  background: var(--surface-control);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 9px 12px;
+  font-size: 16px;
+  color: var(--text-primary);
+  outline: none;
+  font-family: inherit;
+  line-height: 1.35;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.other-input-field:focus {
+  background: var(--surface);
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(85, 99, 214, 0.12);
+}
+
+@media (max-width: 430px) {
+  .other-input-field {
+    flex-basis: calc(100% - 29px);
+    margin-left: 29px;
+  }
+}
+
+/* Sticky Bottom Action Framework */
+.sticky-actions-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border-top: 1px solid var(--border);
+  box-shadow: var(--shadow-floating);
+  padding: 12px 16px max(16px, env(safe-area-inset-bottom)) 16px;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+}
+
+.actions-inner {
+  width: 100%;
+  max-width: 680px;
+  display: flex;
+  gap: 12px;
+}
+
+.btn-action {
+  flex: 1;
+  min-height: 48px;
+  border-radius: var(--radius-button);
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-family: inherit;
+  user-select: none;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.08s ease;
+  border: none;
+}
+
+.btn-action:active {
+  transform: scale(0.98);
+}
+
+.btn-draft {
+  background: var(--surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.btn-draft:hover {
+  background: var(--surface-muted);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.btn-complete {
+  background: var(--accent);
+  color: #ffffff;
+  border: 1px solid var(--accent);
+}
+
+.btn-complete:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+/* Compact Toast Feedback */
+.toast-container {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 200;
+  width: 90%;
+  max-width: 440px;
+  pointer-events: none;
+}
+
+.toast {
+  background: var(--text-primary);
+  color: #ffffff;
+  padding: 12px 18px;
+  border-radius: var(--radius-button);
+  font-size: 14px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  box-shadow: 0 10px 26px rgba(31, 42, 68, 0.18);
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast.warning {
+  background: #3f3444;
+  color: #ffffff;
+}
+
+/* Quiet Completion Sheet Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.32);
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.modal-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.modal-sheet {
+  background: var(--surface);
+  border-top-left-radius: var(--radius-card);
+  border-top-right-radius: var(--radius-card);
+  padding: 24px 20px max(24px, env(safe-area-inset-bottom)) 20px;
+  width: 100%;
+  max-width: 680px;
+  border: 1px solid var(--border);
+  border-bottom: 0;
+  box-shadow: 0 -14px 34px rgba(31, 42, 68, 0.12);
+  transform: translateY(100%);
+  transition: transform 0.25s ease;
+}
+
+.modal-overlay.active .modal-sheet {
+  transform: translateY(0);
+}
+
+.sheet-header {
+  text-align: center;
+  margin-bottom: 22px;
+}
+
+.sheet-title {
+  font-size: 19px;
+  font-weight: 650;
+  color: var(--text-primary);
+  line-height: 1.35;
+  margin-bottom: 6px;
+}
+
+.sheet-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.sheet-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.btn-sheet {
+  width: 100%;
+  min-height: 48px;
+  border-radius: var(--radius-button);
+  font-size: 16px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.btn-sheet-primary {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.btn-sheet-primary:hover {
+  background: var(--accent-hover);
+}
+
+.btn-sheet-secondary {
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.btn-sheet-secondary:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+@media (min-width: 768px) {
+  .modal-overlay {
+    align-items: center;
+    padding: 24px;
+  }
+
+  .modal-sheet {
+    border-radius: var(--radius-card);
+    border-bottom: 1px solid var(--border);
+    max-width: 420px;
+    padding: 26px 24px 24px;
+  }
+}

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>2026 TMTS台中展情報（TFC內部使用）</title>
+  
+  <!-- Refined UI Framework Stylesheet -->
+  <link rel="stylesheet" href="../styles/prototypes/exhibition-interview-mobile.css">
+</head>
+<body>
+
+  <div class="page-wrapper">
+    <div class="form-column">
+      
+      <!-- Refined Header Card -->
+      <header class="header-card">
+        <div class="header-tag">TFC 內部使用</div>
+        <h1 class="header-title">2026 TMTS台中展情報（TFC內部使用）</h1>
+        <p class="header-subtitle">*為必填項目 / 單人可填寫多份，不限單份</p>
+        <div class="meta-row">
+          <div class="meta-info-group">
+            <span>紀錄人：張小明 (業務專員)</span>
+            <span id="header-timestamp">2026/08/19 10:30</span>
+          </div>
+          <span id="status-badge" class="status-badge draft">草稿</span>
+        </div>
+      </header>
+
+      <!-- Main Form Questions -->
+      <main id="questions-form" style="display: flex; flex-direction: column; gap: 16px;">
+
+        <!-- 1. 來訪客戶類別 -->
+        <section class="question-card">
+          <h2 class="question-title">來訪客戶類別（可複選）</h2>
+          <div class="options-group">
+            <label class="option-row"><input type="checkbox" name="cat" value="代理商"> <span>代理商</span></label>
+            <label class="option-row"><input type="checkbox" name="cat" value="SI / SIer"> <span>SI / SIer</span></label>
+            <label class="option-row"><input type="checkbox" name="cat" value="終端用戶"> <span>終端用戶</span></label>
+            <label class="option-row"><input type="checkbox" name="cat" value="人氣/好奇"> <span>人氣/好奇</span></label>
+            <label class="option-row"><input type="checkbox" name="cat" value="競爭對手/同業/學校"> <span>競爭對手/同業/學校</span></label>
+            <label class="option-row"><input type="checkbox" name="cat" value="學習/學生"> <span>學習/學生</span></label>
+            <label class="option-row"><input type="checkbox" name="cat" value="新創/創投"> <span>新創/創投</span></label>
+            <label class="option-row"><input type="checkbox" name="cat" value="媒體/協會/政府機構"> <span>媒體/協會/政府機構</span></label>
+            <label class="option-row"><input type="checkbox" name="cat" value="中華民國國籍學校"> <span>中華民國國籍學校</span></label>
+            <div class="other-option-row">
+              <label class="other-option-label"><input type="checkbox" name="cat" value="其他" id="cat_other_check"> <span>其他：</span></label>
+              <input type="text" id="cat_other" class="other-input-field" placeholder="">
+            </div>
+          </div>
+        </section>
+
+        <!-- Grouped Customer Identity Section (Questions 2, 3, 4) -->
+        <section class="question-card grouped-identity-card">
+          <!-- 2. 客戶公司名稱 -->
+          <div class="form-field-group">
+            <h2 class="question-title" style="margin-bottom: 0;">客戶公司名稱</h2>
+            <input type="text" id="company_name" class="input-control" placeholder="您的回答" autocomplete="off">
+          </div>
+
+          <!-- 3. 主要客戶姓名 -->
+          <div class="form-field-group">
+            <h2 class="question-title" style="margin-bottom: 0;">主要客戶姓名</h2>
+            <input type="text" id="contact_name" class="input-control" placeholder="您的回答" autocomplete="off">
+          </div>
+
+          <!-- 4. 主要客戶職稱 -->
+          <div class="form-field-group">
+            <h2 class="question-title" style="margin-bottom: 0;">主要客戶職稱</h2>
+            <input type="text" id="role_title" class="input-control" placeholder="您的回答" autocomplete="off">
+          </div>
+        </section>
+
+        <!-- 5. 來訪人數 -->
+        <section class="question-card">
+          <h2 class="question-title">來訪人數（含主要受訪者）</h2>
+          <select id="visitor_count" class="select-control">
+            <option value="">選擇</option>
+            <option value="1人">1人</option>
+            <option value="2人">2人</option>
+            <option value="3-5人">3-5人</option>
+            <option value="6-10人">6-10人</option>
+            <option value="10人以上">10人以上</option>
+          </select>
+        </section>
+
+        <!-- 6. 客戶規模 -->
+        <section class="question-card">
+          <h2 class="question-title">客戶規模（觀展/包含但不限於CNC設備）</h2>
+          <select id="company_scale" class="select-control">
+            <option value="">選擇</option>
+            <option value="1-10人">1-10人</option>
+            <option value="11-50人">11-50人</option>
+            <option value="51-200人">51-200人</option>
+            <option value="201-500人">201-500人</option>
+            <option value="500人以上">500人以上</option>
+          </select>
+        </section>
+
+        <!-- 7. 客戶主要對什麼有興趣（大方向） -->
+        <section class="question-card">
+          <h2 class="question-title">客戶主要對什麼有興趣（大方向）可複選</h2>
+          <div class="options-group">
+            <label class="option-row"><input type="checkbox" name="interest" value="CNC"> <span>CNC</span></label>
+            <label class="option-row"><input type="checkbox" name="interest" value="數轉"> <span>數轉</span></label>
+            <label class="option-row"><input type="checkbox" name="interest" value="雙軸/雙主軸"> <span>雙軸/雙主軸</span></label>
+            <label class="option-row"><input type="checkbox" name="interest" value="IoT"> <span>IoT</span></label>
+            <label class="option-row"><input type="checkbox" name="interest" value="OT"> <span>OT</span></label>
+            <label class="option-row"><input type="checkbox" name="interest" value="AI"> <span>AI</span></label>
+            <label class="option-row"><input type="checkbox" name="interest" value="自動化/軟體整合"> <span>自動化/軟體整合</span></label>
+            <div class="other-option-row">
+              <label class="other-option-label"><input type="checkbox" name="interest" value="其他" id="interest_other_check"> <span>其他：</span></label>
+              <input type="text" id="interest_other" class="other-input-field" placeholder="">
+            </div>
+          </div>
+        </section>
+
+        <!-- 8. 客戶產業別－大範圍 -->
+        <section class="question-card">
+          <h2 class="question-title">客戶產業別－大範圍－限一項(或可複選)</h2>
+          <div class="options-group">
+            <label class="option-row"><input type="checkbox" name="ind_macro" value="工具機/機械設備/工具/零組件/零件"> <span>工具機/機械設備/工具/零組件/零件</span></label>
+            <label class="option-row"><input type="checkbox" name="ind_macro" value="汽機車/航太/醫療/電子/半導體/能源"> <span>汽機車/航太/醫療/電子/半導體/能源</span></label>
+            <div class="other-option-row">
+              <label class="other-option-label"><input type="checkbox" name="ind_macro" value="其他" id="ind_macro_other_check"> <span>其他：</span></label>
+              <input type="text" id="ind_macro_other" class="other-input-field" placeholder="">
+            </div>
+          </div>
+        </section>
+
+        <!-- 9. 客戶產業別－小範圍 -->
+        <section class="question-card">
+          <h2 class="question-title">客戶產業別－小範圍－限一項(或可複選)</h2>
+          <div class="options-group">
+            <label class="option-row"><input type="checkbox" name="ind_micro" value="精密加工"> <span>精密加工</span></label>
+            <label class="option-row"><input type="checkbox" name="ind_micro" value="模具與零件"> <span>模具與零件</span></label>
+            <label class="option-row"><input type="checkbox" name="ind_micro" value="汽機車/航太/零組件"> <span>汽機車/航太/零組件</span></label>
+            <label class="option-row"><input type="checkbox" name="ind_micro" value="半導體/光電/醫療"> <span>半導體/光電/醫療</span></label>
+            <label class="option-row"><input type="checkbox" name="ind_micro" value="5G/通訊/電子"> <span>5G/通訊/電子</span></label>
+            <label class="option-row"><input type="checkbox" name="ind_micro" value="電子/家電/電腦資訊"> <span>電子/家電/電腦資訊</span></label>
+            <div class="other-option-row">
+              <label class="other-option-label"><input type="checkbox" name="ind_micro" value="其他" id="ind_micro_other_check"> <span>其他：</span></label>
+              <input type="text" id="ind_micro_other" class="other-input-field" placeholder="">
+            </div>
+          </div>
+        </section>
+
+        <!-- 10. 訪談內容 1 -->
+        <section class="question-card">
+          <h2 class="question-title">訪談內容 1（可換行，可換段）</h2>
+          <textarea id="interview_notes_1" class="textarea-control" placeholder="您的回答"></textarea>
+        </section>
+
+        <!-- 11. 訪談內容 2 -->
+        <section class="question-card">
+          <h2 class="question-title">訪談內容 2（可換行，可換段）</h2>
+          <textarea id="interview_notes_2" class="textarea-control" placeholder="您的回答"></textarea>
+        </section>
+
+        <!-- 12. 訪談內容 3 -->
+        <section class="question-card">
+          <h2 class="question-title">訪談內容 3（可換行，可換段）</h2>
+          <textarea id="interview_notes_3" class="textarea-control" placeholder="您的回答"></textarea>
+        </section>
+
+      </main>
+
+    </div>
+  </div>
+
+  <!-- Sticky Bottom Actions Bar -->
+  <div class="sticky-actions-bar">
+    <div class="actions-inner">
+      <button type="button" id="btn-save-draft" class="btn-action btn-draft">儲存草稿</button>
+      <button type="button" id="btn-complete-record" class="btn-action btn-complete">完成紀錄</button>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast-container">
+    <div id="toast-msg" class="toast">提示訊息</div>
+  </div>
+
+  <!-- Quiet Completion Sheet Modal -->
+  <div id="success-modal" class="modal-overlay">
+    <div class="modal-sheet">
+      <div class="sheet-header">
+        <h3 class="sheet-title">紀錄已完成</h3>
+        <p class="sheet-desc">訪談內容已儲存至本地草稿庫。</p>
+      </div>
+      <div class="sheet-actions">
+        <button type="button" id="btn-new-interview" class="btn-sheet btn-sheet-primary">開始下一筆</button>
+        <button type="button" id="btn-edit-current" class="btn-sheet btn-sheet-secondary">返回查看</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Client-only Prototype Logic Script -->
+  <script src="../scripts/prototypes/exhibition-interview-mobile.js"></script>
+</body>
+</html>

@@ -24,6 +24,9 @@ let currentView = 'all';
 // [Phase 8.4 Exhibition UX] Independent filter state and globally stored config
 let showExhibitionOnly = false;
 let currentExhibitionConfig = null;
+let liffInitialized = false;
+let lineLeadRecoveryAttempted = false;
+let lastLineLeadDeniedUserId = null;
 
 function getRawContactIdentifier(record) {
     if (!record) return null;
@@ -36,33 +39,61 @@ function getRawContactIdentifier(record) {
 document.addEventListener('DOMContentLoaded', async () => {
     // [ITEM 5] Start with a neutral verifying state instead of jarring login prompt
     toggleContentVisibility(false, 'verifying');
-    await initLIFF();
     bindEvents();
+    await initLIFF();
 });
 
-window.manualLiffLogin = function() {
+window.manualLiffLogin = async function() {
     console.warn('[Auth] Manual login triggered.');
-    liff.login();
+    if (await ensureLiffReady()) {
+        liff.login();
+    }
 };
 
-window.forceLiffRelogin = function() {
-    console.warn('[Auth] Forcing re-login: logging out and reloading to clear stale state.');
-    if (typeof liff !== 'undefined' && liff.isLoggedIn()) {
-        liff.logout();
+window.forceLiffRelogin = async function() {
+    console.warn('[Auth] Logging out and clearing Line Lead session.');
+    try {
+        await fetch('/api/line/session', {
+            method: 'DELETE',
+            credentials: 'same-origin'
+        });
+    } catch (error) {
+        console.warn('[Auth] Session logout request failed:', error.message);
     }
+
+    try {
+        if (typeof liff !== 'undefined' && liffInitialized && liff.isLoggedIn()) {
+            liff.logout();
+        }
+    } catch (error) {
+        console.warn('[Auth] LIFF logout skipped:', error.message);
+    }
+
+    resetCurrentUser();
     location.reload();
 };
 
 function showAuthFailedFallback() {
     console.warn('[Auth] 401 detected. Halting operations, clearing UI state, and displaying manual fallback.');
     
+    resetCurrentUser();
+
+    // [ITEM 5] Use the explicit expired state
+    toggleContentVisibility(false, 'expired'); 
+}
+
+function resetCurrentUser() {
     updateUserUI(false);
     currentUser.userId = null;
     currentUser.displayName = '訪客';
     currentUser.pictureUrl = null;
+}
 
-    // [ITEM 5] Use the explicit expired state
-    toggleContentVisibility(false, 'expired'); 
+function applyAuthenticatedUser(sessionUser) {
+    currentUser.userId = sessionUser.userId;
+    currentUser.displayName = sessionUser.displayName || sessionUser.userId;
+    currentUser.pictureUrl = sessionUser.pictureUrl || null;
+    updateUserUI(true);
 }
 
 function toggleContentVisibility(show, state = 'login') {
@@ -140,42 +171,52 @@ function showAccessDenied(userId) {
 }
 
 async function initLIFF() {
-    const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-
-    if (isLocal) {
-        console.warn('🛠️ [Dev] 本地模式，使用測試帳號');
-        currentUser.userId = 'TEST_LOCAL_USER';
-        currentUser.displayName = '測試員 (Local)';
-        updateUserUI(true);
-        loadLeadsData(); 
-        return; 
-    }
-
     try {
-        if (typeof liff === 'undefined' || !LIFF_ID) {
-            console.error('LIFF 未就緒');
+        const existingSession = await fetch('/api/line/session', {
+            credentials: 'same-origin'
+        });
+
+        if (existingSession.ok) {
+            const result = await existingSession.json();
+            applyAuthenticatedUser(result);
+            loadLeadsData();
             return;
         }
-        
-        await liff.init({ liffId: LIFF_ID });
-        
-        if (liff.isLoggedIn()) {
-            const profile = await liff.getProfile();
-            currentUser.userId = profile.userId;
-            currentUser.displayName = profile.displayName;
-            currentUser.pictureUrl = profile.pictureUrl;
-            updateUserUI(true);
-            
+
+        if (existingSession.status === 403) {
+            const result = await existingSession.json();
+            toggleContentVisibility(false);
+            showAccessDenied(result.yourUserId);
+            return;
+        }
+
+        if (existingSession.status !== 401) {
+            showAuthFailedFallback();
+            return;
+        }
+
+        const sessionCreated = await createLineLeadSessionFromLiff();
+        if (sessionCreated === true) {
             loadLeadsData();
-        } else {
-            updateUserUI(false);
-            // [ITEM 5] Switch to login prompt once verification fails locally
-            toggleContentVisibility(false, 'login');
         }
     } catch (error) {
-        console.error('LIFF Init Error:', error);
+        console.error('Line Lead session init error:', error);
         toggleContentVisibility(false, 'login');
     }
+}
+
+async function ensureLiffReady() {
+    if (typeof liff === 'undefined' || !LIFF_ID) {
+        console.error('LIFF 未就緒');
+        return false;
+    }
+
+    if (!liffInitialized) {
+        await liff.init({ liffId: LIFF_ID });
+        liffInitialized = true;
+    }
+
+    return true;
 }
 
 function updateUserUI(isLoggedIn) {
@@ -286,19 +327,87 @@ function bindEvents() {
     if (deleteBtn) deleteBtn.onclick = handleDeleteSubmit;
 }
 
-async function getValidIdToken() {
-    if (!liff.isLoggedIn()) {
-        console.warn('[Auth] Token 取得失敗: LIFF 尚未登入');
-        return null;
+async function createLineLeadSessionFromLiff() {
+    const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    const headers = {};
+
+    if (isLocal) {
+        headers.Authorization = 'Bearer TEST_LOCAL_TOKEN';
+    } else {
+        if (!await ensureLiffReady()) {
+            toggleContentVisibility(false, 'login');
+            return false;
+        }
+
+        if (!liff.isLoggedIn()) {
+            updateUserUI(false);
+            toggleContentVisibility(false, 'login');
+            return false;
+        }
+
+        const idToken = liff.getIDToken();
+        if (!idToken) {
+            showAuthFailedFallback();
+            return false;
+        }
+
+        headers.Authorization = `Bearer ${idToken}`;
     }
 
-    const token = liff.getIDToken();
-    if (!token) {
-        console.warn('[Auth] Token 取得失敗: ID Token 為空');
-        return null;
+    const response = await fetch('/api/line/session', {
+        method: 'POST',
+        headers,
+        credentials: 'same-origin'
+    });
+
+    const result = await response.json().catch(() => ({}));
+
+    if (response.ok && result.success) {
+        applyAuthenticatedUser(result);
+        return true;
     }
 
-    return token;
+    if (response.status === 403) {
+        lastLineLeadDeniedUserId = result.yourUserId || null;
+        toggleContentVisibility(false);
+        showAccessDenied(result.yourUserId);
+        return 'forbidden';
+    }
+
+    if (response.status === 401) {
+        showAuthFailedFallback();
+        return false;
+    }
+
+    showAuthFailedFallback();
+    return false;
+}
+
+async function lineLeadFetch(url, options = {}, allowRecovery = true) {
+    const fetchOptions = {
+        ...options,
+        credentials: 'same-origin',
+        headers: {
+            ...(options.headers || {})
+        }
+    };
+
+    let response = await fetch(url, fetchOptions);
+
+    if (response.status === 401 && allowRecovery && !lineLeadRecoveryAttempted) {
+        lineLeadRecoveryAttempted = true;
+        const recovered = await createLineLeadSessionFromLiff();
+        if (recovered === true) {
+            response = await fetch(url, fetchOptions);
+        } else if (recovered === 'forbidden') {
+            return new Response(JSON.stringify({ success: false, yourUserId: lastLineLeadDeniedUserId }), {
+                status: 403,
+                headers: { 'Content-Type': 'application/json' }
+            });
+        }
+    }
+
+    return response;
 }
 
 // ============================================================================
@@ -444,20 +553,7 @@ async function loadLeadsData() {
             'Content-Type': 'application/json'
         };
 
-        if (currentUser.userId === 'TEST_LOCAL_USER') {
-            headers['Authorization'] = 'Bearer TEST_LOCAL_TOKEN';
-        } else {
-            const idToken = await getValidIdToken();
-            if (!idToken) {
-                console.warn('[Auth] Missing token, skip request.');
-                if(loadingEl) loadingEl.style.display = 'none';
-                return;
-            }
-            
-            headers['Authorization'] = `Bearer ${idToken}`;
-        }
-
-        const response = await fetch('/api/line/leads', { headers });
+        const response = await lineLeadFetch('/api/line/leads', { headers });
         
         if (response.status === 401) {
             showAuthFailedFallback();
@@ -818,20 +914,7 @@ async function handleEditSubmit(e) {
             'Content-Type': 'application/json'
         };
 
-        if (currentUser.userId === 'TEST_LOCAL_USER') {
-            headers['Authorization'] = 'Bearer TEST_LOCAL_TOKEN';
-        } else {
-            const idToken = await getValidIdToken();
-            if (!idToken) {
-                console.warn('[Auth] Missing token, skip request.');
-                btn.disabled = false;
-                btn.textContent = originalText;
-                return;
-            }
-            headers['Authorization'] = `Bearer ${idToken}`;
-        }
-
-        const res = await fetch(`/api/line/leads/${encodeURIComponent(rowIndex)}`, {
+        const res = await lineLeadFetch(`/api/line/leads/${encodeURIComponent(rowIndex)}`, {
             method: 'PUT',
             headers: headers,
             body: JSON.stringify(data)
@@ -884,21 +967,7 @@ async function handleDeleteSubmit(e) {
     try {
         const headers = { 'Content-Type': 'application/json' };
 
-        if (currentUser.userId === 'TEST_LOCAL_USER') {
-            headers['Authorization'] = 'Bearer TEST_LOCAL_TOKEN';
-        } else {
-            const idToken = await getValidIdToken();
-            if (!idToken) {
-                console.warn('[Auth] Missing token, skip request.');
-                deleteBtn.disabled = false;
-                deleteBtn.textContent = originalDeleteText;
-                if (saveBtn) saveBtn.disabled = false;
-                return;
-            }
-            headers['Authorization'] = `Bearer ${idToken}`;
-        }
-
-        const res = await fetch(`/api/line/leads/${encodeURIComponent(rowIndex)}`, {
+        const res = await lineLeadFetch(`/api/line/leads/${encodeURIComponent(rowIndex)}`, {
             method: 'DELETE',
             headers: headers
         });
