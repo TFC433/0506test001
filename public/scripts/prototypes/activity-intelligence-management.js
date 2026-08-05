@@ -26,9 +26,21 @@
     focusQuickFirst: false,
     quickAnswers: {},
     overview: { q: '', status: 'all', sort: 'name', dir: 'asc' },
-    records: { scope: 'all', q: '', recorder: 'all', priority: 'all', state: 'normal', low: false, start: '', end: '' },
-    analytics: { recorder: 'all', start: '', end: '', q: '' },
-    includeVoidCsv: false
+    records: {
+      scope: 'all',
+      q: '',
+      recorder: 'all',
+      priority: 'all',
+      state: 'normal',
+      low: false,
+      period: 'all',
+      start: '',
+      end: '',
+      customOpen: false,
+      moreOpen: false,
+      filterError: ''
+    },
+    analytics: { recorder: 'all', start: '', end: '', q: '' }
   };
 
   init();
@@ -48,7 +60,8 @@
     if (!currentUser || !currentUser.authenticated) return;
     if (isRecorder()) {
       const open = openActivities();
-      ui.tab = 'entry';
+      ui.tab = 'records';
+      ui.records.scope = 'entry';
       ui.quickAnswers = {};
       if (open.length === 1) {
         ui.selectedActivityId = open[0].id;
@@ -58,6 +71,7 @@
       }
       return;
     }
+    if (ui.records.scope === 'entry') ui.records.scope = 'all';
     ui.view = 'overview';
     ui.tab = 'overview';
   }
@@ -259,18 +273,17 @@
             <thead>
               <tr>
                 ${th('name', '活動名稱')}
+                <th>活動註解</th>
                 ${th('formOpenStart', '表單開放期間')}
-                <th>展期</th>
                 ${th('status', '狀態')}
                 ${th('total', '情報總數')}
                 ${th('today', '今日新增')}
                 ${th('lastRecord', '最近紀錄')}
-                ${th('updatedAt', '最近更新')}
                 <th>操作</th>
               </tr>
             </thead>
             <tbody>
-              ${rows.map(renderActivityRow).join('') || '<tr><td colspan="9"><div class="aim-empty">沒有符合篩選條件的活動。</div></td></tr>'}
+              ${rows.map(renderActivityRow).join('') || '<tr><td colspan="8"><div class="aim-empty">沒有符合篩選條件的活動。</div></td></tr>'}
             </tbody>
           </table>
         </div>
@@ -286,20 +299,22 @@
   function renderActivityRow(activity) {
     const metrics = activityMetrics(activity.id);
     const status = Store.activityStatus(activity);
-    const ex = Store.activitySubtitle(activity) || '-';
+    const subtitle = Store.activitySubtitle(activity);
+    const note = activity.description || '';
     return `
       <tr>
-        <td><strong>${Store.escapeHtml(activity.name)}</strong></td>
-        <td>${Store.formatDate(activity.formOpenStart)} - ${Store.formatDate(activity.formOpenEnd)}</td>
-        <td>${Store.escapeHtml(ex.replace('展期：', ''))}</td>
+        <td class="aim-activity-name-cell">
+          <button class="aim-activity-link" type="button" data-action="open" data-id="${activity.id}">${Store.escapeHtml(activity.name)}</button>
+          ${subtitle ? `<span class="aim-activity-subtitle">${Store.escapeHtml(subtitle)}</span>` : ''}
+        </td>
+        <td><span class="aim-note-clamp" title="${Store.escapeHtml(note)}">${note ? Store.escapeHtml(note) : '<span class="aim-muted-dash">—</span>'}</span></td>
+        <td>${formatCompactDateRange(activity.formOpenStart, activity.formOpenEnd)}</td>
         <td>${statusPill(status)}</td>
         <td>${metrics.total}</td>
         <td>${metrics.today}</td>
-        <td>${metrics.lastRecord ? Store.formatDateTime(metrics.lastRecord) : '-'}</td>
-        <td>${Store.formatDateTime(activity.updatedAt)}</td>
+        <td>${metrics.lastRecord ? Store.formatDateTime(metrics.lastRecord) : '<span class="aim-muted-dash">—</span>'}</td>
         <td>
           <div class="aim-actions">
-            <button class="aim-button" type="button" data-action="open" data-id="${activity.id}">進入活動</button>
             <button class="aim-button" type="button" data-action="duplicate" data-id="${activity.id}">複製活動</button>
           </div>
         </td>
@@ -316,7 +331,6 @@
       <section>
         <div class="aim-workspace-head">
           <div>
-            ${canManageActivities() ? '<button class="aim-button" type="button" data-action="all">活動總覽</button>' : ''}
             <h2 class="aim-workspace-title">${Store.escapeHtml(activity.name)}</h2>
             <div class="aim-workspace-meta">
               ${Store.activitySubtitle(activity) ? `<span class="aim-meta-chip">${Store.escapeHtml(Store.activitySubtitle(activity))}</span>` : ''}
@@ -326,14 +340,12 @@
               <span class="aim-meta-chip">今日 <strong>${metrics.today}</strong></span>
             </div>
           </div>
-          ${canManageActivities() ? '<button class="aim-button" type="button" data-action="settings">活動設定</button>' : ''}
+          ${canManageActivities() ? '<div class="aim-actions"><button class="aim-button" type="button" data-action="all">活動總覽</button><button class="aim-button" type="button" data-action="settings">活動設定</button></div>' : ''}
         </div>
         <nav class="aim-tabs" aria-label="活動模組">
           ${canManageActivities() ? tab('overview', '活動概況') : ''}
           ${canDesignForm() ? tab('form', '表單設計') : ''}
-          ${isRecorder() ? tab('entry', '新增情報') : ''}
-          ${isRecorder() ? tab('all_records', '全部紀錄') : tab('records', '情報紀錄')}
-          ${isRecorder() ? tab('my_records', '我的紀錄') : ''}
+          ${tab('records', '情報紀錄')}
           ${canUseAnalytics() ? tab('analytics', '數據分析') : ''}
         </nav>
         ${renderTab(activity)}
@@ -347,9 +359,8 @@
 
   function renderTab(activity) {
     if (isRecorder()) {
-      if (ui.tab === 'all_records') return renderRecords(activity, 'all');
-      if (ui.tab === 'my_records') return renderRecords(activity, 'mine');
-      return renderQuickEntry(activity);
+      if (ui.records.scope === 'entry') return renderQuickEntry(activity);
+      return renderRecords(activity, ui.records.scope === 'mine' ? 'mine' : 'all');
     }
     if (ui.tab === 'form' && canDesignForm()) return renderForm(activity);
     if (ui.tab === 'records') return renderRecords(activity, ui.records.scope);
@@ -370,11 +381,11 @@
             <div class="aim-kpi"><span>有效情報紀錄</span><strong>${metrics.active}</strong></div>
             <div class="aim-kpi"><span>紀錄者數</span><strong>${metrics.recorders}</strong></div>
           </div>
-          <div class="aim-grid-3">
+          <div class="aim-grid-2 aim-overview-summary-grid">
             <div class="aim-panel"><h3>表單狀態</h3><dl class="aim-definition-list"><dt>欄位數</dt><dd>${activity.formFields.filter(f => !f.retired).length}</dd><dt>可填寫狀態</dt><dd>${formState(status.key)}</dd></dl></div>
             <div class="aim-panel"><h3>追蹤品質</h3><dl class="aim-definition-list"><dt>高優先</dt><dd>${metrics.high}</dd><dt>低完整度</dt><dd>${metrics.low}</dd></dl></div>
-            <div class="aim-panel"><h3>快速操作</h3><div class="aim-actions" style="justify-content:flex-start">${canDesignForm() ? '<button class="aim-button" data-action="tab" data-tab="form" type="button">表單設計</button>' : ''}<button class="aim-button" data-action="tab" data-tab="records" type="button">情報紀錄</button><button class="aim-button" data-action="tab" data-tab="analytics" type="button">數據分析</button><button class="aim-button aim-button-soft" data-action="export-all" type="button">匯出 CSV</button></div></div>
           </div>
+          <div class="aim-panel aim-activity-note-panel"><h3>活動註解</h3><p>${activity.description ? Store.escapeHtml(activity.description) : '<span class="aim-muted-dash">—</span>'}</p></div>
         </div>
         <div class="aim-panel">
           <h3>最近紀錄</h3>
@@ -389,8 +400,9 @@
     const open = status.key === 'open';
     const recent = recordsFor(activity.id).filter(r => r.status !== 'void').sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
     return `
+      ${renderRecordScopeSwitch()}
       ${!open ? '<div class="aim-warning">表單目前未開放，紀錄者不能新增或編輯自己的紀錄。</div>' : ''}
-      <div class="aim-recorder-layout">
+      <div class="aim-entry-layout">
         <div class="aim-panel">
           <div class="aim-panel-title-row">
             <h2>新增情報</h2>
@@ -403,7 +415,7 @@
             ${activity.formFields.filter(f => f.visible && !f.retired).map(field => renderQuickField(field, open)).join('')}
           </div>
         </div>
-        <aside class="aim-panel aim-recorder-context">
+        <aside class="aim-panel aim-entry-context">
           <h2>目前活動</h2>
           <dl class="aim-definition-list">
             <dt>活動</dt><dd>${Store.escapeHtml(activity.name)}</dd>
@@ -411,7 +423,7 @@
             <dt>表單期間</dt><dd>${Store.formatDate(activity.formOpenStart)} - ${Store.formatDate(activity.formOpenEnd)}</dd>
             <dt>狀態</dt><dd>${statusPill(status)}</dd>
           </dl>
-          <div class="aim-context-link"><button class="aim-button" data-action="tab" data-tab="all_records" type="button">查看全部紀錄</button></div>
+          <div class="aim-context-link"><button class="aim-button" data-action="scope" data-scope="all" type="button">查看全部紀錄</button></div>
           <h2>最近紀錄</h2>
           <div class="aim-latest-list">${recent.map(r => `<button class="aim-latest-item" data-action="record" data-id="${r.id}" type="button" style="text-align:left"><strong>${Store.escapeHtml(Store.recordSummary(r))}</strong><span class="aim-small">${Store.escapeHtml(r.createdByDisplayName)}，${Store.formatDateTime(r.createdAt)}</span></button>`).join('') || '<div class="aim-empty">尚無紀錄。</div>'}</div>
         </aside>
@@ -493,30 +505,70 @@
     const rows = filteredRecords(activity, scope);
     const recorders = unique(recordsFor(activity.id).map(r => r.createdByDisplayName));
     const management = canManageRecords();
+    const advancedCount = activeAdvancedFilterCount();
     return `
+      ${renderRecordScopeSwitch()}
       <div class="aim-panel">
-        <div class="aim-panel-title-row">
-          <h2>${scope === 'mine' ? '我的紀錄' : '全部紀錄'}</h2>
-          ${management ? `<div class="aim-actions"><label class="aim-checkbox"><input id="aim-csv-void" type="checkbox" ${ui.includeVoidCsv ? 'checked' : ''}> CSV 包含作廢紀錄</label><button class="aim-button" data-action="export-filtered" type="button">匯出篩選 CSV</button><button class="aim-button" data-action="export-all" type="button">匯出全部 CSV</button><button class="aim-button aim-button-primary" data-action="new-record" ${Store.activityStatus(activity).key === 'open' ? '' : 'disabled'} type="button">新增情報紀錄</button></div>` : ''}
+        <div class="aim-records-head">
+          <div>
+            <h2>${scope === 'mine' ? '我的紀錄' : '全部紀錄'}</h2>
+            <p class="aim-small">目前結果共 ${rows.length} 筆</p>
+          </div>
+          ${management ? `
+            <div class="aim-records-head-actions">
+              <div class="aim-record-create-area">
+                <button class="aim-button aim-button-primary" data-action="new-record" ${Store.activityStatus(activity).key === 'open' ? '' : 'disabled'} type="button">新增情報</button>
+              </div>
+              <div class="aim-data-functions" aria-label="資料功能">
+                <span>資料功能</span>
+                <button class="aim-button" data-action="export-filtered" type="button">匯出目前結果 CSV</button>
+              </div>
+            </div>
+          ` : ''}
         </div>
-        <div class="aim-record-toolbar">
-          ${management ? `<div class="aim-record-switch"><button data-action="scope" data-scope="mine" aria-pressed="${ui.records.scope === 'mine'}" type="button">我的紀錄</button><button data-action="scope" data-scope="all" aria-pressed="${ui.records.scope === 'all'}" type="button">全部紀錄</button></div>` : '<span class="aim-small">同活動紀錄</span>'}
-          <input class="aim-input" id="aim-record-start" type="date" value="${ui.records.start}" aria-label="開始日期">
-          <input class="aim-input" id="aim-record-end" type="date" value="${ui.records.end}" aria-label="結束日期">
-          <select class="aim-select" id="aim-record-recorder">${option('all', '全部紀錄者', ui.records.recorder)}${recorders.map(r => option(r, r, ui.records.recorder)).join('')}</select>
-          <input class="aim-input" id="aim-record-q" value="${Store.escapeHtml(ui.records.q)}" placeholder="搜尋姓名、公司或內容">
-          <select class="aim-select" id="aim-record-priority">${option('all', '全部優先度', ui.records.priority)}${['高', '中', '低', '未判斷'].map(p => option(p, p, ui.records.priority)).join('')}</select>
-          <div class="aim-actions"><select class="aim-select" id="aim-record-state">${option('normal', '有效', ui.records.state)}${option('void', '作廢', ui.records.state)}${option('all', '有效與作廢', ui.records.state)}</select><label class="aim-checkbox"><input id="aim-record-low" type="checkbox" ${ui.records.low ? 'checked' : ''}> 低完整度</label><button class="aim-button" data-action="clear-records" type="button">清除</button></div>
+        <div class="aim-record-filter-bar" role="search">
+          <div class="aim-record-search"><input class="aim-input" id="aim-record-q" value="${Store.escapeHtml(ui.records.q)}" placeholder="搜尋姓名、公司或內容" aria-label="搜尋紀錄"></div>
+          <div class="aim-period-group" role="group" aria-label="快速期間篩選">
+            ${periodButton('all', '全部')}
+            ${periodButton('today', '今日')}
+            ${periodButton('yesterday', '昨日')}
+            ${periodButton('day_before', '前日')}
+            ${periodButton('custom', customPeriodLabel())}
+          </div>
+          <button class="aim-button aim-more-filter-button" data-action="toggle-more-filters" aria-expanded="${ui.records.moreOpen}" type="button">更多篩選${advancedCount ? `（${advancedCount}）` : ''}</button>
         </div>
-        <div class="aim-small" style="margin-bottom:8px">共 ${rows.length} 筆</div>
-        <div class="aim-table-wrap"><table class="aim-table"><thead><tr><th>建立時間</th><th>紀錄者</th><th>客戶資訊</th><th>欄位完整度</th><th>後續優先度</th><th>最近更新</th><th>狀態</th><th>操作</th></tr></thead><tbody>${rows.map(r => renderRecordRow(r, activity)).join('') || '<tr><td colspan="8"><div class="aim-empty">沒有符合篩選條件的紀錄。</div></td></tr>'}</tbody></table></div>
+        ${ui.records.customOpen ? `
+          <div class="aim-filter-panel aim-custom-period-panel">
+            <div class="aim-field"><label for="aim-record-start">開始日期</label><input class="aim-input" id="aim-record-start" type="date" value="${ui.records.start}"></div>
+            <div class="aim-field"><label for="aim-record-end">結束日期</label><input class="aim-input" id="aim-record-end" type="date" value="${ui.records.end}"></div>
+            <div class="aim-filter-panel-actions"><button class="aim-button aim-button-primary" data-action="apply-custom-period" type="button">套用</button><button class="aim-button" data-action="clear-custom-period" type="button">清除</button></div>
+            <p class="aim-field-error" id="aim-record-date-error" role="alert">${Store.escapeHtml(ui.records.filterError)}</p>
+          </div>
+        ` : ''}
+        ${ui.records.moreOpen ? `
+          <div class="aim-filter-panel aim-more-filters-panel">
+            <div class="aim-field"><label for="aim-record-recorder">紀錄者</label><select class="aim-select" id="aim-record-recorder">${option('all', '全部紀錄者', ui.records.recorder)}${recorders.map(r => option(r, r, ui.records.recorder)).join('')}</select></div>
+            <div class="aim-field"><label for="aim-record-priority">後續優先度</label><select class="aim-select" id="aim-record-priority">${option('all', '全部優先度', ui.records.priority)}${['高', '中', '低', '未判斷'].map(p => option(p, p, ui.records.priority)).join('')}</select></div>
+            <div class="aim-field"><label for="aim-record-state">紀錄狀態</label><select class="aim-select" id="aim-record-state">${option('normal', '有效', ui.records.state)}${option('void', '作廢', ui.records.state)}${option('all', '有效與作廢', ui.records.state)}</select></div>
+            <label class="aim-checkbox"><input id="aim-record-low" type="checkbox" ${ui.records.low ? 'checked' : ''}> 低完整度</label>
+            <button class="aim-button" data-action="reset-more-filters" type="button">重設進階篩選</button>
+          </div>
+        ` : ''}
+        <div class="aim-table-wrap"><table class="aim-table"><thead><tr><th>建立時間</th><th>紀錄者</th><th>客戶資訊</th><th>欄位完整度</th><th>後續優先度</th><th>最近更新</th><th>操作</th></tr></thead><tbody>${rows.map(r => renderRecordRow(r, activity)).join('') || '<tr><td colspan="7"><div class="aim-empty">沒有符合篩選條件的紀錄。</div></td></tr>'}</tbody></table></div>
       </div>
     `;
   }
 
   function renderRecordRow(record, activity) {
     const coverage = recordCoverage(record, activity);
-    return `<tr><td>${Store.formatDateTime(record.createdAt)}</td><td>${Store.escapeHtml(record.createdByDisplayName)}</td><td>${Store.escapeHtml(Store.recordSummary(record))}</td><td>${coverage.answered}/${coverage.total}<div class="aim-coverage-bar"><span style="width:${coverage.percent}%"></span></div></td><td>${priorityPill(record.answers.fld_priority || '未判斷')}</td><td>${Store.formatDateTime(record.updatedAt)}</td><td>${record.status === 'void' ? '<span class="aim-pill aim-pill-void">作廢</span>' : '<span class="aim-pill aim-pill-open">有效</span>'}</td><td><button class="aim-button" data-action="record" data-id="${record.id}" type="button">查看</button></td></tr>`;
+    return `<tr class="${record.status === 'void' ? 'aim-record-row-void' : ''}"><td>${Store.formatDateTime(record.createdAt)}</td><td>${Store.escapeHtml(record.createdByDisplayName)}</td><td><div class="aim-record-identity"><span>${Store.escapeHtml(Store.recordSummary(record))}</span>${record.status === 'void' ? '<span class="aim-pill aim-pill-void">已作廢</span>' : ''}</div></td><td>${coverage.answered}/${coverage.total}<div class="aim-coverage-bar"><span style="width:${coverage.percent}%"></span></div></td><td>${priorityPill(record.answers.fld_priority || '未判斷')}</td><td>${Store.formatDateTime(record.updatedAt)}</td><td><button class="aim-button" data-action="record" data-id="${record.id}" type="button">查看</button></td></tr>`;
+  }
+
+  function renderRecordScopeSwitch() {
+    const choices = isRecorder()
+      ? [['entry', '新增情報'], ['all', '全部紀錄'], ['mine', '我的紀錄']]
+      : [['mine', '我的紀錄'], ['all', '全部紀錄']];
+    return `<div class="aim-record-subviews" aria-label="情報紀錄檢視">${choices.map(([scope, label]) => `<button data-action="scope" data-scope="${scope}" aria-pressed="${ui.records.scope === scope}" type="button">${label}</button>`).join('')}</div>`;
   }
 
   function renderAnalytics(activity) {
@@ -597,7 +649,7 @@
           <div class="aim-field"><label>展期開始日期（選填）</label><input class="aim-input" id="aim-dialog-ex-start" type="date" value="${ui.dialog.exhibitionStart || ''}"></div>
           <div class="aim-field"><label>展期結束日期（選填）</label><input class="aim-input" id="aim-dialog-ex-end" type="date" value="${ui.dialog.exhibitionEnd || ''}"></div>
           <div class="aim-field aim-full"><label>活動說明（選填）</label><textarea class="aim-textarea" id="aim-dialog-description">${Store.escapeHtml(ui.dialog.description || '')}</textarea></div>
-        </div></div>
+        </div><p class="aim-field-error" id="aim-dialog-error" role="alert">${Store.escapeHtml(ui.dialog.error || '')}</p></div>
         <div class="aim-dialog-foot"><button class="aim-button" data-action="close-dialog" type="button">取消</button><button class="aim-button aim-button-primary" data-action="save-activity-dialog" type="button">${duplicate ? '建立複製活動' : '建立活動'}</button></div>
       </section>
     `;
@@ -668,6 +720,13 @@
     return `<div class="aim-field"><label>${Store.escapeHtml(field.title)}</label><input class="aim-input aim-record-input" data-field="${field.fieldId}" value="${Store.escapeHtml(value || '')}"></div>`;
   }
 
+  root.addEventListener('keydown', event => {
+    const activityLink = event.target.closest('.aim-activity-link');
+    if (!activityLink || !['Enter', ' '].includes(event.key)) return;
+    event.preventDefault();
+    activityLink.click();
+  });
+
   root.addEventListener('click', event => {
     const el = event.target.closest('[data-action]');
     if (!el) return;
@@ -675,14 +734,14 @@
     if (action === 'use-real-role') switchPreviewRole('real');
     if (action === 'all' && canManageActivities()) { ui.view = 'overview'; ui.tab = 'overview'; }
     if (action === 'open' && canManageActivities()) { ui.selectedActivityId = el.dataset.id; ui.view = 'workspace'; ui.tab = 'overview'; }
-    if (action === 'recorder-open' && isRecorder()) { ui.selectedActivityId = el.dataset.id; ui.view = 'workspace'; ui.tab = 'entry'; }
+    if (action === 'recorder-open' && isRecorder()) { ui.selectedActivityId = el.dataset.id; ui.view = 'workspace'; ui.tab = 'records'; ui.records.scope = 'entry'; }
     if (action === 'tab') selectTab(el.dataset.tab);
     if (action === 'sort' && canManageActivities()) sort(el.dataset.key);
     if (action === 'clear-overview' && canManageActivities()) ui.overview = { q: '', status: 'all', sort: 'name', dir: 'asc' };
-    if (action === 'new-activity' && canManageActivities()) ui.dialog = { type: 'activity', mode: 'create' };
+    if (action === 'new-activity' && canManageActivities()) ui.dialog = freshActivityDraft();
     if (action === 'duplicate' && canManageActivities()) openDuplicate(el.dataset.id);
     if (action === 'close-dialog') ui.dialog = null;
-    if (action === 'save-activity-dialog' && canManageActivities()) saveActivityDialog();
+    if (action === 'save-activity-dialog' && canManageActivities() && !saveActivityDialog()) return;
     if (action === 'settings' && canManageActivities()) ui.drawer = { type: 'settings' };
     if (action === 'close-drawer') ui.drawer = null;
     if (action === 'save-settings' && canManageActivities()) saveSettings();
@@ -694,8 +753,15 @@
     if (action === 'copy-field' && canDesignForm()) copyField(el.dataset.id);
     if (action === 'delete-field' && canDesignForm()) deleteField(el.dataset.id);
     if (action === 'retire-field' && canDesignForm()) retireField(el.dataset.id);
-    if (action === 'scope' && canManageRecords()) ui.records.scope = el.dataset.scope;
-    if (action === 'clear-records') ui.records = { scope: ui.records.scope, q: '', recorder: 'all', priority: 'all', state: 'normal', low: false, start: '', end: '' };
+    if (action === 'scope' && (canManageRecords() || isRecorder())) {
+      const allowed = isRecorder() ? ['entry', 'all', 'mine'] : ['all', 'mine'];
+      if (allowed.includes(el.dataset.scope)) ui.records.scope = el.dataset.scope;
+    }
+    if (action === 'record-period') setRecordPeriod(el.dataset.period);
+    if (action === 'toggle-more-filters') ui.records.moreOpen = !ui.records.moreOpen;
+    if (action === 'apply-custom-period' && !applyCustomPeriod()) return;
+    if (action === 'clear-custom-period') clearCustomPeriod();
+    if (action === 'reset-more-filters') resetMoreFilters();
     if (action === 'new-record' && canManageRecords() && canCreateRecord(selectedActivity())) ui.drawer = { type: 'record', mode: 'create', working: {} };
     if (action === 'record') ui.drawer = { type: 'record', mode: 'view', id: el.dataset.id };
     if (action === 'edit-record') {
@@ -709,7 +775,6 @@
     if (action === 'quick-save-next') saveQuickRecord(true);
     if (action === 'quick-save-view') saveQuickRecord(false);
     if (action === 'export-filtered' && canExport()) exportCsv(filteredRecords(selectedActivity(), ui.records.scope), selectedActivity(), 'filtered');
-    if (action === 'export-all' && canExport()) exportCsv(recordsFor(selectedActivity().id).filter(r => r.status !== 'void' || ui.includeVoidCsv), selectedActivity(), 'all');
     if (action === 'clear-analytics' && canUseAnalytics()) ui.analytics = { recorder: 'all', start: '', end: '', q: '' };
     save();
     render();
@@ -720,12 +785,12 @@
     if (preview) preview.addEventListener('change', () => switchPreviewRole(preview.value));
     bind('aim-overview-q', value => { ui.overview.q = value; });
     bind('aim-overview-status', value => { ui.overview.status = value; }, 'change');
-    bind('aim-dialog-name', value => { if (ui.dialog) ui.dialog.name = value; });
-    bind('aim-dialog-form-start', value => { if (ui.dialog) ui.dialog.formOpenStart = value; }, 'change');
-    bind('aim-dialog-form-end', value => { if (ui.dialog) ui.dialog.formOpenEnd = value; }, 'change');
-    bind('aim-dialog-ex-start', value => { if (ui.dialog) ui.dialog.exhibitionStart = value; }, 'change');
-    bind('aim-dialog-ex-end', value => { if (ui.dialog) ui.dialog.exhibitionEnd = value; }, 'change');
-    bind('aim-dialog-description', value => { if (ui.dialog) ui.dialog.description = value; });
+    bindActivityDraftField('aim-dialog-name', 'name');
+    bindActivityDraftField('aim-dialog-form-start', 'formOpenStart');
+    bindActivityDraftField('aim-dialog-form-end', 'formOpenEnd');
+    bindActivityDraftField('aim-dialog-ex-start', 'exhibitionStart');
+    bindActivityDraftField('aim-dialog-ex-end', 'exhibitionEnd');
+    bindActivityDraftField('aim-dialog-description', 'description');
     bind('aim-settings-name', value => { if (ui.drawer) ui.drawer.name = value; });
     bind('aim-settings-form-start', value => { if (ui.drawer) ui.drawer.formOpenStart = value; }, 'change');
     bind('aim-settings-form-end', value => { if (ui.drawer) ui.drawer.formOpenEnd = value; }, 'change');
@@ -740,10 +805,9 @@
     bind('aim-record-recorder', value => { ui.records.recorder = value; }, 'change');
     bind('aim-record-priority', value => { ui.records.priority = value; }, 'change');
     bind('aim-record-state', value => { ui.records.state = value; }, 'change');
-    bind('aim-record-start', value => { ui.records.start = value; }, 'change');
-    bind('aim-record-end', value => { ui.records.end = value; }, 'change');
+    bindRecordDateField('aim-record-start', 'start');
+    bindRecordDateField('aim-record-end', 'end');
     bindCheck('aim-record-low', value => { ui.records.low = value; });
-    bindCheck('aim-csv-void', value => { ui.includeVoidCsv = value; });
     bind('aim-analytics-start', value => { ui.analytics.start = value; }, 'change');
     bind('aim-analytics-end', value => { ui.analytics.end = value; }, 'change');
     bind('aim-analytics-recorder', value => { ui.analytics.recorder = value; }, 'change');
@@ -764,6 +828,38 @@
       else list.delete(node.value);
       setQuickAnswer(node.dataset.field, Array.from(list));
     }));
+  }
+
+  function bindActivityDraftField(id, key) {
+    const node = document.getElementById(id);
+    if (!node || !ui.dialog) return;
+    const updateDraft = () => {
+      if (!ui.dialog) return;
+      ui.dialog[key] = node.value;
+      ui.dialog.error = '';
+      const error = document.getElementById('aim-dialog-error');
+      if (error) error.textContent = '';
+    };
+    node.addEventListener('compositionstart', () => {
+      if (ui.dialog) ui.dialog.composing = true;
+    });
+    node.addEventListener('compositionend', () => {
+      if (ui.dialog) ui.dialog.composing = false;
+      updateDraft();
+    });
+    node.addEventListener('input', updateDraft);
+    node.addEventListener('change', updateDraft);
+  }
+
+  function bindRecordDateField(id, key) {
+    const node = document.getElementById(id);
+    if (!node) return;
+    node.addEventListener('change', () => {
+      ui.records[key] = node.value;
+      ui.records.filterError = '';
+      const error = document.getElementById('aim-record-date-error');
+      if (error) error.textContent = '';
+    });
   }
 
   async function switchPreviewRole(value) {
@@ -796,12 +892,111 @@
 
   function selectTab(tabName) {
     if (isRecorder()) {
-      ui.tab = ['entry', 'all_records', 'my_records'].includes(tabName) ? tabName : 'entry';
+      ui.tab = 'records';
       return;
     }
     if (tabName === 'form' && !canDesignForm()) ui.tab = 'overview';
     else if (tabName === 'analytics' && !canUseAnalytics()) ui.tab = 'overview';
-    else ui.tab = tabName;
+    else {
+      ui.tab = tabName;
+      if (tabName === 'records' && ui.records.scope === 'entry') ui.records.scope = 'all';
+    }
+  }
+
+  function periodButton(period, label) {
+    const active = ui.records.period === period;
+    const expanded = period === 'custom' ? ` aria-expanded="${ui.records.customOpen}"` : '';
+    return `<button data-action="record-period" data-period="${period}" aria-pressed="${active}"${expanded} type="button">${Store.escapeHtml(label)}</button>`;
+  }
+
+  function setRecordPeriod(period) {
+    if (!['all', 'today', 'yesterday', 'day_before', 'custom'].includes(period)) return;
+    ui.records.filterError = '';
+    if (period === 'custom') {
+      ui.records.customOpen = !ui.records.customOpen;
+      return;
+    }
+    ui.records.period = period;
+    ui.records.customOpen = false;
+  }
+
+  function applyCustomPeriod() {
+    const startNode = document.getElementById('aim-record-start');
+    const endNode = document.getElementById('aim-record-end');
+    if (startNode) ui.records.start = startNode.value;
+    if (endNode) ui.records.end = endNode.value;
+    let message = '';
+    if (!ui.records.start || !ui.records.end) message = '請同時填寫開始日期與結束日期。';
+    else if (ui.records.start > ui.records.end) message = '開始日期不可晚於結束日期。';
+    if (message) {
+      ui.records.filterError = message;
+      const error = document.getElementById('aim-record-date-error');
+      if (error) error.textContent = message;
+      return false;
+    }
+    ui.records.period = 'custom';
+    ui.records.customOpen = false;
+    ui.records.filterError = '';
+    return true;
+  }
+
+  function clearCustomPeriod() {
+    ui.records.period = 'all';
+    ui.records.start = '';
+    ui.records.end = '';
+    ui.records.customOpen = false;
+    ui.records.filterError = '';
+  }
+
+  function resetMoreFilters() {
+    ui.records.recorder = 'all';
+    ui.records.priority = 'all';
+    ui.records.state = 'normal';
+    ui.records.low = false;
+  }
+
+  function activeAdvancedFilterCount() {
+    return [
+      ui.records.recorder !== 'all',
+      ui.records.priority !== 'all',
+      ui.records.state !== 'normal',
+      ui.records.low
+    ].filter(Boolean).length;
+  }
+
+  function customPeriodLabel() {
+    if (ui.records.period !== 'custom' || !ui.records.start || !ui.records.end) return '自訂區間';
+    return `自訂區間 ${formatCompactDateRange(ui.records.start, ui.records.end)}`;
+  }
+
+  function recordDateRange() {
+    if (ui.records.period === 'today') return [Store.CURRENT_DATE, Store.CURRENT_DATE];
+    if (ui.records.period === 'yesterday') {
+      const date = shiftLocalDate(Store.CURRENT_DATE, -1);
+      return [date, date];
+    }
+    if (ui.records.period === 'day_before') {
+      const date = shiftLocalDate(Store.CURRENT_DATE, -2);
+      return [date, date];
+    }
+    if (ui.records.period === 'custom') return [ui.records.start, ui.records.end];
+    return ['', ''];
+  }
+
+  function shiftLocalDate(isoDate, days) {
+    const [year, month, day] = isoDate.split('-').map(Number);
+    const date = new Date(year, month - 1, day, 12, 0, 0);
+    date.setDate(date.getDate() + days);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+  }
+
+  function formatCompactDateRange(start, end) {
+    const startText = Store.formatDate(start);
+    const endText = Store.formatDate(end);
+    if (start && end && start.slice(0, 4) === end.slice(0, 4)) {
+      return `${startText}－${endText.slice(5)}`;
+    }
+    return `${startText}－${endText}`;
   }
 
   function filteredActivities() {
@@ -853,13 +1048,14 @@
 
   function filteredRecords(activity, scope) {
     const q = ui.records.q.trim().toLowerCase();
+    const [dateStart, dateEnd] = recordDateRange();
     return recordsFor(activity.id).filter(r => {
       if (scope === 'mine' && r.createdByUserId !== currentUser.userId) return false;
       if (ui.records.state !== 'all' && (ui.records.state === 'void') !== (r.status === 'void')) return false;
       if (ui.records.recorder !== 'all' && r.createdByDisplayName !== ui.records.recorder) return false;
       if (ui.records.priority !== 'all' && (r.answers.fld_priority || '未判斷') !== ui.records.priority) return false;
-      if (ui.records.start && r.createdAt.slice(0, 10) < ui.records.start) return false;
-      if (ui.records.end && r.createdAt.slice(0, 10) > ui.records.end) return false;
+      if (dateStart && r.createdAt.slice(0, 10) < dateStart) return false;
+      if (dateEnd && r.createdAt.slice(0, 10) > dateEnd) return false;
       if (ui.records.low && recordCoverage(r, activity).answered > 1) return false;
       const text = `${Store.recordSummary(r)} ${Object.values(r.answers).flat().join(' ')}`.toLowerCase();
       if (q && !text.includes(q)) return false;
@@ -899,14 +1095,38 @@
       formOpenEnd: source.formOpenEnd,
       exhibitionStart: source.exhibitionStart || '',
       exhibitionEnd: source.exhibitionEnd || '',
-      description: source.description
+      description: source.description,
+      error: '',
+      composing: false
+    };
+  }
+
+  function freshActivityDraft() {
+    return {
+      type: 'activity',
+      mode: 'create',
+      name: '',
+      formOpenStart: '',
+      formOpenEnd: '',
+      exhibitionStart: '',
+      exhibitionEnd: '',
+      description: '',
+      error: '',
+      composing: false
     };
   }
 
   function saveActivityDialog() {
     const d = ui.dialog || {};
+    if (d.composing) {
+      showActivityDialogError('請先完成文字輸入。');
+      return false;
+    }
     const validation = validateActivity(d);
-    if (validation) return toast(validation);
+    if (validation) {
+      showActivityDialogError(validation);
+      return false;
+    }
     const source = d.sourceId ? state.activities.find(a => a.id === d.sourceId) : null;
     const activity = {
       id: Store.uid('act'),
@@ -931,6 +1151,13 @@
     ui.view = 'workspace';
     ui.tab = 'overview';
     toast(source ? '已建立複製活動。' : '已建立活動。');
+    return true;
+  }
+
+  function showActivityDialogError(message) {
+    if (ui.dialog) ui.dialog.error = message;
+    const error = document.getElementById('aim-dialog-error');
+    if (error) error.textContent = message;
   }
 
   function saveSettings() {
@@ -1056,7 +1283,8 @@
     createRecord(activity, clean(ui.quickAnswers || {}));
     ui.quickAnswers = {};
     ui.focusQuickFirst = stayOnEntry;
-    ui.tab = stayOnEntry ? 'entry' : 'all_records';
+    ui.tab = 'records';
+    ui.records.scope = stayOnEntry ? 'entry' : 'all';
     toast('已儲存一筆情報。');
   }
 
@@ -1106,7 +1334,7 @@
   }
 
   function exportCsv(records, activity, scope) {
-    const rows = records.filter(r => ui.includeVoidCsv || r.status !== 'void');
+    const rows = records;
     const fields = exportFields(activity, rows);
     const header = ['活動名稱', '紀錄 ID', '建立者', '建立時間', '最近更新者', '最近更新', '紀錄狀態', ...fields.map(f => f.title)];
     const body = rows.map(r => [activity.name, r.id, r.createdByDisplayName, Store.formatDateTime(r.createdAt), r.updatedByDisplayName, Store.formatDateTime(r.updatedAt), r.status === 'void' ? '作廢' : '有效', ...fields.map(f => Store.answerText(r.answers[f.fieldId]))]);

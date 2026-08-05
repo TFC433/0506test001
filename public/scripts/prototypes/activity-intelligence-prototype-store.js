@@ -381,7 +381,10 @@
 
   function activitySubtitle(activity) {
     if (!activity.exhibitionStart && !activity.exhibitionEnd) return '';
-    return `展期：${formatDate(activity.exhibitionStart)} - ${formatDate(activity.exhibitionEnd)}`;
+    if (activity.exhibitionStart === activity.exhibitionEnd) {
+      return `展覽日期：${formatDate(activity.exhibitionStart)}`;
+    }
+    return `展覽期間：${formatDate(activity.exhibitionStart)}－${formatDate(activity.exhibitionEnd)}`;
   }
 
   function escapeHtml(value) {
