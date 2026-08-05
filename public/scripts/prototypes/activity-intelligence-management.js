@@ -141,28 +141,197 @@
   function shell(content) {
     return `
       <div class="aim-shell">
-        <header class="aim-topbar">
-          <div class="aim-brand">
-            <h1>活動情報管理</h1>
-            <span>單一桌面角色原型 V2</span>
-          </div>
-          <div class="aim-actions">
-            ${renderPreviewControl()}
-            <div class="aim-user" aria-label="目前使用者">
-              <span>${Store.escapeHtml(currentUser.source || 'LINE 白名單')}</span>
-              <strong>${Store.escapeHtml(currentUser.displayName || currentUser.userId || '')}</strong>
-              <span>${Store.escapeHtml(currentUser.authenticated ? Store.roleLabel(currentUser.role) : '尚未取得角色')}</span>
+        ${renderSidebar()}
+        <div class="aim-app-column">
+          <header class="aim-topbar">
+            ${renderBreadcrumb()}
+            <div class="aim-topbar-actions">
+              ${renderPreviewControl()}
+              ${renderUserIdentity()}
             </div>
-          </div>
-        </header>
-        <main class="aim-main">
+          </header>
           ${renderPreviewBanner()}
-          ${content}
-        </main>
+          <main class="aim-main">
+            ${renderPageHeader()}
+            <div class="aim-page-content">${content}</div>
+          </main>
+        </div>
       </div>
       ${renderDialog()}
       ${renderDrawer()}
       ${ui.toast ? `<div class="aim-toast" role="status">${Store.escapeHtml(ui.toast)}</div>` : ''}
+    `;
+  }
+
+  function productRoleLabel(role) {
+    return {
+      super_admin: '最高管理者',
+      admin: '管理者',
+      recorder: '紀錄者'
+    }[role] || '尚未取得角色';
+  }
+
+  function activeModule() {
+    if (ui.drawer && ui.drawer.type === 'settings') return 'settings';
+    if (ui.view !== 'workspace') return isRecorder() ? 'records' : 'all';
+    return isRecorder() ? 'records' : ui.tab;
+  }
+
+  function moduleLabel(key) {
+    return {
+      all: '所有活動',
+      overview: '活動概況',
+      form: '表單設計',
+      records: '情報紀錄',
+      analytics: '數據分析',
+      settings: '活動設定'
+    }[key] || '活動情報管理';
+  }
+
+  function moduleDescription(key) {
+    return {
+      overview: '掌握活動狀態、紀錄進度與近期更新。',
+      form: '設定現場紀錄所需的欄位與填寫規則。',
+      records: isRecorder() ? '新增情報並查看活動紀錄。' : '篩選、檢視與管理活動情報紀錄。',
+      analytics: '依紀錄內容與人員分布查看活動洞察。',
+      settings: '管理活動名稱、日期與活動註解。'
+    }[key] || '';
+  }
+
+  function renderSidebar() {
+    const activity = selectedActivity();
+    const active = activeModule();
+    const activityNav = ui.view === 'workspace' && activity;
+    return `
+      <aside class="aim-sidebar" aria-label="主要導覽">
+        <div class="aim-product-brand">
+          <img class="aim-brand-logo" src="../images/logo-full.svg" alt="FANUC force">
+          <strong class="aim-product-title">活動情報管理</strong>
+        </div>
+        <nav class="aim-sidebar-nav">
+          ${canManageActivities() ? `
+            <div class="aim-nav-group">
+              <span class="aim-nav-label">活動管理</span>
+              ${sidebarButton('all', '所有活動', active === 'all')}
+            </div>
+          ` : ''}
+          ${currentUser.authenticated && isRecorder() ? `
+            <div class="aim-nav-group">
+              <span class="aim-nav-label">工作區</span>
+              ${sidebarButton('records-home', '情報紀錄', true)}
+            </div>
+          ` : ''}
+          ${activityNav && canManageActivities() ? `
+            <div class="aim-nav-group aim-activity-nav-group">
+              <span class="aim-nav-label">目前活動</span>
+              <div class="aim-sidebar-context" title="${Store.escapeHtml(activity.name)}">
+                <strong>${Store.escapeHtml(activity.name)}</strong>
+                ${Store.activitySubtitle(activity) ? `<span>${Store.escapeHtml(Store.activitySubtitle(activity))}</span>` : ''}
+              </div>
+              ${sidebarTab('overview', '活動概況', active === 'overview')}
+              ${canDesignForm() ? sidebarTab('form', '表單設計', active === 'form') : ''}
+              ${sidebarTab('records', '情報紀錄', active === 'records')}
+              ${canUseAnalytics() ? sidebarTab('analytics', '數據分析', active === 'analytics') : ''}
+              ${sidebarButton('settings', '活動設定', active === 'settings')}
+            </div>
+          ` : ''}
+        </nav>
+        <div class="aim-sidebar-foot">
+          <span>${currentUser.authenticated ? productRoleLabel(currentUser.role) : '未登入'}</span>
+          <small>Prototype V2</small>
+        </div>
+      </aside>
+    `;
+  }
+
+  function sidebarButton(action, label, active) {
+    return `<button class="aim-nav-item" type="button" data-action="${action}" aria-current="${active ? 'page' : 'false'}"><span>${Store.escapeHtml(label)}</span></button>`;
+  }
+
+  function sidebarTab(tabName, label, active) {
+    return `<button class="aim-nav-item" type="button" data-action="tab" data-tab="${tabName}" aria-current="${active ? 'page' : 'false'}"><span>${Store.escapeHtml(label)}</span></button>`;
+  }
+
+  function renderBreadcrumb() {
+    const activity = selectedActivity();
+    const items = [];
+    if (!currentUser.authenticated) items.push('活動情報管理');
+    else if (isRecorder()) {
+      items.push('情報紀錄');
+      if (ui.view === 'workspace' && activity) items.push(activity.name);
+    } else {
+      items.push('所有活動');
+      if (ui.view === 'workspace' && activity) {
+        items.push(activity.name);
+        items.push(moduleLabel(activeModule()));
+      }
+    }
+    return `<nav class="aim-breadcrumb" aria-label="麵包屑">${items.map((item, index) => `<span${index === items.length - 1 ? ' aria-current="page"' : ''}>${Store.escapeHtml(item)}</span>`).join('<b aria-hidden="true">/</b>')}</nav>`;
+  }
+
+  function safePictureUrl(value) {
+    if (!value) return '';
+    try {
+      const parsed = new URL(value, window.location.origin);
+      return ['http:', 'https:'].includes(parsed.protocol) ? parsed.href : '';
+    } catch (error) {
+      return '';
+    }
+  }
+
+  function userInitials() {
+    const name = String(currentUser.displayName || currentUser.userId || 'TFC').trim();
+    return Array.from(name).slice(0, 2).join('').toUpperCase();
+  }
+
+  function renderUserIdentity() {
+    const picture = safePictureUrl(currentUser.pictureUrl);
+    const name = currentUser.displayName || currentUser.userId || '未登入使用者';
+    return `
+      <div class="aim-user" aria-label="目前使用者">
+        <span class="aim-avatar" aria-hidden="true">
+          <span>${Store.escapeHtml(userInitials())}</span>
+          ${picture ? `<img src="${Store.escapeHtml(picture)}" alt="">` : ''}
+        </span>
+        <span class="aim-user-copy">
+          <strong title="${Store.escapeHtml(name)}">${Store.escapeHtml(name)}</strong>
+          <small>${Store.escapeHtml(currentUser.authenticated ? productRoleLabel(currentUser.role) : '尚未取得角色')}</small>
+        </span>
+      </div>
+    `;
+  }
+
+  function renderPageHeader() {
+    const activity = selectedActivity();
+    if (!currentUser.authenticated) {
+      return `<header class="aim-page-header"><div><h1>活動情報管理</h1><p>請先取得有效的使用者角色。</p></div></header>`;
+    }
+    if (ui.view === 'overview') {
+      return `
+        <header class="aim-page-header">
+          <div><h1>所有活動</h1><p>管理活動、開放期間、情報紀錄與分析。</p></div>
+          <button class="aim-button aim-button-primary" type="button" data-action="new-activity">建立活動</button>
+        </header>
+      `;
+    }
+    if (ui.view === 'activityChooser') {
+      return `<header class="aim-page-header"><div><h1>選擇開放中的活動</h1><p>目前有多個活動開放填寫，請選擇要紀錄的活動。</p></div></header>`;
+    }
+    if (ui.view === 'noOpenActivity') {
+      return `<header class="aim-page-header"><div><h1>情報紀錄</h1><p>目前沒有可填寫的活動。</p></div></header>`;
+    }
+    if (!activity) return '';
+    const status = Store.activityStatus(activity);
+    const module = activeModule();
+    return `
+      <header class="aim-page-header aim-activity-page-header">
+        <div class="aim-activity-identity">
+          <div class="aim-activity-title-row"><h1>${Store.escapeHtml(activity.name)}</h1>${statusPill(status)}</div>
+          ${Store.activitySubtitle(activity) ? `<p class="aim-exhibition-subtitle">${Store.escapeHtml(Store.activitySubtitle(activity))}</p>` : ''}
+          <p class="aim-form-period">表單開放 ${Store.formatDate(activity.formOpenStart)} - ${Store.formatDate(activity.formOpenEnd)}</p>
+        </div>
+        <div class="aim-module-heading"><span>目前模組</span><h2>${moduleLabel(module)}</h2><p>${moduleDescription(module)}</p></div>
+      </header>
     `;
   }
 
@@ -173,7 +342,7 @@
       <label class="aim-preview-control">本機角色預覽
         <select class="aim-select" id="aim-role-preview" aria-label="本機角色預覽">
           ${option('real', '實際白名單角色', selected)}
-          ${Store.ROLES.map(role => option(role, Store.roleLabel(role), selected)).join('')}
+          ${Store.ROLES.map(role => option(role, productRoleLabel(role), selected)).join('')}
         </select>
       </label>
     `;
@@ -183,9 +352,9 @@
     if (!currentUser || !currentUser.isPrototypePreview) return '';
     return `
       <div class="aim-preview-banner" role="status">
-        <strong>本機模擬角色：${Store.escapeHtml(Store.roleLabel(currentUser.role))}</strong>
-        <span>這只會改變原型前端呈現，不會修改後端 Session、JWT、Cookie、Google Sheet 或 LINE 白名單。</span>
-        <button class="aim-button aim-button-soft" type="button" data-action="use-real-role">回到實際白名單角色</button>
+        <strong>本機開發預覽：目前以「${Store.escapeHtml(productRoleLabel(currentUser.role))}」權限檢視</strong>
+        <span>僅影響此瀏覽器工作階段的原型呈現。</span>
+        <button class="aim-button aim-button-soft" type="button" data-action="use-real-role">恢復真實角色</button>
       </div>
     `;
   }
@@ -210,12 +379,6 @@
     const rows = openActivities();
     return `
       <section>
-        <div class="aim-page-head">
-          <div>
-            <h2 class="aim-page-title">選擇開放中的活動</h2>
-            <p class="aim-subtitle">目前有多個活動開放填寫，請選擇要紀錄的活動。</p>
-          </div>
-        </div>
         <div class="aim-activity-chooser">
           ${rows.map(activity => `
             <button class="aim-chooser-row" type="button" data-action="recorder-open" data-id="${activity.id}">
@@ -244,32 +407,27 @@
     const kpis = overviewKpis();
     return `
       <section>
-        <div class="aim-page-head">
-          <div>
-            <h2 class="aim-page-title">活動總覽</h2>
-            <p class="aim-subtitle">管理活動、表單開放期間、情報紀錄、分析與 CSV 匯出。</p>
-          </div>
-          <button class="aim-button aim-button-primary" type="button" data-action="new-activity">新增活動</button>
-        </div>
         <div class="aim-kpi-grid">
           <div class="aim-kpi"><span>活動總數</span><strong>${state.activities.length}</strong></div>
           <div class="aim-kpi"><span>開放中</span><strong>${kpis.open}</strong></div>
           <div class="aim-kpi"><span>有效情報紀錄</span><strong>${kpis.activeRecords}</strong></div>
           <div class="aim-kpi"><span>今日新增</span><strong>${kpis.today}</strong></div>
         </div>
-        <div class="aim-toolbar" role="search">
-          <input class="aim-input" id="aim-overview-q" value="${Store.escapeHtml(ui.overview.q)}" placeholder="搜尋活動" aria-label="搜尋活動">
-          <select class="aim-select" id="aim-overview-status" aria-label="活動狀態">
-            ${option('all', '全部狀態', ui.overview.status)}
-            ${option('upcoming', '尚未開放', ui.overview.status)}
-            ${option('open', '開放中', ui.overview.status)}
-            ${option('ended', '已結束', ui.overview.status)}
-          </select>
-          <span></span>
-          <button class="aim-button" type="button" data-action="clear-overview">清除篩選</button>
-        </div>
-        <div class="aim-table-wrap">
-          <table class="aim-table">
+        <div class="aim-content-card aim-activity-list-card">
+          <div class="aim-content-card-head"><div><h2>活動清單</h2><p>${rows.length} 個符合目前條件的活動</p></div></div>
+          <div class="aim-toolbar" role="search">
+            <input class="aim-input" id="aim-overview-q" value="${Store.escapeHtml(ui.overview.q)}" placeholder="搜尋活動" aria-label="搜尋活動">
+            <select class="aim-select" id="aim-overview-status" aria-label="活動狀態">
+              ${option('all', '全部狀態', ui.overview.status)}
+              ${option('upcoming', '尚未開放', ui.overview.status)}
+              ${option('open', '開放中', ui.overview.status)}
+              ${option('ended', '已結束', ui.overview.status)}
+            </select>
+            <span></span>
+            <button class="aim-button" type="button" data-action="clear-overview">清除篩選</button>
+          </div>
+          <div class="aim-table-wrap">
+            <table class="aim-table">
             <thead>
               <tr>
                 ${th('name', '活動名稱')}
@@ -285,7 +443,8 @@
             <tbody>
               ${rows.map(renderActivityRow).join('') || '<tr><td colspan="8"><div class="aim-empty">沒有符合篩選條件的活動。</div></td></tr>'}
             </tbody>
-          </table>
+            </table>
+          </div>
         </div>
       </section>
     `;
@@ -325,36 +484,11 @@
   function renderWorkspace() {
     const activity = selectedActivity();
     if (!activity) return canManageActivities() ? renderOverview() : renderNoOpenActivity();
-    const status = Store.activityStatus(activity);
-    const metrics = activityMetrics(activity.id);
     return `
       <section>
-        <div class="aim-workspace-head">
-          <div>
-            <h2 class="aim-workspace-title">${Store.escapeHtml(activity.name)}</h2>
-            <div class="aim-workspace-meta">
-              ${Store.activitySubtitle(activity) ? `<span class="aim-meta-chip">${Store.escapeHtml(Store.activitySubtitle(activity))}</span>` : ''}
-              <span class="aim-meta-chip">表單開放 <strong>${Store.formatDate(activity.formOpenStart)} - ${Store.formatDate(activity.formOpenEnd)}</strong></span>
-              ${statusPill(status)}
-              <span class="aim-meta-chip">有效紀錄 <strong>${metrics.active}</strong></span>
-              <span class="aim-meta-chip">今日 <strong>${metrics.today}</strong></span>
-            </div>
-          </div>
-          ${canManageActivities() ? '<div class="aim-actions"><button class="aim-button" type="button" data-action="all">活動總覽</button><button class="aim-button" type="button" data-action="settings">活動設定</button></div>' : ''}
-        </div>
-        <nav class="aim-tabs" aria-label="活動模組">
-          ${canManageActivities() ? tab('overview', '活動概況') : ''}
-          ${canDesignForm() ? tab('form', '表單設計') : ''}
-          ${tab('records', '情報紀錄')}
-          ${canUseAnalytics() ? tab('analytics', '數據分析') : ''}
-        </nav>
         ${renderTab(activity)}
       </section>
     `;
-  }
-
-  function tab(key, label) {
-    return `<button class="aim-tab" role="tab" aria-selected="${ui.tab === key}" data-action="tab" data-tab="${key}" type="button">${label}</button>`;
   }
 
   function renderTab(activity) {
@@ -733,6 +867,7 @@
     const action = el.dataset.action;
     if (action === 'use-real-role') switchPreviewRole('real');
     if (action === 'all' && canManageActivities()) { ui.view = 'overview'; ui.tab = 'overview'; }
+    if (action === 'records-home' && isRecorder()) applyRoleLanding();
     if (action === 'open' && canManageActivities()) { ui.selectedActivityId = el.dataset.id; ui.view = 'workspace'; ui.tab = 'overview'; }
     if (action === 'recorder-open' && isRecorder()) { ui.selectedActivityId = el.dataset.id; ui.view = 'workspace'; ui.tab = 'records'; ui.records.scope = 'entry'; }
     if (action === 'tab') selectTab(el.dataset.tab);
