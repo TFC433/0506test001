@@ -92,18 +92,41 @@ async function getSystemConfig(req) {
     return systemService.getSystemConfig();
 }
 
-async function isLineUserWhitelisted(req, lineUserId) {
-    let systemConfig;
-    try {
-        systemConfig = await getSystemConfig(req);
-    } catch (_) {
-        systemConfig = null;
-    }
+function normalizeLineLeadRole(value) {
+    const normalized = typeof value === 'string' ? value.trim().toLowerCase() : '';
+    return ['super_admin', 'admin', 'recorder'].includes(normalized) ? normalized : 'recorder';
+}
 
+function findLineUserWhitelistEntry(systemConfig, lineUserId) {
     if (!systemConfig) return false;
 
     const whitelist = systemConfig[lineLeadConfig.WHITELIST_CONFIG_CATEGORY] || [];
-    return whitelist.some(item => item && item.value && item.value.trim() === lineUserId);
+    return whitelist.find(item => item && item.value && item.value.trim() === lineUserId) || null;
+}
+
+function resolveLineLeadRoleFromWhitelistEntry(entry) {
+    return normalizeLineLeadRole(entry && entry.style);
+}
+
+function resolveLineLeadRoleFromSystemConfig(systemConfig, lineUserId) {
+    return resolveLineLeadRoleFromWhitelistEntry(findLineUserWhitelistEntry(systemConfig, lineUserId));
+}
+
+async function getLineUserWhitelistEntry(req, lineUserId, systemConfigOverride) {
+    let systemConfig = systemConfigOverride;
+    if (!systemConfig) {
+        try {
+            systemConfig = await getSystemConfig(req);
+        } catch (_) {
+            systemConfig = null;
+        }
+    }
+
+    return findLineUserWhitelistEntry(systemConfig, lineUserId);
+}
+
+async function isLineUserWhitelisted(req, lineUserId, systemConfigOverride) {
+    return Boolean(await getLineUserWhitelistEntry(req, lineUserId, systemConfigOverride));
 }
 
 function getLineLeadSessionSecret() {
@@ -236,6 +259,7 @@ async function establishSessionForUser(req, res, lineUser, systemConfig) {
     const sessionDays = resolveLineLeadSessionDays(systemConfig);
     const sessionSeconds = sessionDays * 24 * 60 * 60;
     const token = issueLineLeadSessionJwt(lineUser, sessionSeconds);
+    const role = normalizeLineLeadRole(lineUser.role || resolveLineLeadRoleFromSystemConfig(systemConfig, lineUser.userId));
 
     if (!token) {
         return sendSafeSecretError(res);
@@ -253,6 +277,7 @@ async function establishSessionForUser(req, res, lineUser, systemConfig) {
         userId: lineUser.userId,
         displayName: lineUser.displayName,
         pictureUrl: lineUser.pictureUrl,
+        role,
         sessionDays
     });
 }
@@ -282,11 +307,19 @@ async function getLineLeadSession(req, res) {
             clearLineLeadSessionCookie(req, res);
             return sendUnauthorized(res);
         }
+        lineUser.role = 'recorder';
     } else {
-        const allowed = await isLineUserWhitelisted(req, lineUser.userId);
-        if (!allowed) {
+        let systemConfig;
+        try {
+            systemConfig = await getSystemConfig(req);
+        } catch (_) {
+            systemConfig = null;
+        }
+        const whitelistEntry = await getLineUserWhitelistEntry(req, lineUser.userId, systemConfig);
+        if (!whitelistEntry) {
             return sendForbidden(req, res, lineUser.userId);
         }
+        lineUser.role = resolveLineLeadRoleFromWhitelistEntry(whitelistEntry);
     }
 
     req.lineUser = lineUser;
@@ -295,7 +328,8 @@ async function getLineLeadSession(req, res) {
         authenticated: true,
         userId: lineUser.userId,
         displayName: lineUser.displayName,
-        pictureUrl: lineUser.pictureUrl
+        pictureUrl: lineUser.pictureUrl,
+        role: normalizeLineLeadRole(lineUser.role)
     });
 }
 
@@ -315,6 +349,7 @@ async function createLineLeadSession(req, res) {
         }
 
         const lineUser = createLocalDevLineUser();
+        lineUser.role = 'recorder';
         let systemConfig = null;
         try {
             systemConfig = await getSystemConfig(req);
@@ -343,8 +378,8 @@ async function createLineLeadSession(req, res) {
         systemConfig = null;
     }
 
-    const allowed = await isLineUserWhitelisted(req, lineUser.userId);
-    if (!allowed) {
+    const whitelistEntry = await getLineUserWhitelistEntry(req, lineUser.userId, systemConfig);
+    if (!whitelistEntry) {
         return res.status(403).json({
             success: false,
             authenticated: false,
@@ -353,6 +388,7 @@ async function createLineLeadSession(req, res) {
         });
     }
 
+    lineUser.role = resolveLineLeadRoleFromWhitelistEntry(whitelistEntry);
     return establishSessionForUser(req, res, lineUser, systemConfig);
 }
 
@@ -386,11 +422,19 @@ async function requireLineLeadSession(req, res, next) {
             clearLineLeadSessionCookie(req, res);
             return sendUnauthorized(res);
         }
+        lineUser.role = 'recorder';
     } else {
-        const allowed = await isLineUserWhitelisted(req, lineUser.userId);
-        if (!allowed) {
+        let systemConfig;
+        try {
+            systemConfig = await getSystemConfig(req);
+        } catch (_) {
+            systemConfig = null;
+        }
+        const whitelistEntry = await getLineUserWhitelistEntry(req, lineUser.userId, systemConfig);
+        if (!whitelistEntry) {
             return sendForbidden(req, res, lineUser.userId);
         }
+        lineUser.role = resolveLineLeadRoleFromWhitelistEntry(whitelistEntry);
     }
 
     req.lineUser = lineUser;
@@ -408,6 +452,11 @@ module.exports = {
     getCookieOptions,
     clearLineLeadSessionCookie,
     resolveLineLeadSessionDays,
+    normalizeLineLeadRole,
+    findLineUserWhitelistEntry,
+    resolveLineLeadRoleFromWhitelistEntry,
+    resolveLineLeadRoleFromSystemConfig,
+    getLineUserWhitelistEntry,
     isLineUserWhitelisted,
     issueLineLeadSessionJwt,
     verifyLineLeadSessionJwt
