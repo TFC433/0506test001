@@ -175,7 +175,6 @@
   }
 
   function activeModule() {
-    if (ui.drawer && ui.drawer.type === 'settings') return 'settings';
     if (ui.view !== 'workspace') return isRecorder() ? 'records' : 'all';
     return isRecorder() ? 'records' : ui.tab;
   }
@@ -230,7 +229,7 @@
               ${canDesignForm() ? sidebarTab('form', '表單設計', active === 'form') : ''}
               ${sidebarTab('records', '表單紀錄', active === 'records')}
               ${canUseAnalytics() ? sidebarTab('analytics', '數據分析', active === 'analytics') : ''}
-              ${sidebarButton('settings', '活動設定', active === 'settings')}
+
             </div>
           ` : ''}
         </nav>
@@ -336,12 +335,14 @@
     if (!activity) return '';
     const status = Store.activityStatus(activity);
     const module = activeModule();
+    const showSettingsButton = canManageActivities() && ui.tab === 'overview';
     return `
       <header class="aim-page-header aim-activity-page-header">
         <div class="aim-activity-identity">
           <div class="aim-activity-title-row"><h1>${Store.escapeHtml(activity.name)}</h1>${statusPill(status)}<span class="aim-form-period">表單開放：${Store.escapeHtml(formatHeaderDateRange(activity.formOpenStart, activity.formOpenEnd, true))}</span></div>
           ${headerExhibitionSubtitle(activity) ? `<p class="aim-exhibition-subtitle">${Store.escapeHtml(headerExhibitionSubtitle(activity))}</p>` : ''}
         </div>
+        ${showSettingsButton ? '<button class="aim-button aim-button-settings aim-header-settings-button" type="button" data-action="settings">活動設定</button>' : ''}
         <div class="aim-module-heading"><span>目前模組</span><h2>${moduleLabel(module)}</h2><p>${moduleDescription(module)}</p></div>
       </header>
     `;
@@ -765,6 +766,20 @@
     return `<div class="aim-field">${label}<input class="aim-input aim-quick-input" data-field="${field.fieldId}" value="${Store.escapeHtml(value || '')}" ${enabled ? '' : 'disabled'}></div>`;
   }
 
+  function renderCardLinkPlaceholder() {
+    return `
+      <div class="aim-card-link-placeholder">
+        <div class="aim-card-link-placeholder-content">
+          <div class="aim-card-link-placeholder-header">
+            <span class="aim-card-link-placeholder-title">名片連結</span>
+            <span class="aim-card-link-placeholder-status">尚未啟用</span>
+          </div>
+          <p class="aim-card-link-placeholder-desc">未來將表單紀錄與名片 Card ID 串聯，目前尚未啟用。</p>
+        </div>
+      </div>
+    `;
+  }
+
   function renderForm(activity) {
     const status = Store.activityStatus(activity);
     const selected = activity.formFields.find(f => f.fieldId === ui.selectedFieldId) || activity.formFields[0];
@@ -773,6 +788,7 @@
       ${status.key === 'open' ? '<div class="aim-warning">此活動表單正在開放中，調整欄位會影響後續紀錄填寫。</div>' : ''}
       <div class="aim-form-designer">
         <div class="aim-panel">
+          ${renderCardLinkPlaceholder()}
           <div class="aim-panel-title-row"><h2>表單欄位設計</h2><div class="aim-actions"><select class="aim-select" id="aim-add-field-type">${fieldTypes.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select><button class="aim-button aim-button-primary" data-action="add-field" type="button">新增欄位</button></div></div>
           <div class="aim-field-list">${activity.formFields.map((field, index) => renderFieldRow(activity, field, index)).join('')}</div>
           ${selected ? renderFieldEditor(activity, selected) : ''}
@@ -784,11 +800,11 @@
 
   function renderFieldRow(activity, field, index) {
     const hasAnswers = fieldHasAnswers(activity.id, field.fieldId);
+    const isSelected = ui.selectedFieldId === field.fieldId;
     return `
-      <div class="aim-field-row" aria-selected="${ui.selectedFieldId === field.fieldId}">
-        <button type="button" data-action="select-field" data-id="${field.fieldId}" style="border:0;background:transparent;padding:0;text-align:left;cursor:pointer">
+      <div class="aim-field-row${isSelected ? ' aim-field-row-selected' : ''}" aria-selected="${isSelected}">
+        <button class="aim-field-row-select" type="button" data-action="select-field" data-id="${field.fieldId}">
           <div class="aim-field-row-title"><span>${Store.escapeHtml(field.title || '未命名欄位')}</span><span class="aim-pill">${fieldTypeLabel(field.type)}</span>${field.visible ? '' : '<span class="aim-pill aim-pill-hidden">已隱藏</span>'}${field.retired ? '<span class="aim-pill aim-pill-retired">已停用</span>' : ''}${hasAnswers ? '<span class="aim-pill">已有回答</span>' : ''}</div>
-          <div class="aim-small">${Store.escapeHtml(field.fieldId)}</div>
         </button>
         <div class="aim-field-row-actions"><button class="aim-button aim-icon-button" data-action="move-field" data-id="${field.fieldId}" data-dir="-1" ${index === 0 ? 'disabled' : ''} type="button">^</button><button class="aim-button aim-icon-button" data-action="move-field" data-id="${field.fieldId}" data-dir="1" ${index === activity.formFields.length - 1 ? 'disabled' : ''} type="button">v</button></div>
       </div>
@@ -799,12 +815,24 @@
     const hasAnswers = fieldHasAnswers(activity.id, field.fieldId);
     const optionTypes = ['single_choice', 'multiple_choice', 'dropdown'];
     return `
-      <div class="aim-panel" style="margin-top:12px">
-        <div class="aim-panel-title-row"><h3>欄位設定</h3><span class="aim-small">${Store.escapeHtml(field.fieldId)}</span></div>
-        <div class="aim-editor-grid"><div class="aim-field"><label>標題</label><input class="aim-input" id="aim-field-title" value="${Store.escapeHtml(field.title)}" ${field.retired ? 'disabled' : ''}></div><div class="aim-field"><label>類型</label><select class="aim-select" id="aim-field-type" ${field.retired || hasAnswers ? 'disabled' : ''}>${fieldTypes.map(([k, l]) => option(k, l, field.type)).join('')}</select></div></div>
-        <div class="aim-field"><label>說明文字</label><input class="aim-input" id="aim-field-helper" value="${Store.escapeHtml(field.helperText || '')}" ${field.retired ? 'disabled' : ''}></div>
-        ${optionTypes.includes(field.type) ? `<div class="aim-field"><label>選項，每行一個</label><textarea class="aim-textarea" id="aim-field-options" ${field.retired ? 'disabled' : ''}>${Store.escapeHtml((field.options || []).join('\n'))}</textarea></div>` : ''}
-        <div class="aim-actions" style="justify-content:flex-start"><button class="aim-button" data-action="toggle-field" data-id="${field.fieldId}" ${field.retired ? 'disabled' : ''} type="button">${field.visible ? '隱藏欄位' : '顯示欄位'}</button><button class="aim-button" data-action="copy-field" data-id="${field.fieldId}" type="button">複製欄位</button><button class="aim-button aim-button-danger" data-action="${hasAnswers ? 'retire-field' : 'delete-field'}" data-id="${field.fieldId}" ${field.retired ? 'disabled' : ''} type="button">${hasAnswers ? '停用欄位' : '刪除欄位'}</button></div>
+      <div class="aim-field-editor" data-editor-field="${field.fieldId}">
+        <div class="aim-field-editor-head">
+          <h3>欄位設定</h3>
+          <div class="aim-field-editor-status">
+            ${field.retired ? '<span class="aim-pill aim-pill-retired">已停用</span>' : ''}
+            ${!field.visible && !field.retired ? '<span class="aim-pill aim-pill-hidden">已隱藏</span>' : ''}
+            ${hasAnswers ? '<span class="aim-pill">已有回答</span>' : ''}
+          </div>
+        </div>
+        <div class="aim-field-editor-body">
+          <div class="aim-editor-grid">
+            <div class="aim-field"><label>標題</label><textarea class="aim-textarea aim-auto-grow aim-field-design-input" id="aim-field-title" data-design-field="title" rows="1" ${field.retired ? 'disabled' : ''}>${Store.escapeHtml(field.title)}</textarea></div>
+            <div class="aim-field"><label>類型</label><select class="aim-select" id="aim-field-type" ${field.retired || hasAnswers ? 'disabled' : ''}>${fieldTypes.map(([k, l]) => option(k, l, field.type)).join('')}</select></div>
+          </div>
+          <div class="aim-field"><label>說明文字</label><textarea class="aim-textarea aim-auto-grow aim-field-design-input" id="aim-field-helper" data-design-field="helperText" rows="1" ${field.retired ? 'disabled' : ''}>${Store.escapeHtml(field.helperText || '')}</textarea></div>
+          ${optionTypes.includes(field.type) ? `<div class="aim-field"><label>選項，每行一個</label><textarea class="aim-textarea aim-auto-grow aim-field-design-input" id="aim-field-options" data-design-field="options" rows="2" ${field.retired ? 'disabled' : ''}>${Store.escapeHtml((field.options || []).join('\n'))}</textarea></div>` : ''}
+        </div>
+        <div class="aim-field-editor-actions"><button class="aim-button" data-action="toggle-field" data-id="${field.fieldId}" ${field.retired ? 'disabled' : ''} type="button">${field.visible ? '隱藏欄位' : '顯示欄位'}</button><button class="aim-button" data-action="copy-field" data-id="${field.fieldId}" type="button">複製欄位</button><button class="aim-button aim-button-danger" data-action="${hasAnswers ? 'retire-field' : 'delete-field'}" data-id="${field.fieldId}" ${field.retired ? 'disabled' : ''} type="button">${hasAnswers ? '停用欄位' : '刪除欄位'}</button></div>
       </div>
     `;
   }
@@ -1125,10 +1153,8 @@
     bindSettingsField('aim-settings-ex-start', 'exhibitionStart', 'change');
     bindSettingsField('aim-settings-ex-end', 'exhibitionEnd', 'change');
     bindSettingsField('aim-settings-description', 'description');
-    bind('aim-field-title', value => updateField({ title: value }));
-    bind('aim-field-helper', value => updateField({ helperText: value }));
     bind('aim-field-type', value => updateField({ type: value, options: ['single_choice', 'multiple_choice', 'dropdown'].includes(value) ? ['選項 1', '選項 2'] : [] }), 'change');
-    bind('aim-field-options', value => updateField({ options: value.split('\n').map(v => v.trim()).filter(Boolean) }));
+    bindFormDesignTextareas();
     bind('aim-record-q', value => { ui.records.q = value; });
     bind('aim-record-recorder', value => { ui.records.recorder = value; }, 'change');
     bind('aim-record-priority', value => { ui.records.priority = value; }, 'change');
@@ -1164,11 +1190,12 @@
       setQuickAnswer(node.dataset.field, Array.from(list));
     }));
     bindAutoGrowingTextareas();
+    initFormDesignAutoGrow();
     fitRecordPreviewBadges();
   }
 
   function bindAutoGrowingTextareas() {
-    document.querySelectorAll('.aim-auto-grow').forEach(textarea => {
+    document.querySelectorAll('.aim-auto-grow:not(.aim-field-design-input)').forEach(textarea => {
       autoGrowTextarea(textarea);
       textarea.addEventListener('input', () => autoGrowTextarea(textarea));
     });
@@ -1178,6 +1205,30 @@
     if (!textarea || textarea.offsetParent === null) return;
     textarea.style.height = 'auto';
     textarea.style.height = `${textarea.scrollHeight}px`;
+  }
+
+  function initFormDesignAutoGrow() {
+    document.querySelectorAll('.aim-field-design-input').forEach(textarea => {
+      autoGrowTextarea(textarea);
+    });
+  }
+
+  function bindFormDesignTextareas() {
+    document.querySelectorAll('.aim-field-design-input').forEach(textarea => {
+      const designField = textarea.dataset.designField;
+      if (!designField) return;
+      const handleInput = () => {
+        autoGrowTextarea(textarea);
+        if (designField === 'options') {
+          updateField({ options: textarea.value.split('\n').map(v => v.trim()).filter(Boolean) });
+        } else {
+          updateField({ [designField]: textarea.value });
+        }
+        save();
+      };
+      textarea.addEventListener('input', handleInput);
+      textarea.addEventListener('change', handleInput);
+    });
   }
 
   function fitRecordPreviewBadges() {
