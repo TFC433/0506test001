@@ -1258,6 +1258,52 @@ a:focus-visible {
   line-height: 1.4;
 }
 
+.aim-record-card-meta-right {
+  /* removed: completeness is now inline in meta flow */
+  display: none;
+}
+
+.aim-record-card-completeness {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.aim-record-card-completeness-label {
+  color: var(--aim-muted-2);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.aim-record-card-completeness-count {
+  color: var(--aim-text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.aim-record-card-completeness-bar {
+  display: inline-block;
+  position: relative;
+  width: 36px;
+  height: 4px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+.aim-record-card-completeness-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: var(--bar-w, 0px);
+  background: var(--bar-color, #15803d);
+  border-radius: 999px;
+}
+
 .aim-record-card-meta span {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -1271,24 +1317,51 @@ a:focus-visible {
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0 10px;
   padding: 12px;
+  align-items: stretch;
 }
 
 .aim-record-card-copy {
+  min-width: 0;
   width: 100%;
   max-width: 100%;
-  min-width: 0;
 }
 
 .aim-record-card-identity-row {
-  align-items: flex-start;
-  justify-content: space-between;
-  flex-wrap: wrap;
   margin-top: 6px;
+  min-width: 0;
 }
 
-.aim-record-card-identity-row .aim-record-actions {
+.aim-record-card-right-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 6px;
   flex: 0 0 auto;
+  min-width: 0;
+}
+
+.aim-record-card-biz-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 7px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 4px;
+  color: var(--aim-muted-2);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+  min-width: 60px;
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .aim-record-card-primary {
@@ -1560,6 +1633,22 @@ a:focus-visible {
   color: #596579;
   background: #eef2f6;
   border-color: #d5dde7;
+}
+
+.aim-preview-sep {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 0 5px;
+  color: var(--aim-muted-2);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1;
+  user-select: none;
+}
+
+.aim-preview-sep[hidden] {
+  display: none;
 }
 
 .aim-record-preview-text {

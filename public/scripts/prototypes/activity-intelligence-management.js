@@ -583,30 +583,45 @@
   function renderRecordCard(record, activity, context) {
     const expanded = ui.expandedRecords[context].has(record.id) && canViewRecord(record, activity);
     const preview = recordPreview(record, activity);
+    const coverage = recordCoverage(record, activity);
     return `
       <article class="aim-latest-item aim-record-card aim-record-card-${context} ${record.status === 'void' ? 'aim-record-card-void' : ''}">
         <div class="aim-record-card-summary">
           <div class="aim-record-card-copy">
-            <div class="aim-record-card-meta">
-              <span>${Store.escapeHtml(activity.name)}</span>
-              <span>${Store.escapeHtml(record.createdByDisplayName)}</span>
-              <span>${Store.formatDateTime(record.createdAt)}</span>
-              ${record.status === 'void' ? '<span class="aim-pill aim-pill-void">已作廢</span>' : ''}
-            </div>
+            ${renderRecordCardMeta(record, activity, coverage)}
             <div class="aim-record-card-identity-row">
               <div class="aim-record-card-primary">
-              <strong class="${preview.customer ? '' : 'aim-missing-name'}">${Store.escapeHtml(preview.customer || '未填姓名')}</strong>
+                <strong class="${preview.customer ? '' : 'aim-missing-name'}">${Store.escapeHtml(preview.customer || '未填姓名')}</strong>
                 ${preview.company ? `<span class="aim-record-card-company">${Store.escapeHtml(preview.company)}</span>` : ''}
                 ${preview.priority ? priorityPill(preview.priority) : ''}
               </div>
-              ${renderRecordReviewActions(record, activity, context, expanded)}
             </div>
             ${renderRecordPreviewContent(preview, context)}
+          </div>
+          <div class="aim-record-card-right-rail">
+            ${renderRecordReviewActions(record, activity, context, expanded)}
+            <div class="aim-record-card-biz-slot" aria-hidden="true">未連結名片</div>
           </div>
         </div>
         ${expanded ? renderInlineRecordDetail(record, activity) : ''}
       </article>
     `;
+  }
+
+  function renderRecordCardMeta(record, activity, coverage) {
+    const answered = coverage.answered;
+    const total = coverage.total;
+    const barWidth = total > 0 ? Math.round(answered / total * 36) : 0;
+    const pct = coverage.percent;
+    const barColor = pct >= 70 ? '#15803d' : pct >= 40 ? '#b45309' : '#b42318';
+    const completenessHtml = `<span class="aim-record-card-completeness" title="欄位完整度 ${answered}/${total}"><span class="aim-record-card-completeness-label">完整度</span><span class="aim-record-card-completeness-count">${answered}/${total}</span><span class="aim-record-card-completeness-bar" style="--bar-w:${barWidth}px;--bar-color:${barColor}" aria-hidden="true"></span></span>`;
+    return `<div class="aim-record-card-meta">
+      <span>${Store.escapeHtml(activity.name)}</span>
+      <span>${Store.escapeHtml(record.createdByDisplayName)}</span>
+      <span>${Store.formatDateTime(record.createdAt)}</span>
+      ${record.status === 'void' ? '<span class="aim-pill aim-pill-void">已作廢</span>' : ''}
+      ${completenessHtml}
+    </div>`;
   }
 
   function renderExpansionToggle(context, records) {
@@ -669,18 +684,17 @@
     const customerField = fields.find(field => field.fieldId === 'fld_customer_name') || fields.find(field => /客戶|受訪者|姓名/.test(field.title));
     const companyField = fields.find(field => field.fieldId === 'fld_company') || fields.find(field => /公司|企業|組織/.test(field.title));
     const priorityField = fields.find(field => field.fieldId === 'fld_priority') || fields.find(field => /優先/.test(field.title));
-    const badges = [];
+    const badgeGroups = [];
     fields.filter(field => isChoiceField(field) && field !== priorityField).forEach(field => {
-      categoricalValues(record.answers[field.fieldId]).forEach(value => {
-        badges.push({ field, value });
-      });
+      const values = categoricalValues(record.answers[field.fieldId]);
+      if (values.length) badgeGroups.push({ field, values });
     });
     const textField = fields.find(field => field.type === 'long_text');
     return {
       customer: customerField ? Store.answerText(record.answers[customerField.fieldId]) : '',
       company: companyField ? Store.answerText(record.answers[companyField.fieldId]) : '',
       priority: priorityField ? Store.answerText(record.answers[priorityField.fieldId]) : '',
-      badges,
+      badgeGroups,
       text: textField ? { label: textField.title, value: Store.answerText(record.answers[textField.fieldId]) } : null
     };
   }
@@ -703,8 +717,18 @@
   }
 
   function renderRecordPreviewContent(preview, context) {
-    const badges = preview.badges.map(item => `<span class="aim-answer-badge" data-preview-badge>${Store.escapeHtml(item.value)}</span>`).join('');
-    const badgeLine = badges ? `<div class="aim-record-preview-badges" data-preview-badges>${badges}<span class="aim-answer-badge aim-preview-overflow-badge" data-preview-overflow hidden>+0</span></div>` : '';
+    const groups = preview.badgeGroups || [];
+    const nonEmptyGroups = groups.filter(g => g.values && g.values.length > 0);
+    let badgesHtml = '';
+    nonEmptyGroups.forEach((group, groupIndex) => {
+      if (groupIndex > 0) {
+        badgesHtml += '<span class="aim-preview-sep" data-preview-sep aria-hidden="true">|</span>';
+      }
+      group.values.forEach(value => {
+        badgesHtml += `<span class="aim-answer-badge" data-preview-badge>${Store.escapeHtml(value)}</span>`;
+      });
+    });
+    const badgeLine = badgesHtml ? `<div class="aim-record-preview-badges" data-preview-badges>${badgesHtml}<span class="aim-answer-badge aim-preview-overflow-badge" data-preview-overflow hidden>+0</span></div>` : '';
     const text = preview.text ? `<p class="aim-record-preview-text"><span>${Store.escapeHtml(preview.text.label)}：</span>${Store.escapeHtml(preview.text.value)}</p>` : '';
     if (!badgeLine && !text) return '';
     return `<div class="aim-record-preview-content aim-record-preview-content-${context}">${badgeLine}${text}</div>`;
@@ -1159,17 +1183,33 @@
   function fitRecordPreviewBadges() {
     document.querySelectorAll('[data-preview-badges]').forEach(container => {
       const badges = Array.from(container.querySelectorAll('[data-preview-badge]'));
+      const seps = Array.from(container.querySelectorAll('[data-preview-sep]'));
       const overflow = container.querySelector('[data-preview-overflow]');
       if (!overflow) return;
+      // Reset: show all badges and seps, hide overflow
       badges.forEach(badge => { badge.hidden = false; });
+      seps.forEach(sep => { sep.hidden = false; });
       overflow.hidden = true;
       if (container.scrollWidth <= container.clientWidth) return;
+      // Need to hide some badges
       overflow.hidden = false;
       let hiddenCount = 0;
       for (let index = badges.length - 1; index >= 0; index -= 1) {
         badges[index].hidden = true;
         hiddenCount += 1;
         overflow.textContent = `+${hiddenCount}`;
+        // After hiding a badge, also hide any separator that would now be trailing
+        // (i.e. a sep whose following sibling badges are all hidden, or it is the first visible element)
+        seps.forEach(sep => {
+          // Find the previous and next visible badges relative to sep
+          const allItems = Array.from(container.children);
+          const sepIndex = allItems.indexOf(sep);
+          // badges before this sep (same or preceding group) - check if any visible badge follows this sep
+          const hasBadgeAfter = allItems.slice(sepIndex + 1).some(el => el.dataset.previewBadge !== undefined && !el.hidden);
+          // badges before this sep - check if any visible badge precedes it
+          const hasBadgeBefore = allItems.slice(0, sepIndex).some(el => el.dataset.previewBadge !== undefined && !el.hidden);
+          sep.hidden = !hasBadgeAfter || !hasBadgeBefore;
+        });
         if (container.scrollWidth <= container.clientWidth) break;
       }
     });
