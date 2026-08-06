@@ -25,9 +25,13 @@
     toast: '',
     focusQuickFirst: false,
     quickAnswers: {},
+    expandedRecords: {
+      personal: new Set(),
+      all: new Set()
+    },
     overview: { q: '', status: 'all', sort: 'name', dir: 'asc' },
     records: {
-      scope: 'all',
+      scope: 'entry',
       q: '',
       recorder: 'all',
       priority: 'all',
@@ -71,7 +75,6 @@
       }
       return;
     }
-    if (ui.records.scope === 'entry') ui.records.scope = 'all';
     ui.view = 'overview';
     ui.tab = 'overview';
   }
@@ -150,7 +153,6 @@
               ${renderUserIdentity()}
             </div>
           </header>
-          ${renderPreviewBanner()}
           <main class="aim-main">
             ${renderPageHeader()}
             <div class="aim-page-content">${content}</div>
@@ -182,7 +184,7 @@
       all: '所有活動',
       overview: '活動概況',
       form: '表單設計',
-      records: '情報紀錄',
+      records: '表單紀錄',
       analytics: '數據分析',
       settings: '活動設定'
     }[key] || '活動情報管理';
@@ -192,7 +194,7 @@
     return {
       overview: '掌握活動狀態、紀錄進度與近期更新。',
       form: '設定現場紀錄所需的欄位與填寫規則。',
-      records: isRecorder() ? '新增情報並查看活動紀錄。' : '篩選、檢視與管理活動情報紀錄。',
+      records: '新增、查詢與管理目前活動的表單紀錄。',
       analytics: '依紀錄內容與人員分布查看活動洞察。',
       settings: '管理活動名稱、日期與活動註解。'
     }[key] || '';
@@ -215,22 +217,17 @@
               ${sidebarButton('all', '所有活動', active === 'all')}
             </div>
           ` : ''}
-          ${currentUser.authenticated && isRecorder() ? `
-            <div class="aim-nav-group">
-              <span class="aim-nav-label">工作區</span>
-              ${sidebarButton('records-home', '情報紀錄', true)}
-            </div>
-          ` : ''}
+          ${currentUser.authenticated && isRecorder() ? renderRecorderSidebarGroup(activityNav ? activity : null) : ''}
           ${activityNav && canManageActivities() ? `
             <div class="aim-nav-group aim-activity-nav-group">
               <span class="aim-nav-label">目前活動</span>
               <div class="aim-sidebar-context" title="${Store.escapeHtml(activity.name)}">
                 <strong>${Store.escapeHtml(activity.name)}</strong>
-                ${Store.activitySubtitle(activity) ? `<span>${Store.escapeHtml(Store.activitySubtitle(activity))}</span>` : ''}
+                ${renderSidebarExhibitionPeriod(activity)}
               </div>
               ${sidebarTab('overview', '活動概況', active === 'overview')}
               ${canDesignForm() ? sidebarTab('form', '表單設計', active === 'form') : ''}
-              ${sidebarTab('records', '情報紀錄', active === 'records')}
+              ${sidebarTab('records', '表單紀錄', active === 'records')}
               ${canUseAnalytics() ? sidebarTab('analytics', '數據分析', active === 'analytics') : ''}
               ${sidebarButton('settings', '活動設定', active === 'settings')}
             </div>
@@ -252,13 +249,28 @@
     return `<button class="aim-nav-item" type="button" data-action="tab" data-tab="${tabName}" aria-current="${active ? 'page' : 'false'}"><span>${Store.escapeHtml(label)}</span></button>`;
   }
 
+  function renderRecorderSidebarGroup(activity) {
+    return `
+      <div class="aim-nav-group aim-activity-nav-group">
+        <span class="aim-nav-label">${activity ? '目前活動' : '活動管理'}</span>
+        ${activity ? `<div class="aim-sidebar-context" title="${Store.escapeHtml(activity.name)}"><strong>${Store.escapeHtml(activity.name)}</strong>${renderSidebarExhibitionPeriod(activity)}</div>` : ''}
+        <div class="aim-nav-item aim-nav-item-static" aria-current="page"><span>表單紀錄</span></div>
+      </div>
+    `;
+  }
+
+  function renderSidebarExhibitionPeriod(activity) {
+    if (!activity || !activity.exhibitionStart || !activity.exhibitionEnd) return '';
+    return `<span class="aim-sidebar-period"><span>展覽期間：</span><span>${Store.formatDate(activity.exhibitionStart)} ～</span><span>${Store.formatDate(activity.exhibitionEnd)}</span></span>`;
+  }
+
   function renderBreadcrumb() {
     const activity = selectedActivity();
     const items = [];
     if (!currentUser.authenticated) items.push('活動情報管理');
     else if (isRecorder()) {
-      items.push('情報紀錄');
       if (ui.view === 'workspace' && activity) items.push(activity.name);
+      items.push('表單紀錄');
     } else {
       items.push('所有活動');
       if (ui.view === 'workspace' && activity) {
@@ -309,7 +321,7 @@
     if (ui.view === 'overview') {
       return `
         <header class="aim-page-header">
-          <div><h1>所有活動</h1><p>管理活動、開放期間、情報紀錄與分析。</p></div>
+          <div><h1>所有活動</h1><p>管理活動、開放期間、表單紀錄與分析。</p></div>
           <button class="aim-button aim-button-primary" type="button" data-action="new-activity">建立活動</button>
         </header>
       `;
@@ -318,7 +330,7 @@
       return `<header class="aim-page-header"><div><h1>選擇開放中的活動</h1><p>目前有多個活動開放填寫，請選擇要紀錄的活動。</p></div></header>`;
     }
     if (ui.view === 'noOpenActivity') {
-      return `<header class="aim-page-header"><div><h1>情報紀錄</h1><p>目前沒有可填寫的活動。</p></div></header>`;
+      return `<header class="aim-page-header"><div><h1>表單紀錄</h1><p>目前沒有可填寫的活動。</p></div></header>`;
     }
     if (!activity) return '';
     const status = Store.activityStatus(activity);
@@ -326,13 +338,26 @@
     return `
       <header class="aim-page-header aim-activity-page-header">
         <div class="aim-activity-identity">
-          <div class="aim-activity-title-row"><h1>${Store.escapeHtml(activity.name)}</h1>${statusPill(status)}</div>
-          ${Store.activitySubtitle(activity) ? `<p class="aim-exhibition-subtitle">${Store.escapeHtml(Store.activitySubtitle(activity))}</p>` : ''}
-          <p class="aim-form-period">表單開放 ${Store.formatDate(activity.formOpenStart)} - ${Store.formatDate(activity.formOpenEnd)}</p>
+          <div class="aim-activity-title-row"><h1>${Store.escapeHtml(activity.name)}</h1>${statusPill(status)}<span class="aim-form-period">表單開放：${Store.escapeHtml(formatHeaderDateRange(activity.formOpenStart, activity.formOpenEnd, true))}</span></div>
+          ${headerExhibitionSubtitle(activity) ? `<p class="aim-exhibition-subtitle">${Store.escapeHtml(headerExhibitionSubtitle(activity))}</p>` : ''}
         </div>
         <div class="aim-module-heading"><span>目前模組</span><h2>${moduleLabel(module)}</h2><p>${moduleDescription(module)}</p></div>
       </header>
     `;
+  }
+
+  function formatHeaderDateRange(start, end, compactSameMonth) {
+    const startText = Store.formatDate(start);
+    const endText = Store.formatDate(end);
+    if (!startText || !endText) return startText || endText;
+    if (compactSameMonth && String(start).slice(0, 7) === String(end).slice(0, 7)) return `${startText} ～ ${String(end).slice(8, 10)}`;
+    return `${startText} ～ ${endText}`;
+  }
+
+  function headerExhibitionSubtitle(activity) {
+    if (!activity.exhibitionStart && !activity.exhibitionEnd) return '';
+    if (activity.exhibitionStart === activity.exhibitionEnd) return `展覽日期：${Store.formatDate(activity.exhibitionStart)}`;
+    return `展覽期間：${formatHeaderDateRange(activity.exhibitionStart, activity.exhibitionEnd, false)}`;
   }
 
   function renderPreviewControl() {
@@ -345,17 +370,6 @@
           ${Store.ROLES.map(role => option(role, productRoleLabel(role), selected)).join('')}
         </select>
       </label>
-    `;
-  }
-
-  function renderPreviewBanner() {
-    if (!currentUser || !currentUser.isPrototypePreview) return '';
-    return `
-      <div class="aim-preview-banner" role="status">
-        <strong>本機開發預覽：目前以「${Store.escapeHtml(productRoleLabel(currentUser.role))}」權限檢視</strong>
-        <span>僅影響此瀏覽器工作階段的原型呈現。</span>
-        <button class="aim-button aim-button-soft" type="button" data-action="use-real-role">恢復真實角色</button>
-      </div>
     `;
   }
 
@@ -397,7 +411,7 @@
     return `
       <section class="aim-empty">
         <h2>目前沒有開放中的活動</h2>
-        <p>請等待管理員開放活動表單後再新增情報紀錄。</p>
+        <p>請等待管理員開放活動表單後再新增紀錄。</p>
       </section>
     `;
   }
@@ -492,12 +506,8 @@
   }
 
   function renderTab(activity) {
-    if (isRecorder()) {
-      if (ui.records.scope === 'entry') return renderQuickEntry(activity);
-      return renderRecords(activity, ui.records.scope === 'mine' ? 'mine' : 'all');
-    }
     if (ui.tab === 'form' && canDesignForm()) return renderForm(activity);
-    if (ui.tab === 'records') return renderRecords(activity, ui.records.scope);
+    if (ui.tab === 'records') return renderRecordsWorkspace(activity);
     if (ui.tab === 'analytics' && canUseAnalytics()) return renderAnalytics(activity);
     return renderActivityOverview(activity);
   }
@@ -523,46 +533,166 @@
         </div>
         <div class="aim-panel">
           <h3>最近紀錄</h3>
-          <div class="aim-latest-list">${latest.map(r => `<button class="aim-latest-item" data-action="record" data-id="${r.id}" type="button" style="text-align:left"><strong>${Store.escapeHtml(Store.recordSummary(r))}</strong><span class="aim-small">${Store.formatDateTime(r.createdAt)}，${Store.escapeHtml(r.createdByDisplayName)} 建立</span></button>`).join('') || '<div class="aim-empty">目前沒有有效紀錄。</div>'}</div>
+          <div class="aim-latest-list">${latest.map(r => `<button class="aim-latest-item" data-action="open-record-inline" data-id="${r.id}" type="button" style="text-align:left"><strong>${Store.escapeHtml(Store.recordSummary(r))}</strong><span class="aim-small">${Store.formatDateTime(r.createdAt)}，${Store.escapeHtml(r.createdByDisplayName)} 建立</span></button>`).join('') || '<div class="aim-empty">目前沒有有效紀錄。</div>'}</div>
         </div>
       </div>
+    `;
+  }
+
+  function renderRecordsWorkspace(activity) {
+    if (!['entry', 'all'].includes(ui.records.scope)) ui.records.scope = 'entry';
+    return `
+      ${renderRecordScopeSwitch()}
+      ${ui.records.scope === 'entry' ? renderQuickEntry(activity) : renderRecords(activity, ui.records.scope)}
     `;
   }
 
   function renderQuickEntry(activity) {
     const status = Store.activityStatus(activity);
     const open = status.key === 'open';
-    const recent = recordsFor(activity.id).filter(r => r.status !== 'void').sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
+    const personalRecords = recordsOwnedByCurrentUser(activity.id);
     return `
-      ${renderRecordScopeSwitch()}
-      ${!open ? '<div class="aim-warning">表單目前未開放，紀錄者不能新增或編輯自己的紀錄。</div>' : ''}
+      ${!open ? '<div class="aim-warning">表單目前未開放，無法新增紀錄。</div>' : ''}
       <div class="aim-entry-layout">
-        <div class="aim-panel">
+        <div class="aim-panel aim-entry-form">
           <div class="aim-panel-title-row">
-            <h2>新增情報</h2>
-            <div class="aim-actions">
-              <button class="aim-button aim-button-primary" data-action="quick-save-next" ${open ? '' : 'disabled'} type="button">儲存並繼續新增</button>
-              <button class="aim-button" data-action="quick-save-view" ${open ? '' : 'disabled'} type="button">儲存並查看紀錄</button>
-            </div>
+            <h2>新增紀錄</h2>
           </div>
           <div class="aim-answer-list">
-            ${activity.formFields.filter(f => f.visible && !f.retired).map(field => renderQuickField(field, open)).join('')}
+            ${quickEntryFields(activity).map(field => renderQuickField(field, open)).join('')}
+          </div>
+          <div class="aim-entry-save-actions">
+            <button class="aim-button aim-button-primary" data-action="quick-save-next" ${open ? '' : 'disabled'} type="button">儲存並繼續新增</button>
           </div>
         </div>
-        <aside class="aim-panel aim-entry-context">
-          <h2>目前活動</h2>
-          <dl class="aim-definition-list">
-            <dt>活動</dt><dd>${Store.escapeHtml(activity.name)}</dd>
-            <dt>紀錄者</dt><dd>${Store.escapeHtml(currentUser.displayName)}</dd>
-            <dt>表單期間</dt><dd>${Store.formatDate(activity.formOpenStart)} - ${Store.formatDate(activity.formOpenEnd)}</dd>
-            <dt>狀態</dt><dd>${statusPill(status)}</dd>
-          </dl>
-          <div class="aim-context-link"><button class="aim-button" data-action="scope" data-scope="all" type="button">查看全部紀錄</button></div>
-          <h2>最近紀錄</h2>
-          <div class="aim-latest-list">${recent.map(r => `<button class="aim-latest-item" data-action="record" data-id="${r.id}" type="button" style="text-align:left"><strong>${Store.escapeHtml(Store.recordSummary(r))}</strong><span class="aim-small">${Store.escapeHtml(r.createdByDisplayName)}，${Store.formatDateTime(r.createdAt)}</span></button>`).join('') || '<div class="aim-empty">尚無紀錄。</div>'}</div>
+        <aside class="aim-panel aim-entry-context aim-personal-records" aria-live="polite">
+          <div class="aim-personal-records-head">
+            <div><h2>我的紀錄</h2><span class="aim-personal-record-count">${personalRecords.length} 筆</span></div>
+            ${personalRecords.length ? renderExpansionControls('personal') : ''}
+          </div>
+          <div class="aim-latest-list aim-personal-record-list">${personalRecords.map(record => renderPersonalRecordItem(record, activity)).join('') || '<div class="aim-empty">目前尚無我的紀錄。</div>'}</div>
         </aside>
       </div>
     `;
+  }
+
+  function renderPersonalRecordItem(record, activity) {
+    const expanded = ui.expandedRecords.personal.has(record.id) && canViewRecord(record, activity);
+    const preview = recordPreview(record, activity);
+    return `
+      <div class="aim-latest-item aim-personal-record-item ${record.status === 'void' ? 'aim-personal-record-item-void' : ''}">
+        <div class="aim-personal-record-summary">
+          <div class="aim-personal-record-copy">
+            <div class="aim-personal-record-primary">
+              <strong>${Store.escapeHtml(preview.customer || '未填姓名')}</strong>
+              ${preview.company ? `<span class="aim-personal-record-company">${Store.escapeHtml(preview.company)}</span>` : ''}
+              ${preview.priority ? priorityPill(preview.priority) : ''}
+              ${record.status === 'void' ? '<span class="aim-pill aim-pill-void">已作廢</span>' : ''}
+            </div>
+            <div class="aim-personal-record-meta"><span>${Store.escapeHtml(activity.name)}</span><span>${Store.escapeHtml(record.createdByDisplayName)}</span><span>${Store.formatDateTime(record.createdAt)}</span></div>
+            ${renderRecordPreviewContent(preview, 'personal')}
+          </div>
+          ${renderRecordReviewActions(record, activity, 'personal', expanded)}
+        </div>
+        ${expanded ? renderInlineRecordDetail(record, activity) : ''}
+      </div>
+    `;
+  }
+
+  function renderExpansionControls(context) {
+    return `<div class="aim-expansion-controls"><button class="aim-button" data-action="expand-records" data-context="${context}" type="button">全部展開</button><button class="aim-button" data-action="collapse-records" data-context="${context}" type="button">全部收合</button></div>`;
+  }
+
+  function renderInlineRecordDetail(record, activity) {
+    if (!canViewRecord(record, activity)) return '';
+    const populatedFields = activity.formFields.filter(field => field.type !== 'section_heading' && !field.retired && hasValue(record.answers[field.fieldId]));
+    const questionCards = populatedFields.map(field => renderRecordQuestionCard(field, record.answers[field.fieldId])).join('');
+    return `
+      <div class="aim-inline-record-detail">
+        <section class="aim-inline-record-meta-card" aria-label="紀錄資訊">
+          <dl class="aim-inline-record-meta">
+            <div><dt>活動</dt><dd>${Store.escapeHtml(activity.name)}</dd></div>
+            <div><dt>紀錄者</dt><dd>${Store.escapeHtml(record.createdByDisplayName)}</dd></div>
+            <div><dt>建立時間</dt><dd>${Store.formatDateTime(record.createdAt)}</dd></div>
+            <div><dt>最近更新</dt><dd>${Store.formatDateTime(record.updatedAt)}，${Store.escapeHtml(record.updatedByDisplayName)}</dd></div>
+          </dl>
+        </section>
+        <div class="aim-record-question-list">${questionCards || '<p class="aim-inline-record-empty">此紀錄沒有已填寫的內容。</p>'}</div>
+      </div>
+    `;
+  }
+
+  function renderRecordReviewActions(record, activity, context, expanded) {
+    const toggle = `<button class="aim-button" data-action="toggle-record-expansion" data-context="${context}" data-id="${record.id}" aria-expanded="${expanded}" type="button">${expanded ? '收合' : '查看'}</button>`;
+    if (!expanded) return `<div class="aim-record-actions">${toggle}</div>`;
+    const edit = canEditRecord(record, activity) ? `<button class="aim-button" data-action="edit-record" data-id="${record.id}" type="button">編輯</button>` : '';
+    const restore = canRestoreRecord(record, activity) ? `<button class="aim-button" data-action="restore-record" data-id="${record.id}" type="button">還原</button>` : '';
+    return `<div class="aim-record-actions">${toggle}${edit}${restore}</div>`;
+  }
+
+  function isChoiceField(field) {
+    return ['single_choice', 'multiple_choice', 'dropdown', 'boolean', 'checkbox', 'toggle'].includes(field.type);
+  }
+
+  function quickEntryFields(activity) {
+    const fields = activity.formFields.filter(field => field.visible && !field.retired);
+    if (fields[0] && fields[0].type === 'section_heading' && fields[0].title === '基本資訊') return fields.slice(1);
+    return fields;
+  }
+
+  function recordPreview(record, activity) {
+    const fields = activity.formFields.filter(field => field.type !== 'section_heading' && !field.retired && hasValue(record.answers[field.fieldId]));
+    const customerField = fields.find(field => field.fieldId === 'fld_customer_name') || fields.find(field => /客戶|受訪者|姓名/.test(field.title));
+    const companyField = fields.find(field => field.fieldId === 'fld_company') || fields.find(field => /公司|企業|組織/.test(field.title));
+    const priorityField = fields.find(field => field.fieldId === 'fld_priority') || fields.find(field => /優先/.test(field.title));
+    const badges = [];
+    fields.filter(field => isChoiceField(field) && field !== priorityField).forEach(field => {
+      categoricalValues(record.answers[field.fieldId]).forEach(value => {
+        if (badges.length < 3) badges.push({ field, value });
+      });
+    });
+    const textField = fields.find(field => field.type === 'long_text');
+    return {
+      customer: customerField ? Store.answerText(record.answers[customerField.fieldId]) : '',
+      company: companyField ? Store.answerText(record.answers[companyField.fieldId]) : '',
+      priority: priorityField ? Store.answerText(record.answers[priorityField.fieldId]) : '',
+      badges,
+      text: textField ? { label: textField.title, value: Store.answerText(record.answers[textField.fieldId]) } : null
+    };
+  }
+
+  function categoricalValues(value) {
+    const values = Array.isArray(value) ? value : [typeof value === 'boolean' ? (value ? '是' : '否') : value];
+    return values.filter(hasValue);
+  }
+
+  function answerBadgeClass(field, value) {
+    if (field.fieldId !== 'fld_priority') return '';
+    if (value === '高') return ' aim-answer-badge-high';
+    if (value === '中') return ' aim-answer-badge-medium';
+    if (value === '低') return ' aim-answer-badge-low';
+    return ' aim-answer-badge-neutral';
+  }
+
+  function renderCategoricalBadges(field, value, limit) {
+    return categoricalValues(value).slice(0, limit || Number.MAX_SAFE_INTEGER).map(item => `<span class="aim-answer-badge${answerBadgeClass(field, item)}">${Store.escapeHtml(item)}</span>`).join('');
+  }
+
+  function renderRecordPreviewContent(preview, context) {
+    const badges = preview.badges.map(item => `<span class="aim-answer-badge">${Store.escapeHtml(item.value)}</span>`).join('');
+    const text = preview.text ? `<p class="aim-record-preview-text"><span>${Store.escapeHtml(preview.text.label)}：</span>${Store.escapeHtml(preview.text.value)}</p>` : `<p class="aim-record-preview-text aim-record-preview-empty">目前沒有其他摘要內容。</p>`;
+    return `<div class="aim-record-preview-content aim-record-preview-content-${context}">${badges ? `<div class="aim-record-preview-badges">${badges}</div>` : ''}${text}</div>`;
+  }
+
+  function renderRecordQuestionCard(field, value) {
+    const choice = isChoiceField(field);
+    const longText = field.type === 'long_text';
+    const answer = choice ? `<div class="aim-answer-badges">${renderCategoricalBadges(field, value)}</div>` : `<div class="aim-record-question-answer">${Store.escapeHtml(Store.answerText(value))}</div>`;
+    return `<section class="aim-record-question-card${choice ? ' aim-record-question-choice' : ''}${longText ? ' aim-record-question-long' : ''}"><h3>${Store.escapeHtml(field.title)}</h3>${answer}</section>`;
+  }
+
+  function renderRecordPreviewRow(record, activity) {
+    return `<tr class="aim-record-preview-row ${record.status === 'void' ? 'aim-record-preview-row-void' : ''}"><td colspan="7">${renderRecordPreviewContent(recordPreview(record, activity), 'table')}</td></tr>`;
   }
 
   function renderQuickField(field, enabled) {
@@ -638,27 +768,23 @@
     const scope = forcedScope || ui.records.scope;
     const rows = filteredRecords(activity, scope);
     const recorders = unique(recordsFor(activity.id).map(r => r.createdByDisplayName));
-    const management = canManageRecords();
     const advancedCount = activeAdvancedFilterCount();
     return `
-      ${renderRecordScopeSwitch()}
       <div class="aim-panel">
         <div class="aim-records-head">
           <div>
             <h2>${scope === 'mine' ? '我的紀錄' : '全部紀錄'}</h2>
             <p class="aim-small">目前結果共 ${rows.length} 筆</p>
           </div>
-          ${management ? `
-            <div class="aim-records-head-actions">
-              <div class="aim-record-create-area">
-                <button class="aim-button aim-button-primary" data-action="new-record" ${Store.activityStatus(activity).key === 'open' ? '' : 'disabled'} type="button">新增情報</button>
-              </div>
+          <div class="aim-records-head-actions">
+            ${rows.length ? renderExpansionControls('all') : ''}
+            ${canExport() ? `
               <div class="aim-data-functions" aria-label="資料功能">
                 <span>資料功能</span>
                 <button class="aim-button" data-action="export-filtered" type="button">匯出目前結果 CSV</button>
               </div>
-            </div>
-          ` : ''}
+            ` : ''}
+          </div>
         </div>
         <div class="aim-record-filter-bar" role="search">
           <div class="aim-record-search"><input class="aim-input" id="aim-record-q" value="${Store.escapeHtml(ui.records.q)}" placeholder="搜尋姓名、公司或內容" aria-label="搜尋紀錄"></div>
@@ -695,14 +821,25 @@
 
   function renderRecordRow(record, activity) {
     const coverage = recordCoverage(record, activity);
-    return `<tr class="${record.status === 'void' ? 'aim-record-row-void' : ''}"><td>${Store.formatDateTime(record.createdAt)}</td><td>${Store.escapeHtml(record.createdByDisplayName)}</td><td><div class="aim-record-identity"><span>${Store.escapeHtml(Store.recordSummary(record))}</span>${record.status === 'void' ? '<span class="aim-pill aim-pill-void">已作廢</span>' : ''}</div></td><td>${coverage.answered}/${coverage.total}<div class="aim-coverage-bar"><span style="width:${coverage.percent}%"></span></div></td><td>${priorityPill(record.answers.fld_priority || '未判斷')}</td><td>${Store.formatDateTime(record.updatedAt)}</td><td><button class="aim-button" data-action="record" data-id="${record.id}" type="button">查看</button></td></tr>`;
+    const expanded = ui.expandedRecords.all.has(record.id) && canViewRecord(record, activity);
+    return `
+      <tr class="aim-record-summary-row ${record.status === 'void' ? 'aim-record-row-void' : ''}">
+        <td>${Store.formatDateTime(record.createdAt)}</td>
+        <td>${Store.escapeHtml(record.createdByDisplayName)}</td>
+        <td><div class="aim-record-identity"><span>${Store.escapeHtml(Store.recordSummary(record))}</span>${record.status === 'void' ? '<span class="aim-pill aim-pill-void">已作廢</span>' : ''}</div></td>
+        <td>${coverage.answered}/${coverage.total}<div class="aim-coverage-bar"><span style="width:${coverage.percent}%"></span></div></td>
+        <td>${priorityPill(record.answers.fld_priority || '未判斷')}</td>
+        <td>${Store.formatDateTime(record.updatedAt)}</td>
+        <td>${renderRecordReviewActions(record, activity, 'all', expanded)}</td>
+      </tr>
+      ${renderRecordPreviewRow(record, activity)}
+      ${expanded ? `<tr class="aim-record-detail-row"><td colspan="7">${renderInlineRecordDetail(record, activity)}</td></tr>` : ''}
+    `;
   }
 
   function renderRecordScopeSwitch() {
-    const choices = isRecorder()
-      ? [['entry', '新增情報'], ['all', '全部紀錄'], ['mine', '我的紀錄']]
-      : [['mine', '我的紀錄'], ['all', '全部紀錄']];
-    return `<div class="aim-record-subviews" aria-label="情報紀錄檢視">${choices.map(([scope, label]) => `<button data-action="scope" data-scope="${scope}" aria-pressed="${ui.records.scope === scope}" type="button">${label}</button>`).join('')}</div>`;
+    const choices = [['entry', '新增紀錄'], ['all', '全部紀錄']];
+    return `<div class="aim-record-subviews" aria-label="表單紀錄檢視">${choices.map(([scope, label]) => `<button data-action="scope" data-scope="${scope}" aria-pressed="${ui.records.scope === scope}" type="button">${label}</button>`).join('')}</div>`;
   }
 
   function renderAnalytics(activity) {
@@ -792,21 +929,22 @@
   function renderDrawer() {
     if (!ui.drawer) return '';
     if (ui.drawer.type === 'settings' && canManageActivities()) return settingsDrawer();
-    if (ui.drawer.type === 'record') return recordDrawer();
+    if (ui.drawer.type === 'record' && ui.drawer.mode === 'edit') return recordDrawer();
     return '';
   }
 
   function settingsDrawer() {
     const activity = selectedActivity();
+    const draft = ui.drawer;
     return `
       <div class="aim-drawer-backdrop" data-action="close-drawer"></div>
       <aside class="aim-drawer" role="dialog" aria-modal="true">
         <div class="aim-drawer-head"><h2>活動設定</h2><button class="aim-button aim-icon-button" data-action="close-drawer" aria-label="關閉活動設定" type="button">x</button></div>
         <div class="aim-drawer-body">
-          <div class="aim-field"><label>活動名稱</label><input class="aim-input" id="aim-settings-name" value="${Store.escapeHtml(activity.name)}"></div>
-          <div class="aim-modal-grid"><div class="aim-field"><label>表單開放開始日期</label><input class="aim-input" id="aim-settings-form-start" type="date" value="${activity.formOpenStart}"></div><div class="aim-field"><label>表單開放結束日期</label><input class="aim-input" id="aim-settings-form-end" type="date" value="${activity.formOpenEnd}"></div><div class="aim-field"><label>展期開始日期（選填）</label><input class="aim-input" id="aim-settings-ex-start" type="date" value="${activity.exhibitionStart || ''}"></div><div class="aim-field"><label>展期結束日期（選填）</label><input class="aim-input" id="aim-settings-ex-end" type="date" value="${activity.exhibitionEnd || ''}"></div></div>
-          <div class="aim-field"><label>活動說明</label><textarea class="aim-textarea" id="aim-settings-description">${Store.escapeHtml(activity.description || '')}</textarea></div>
-          <dl class="aim-definition-list"><dt>活動 ID</dt><dd>${Store.escapeHtml(activity.id)}</dd><dt>建立者</dt><dd>${Store.escapeHtml(activity.createdByDisplayName)}</dd><dt>建立時間</dt><dd>${Store.formatDateTime(activity.createdAt)}</dd><dt>最近更新者</dt><dd>${Store.escapeHtml(activity.updatedByDisplayName)}</dd><dt>最近更新</dt><dd>${Store.formatDateTime(activity.updatedAt)}</dd><dt>狀態</dt><dd>${statusPill(Store.activityStatus(activity))}</dd></dl>
+          <div class="aim-field"><label>活動名稱</label><input class="aim-input" id="aim-settings-name" value="${Store.escapeHtml(draft.name || '')}"></div>
+          <div class="aim-modal-grid"><div class="aim-field"><label>表單開放開始日期</label><input class="aim-input" id="aim-settings-form-start" type="date" value="${draft.formOpenStart || ''}"></div><div class="aim-field"><label>表單開放結束日期</label><input class="aim-input" id="aim-settings-form-end" type="date" value="${draft.formOpenEnd || ''}"></div><div class="aim-field"><label>展期開始日期（選填）</label><input class="aim-input" id="aim-settings-ex-start" type="date" value="${draft.exhibitionStart || ''}"></div><div class="aim-field"><label>展期結束日期（選填）</label><input class="aim-input" id="aim-settings-ex-end" type="date" value="${draft.exhibitionEnd || ''}"></div></div>
+          <div class="aim-field"><label>活動說明</label><textarea class="aim-textarea" id="aim-settings-description">${Store.escapeHtml(draft.description || '')}</textarea></div>
+          <dl class="aim-definition-list"><dt>建立者</dt><dd>${Store.escapeHtml(activity.createdByDisplayName)}</dd><dt>建立時間</dt><dd>${Store.formatDateTime(activity.createdAt)}</dd><dt>最近更新者</dt><dd>${Store.escapeHtml(activity.updatedByDisplayName)}</dd><dt>最近更新</dt><dd>${Store.formatDateTime(activity.updatedAt)}</dd><dt>狀態</dt><dd>${statusPill(Store.activityStatus({ ...activity, ...draft }))}</dd></dl>
           <div class="aim-panel" style="margin-top:16px"><div class="aim-panel-title-row"><h3>Prototype 資料</h3><button class="aim-button aim-button-danger" data-action="reset" type="button">重設 Prototype 資料</button></div></div>
         </div>
         <div class="aim-drawer-foot"><button class="aim-button" data-action="close-drawer" type="button">關閉</button><button class="aim-button aim-button-primary" data-action="save-settings" type="button">儲存設定</button></div>
@@ -814,26 +952,36 @@
     `;
   }
 
+  function settingsDraft(activity) {
+    return {
+      type: 'settings',
+      name: activity.name,
+      formOpenStart: activity.formOpenStart,
+      formOpenEnd: activity.formOpenEnd,
+      exhibitionStart: activity.exhibitionStart || '',
+      exhibitionEnd: activity.exhibitionEnd || '',
+      description: activity.description || ''
+    };
+  }
+
   function recordDrawer() {
     const activity = selectedActivity();
     const record = ui.drawer.id ? state.records.find(r => r.id === ui.drawer.id) : null;
-    const creating = ui.drawer.mode === 'create';
-    const editable = creating ? canCreateRecord(activity) : canEditRecord(record, activity);
-    const editing = (ui.drawer.mode === 'edit' || creating) && editable;
-    const working = ui.drawer.working || (record ? Store.clone(record.answers) : {});
-    const otherRecorderRecord = isRecorder() && record && record.createdByUserId !== currentUser.userId;
-    const ownRecorderRecord = isRecorder() && record && record.createdByUserId === currentUser.userId;
+    if (!canEditRecord(record, activity)) return '';
+    const editing = true;
+    const working = ui.drawer.working || Store.clone(record.answers);
     return `
       <div class="aim-drawer-backdrop" data-action="close-drawer"></div>
       <aside class="aim-drawer" role="dialog" aria-modal="true">
-        <div class="aim-drawer-head"><h2>${creating ? '新增情報紀錄' : editing ? '編輯紀錄' : '紀錄明細'}</h2><button class="aim-button aim-icon-button" data-action="close-drawer" type="button" aria-label="關閉紀錄">x</button></div>
+        <div class="aim-drawer-head"><h2>編輯紀錄</h2><button class="aim-button aim-icon-button" data-action="close-drawer" type="button" aria-label="關閉紀錄">x</button></div>
         <div class="aim-drawer-body">
-          ${otherRecorderRecord ? `<div class="aim-readonly-note">此筆紀錄由 ${Store.escapeHtml(record.createdByDisplayName)} 建立，你可以檢視但不可編輯或作廢。</div>` : ''}
-          ${ownRecorderRecord ? `<div class="aim-readonly-note">${Store.activityStatus(activity).key === 'open' ? '自己的紀錄可編輯。' : '表單已不開放，紀錄者只能檢視自己的紀錄。'}</div>` : ''}
-          ${record ? `<dl class="aim-definition-list" style="margin-bottom:14px"><dt>紀錄 ID</dt><dd>${record.id}</dd><dt>建立者</dt><dd>${Store.escapeHtml(record.createdByDisplayName)}</dd><dt>建立時間</dt><dd>${Store.formatDateTime(record.createdAt)}</dd><dt>最近更新者</dt><dd>${Store.escapeHtml(record.updatedByDisplayName)}</dd><dt>最近更新</dt><dd>${Store.formatDateTime(record.updatedAt)}</dd><dt>狀態</dt><dd>${record.status === 'void' ? '作廢' : '有效'}</dd></dl>` : ''}
+          <dl class="aim-definition-list" style="margin-bottom:14px"><dt>建立者</dt><dd>${Store.escapeHtml(record.createdByDisplayName)}</dd><dt>建立時間</dt><dd>${Store.formatDateTime(record.createdAt)}</dd><dt>最近更新者</dt><dd>${Store.escapeHtml(record.updatedByDisplayName)}</dd><dt>最近更新</dt><dd>${Store.formatDateTime(record.updatedAt)}</dd><dt>狀態</dt><dd>${record.status === 'void' ? '作廢' : '有效'}</dd></dl>
           <div class="aim-answer-list">${activity.formFields.map(field => renderAnswer(field, working, editing)).join('')}</div>
         </div>
-        <div class="aim-drawer-foot">${record && !editing && canEditRecord(record, activity) ? `<button class="aim-button" data-action="edit-record" data-id="${record.id}" type="button">編輯</button>` : ''}${record && !editing && canManageRecords() ? `<button class="aim-button aim-button-danger" data-action="${record.status === 'void' ? 'restore-record' : 'void-record'}" data-id="${record.id}" type="button">${record.status === 'void' ? '還原紀錄' : '作廢紀錄'}</button>` : ''}<button class="aim-button" data-action="close-drawer" type="button">關閉</button>${editing ? `<button class="aim-button aim-button-primary" data-action="${creating ? 'save-new-record' : 'save-record'}" type="button">儲存紀錄</button>` : ''}</div>
+        <div class="aim-drawer-foot aim-record-drawer-foot">
+          ${canVoidRecord(record, activity) ? `<button class="aim-button aim-button-danger" data-action="void-record" data-id="${record.id}" type="button">作廢紀錄</button>` : ''}
+          <div class="aim-drawer-actions"><button class="aim-button" data-action="close-drawer" type="button">關閉</button><button class="aim-button aim-button-primary" data-action="save-record" type="button">儲存修改</button></div>
+        </div>
       </aside>
     `;
   }
@@ -865,9 +1013,7 @@
     const el = event.target.closest('[data-action]');
     if (!el) return;
     const action = el.dataset.action;
-    if (action === 'use-real-role') switchPreviewRole('real');
     if (action === 'all' && canManageActivities()) { ui.view = 'overview'; ui.tab = 'overview'; }
-    if (action === 'records-home' && isRecorder()) applyRoleLanding();
     if (action === 'open' && canManageActivities()) { ui.selectedActivityId = el.dataset.id; ui.view = 'workspace'; ui.tab = 'overview'; }
     if (action === 'recorder-open' && isRecorder()) { ui.selectedActivityId = el.dataset.id; ui.view = 'workspace'; ui.tab = 'records'; ui.records.scope = 'entry'; }
     if (action === 'tab') selectTab(el.dataset.tab);
@@ -877,7 +1023,7 @@
     if (action === 'duplicate' && canManageActivities()) openDuplicate(el.dataset.id);
     if (action === 'close-dialog') ui.dialog = null;
     if (action === 'save-activity-dialog' && canManageActivities() && !saveActivityDialog()) return;
-    if (action === 'settings' && canManageActivities()) ui.drawer = { type: 'settings' };
+    if (action === 'settings' && canManageActivities()) ui.drawer = settingsDraft(selectedActivity());
     if (action === 'close-drawer') ui.drawer = null;
     if (action === 'save-settings' && canManageActivities()) saveSettings();
     if (action === 'reset' && canManageActivities()) resetData();
@@ -889,7 +1035,7 @@
     if (action === 'delete-field' && canDesignForm()) deleteField(el.dataset.id);
     if (action === 'retire-field' && canDesignForm()) retireField(el.dataset.id);
     if (action === 'scope' && (canManageRecords() || isRecorder())) {
-      const allowed = isRecorder() ? ['entry', 'all', 'mine'] : ['all', 'mine'];
+      const allowed = ['entry', 'mine', 'all'];
       if (allowed.includes(el.dataset.scope)) ui.records.scope = el.dataset.scope;
     }
     if (action === 'record-period') setRecordPeriod(el.dataset.period);
@@ -897,18 +1043,27 @@
     if (action === 'apply-custom-period' && !applyCustomPeriod()) return;
     if (action === 'clear-custom-period') clearCustomPeriod();
     if (action === 'reset-more-filters') resetMoreFilters();
-    if (action === 'new-record' && canManageRecords() && canCreateRecord(selectedActivity())) ui.drawer = { type: 'record', mode: 'create', working: {} };
-    if (action === 'record') ui.drawer = { type: 'record', mode: 'view', id: el.dataset.id };
+    if (action === 'open-record-inline') {
+      const record = state.records.find(r => r.id === el.dataset.id);
+      if (canViewRecord(record, selectedActivity())) {
+        ui.tab = 'records';
+        ui.records.scope = 'all';
+        ui.expandedRecords.all.add(record.id);
+      }
+    }
+    if (action === 'toggle-record-expansion') {
+      toggleRecordExpansion(el.dataset.context, el.dataset.id);
+    }
+    if (action === 'expand-records') setRecordExpansions(el.dataset.context, true);
+    if (action === 'collapse-records') setRecordExpansions(el.dataset.context, false);
     if (action === 'edit-record') {
       const record = state.records.find(r => r.id === el.dataset.id);
       if (canEditRecord(record, selectedActivity())) ui.drawer = { type: 'record', mode: 'edit', id: record.id, working: Store.clone(record.answers) };
     }
-    if (action === 'save-new-record') saveNewRecord();
     if (action === 'save-record') saveRecord();
-    if (action === 'void-record' && canManageRecords()) voidRecord(el.dataset.id);
-    if (action === 'restore-record' && canManageRecords()) restoreRecord(el.dataset.id);
-    if (action === 'quick-save-next') saveQuickRecord(true);
-    if (action === 'quick-save-view') saveQuickRecord(false);
+    if (action === 'void-record') voidRecord(el.dataset.id);
+    if (action === 'restore-record') restoreRecord(el.dataset.id);
+    if (action === 'quick-save-next') saveQuickRecord();
     if (action === 'export-filtered' && canExport()) exportCsv(filteredRecords(selectedActivity(), ui.records.scope), selectedActivity(), 'filtered');
     if (action === 'clear-analytics' && canUseAnalytics()) ui.analytics = { recorder: 'all', start: '', end: '', q: '' };
     save();
@@ -926,12 +1081,12 @@
     bindActivityDraftField('aim-dialog-ex-start', 'exhibitionStart');
     bindActivityDraftField('aim-dialog-ex-end', 'exhibitionEnd');
     bindActivityDraftField('aim-dialog-description', 'description');
-    bind('aim-settings-name', value => { if (ui.drawer) ui.drawer.name = value; });
-    bind('aim-settings-form-start', value => { if (ui.drawer) ui.drawer.formOpenStart = value; }, 'change');
-    bind('aim-settings-form-end', value => { if (ui.drawer) ui.drawer.formOpenEnd = value; }, 'change');
-    bind('aim-settings-ex-start', value => { if (ui.drawer) ui.drawer.exhibitionStart = value; }, 'change');
-    bind('aim-settings-ex-end', value => { if (ui.drawer) ui.drawer.exhibitionEnd = value; }, 'change');
-    bind('aim-settings-description', value => { if (ui.drawer) ui.drawer.description = value; });
+    bindSettingsField('aim-settings-name', 'name');
+    bindSettingsField('aim-settings-form-start', 'formOpenStart', 'change');
+    bindSettingsField('aim-settings-form-end', 'formOpenEnd', 'change');
+    bindSettingsField('aim-settings-ex-start', 'exhibitionStart', 'change');
+    bindSettingsField('aim-settings-ex-end', 'exhibitionEnd', 'change');
+    bindSettingsField('aim-settings-description', 'description');
     bind('aim-field-title', value => updateField({ title: value }));
     bind('aim-field-helper', value => updateField({ helperText: value }));
     bind('aim-field-type', value => updateField({ type: value, options: ['single_choice', 'multiple_choice', 'dropdown'].includes(value) ? ['選項 1', '選項 2'] : [] }), 'change');
@@ -986,6 +1141,16 @@
     node.addEventListener('change', updateDraft);
   }
 
+  function bindSettingsField(id, key, eventName) {
+    const node = document.getElementById(id);
+    if (!node || !ui.drawer || ui.drawer.type !== 'settings') return;
+    const updateDraft = () => {
+      if (ui.drawer && ui.drawer.type === 'settings') ui.drawer[key] = node.value;
+    };
+    node.addEventListener(eventName || 'input', updateDraft);
+    if (!eventName) node.addEventListener('change', updateDraft);
+  }
+
   function bindRecordDateField(id, key) {
     const node = document.getElementById(id);
     if (!node) return;
@@ -1002,6 +1167,8 @@
     currentUser = await Store.resolveCurrentUser();
     ui.drawer = null;
     ui.dialog = null;
+    ui.expandedRecords.personal.clear();
+    ui.expandedRecords.all.clear();
     applyRoleLanding();
     render();
   }
@@ -1028,13 +1195,14 @@
   function selectTab(tabName) {
     if (isRecorder()) {
       ui.tab = 'records';
+      if (tabName === 'records') ui.records.scope = 'entry';
       return;
     }
     if (tabName === 'form' && !canDesignForm()) ui.tab = 'overview';
     else if (tabName === 'analytics' && !canUseAnalytics()) ui.tab = 'overview';
     else {
       ui.tab = tabName;
-      if (tabName === 'records' && ui.records.scope === 'entry') ui.records.scope = 'all';
+      if (tabName === 'records') ui.records.scope = 'entry';
     }
   }
 
@@ -1149,6 +1317,37 @@
 
   function recordsFor(activityId) {
     return state.records.filter(r => r.activityId === activityId);
+  }
+
+  function recordsOwnedByCurrentUser(activityId) {
+    if (!currentUser || !currentUser.authenticated) return [];
+    return recordsFor(activityId)
+      .filter(record => record.createdByUserId === currentUser.userId)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || state.records.indexOf(b) - state.records.indexOf(a));
+  }
+
+  function toggleRecordExpansion(context, recordId) {
+    if (!['personal', 'all'].includes(context)) return;
+    const record = state.records.find(item => item.id === recordId);
+    if (!canViewRecord(record, selectedActivity())) return;
+    const expanded = ui.expandedRecords[context];
+    if (expanded.has(recordId)) expanded.delete(recordId);
+    else expanded.add(recordId);
+  }
+
+  function setRecordExpansions(context, expand) {
+    if (!['personal', 'all'].includes(context)) return;
+    const activity = selectedActivity();
+    if (!activity) return;
+    const expanded = ui.expandedRecords[context];
+    if (!expand) {
+      expanded.clear();
+      return;
+    }
+    const records = context === 'personal' ? recordsOwnedByCurrentUser(activity.id) : filteredRecords(activity, 'all');
+    records.forEach(record => {
+      if (canViewRecord(record, activity)) expanded.add(record.id);
+    });
   }
 
   function activityMetrics(activityId) {
@@ -1399,28 +1598,36 @@
     return currentUser && currentUser.authenticated && activity && Store.activityStatus(activity).key === 'open';
   }
 
+  function canViewRecord(record, activity) {
+    if (!currentUser || !currentUser.authenticated || !record || !activity || record.activityId !== activity.id) return false;
+    return canManageRecords() || isRecorder();
+  }
+
   function canEditRecord(record, activity) {
-    if (!record || record.status === 'void') return false;
+    if (!canViewRecord(record, activity) || record.status === 'void') return false;
     if (canManageRecords()) return true;
-    return isRecorder() && record.createdByUserId === currentUser.userId && Store.activityStatus(activity).key === 'open';
+    return isRecorder() && record.createdByUserId === currentUser.userId;
   }
 
-  function saveNewRecord() {
-    if (!canCreateRecord(selectedActivity())) return toast('表單目前未開放，無法新增紀錄。');
-    createRecord(selectedActivity(), clean(ui.drawer.working || {}));
-    ui.drawer = null;
-    toast('已建立情報紀錄。');
+  function canVoidRecord(record, activity) {
+    if (!canViewRecord(record, activity) || record.status === 'void') return false;
+    if (canManageRecords()) return true;
+    return isRecorder() && record.createdByUserId === currentUser.userId;
   }
 
-  function saveQuickRecord(stayOnEntry) {
+  function canRestoreRecord(record, activity) {
+    return canViewRecord(record, activity) && canManageRecords() && record.status === 'void';
+  }
+
+  function saveQuickRecord() {
     const activity = selectedActivity();
     if (!canCreateRecord(activity)) return toast('表單目前未開放，無法新增紀錄。');
     createRecord(activity, clean(ui.quickAnswers || {}));
     ui.quickAnswers = {};
-    ui.focusQuickFirst = stayOnEntry;
+    ui.focusQuickFirst = true;
     ui.tab = 'records';
-    ui.records.scope = stayOnEntry ? 'entry' : 'all';
-    toast('已儲存一筆情報。');
+    ui.records.scope = 'entry';
+    toast('已儲存一筆紀錄。');
   }
 
   function createRecord(activity, answers) {
@@ -1445,22 +1652,26 @@
     record.updatedByUserId = currentUser.userId;
     record.updatedByDisplayName = currentUser.displayName;
     record.updatedAt = Store.nowStamp();
-    ui.drawer = { type: 'record', mode: 'view', id: record.id };
+    ui.drawer = null;
     toast('已儲存紀錄。');
   }
 
   function voidRecord(id) {
-    if (!window.confirm('確定要作廢此紀錄？')) return;
     const record = state.records.find(r => r.id === id);
+    if (!canVoidRecord(record, selectedActivity())) return toast('沒有權限作廢此紀錄。');
+    if (!window.confirm('確定要作廢此紀錄？')) return;
     record.status = 'void';
     record.updatedByUserId = currentUser.userId;
     record.updatedByDisplayName = currentUser.displayName;
     record.updatedAt = Store.nowStamp();
+    if (ui.drawer && ui.drawer.type === 'record' && ui.drawer.id === record.id) ui.drawer = null;
     toast('已作廢紀錄。');
   }
 
   function restoreRecord(id) {
     const record = state.records.find(r => r.id === id);
+    if (!canRestoreRecord(record, selectedActivity())) return toast('沒有權限還原此紀錄。');
+    if (!window.confirm('確定要還原此紀錄？')) return;
     record.status = 'active';
     record.updatedByUserId = currentUser.userId;
     record.updatedByDisplayName = currentUser.displayName;
@@ -1505,6 +1716,8 @@
     ui.view = 'overview';
     ui.tab = 'overview';
     ui.drawer = null;
+    ui.expandedRecords.personal.clear();
+    ui.expandedRecords.all.clear();
     toast('已重設 Prototype 資料。');
   }
 

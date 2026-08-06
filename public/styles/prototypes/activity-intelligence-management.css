@@ -67,7 +67,7 @@ a:focus-visible {
 .aim-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 228px minmax(0, 1fr);
+  grid-template-columns: 200px minmax(0, 1fr);
   background: var(--aim-bg);
 }
 
@@ -86,20 +86,20 @@ a:focus-visible {
 }
 
 .aim-product-brand {
-  min-height: 180px;
-  flex: 0 0 180px;
+  min-height: 158px;
+  flex: 0 0 158px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  gap: 9px;
-  padding: 20px 22px 22px;
+  gap: 18px;
+  padding: 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.09);
 }
 
 .aim-brand-logo {
   display: block;
-  width: 164px;
+  width: 120px;
   max-width: 100%;
   height: auto;
   margin: 0 auto;
@@ -107,22 +107,22 @@ a:focus-visible {
 }
 
 .aim-product-title {
-  width: 164px;
+  width: 120px;
   max-width: 100%;
   margin: 0 auto;
-  overflow: hidden;
+  overflow: visible;
   color: var(--aim-sidebar-text);
   font-size: 15px;
   font-weight: 600;
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.4;
+  text-overflow: clip;
+  white-space: normal;
 }
 
 .aim-sidebar-nav {
   flex: 1;
   min-height: 0;
-  padding: 16px 10px;
+  padding: 12px 16px 24px;
   overflow-y: auto;
 }
 
@@ -132,7 +132,7 @@ a:focus-visible {
 
 .aim-nav-label {
   display: block;
-  padding: 0 10px 7px;
+  padding: 0 12px 7px 24px;
   color: var(--aim-sidebar-muted);
   font-size: 11px;
   font-weight: 600;
@@ -149,7 +149,7 @@ a:focus-visible {
   border-radius: 6px;
   background: transparent;
   color: var(--aim-sidebar-text);
-  padding: 0 12px;
+  padding: 0 12px 0 24px;
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
@@ -179,9 +179,17 @@ a:focus-visible {
   content: "";
 }
 
+.aim-nav-item-static,
+.aim-nav-item-static:hover {
+  background: var(--aim-sidebar-active);
+  color: #fff;
+  cursor: default;
+  font-weight: 600;
+}
+
 .aim-sidebar-context {
   min-width: 0;
-  margin: 0 5px 8px;
+  margin: 0 0 8px;
   padding: 9px 8px 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
@@ -206,6 +214,26 @@ a:focus-visible {
   color: var(--aim-sidebar-muted);
   font-size: 12px;
   font-weight: 400;
+}
+
+.aim-sidebar-context .aim-sidebar-period,
+.aim-sidebar-context .aim-sidebar-period span {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.aim-sidebar-context .aim-sidebar-period {
+  display: grid;
+  gap: 1px;
+  margin-top: 5px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.aim-sidebar-context .aim-sidebar-period span {
+  display: block;
+  margin-top: 0;
 }
 
 .aim-sidebar-foot {
@@ -354,26 +382,6 @@ a:focus-visible {
   font-size: 13px;
 }
 
-.aim-preview-banner {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 12px;
-  margin: 12px 26px 0;
-  border: 1px solid #fde68a;
-  background: var(--aim-amber-soft);
-  color: #7c2d12;
-  border-radius: var(--aim-radius);
-  padding: 10px 12px;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
-.aim-preview-banner strong {
-  color: #7c2d12;
-  font-weight: 600;
-}
-
 .aim-main {
   width: min(100%, 1500px);
   margin: 0 auto;
@@ -431,14 +439,25 @@ a:focus-visible {
 }
 
 .aim-exhibition-subtitle {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
   font-size: 13px !important;
 }
 
 .aim-form-period {
-  font-size: 12px !important;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
 }
 
 .aim-module-heading {
@@ -786,7 +805,7 @@ a:focus-visible {
   gap: 5px;
   min-height: 22px;
   padding: 3px 8px;
-  border-radius: 999px;
+  border-radius: 4px;
   font-size: 12px;
   font-weight: 600;
   border: 1px solid transparent;
@@ -832,6 +851,12 @@ a:focus-visible {
 }
 
 .aim-pill-low {
+  color: var(--aim-green);
+  background: var(--aim-green-soft);
+  border-color: #bbf7d0;
+}
+
+.aim-pill-record-active {
   color: var(--aim-green);
   background: var(--aim-green-soft);
   border-color: #bbf7d0;
@@ -1124,10 +1149,17 @@ a:focus-visible {
 }
 
 .aim-entry-layout {
+  width: 100%;
   display: grid;
-  grid-template-columns: minmax(520px, 760px) minmax(300px, 360px);
+  grid-template-columns: minmax(0, 1.45fr) minmax(360px, 1fr);
   gap: 14px;
   align-items: start;
+}
+
+.aim-entry-form,
+.aim-entry-context {
+  min-width: 0;
+  width: 100%;
 }
 
 .aim-entry-context {
@@ -1135,8 +1167,334 @@ a:focus-visible {
   top: 82px;
 }
 
-.aim-context-link {
-  margin: 14px 0;
+.aim-entry-save-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--aim-border);
+}
+
+.aim-personal-records {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 104px);
+}
+
+.aim-personal-records-head,
+.aim-personal-record-meta,
+.aim-personal-record-summary,
+.aim-expansion-controls,
+.aim-record-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aim-personal-records-head {
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.aim-personal-records-head h2 {
+  margin: 0;
+}
+
+.aim-personal-record-count {
+  color: var(--aim-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.aim-personal-record-list {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.aim-personal-record-item {
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  color: inherit;
+  text-align: left;
+}
+
+.aim-personal-record-meta {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 4px 12px;
+  color: var(--aim-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.aim-personal-record-summary {
+  align-items: flex-start;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px;
+}
+
+.aim-personal-record-summary > div:first-child {
+  min-width: 0;
+  flex: 1;
+}
+
+.aim-personal-record-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.aim-personal-record-primary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.aim-personal-record-primary strong {
+  display: inline;
+  margin: 0;
+  color: var(--aim-text);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.aim-personal-record-company {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.aim-personal-record-company::before {
+  margin-right: 5px;
+  color: var(--aim-muted-2);
+  content: "/";
+}
+
+.aim-personal-record-primary + .aim-personal-record-meta {
+  margin-top: 6px;
+}
+
+.aim-personal-record-item-void .aim-personal-record-summary {
+  background: #fafbfc;
+}
+
+.aim-expansion-controls,
+.aim-record-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.aim-expansion-controls .aim-button,
+.aim-record-actions .aim-button {
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 12px;
+}
+
+.aim-inline-record-detail {
+  width: 100%;
+  margin-top: 0;
+  padding: 16px;
+  border-top: 1px solid var(--aim-border-strong);
+  background: var(--aim-surface-muted);
+}
+
+.aim-inline-record-meta-card {
+  padding: 10px 12px;
+  border: 1px solid var(--aim-border);
+  border-radius: 6px;
+  background: #f4f7fa;
+}
+
+.aim-inline-record-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px 20px;
+  margin: 0;
+}
+
+.aim-inline-record-meta > div {
+  min-width: 112px;
+  flex: 1 1 112px;
+}
+
+.aim-inline-record-meta dt {
+  color: var(--aim-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.aim-inline-record-meta dd {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.aim-record-question-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.aim-record-question-card {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid var(--aim-border);
+  border-radius: 6px;
+  background: var(--aim-surface);
+}
+
+.aim-record-question-card h3 {
+  margin: 0 0 5px;
+  color: var(--aim-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.aim-record-question-answer {
+  overflow-wrap: anywhere;
+  color: var(--aim-text);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.aim-record-question-long .aim-record-question-answer {
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.aim-answer-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  white-space: normal !important;
+}
+
+.aim-answer-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.aim-answer-badge-high {
+  color: var(--aim-red);
+  background: var(--aim-red-soft);
+  border-color: #fecaca;
+}
+
+.aim-answer-badge-medium {
+  color: var(--aim-amber);
+  background: var(--aim-amber-soft);
+  border-color: #fde68a;
+}
+
+.aim-answer-badge-low {
+  color: var(--aim-green);
+  background: var(--aim-green-soft);
+  border-color: #bbf7d0;
+}
+
+.aim-record-preview-content {
+  min-width: 0;
+}
+
+.aim-record-preview-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 6px;
+}
+
+.aim-record-preview-text {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.aim-record-preview-text span {
+  color: var(--aim-muted);
+  font-weight: 600;
+}
+
+.aim-record-preview-empty {
+  color: var(--aim-muted-2);
+}
+
+.aim-record-preview-content-personal {
+  margin-top: 9px;
+}
+
+.aim-record-summary-row td {
+  border-bottom: 0;
+}
+
+.aim-record-preview-row td {
+  padding: 0 28px 10px 34px;
+  border-top: 0;
+  border-bottom: 1px solid var(--aim-border);
+  background: #fbfcfe;
+  vertical-align: top;
+}
+
+.aim-record-preview-content-table {
+  min-height: 34px;
+  padding: 7px 10px 7px 13px;
+  border-left: 2px solid #d5dde7;
+}
+
+.aim-record-preview-row-void td {
+  background: #f8fafc;
+}
+
+.aim-table tbody .aim-record-preview-row:hover,
+.aim-table tbody .aim-record-preview-row:hover td {
+  background: #fbfcfe;
+}
+
+.aim-inline-record-empty {
+  margin: 14px 0 0;
+  color: var(--aim-muted);
+  font-size: 13px;
+}
+
+.aim-record-detail-row td {
+  padding: 0 28px 16px 34px;
+  border-top: 0;
+  background: #f4f7fa;
+}
+
+.aim-record-detail-row .aim-inline-record-detail {
+  margin-top: 0;
+  padding: 16px 18px;
+  border: 0;
+  border-left: 3px solid #cbd5e1;
+  background: transparent;
+}
+
+.aim-table tbody .aim-record-detail-row:hover,
+.aim-table tbody .aim-record-detail-row:hover td {
+  background: #f4f7fa;
 }
 
 .aim-readonly-note {
@@ -1201,11 +1559,6 @@ a:focus-visible {
   display: flex;
   align-items: stretch;
   gap: 16px;
-}
-
-.aim-record-create-area {
-  display: flex;
-  align-items: flex-end;
 }
 
 .aim-data-functions {
@@ -1420,6 +1773,15 @@ a:focus-visible {
   background: var(--aim-surface-muted);
 }
 
+.aim-record-drawer-foot {
+  justify-content: space-between;
+}
+
+.aim-drawer-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .aim-modal-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1530,6 +1892,30 @@ a:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .aim-entry-context {
+    position: static;
+  }
+
+  .aim-personal-records {
+    max-height: none;
+  }
+
+  .aim-personal-record-list {
+    overflow: visible;
+    padding-right: 0;
+  }
+
+  .aim-personal-records-head,
+  .aim-personal-record-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .aim-expansion-controls,
+  .aim-record-actions {
+    justify-content: flex-start;
+  }
+
   .aim-activity-chooser {
     grid-template-columns: 1fr;
   }
@@ -1578,21 +1964,6 @@ a:focus-visible {
   .aim-main {
     padding-right: 18px;
     padding-left: 18px;
-  }
-
-  .aim-preview-banner {
-    margin-right: 18px;
-    margin-left: 18px;
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .aim-preview-banner > span {
-    grid-column: 1;
-  }
-
-  .aim-preview-banner > .aim-button {
-    grid-column: 2;
-    grid-row: 1 / span 2;
   }
 
   .aim-preview-control {
