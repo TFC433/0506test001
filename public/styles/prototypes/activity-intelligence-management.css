@@ -691,6 +691,12 @@ a:focus-visible {
   resize: vertical;
 }
 
+.aim-textarea.aim-auto-grow {
+  min-height: 74px;
+  overflow-y: hidden;
+  resize: none;
+}
+
 .aim-checkbox {
   display: inline-flex;
   align-items: center;
@@ -1163,8 +1169,7 @@ a:focus-visible {
 }
 
 .aim-entry-context {
-  position: sticky;
-  top: 82px;
+  position: static;
 }
 
 .aim-entry-save-actions {
@@ -1178,12 +1183,12 @@ a:focus-visible {
 .aim-personal-records {
   display: flex;
   flex-direction: column;
-  max-height: calc(100vh - 104px);
+  max-height: none;
 }
 
 .aim-personal-records-head,
-.aim-personal-record-meta,
-.aim-personal-record-summary,
+.aim-record-card-meta,
+.aim-record-card-identity-row,
 .aim-expansion-controls,
 .aim-record-actions {
   display: flex;
@@ -1194,6 +1199,14 @@ a:focus-visible {
 .aim-personal-records-head {
   justify-content: space-between;
   margin-bottom: 12px;
+}
+
+.aim-personal-records-tools {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .aim-personal-records-head h2 {
@@ -1208,18 +1221,35 @@ a:focus-visible {
 
 .aim-personal-record-list {
   min-height: 0;
-  overflow-y: auto;
+  overflow: visible;
 }
 
-.aim-personal-record-item {
+.aim-record-card-list {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: visible;
+}
+
+.aim-record-card-list-all {
+  margin-top: 16px;
+  gap: 10px;
+}
+
+.aim-record-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   padding: 0;
   overflow: hidden;
   color: inherit;
   text-align: left;
 }
 
-.aim-personal-record-meta {
+.aim-record-card-meta {
   flex-wrap: wrap;
   justify-content: flex-start;
   gap: 4px 12px;
@@ -1228,55 +1258,78 @@ a:focus-visible {
   line-height: 1.4;
 }
 
-.aim-personal-record-summary {
-  align-items: flex-start;
-  justify-content: space-between;
+.aim-record-card-meta span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.aim-record-card-meta .aim-pill {
+  overflow-wrap: normal;
+}
+
+.aim-record-card-summary {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   padding: 12px;
 }
 
-.aim-personal-record-summary > div:first-child {
+.aim-record-card-copy {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
-  flex: 1;
 }
 
-.aim-personal-record-copy {
-  min-width: 0;
-  flex: 1;
+.aim-record-card-identity-row {
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-top: 6px;
 }
 
-.aim-personal-record-primary {
+.aim-record-card-identity-row .aim-record-actions {
+  flex: 0 0 auto;
+}
+
+.aim-record-card-primary {
   display: flex;
   align-items: center;
+  flex: 1 1 240px;
   flex-wrap: wrap;
   gap: 6px;
+  min-width: 0;
 }
 
-.aim-personal-record-primary strong {
+.aim-record-card-primary strong {
   display: inline;
+  max-width: 100%;
   margin: 0;
+  overflow-wrap: anywhere;
   color: var(--aim-text);
   font-size: 14px;
   line-height: 1.4;
 }
 
-.aim-personal-record-company {
+.aim-record-card-primary strong.aim-missing-name {
+  color: var(--aim-red);
+}
+
+.aim-record-card-company {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   color: #475569;
   font-size: 13px;
   line-height: 1.4;
 }
 
-.aim-personal-record-company::before {
+.aim-record-card-company::before {
   margin-right: 5px;
   color: var(--aim-muted-2);
   content: "/";
 }
 
-.aim-personal-record-primary + .aim-personal-record-meta {
-  margin-top: 6px;
-}
-
-.aim-personal-record-item-void .aim-personal-record-summary {
+.aim-record-card-void .aim-record-card-summary {
   background: #fafbfc;
 }
 
@@ -1295,17 +1348,49 @@ a:focus-visible {
 
 .aim-inline-record-detail {
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   margin-top: 0;
   padding: 16px;
   border-top: 1px solid var(--aim-border-strong);
   background: var(--aim-surface-muted);
+  container-type: inline-size;
+}
+
+.aim-record-detail-tree {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding-left: 20px;
+}
+
+.aim-record-detail-tree::before {
+  position: absolute;
+  top: 17px;
+  bottom: 16px;
+  left: 7px;
+  width: 1px;
+  background: #c5cfdb;
+  content: "";
 }
 
 .aim-inline-record-meta-card {
+  position: relative;
   padding: 10px 12px;
   border: 1px solid var(--aim-border);
   border-radius: 6px;
   background: #f4f7fa;
+}
+
+.aim-inline-record-meta-card::before,
+.aim-record-question-list::before {
+  position: absolute;
+  top: 17px;
+  left: -13px;
+  width: 13px;
+  border-top: 1px solid #c5cfdb;
+  content: "";
 }
 
 .aim-inline-record-meta {
@@ -1335,19 +1420,50 @@ a:focus-visible {
 }
 
 .aim-record-question-list {
-  display: flex;
-  flex-direction: column;
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 10px;
   margin-top: 12px;
 }
 
 .aim-record-question-card {
-  width: 100%;
   min-width: 0;
   padding: 11px 12px;
   border: 1px solid var(--aim-border);
   border-radius: 6px;
   background: var(--aim-surface);
+}
+
+.aim-record-question-compact {
+  grid-column: span 3;
+}
+
+.aim-record-question-standard {
+  grid-column: span 4;
+}
+
+.aim-record-question-wide {
+  grid-column: span 6;
+}
+
+.aim-record-question-full {
+  grid-column: 1 / -1;
+}
+
+@container (max-width: 700px) {
+  .aim-record-question-compact,
+  .aim-record-question-standard {
+    grid-column: span 6;
+  }
+
+  .aim-record-question-wide,
+  .aim-record-question-full {
+    grid-column: 1 / -1;
+  }
 }
 
 .aim-record-question-card h3 {
@@ -1410,26 +1526,52 @@ a:focus-visible {
 }
 
 .aim-record-preview-content {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
+  margin-top: 9px;
+}
+
+.aim-record-preview-content:empty {
+  display: none;
 }
 
 .aim-record-preview-badges {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 5px;
   margin-bottom: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.aim-record-preview-badges .aim-answer-badge {
+  flex: 0 0 auto;
+}
+
+.aim-record-preview-badges [hidden] {
+  display: none;
+}
+
+.aim-preview-overflow-badge {
+  color: #596579;
+  background: #eef2f6;
+  border-color: #d5dde7;
 }
 
 .aim-record-preview-text {
-  display: -webkit-box;
+  display: block;
+  min-width: 0;
   margin: 0;
   overflow: hidden;
   color: #475569;
   font-size: 12px;
   line-height: 1.45;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .aim-record-preview-text span {
@@ -1437,64 +1579,11 @@ a:focus-visible {
   font-weight: 600;
 }
 
-.aim-record-preview-empty {
-  color: var(--aim-muted-2);
-}
-
-.aim-record-preview-content-personal {
-  margin-top: 9px;
-}
-
-.aim-record-summary-row td {
-  border-bottom: 0;
-}
-
-.aim-record-preview-row td {
-  padding: 0 28px 10px 34px;
-  border-top: 0;
-  border-bottom: 1px solid var(--aim-border);
-  background: #fbfcfe;
-  vertical-align: top;
-}
-
-.aim-record-preview-content-table {
-  min-height: 34px;
-  padding: 7px 10px 7px 13px;
-  border-left: 2px solid #d5dde7;
-}
-
-.aim-record-preview-row-void td {
-  background: #f8fafc;
-}
-
-.aim-table tbody .aim-record-preview-row:hover,
-.aim-table tbody .aim-record-preview-row:hover td {
-  background: #fbfcfe;
-}
-
 .aim-inline-record-empty {
+  grid-column: 1 / -1;
   margin: 14px 0 0;
   color: var(--aim-muted);
   font-size: 13px;
-}
-
-.aim-record-detail-row td {
-  padding: 0 28px 16px 34px;
-  border-top: 0;
-  background: #f4f7fa;
-}
-
-.aim-record-detail-row .aim-inline-record-detail {
-  margin-top: 0;
-  padding: 16px 18px;
-  border: 0;
-  border-left: 3px solid #cbd5e1;
-  background: transparent;
-}
-
-.aim-table tbody .aim-record-detail-row:hover,
-.aim-table tbody .aim-record-detail-row:hover td {
-  background: #f4f7fa;
 }
 
 .aim-readonly-note {
@@ -1559,6 +1648,11 @@ a:focus-visible {
   display: flex;
   align-items: stretch;
   gap: 16px;
+}
+
+.aim-show-void-records {
+  min-height: 30px;
+  color: #536174;
 }
 
 .aim-data-functions {
@@ -1668,38 +1762,6 @@ a:focus-visible {
 
 .aim-field-error:empty {
   display: none;
-}
-
-.aim-record-identity {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 7px;
-  min-width: 180px;
-}
-
-.aim-record-row-void {
-  color: var(--aim-muted);
-  background: #fafbfc;
-}
-
-.aim-coverage {
-  width: 100%;
-  min-width: 96px;
-}
-
-.aim-coverage-bar {
-  height: 7px;
-  border-radius: 99px;
-  background: #e2e8f0;
-  overflow: hidden;
-  margin-top: 5px;
-}
-
-.aim-coverage-bar span {
-  display: block;
-  height: 100%;
-  background: var(--aim-blue);
 }
 
 .aim-drawer-backdrop,
@@ -1905,8 +1967,7 @@ a:focus-visible {
     padding-right: 0;
   }
 
-  .aim-personal-records-head,
-  .aim-personal-record-summary {
+  .aim-personal-records-head {
     align-items: stretch;
     flex-direction: column;
   }
