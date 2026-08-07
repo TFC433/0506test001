@@ -95,6 +95,14 @@ a:focus-visible {
   gap: 18px;
   padding: 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  width: 100%;
+  color: inherit;
+  border-top: 0;
+  border-right: 0;
+  border-left: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
 }
 
 .aim-brand-logo {
@@ -288,6 +296,25 @@ a:focus-visible {
   max-width: 190px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.aim-breadcrumb-link {
+  max-width: 190px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--aim-muted);
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aim-breadcrumb-link:hover,
+.aim-breadcrumb-link:focus-visible {
+  color: var(--aim-text);
+  text-decoration: underline;
 }
 
 .aim-breadcrumb span[aria-current="page"] {
@@ -1785,6 +1812,17 @@ a:focus-visible {
 
 .aim-raw-card-thumb-large {
   min-height: 220px;
+}
+
+.aim-card-thumb-fallback::after {
+  content: "名片";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  min-height: 36px;
+  color: var(--aim-muted-2);
+  font-size: 12px;
 }
 
 .aim-form-card-link-actions {

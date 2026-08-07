@@ -38,17 +38,6 @@ function scopeSubmissionList(req, res, next) {
             code: 'ACTIVITY_INTELLIGENCE_FORBIDDEN'
         });
     }
-    if (!req.user.userId) {
-        return res.status(401).json({
-            success: false,
-            error: 'Authenticated actor identity is unavailable.',
-            code: 'ACTOR_UNAVAILABLE'
-        });
-    }
-    req.query = {
-        ...(req.query || {}),
-        recorderUserId: req.user.userId
-    };
     return next();
 }
 
@@ -104,7 +93,7 @@ router.post('/activities/:activityId/form/publish', requireRole(DESIGNER_ROLES),
 
 router.get('/activities/:activityId/submissions', requireRole(SUBMISSION_ROLES), scopeSubmissionList, (req, res, next) => getController(req).listSubmissions(req, res, next));
 router.post('/activities/:activityId/submissions', requireRole(SUBMISSION_ROLES), (req, res, next) => getController(req).createSubmission(req, res, next));
-router.get('/submissions/:submissionId', requireRole(SUBMISSION_ROLES), requireSubmissionAccess, (req, res, next) => getController(req).getSubmission(req, res, next));
+router.get('/submissions/:submissionId', requireRole(SUBMISSION_ROLES), (req, res, next) => getController(req).getSubmission(req, res, next));
 router.patch('/submissions/:submissionId', requireRole(SUBMISSION_ROLES), requireSubmissionAccess, (req, res, next) => getController(req).updateSubmission(req, res, next));
 router.post('/submissions/:submissionId/void', requireRole(SUBMISSION_ROLES), requireSubmissionAccess, (req, res, next) => getController(req).voidSubmission(req, res, next));
 router.post('/submissions/:submissionId/restore', requireRole(SUBMISSION_ROLES), requireSubmissionAccess, (req, res, next) => getController(req).restoreSubmission(req, res, next));

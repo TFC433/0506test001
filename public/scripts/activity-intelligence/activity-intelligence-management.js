@@ -26,7 +26,8 @@
     { label: '串聯元件', types: ['card_link'] }
   ];
   const yesNoOptions = ['是', '否'];
-  const formalDeferredMessage = '甇斗芋蝯??澆?蝥?畾萄??迤撘??蝺?';
+  const cardLinkHelperCopy = '????祈”?桃??赤摰Ｙ???';
+  const formalDeferredMessage = '此功能尚未啟用。';
   const otherAnswerValue = '其他';
 
   let state = { activities: [], records: [], selectedActivityId: null };
@@ -160,7 +161,8 @@
 
   async function loadFormForActivity(activityId) {
     if (!activityId) return null;
-    if (formBundles.has(activityId)) return formBundles.get(activityId);
+    const cached = formBundles.get(activityId);
+    if (cached && cached.isCompleteBundle && cached.published.versionId && cached.draft.versionId) return cached;
     const form = await window.ActivityIntelligenceApi.getForm(activityId);
     return updateActivityFormBundle(activityId, form);
   }
@@ -172,7 +174,8 @@
     const published = await window.ActivityIntelligenceApi.getPublishedForm(activityId);
     const merged = {
       ...(existing || normalizeFormBundleDto(null)),
-      published: normalizeVersionDto(published)
+      published: normalizeVersionDto(published),
+      isCompleteBundle: Boolean(existing && existing.isCompleteBundle)
     };
     formBundles.set(activityId, merged);
     const activity = state.activities.find(item => item.id === activityId);
@@ -185,6 +188,7 @@
 
   function updateActivityFormBundle(activityId, form) {
     const bundle = normalizeFormBundleDto(form);
+    bundle.isCompleteBundle = true;
     formBundles.set(activityId, bundle);
     const activity = state.activities.find(item => item.id === activityId);
     if (activity) {
@@ -197,7 +201,8 @@
   function normalizeFormBundleDto(form) {
     return {
       published: normalizeVersionDto(form && form.published),
-      draft: normalizeVersionDto(form && form.draft)
+      draft: normalizeVersionDto(form && form.draft),
+      isCompleteBundle: Boolean(form && form.published && form.draft)
     };
   }
 
@@ -320,7 +325,7 @@
       driveFileId,
       driveLink: card.driveLink || card.drive_link || '',
       driveFilename: card.driveFilename || card.drive_filename || card.sourceFilename || '',
-      thumbnailUrl: card.thumbnailUrl || (driveFileId ? `/api/external/thumbnail?fileId=${encodeURIComponent(driveFileId)}` : '')
+      thumbnailUrl: card.driveLink || card.drive_link ? `/api/drive/thumbnail?link=${encodeURIComponent(card.driveLink || card.drive_link)}` : (card.thumbnailUrl || '')
     };
   }
 
@@ -477,10 +482,10 @@
     const activityNav = ui.view === 'workspace' && activity;
     return `
       <aside class="aim-sidebar" aria-label="主要導覽">
-        <div class="aim-product-brand">
+        <button class="aim-product-brand" data-action="home" type="button" aria-label="回到活動情報管理首頁">
           <img class="aim-brand-logo" src="../images/logo-full.svg" alt="FANUC force">
           <strong class="aim-product-title">活動情報管理</strong>
-        </div>
+        </button>
         <nav class="aim-sidebar-nav">
           ${canManageActivities() ? `
             <div class="aim-nav-group">
@@ -538,18 +543,23 @@
   function renderBreadcrumb() {
     const activity = selectedActivity();
     const items = [];
-    if (!currentUser.authenticated) items.push('活動情報管理');
+    if (!currentUser.authenticated) items.push({ label: '活動情報管理' });
     else if (isRecorder()) {
-      if (ui.view === 'workspace' && activity) items.push(activity.name);
-      items.push('表單紀錄');
+      if (ui.view === 'workspace' && openActivities().length > 1) items.push({ label: '開放活動', action: 'home' });
+      if (ui.view === 'workspace' && activity) items.push({ label: activity.name });
+      items.push({ label: '表單紀錄' });
     } else {
-      items.push('所有活動');
+      items.push({ label: '所有活動', action: ui.view === 'workspace' ? 'home' : '' });
       if (ui.view === 'workspace' && activity) {
-        items.push(activity.name);
-        items.push(moduleLabel(activeModule()));
+        items.push({ label: activity.name, action: ui.tab !== 'overview' ? 'activity-overview' : '' });
+        items.push({ label: moduleLabel(activeModule()) });
       }
     }
-    return `<nav class="aim-breadcrumb" aria-label="麵包屑">${items.map((item, index) => `<span${index === items.length - 1 ? ' aria-current="page"' : ''}>${Store.escapeHtml(item)}</span>`).join('<b aria-hidden="true">/</b>')}</nav>`;
+    return `<nav class="aim-breadcrumb" aria-label="麵包屑">${items.map((item, index) => {
+      const isCurrent = index === items.length - 1 || !item.action;
+      if (isCurrent) return `<span${index === items.length - 1 ? ' aria-current="page"' : ''}>${Store.escapeHtml(item.label)}</span>`;
+      return `<button class="aim-breadcrumb-link" data-action="${item.action}" type="button">${Store.escapeHtml(item.label)}</button>`;
+    }).join('<b aria-hidden="true">/</b>')}</nav>`;
   }
 
   function safePictureUrl(value) {
@@ -691,6 +701,19 @@
     `;
   }
 
+  function goHome() {
+    ui.drawer = null;
+    ui.dialog = null;
+    ui.cardPicker = null;
+    ui.cardPreviewLightboxOpen = false;
+    if (isRecorder()) {
+      applyRoleLanding();
+      return;
+    }
+    ui.view = 'overview';
+    ui.tab = 'overview';
+  }
+
   function renderOverview() {
     const rows = filteredActivities();
     const kpis = overviewKpis();
@@ -824,8 +847,7 @@
   }
 
   function renderRecordsWorkspace(activity) {
-    const allowedScopes = canManageRecords() ? ['entry', 'all'] : ['entry', 'mine'];
-    if (!allowedScopes.includes(ui.records.scope)) ui.records.scope = 'entry';
+    if (!['entry', 'all'].includes(ui.records.scope)) ui.records.scope = 'entry';
     return `
       ${renderRecordScopeSwitch()}
       ${ui.records.scope === 'entry' ? renderQuickEntry(activity) : renderRecords(activity, ui.records.scope)}
@@ -1120,7 +1142,7 @@
       return `
         <section class="aim-form-card-link aim-runtime-card-link">
           <h4>${Store.escapeHtml(item.title || '名片連結')}</h4>
-          <p>${Store.escapeHtml(item.helperText || '可選擇名片與本次紀錄建立預覽關聯。')}</p>
+          <p>${Store.escapeHtml(cardLinkHelperCopy)}</p>
           ${enabled ? `<button class="aim-button aim-button-soft" data-action="runtime-link-card" data-context="${context}" type="button">選擇名片</button>` : '<span class="aim-small">未連結名片</span>'}
         </section>
       `;
@@ -1139,7 +1161,7 @@
   function renderRawCardVisual(card, size) {
     const normalized = normalizeRawCard(card);
     if (!normalized || !normalized.thumbnailUrl) return renderBusinessCardVisual(size || 'thumb');
-    return `<img class="aim-raw-card-thumb aim-raw-card-thumb-${Store.escapeHtml(size || 'thumb')}" src="${Store.escapeHtml(normalized.thumbnailUrl)}" alt="${Store.escapeHtml(normalized.driveFilename || normalized.name || 'RAW card')}">`;
+    return `<img class="aim-raw-card-thumb aim-raw-card-thumb-${Store.escapeHtml(size || 'thumb')}" src="${Store.escapeHtml(normalized.thumbnailUrl)}" alt="${Store.escapeHtml(normalized.driveFilename || normalized.name || 'RAW card')}" loading="lazy" onerror="this.style.display='none'; this.parentElement.classList.add('aim-card-thumb-fallback');">`;
   }
 
   function formDesign(activity) {
@@ -1187,7 +1209,7 @@
       category: 'integration_component',
       type: 'card_link',
       title: '名片連結',
-      helperText: '以名片縮圖建立預覽關聯，不產生表單答案。',
+      helperText: cardLinkHelperCopy,
       placeholder: '',
       options: [],
       allowOther: false,
@@ -1621,7 +1643,7 @@
       return `
         <section class="aim-form-card-link">
           <h4>名片連結</h4>
-          <p>可選擇名片與本次紀錄建立預覽關聯。</p>
+          <p>${Store.escapeHtml(cardLinkHelperCopy)}</p>
           <button class="aim-button aim-button-soft" data-action="mock-link-card" type="button">選擇名片</button>
         </section>
       `;
@@ -1668,7 +1690,21 @@
 
   function renderCardPickerDialog() {
     if (!ui.cardPicker) return '';
-    const q = String(ui.cardPicker.q || '').trim().toLowerCase();
+    return `
+      <div class="aim-dialog-backdrop" data-action="close-card-picker"></div>
+      <section class="aim-dialog" role="dialog" aria-modal="true" aria-label="選擇 RAW 名片">
+        <div class="aim-dialog-head"><h2>選擇 RAW 名片</h2><button class="aim-button aim-icon-button" data-action="close-card-picker" type="button" aria-label="關閉">x</button></div>
+        <div class="aim-dialog-body">
+          <div class="aim-field"><label for="aim-card-picker-q">搜尋名片</label><input class="aim-input" id="aim-card-picker-q" value="${Store.escapeHtml(ui.cardPicker.q || '')}" placeholder="姓名、公司、電話或檔名"></div>
+          <div class="aim-latest-list" id="aim-card-picker-results">${renderCardPickerRows(ui.cardPicker.q || '')}</div>
+        </div>
+        <div class="aim-dialog-foot"><button class="aim-button" data-action="close-card-picker" type="button">取消</button></div>
+      </section>
+    `;
+  }
+
+  function renderCardPickerRows(query) {
+    const q = String(query || '').trim().toLowerCase();
     const rows = rawCards.filter(card => {
       if (!q) return true;
       return [card.name, card.company, card.position, card.email, card.phone, card.mobile, card.driveFilename]
@@ -1677,25 +1713,13 @@
         .toLowerCase()
         .includes(q);
     }).slice(0, 80);
-    return `
-      <div class="aim-dialog-backdrop" data-action="close-card-picker"></div>
-      <section class="aim-dialog" role="dialog" aria-modal="true" aria-label="選擇 RAW 名片">
-        <div class="aim-dialog-head"><h2>選擇 RAW 名片</h2><button class="aim-button aim-icon-button" data-action="close-card-picker" type="button" aria-label="關閉">x</button></div>
-        <div class="aim-dialog-body">
-          <div class="aim-field"><label for="aim-card-picker-q">搜尋名片</label><input class="aim-input" id="aim-card-picker-q" value="${Store.escapeHtml(ui.cardPicker.q || '')}" placeholder="姓名、公司、電話或檔名"></div>
-          <div class="aim-latest-list">
-            ${rows.map(card => `
-              <button class="aim-latest-item" data-action="choose-card" data-card-id="${Store.escapeHtml(card.cardId)}" type="button" style="text-align:left">
-                <span class="aim-record-card-biz-slot">${renderRawCardVisual(card, 'thumb')}</span>
-                <strong>${Store.escapeHtml(card.name || '未命名名片')}</strong>
-                <span class="aim-small">${Store.escapeHtml([card.company, card.position, card.email || card.mobile || card.phone].filter(Boolean).join(' / ') || card.driveFilename || card.cardId)}</span>
-              </button>
-            `).join('') || '<div class="aim-empty">目前沒有可選擇的 RAW 名片。</div>'}
-          </div>
-        </div>
-        <div class="aim-dialog-foot"><button class="aim-button" data-action="close-card-picker" type="button">取消</button></div>
-      </section>
-    `;
+    return rows.map(card => `
+      <button class="aim-latest-item" data-action="choose-card" data-card-id="${Store.escapeHtml(card.cardId)}" type="button" style="text-align:left">
+        <span class="aim-record-card-biz-slot">${renderRawCardVisual(card, 'thumb')}</span>
+        <strong>${Store.escapeHtml(card.name || '未命名名片')}</strong>
+        <span class="aim-small">${Store.escapeHtml([card.company, card.position, card.email || card.mobile || card.phone].filter(Boolean).join(' / ') || card.driveFilename || card.cardId)}</span>
+      </button>
+    `).join('') || '<div class="aim-empty">目前沒有可選擇的 RAW 名片。</div>';
   }
 
   function renderRawCardDetail(card) {
@@ -1758,7 +1782,7 @@
       <div class="aim-panel">
         <div class="aim-records-head">
           <div>
-            <h2>${scope === 'mine' ? '我的紀錄' : '全部紀錄'}</h2>
+            <h2>全部紀錄</h2>
             <p class="aim-small">目前結果共 ${rows.length} 筆</p>
           </div>
           <div class="aim-records-head-actions">
@@ -1805,7 +1829,7 @@
   }
 
   function renderRecordScopeSwitch() {
-    const choices = canManageRecords() ? [['entry', '新增紀錄'], ['all', '全部紀錄']] : [['entry', '新增紀錄'], ['mine', '我的紀錄']];
+    const choices = [['entry', '新增紀錄'], ['all', '全部紀錄']];
     return `<div class="aim-record-subviews" aria-label="表單紀錄檢視">${choices.map(([scope, label]) => `<button data-action="scope" data-scope="${scope}" aria-pressed="${ui.records.scope === scope}" type="button">${label}</button>`).join('')}</div>`;
   }
 
@@ -2009,6 +2033,13 @@
     if (!el) return;
     const action = el.dataset.action;
     if (await handleFormDesignAction(action, el, event)) return;
+    if (action === 'home') {
+      goHome();
+    }
+    if (action === 'activity-overview' && canManageActivities()) {
+      ui.view = 'workspace';
+      ui.tab = 'overview';
+    }
     if (action === 'all' && canManageActivities()) { ui.view = 'overview'; ui.tab = 'overview'; }
     if (action === 'open' && canManageActivities()) {
       ui.selectedActivityId = el.dataset.id;
@@ -2047,7 +2078,7 @@
     if (action === 'delete-field' && canDesignForm()) deleteField(el.dataset.id);
     if (action === 'retire-field' && canDesignForm()) retireField(el.dataset.id);
     if (action === 'scope' && (canManageRecords() || isRecorder())) {
-      const allowed = ['entry', 'mine', 'all'];
+      const allowed = ['entry', 'all'];
       if (allowed.includes(el.dataset.scope)) ui.records.scope = el.dataset.scope;
     }
     if (action === 'record-period') setRecordPeriod(el.dataset.period);
@@ -2421,7 +2452,7 @@
       ui.records.state = value;
       ui.records.showVoidRecords = value !== 'normal';
     }, 'change');
-    bind('aim-card-picker-q', value => { if (ui.cardPicker) ui.cardPicker.q = value; });
+    bindCardPickerSearch();
     bindRecordDateField('aim-record-start', 'start');
     bindRecordDateField('aim-record-end', 'end');
     bindCheck('aim-record-low', value => { ui.records.low = value; });
@@ -2641,6 +2672,26 @@
       ui.records.filterError = '';
       const error = document.getElementById('aim-record-date-error');
       if (error) error.textContent = '';
+    });
+  }
+
+  function bindCardPickerSearch() {
+    const node = document.getElementById('aim-card-picker-q');
+    if (!node || !ui.cardPicker) return;
+    let composing = false;
+    const update = () => {
+      if (!ui.cardPicker) return;
+      ui.cardPicker.q = node.value;
+      const results = document.getElementById('aim-card-picker-results');
+      if (results) results.innerHTML = renderCardPickerRows(node.value);
+    };
+    node.addEventListener('compositionstart', () => { composing = true; });
+    node.addEventListener('compositionend', () => {
+      composing = false;
+      update();
+    });
+    node.addEventListener('input', () => {
+      if (!composing) update();
     });
   }
 
