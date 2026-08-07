@@ -843,6 +843,113 @@ begin
 end;
 $$;
 
+create or replace function public.activity_intelligence_guard_form_item()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+    v_form_version_id uuid;
+    v_version_status text;
+begin
+    if tg_op = 'DELETE'
+       and current_setting('app.activity_intelligence_hard_delete', true) = 'on' then
+        return OLD;
+    end if;
+
+    v_form_version_id := case
+        when tg_op = 'DELETE' then OLD.form_version_id
+        else NEW.form_version_id
+    end;
+
+    select status
+    into v_version_status
+    from public.activity_intelligence_form_versions
+    where form_version_id = v_form_version_id;
+
+    if v_version_status is null then
+        raise exception 'Parent Activity Intelligence form version not found' using errcode = '23514';
+    end if;
+
+    if v_version_status <> 'draft' then
+        raise exception 'Only draft form items may be inserted, updated, or deleted. Version status: %', v_version_status using errcode = '23514';
+    end if;
+
+    if tg_op = 'UPDATE' then
+        if NEW.form_item_id is distinct from OLD.form_item_id then
+            raise exception 'Activity Intelligence form_item_id is immutable' using errcode = '23514';
+        end if;
+        if NEW.form_version_id is distinct from OLD.form_version_id then
+            raise exception 'Activity Intelligence form_version_id is immutable' using errcode = '23514';
+        end if;
+        if NEW.item_key is distinct from OLD.item_key then
+            raise exception 'Activity Intelligence item_key is immutable inside a form version' using errcode = '23514';
+        end if;
+        if NEW.created_at is distinct from OLD.created_at then
+            raise exception 'Activity Intelligence form item created_at is immutable' using errcode = '23514';
+        end if;
+    end if;
+
+    if tg_op = 'DELETE' then
+        return OLD;
+    end if;
+    return NEW;
+end;
+$$;
+
+create or replace function public.activity_intelligence_guard_form_version()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+begin
+    if tg_op = 'DELETE'
+       and current_setting('app.activity_intelligence_hard_delete', true) = 'on' then
+        return OLD;
+    end if;
+
+    if tg_op = 'DELETE' then
+        if OLD.status <> 'draft' then
+            raise exception 'Only draft Activity Intelligence form versions may be deleted.' using errcode = '23514';
+        end if;
+        return OLD;
+    end if;
+
+    if NEW.form_version_id is distinct from OLD.form_version_id then
+        raise exception 'Activity Intelligence form_version_id is immutable' using errcode = '23514';
+    end if;
+    if NEW.activity_id is distinct from OLD.activity_id then
+        raise exception 'Activity Intelligence form version activity_id is immutable' using errcode = '23514';
+    end if;
+    if NEW.version_number is distinct from OLD.version_number then
+        raise exception 'Activity Intelligence form version_number is immutable' using errcode = '23514';
+    end if;
+    if NEW.created_at is distinct from OLD.created_at then
+        raise exception 'Activity Intelligence form version created_at is immutable' using errcode = '23514';
+    end if;
+
+    if OLD.status = 'draft' and NEW.status not in ('draft', 'published') then
+        raise exception 'Invalid Activity Intelligence draft form version status transition' using errcode = '23514';
+    end if;
+    if OLD.status = 'published' and NEW.status not in ('published', 'archived') then
+        raise exception 'Invalid Activity Intelligence published form version status transition' using errcode = '23514';
+    end if;
+    if OLD.status = 'archived' and NEW.status <> 'archived' then
+        raise exception 'Archived Activity Intelligence form versions are immutable' using errcode = '23514';
+    end if;
+
+    if OLD.status in ('published', 'archived') then
+        if NEW.published_at is distinct from OLD.published_at
+           or NEW.published_by_user_id is distinct from OLD.published_by_user_id
+           or NEW.published_by_display_name is distinct from OLD.published_by_display_name then
+            raise exception 'Activity Intelligence publication metadata is immutable after publication' using errcode = '23514';
+        end if;
+    end if;
+
+    return NEW;
+end;
+$$;
+
 create or replace function public.activity_intelligence_hard_delete_submission(
     p_submission_id uuid
 )
@@ -880,6 +987,12 @@ as $$
 declare
     v_deleted_count integer;
 begin
+    perform set_config(
+        'app.activity_intelligence_hard_delete',
+        'on',
+        true
+    );
+
     delete from public.activity_intelligence_submission_answers
     where submission_id in (
         select submission_id
@@ -907,6 +1020,12 @@ begin
     if v_deleted_count = 0 then
         raise exception 'Activity not found' using errcode = '23514';
     end if;
+
+    perform set_config(
+        'app.activity_intelligence_hard_delete',
+        'off',
+        true
+    );
 
     return jsonb_build_object('activity_id', p_activity_id);
 end;
