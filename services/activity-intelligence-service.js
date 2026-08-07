@@ -442,13 +442,10 @@ class ActivityIntelligenceService {
         this._assertUuid(item.formItemId, 'formItemId');
 
         const row = {
-            form_item_id: item.formItemId,
-            value_text: null,
-            value_number: null,
-            value_boolean: null,
-            value_jsonb: null,
-            other_text: hasOtherText ? String(otherText).trim() : null
+            form_item_id: item.formItemId
         };
+
+        if (hasOtherText) row.other_text = String(otherText).trim();
 
         if (item.type === 'short_text' || item.type === 'long_text') {
             row.value_text = String(value || '').trim();
