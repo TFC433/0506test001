@@ -46,6 +46,7 @@
   let rawCards = [];
   let rawCardsLoaded = false;
   let writeInFlight = false;
+  let previewRefreshFrame = 0;
   let ui = {
     view: 'overview',
     tab: 'overview',
@@ -410,6 +411,7 @@
   }
 
   function render() {
+    cancelScheduledFormPreviewRefresh();
     if (!currentUser) {
       root.innerHTML = '<div class="aim-loading">正在載入活動情報管理...</div>';
       return;
@@ -2378,12 +2380,12 @@
     }
     if (action === 'mock-link-card') {
       ui.formPreviewCardLinked = true;
-      refreshFormPreview();
+      scheduleFormPreviewRefresh();
       return true;
     }
     if (action === 'mock-unlink-card') {
       ui.formPreviewCardLinked = false;
-      refreshFormPreview();
+      scheduleFormPreviewRefresh();
       return true;
     }
     if (action === 'runtime-link-card') {
@@ -2520,7 +2522,6 @@
     }
     if (action === 'cycle-thumbnail') {
       cycleThumbnailVariant();
-      refreshFormPreview();
       render();
       return true;
     }
@@ -2531,7 +2532,6 @@
         focalY: thumbnailDefaults.focalY,
         zoom: thumbnailDefaults.zoom
       });
-      refreshFormPreview();
       render();
       return true;
     }
@@ -2653,10 +2653,29 @@
   }
 
   function refreshFormPreview() {
+    previewRefreshFrame = 0;
     const preview = document.querySelector('.aim-preview');
     if (!preview) return;
     preview.innerHTML = renderFormPreview(selectedActivity());
     bindFormPreviewControls();
+  }
+
+  function scheduleFormPreviewRefresh() {
+    if (previewRefreshFrame) return;
+    const scheduler = typeof window.requestAnimationFrame === 'function'
+      ? window.requestAnimationFrame.bind(window)
+      : callback => window.setTimeout(callback, 16);
+    previewRefreshFrame = scheduler(() => {
+      previewRefreshFrame = 0;
+      refreshFormPreview();
+    });
+  }
+
+  function cancelScheduledFormPreviewRefresh() {
+    if (!previewRefreshFrame) return;
+    if (typeof window.cancelAnimationFrame === 'function') window.cancelAnimationFrame(previewRefreshFrame);
+    else window.clearTimeout(previewRefreshFrame);
+    previewRefreshFrame = 0;
   }
 
   function bindInputs() {
@@ -2697,45 +2716,113 @@
     bind('aim-analytics-end', value => { ui.analytics.end = value; }, 'change');
     bind('aim-analytics-recorder', value => { ui.analytics.recorder = value; }, 'change');
     bind('aim-analytics-q', value => { ui.analytics.q = value; });
-    document.querySelectorAll('.aim-record-input').forEach(node => {
-      const eventName = node.tagName === 'SELECT' ? 'change' : 'input';
-      node.addEventListener(eventName, () => {
-        setWorking(node.dataset.field, node.value);
-        if (node.tagName === 'SELECT') render();
-      });
-    });
-    document.querySelectorAll('.aim-record-radio').forEach(node => node.addEventListener('change', () => { if (node.checked) { setWorking(node.dataset.field, node.value); render(); } }));
-    document.querySelectorAll('.aim-record-check').forEach(node => node.addEventListener('change', () => {
-      const list = new Set(ui.drawer.working[node.dataset.field] || []);
-      if (node.checked) list.add(node.value);
-      else list.delete(node.value);
-      setWorking(node.dataset.field, Array.from(list));
-      render();
-    }));
-    document.querySelectorAll('.aim-record-other-input').forEach(node => node.addEventListener('input', () => setWorkingOther(node.dataset.field, node.value)));
-    document.querySelectorAll('.aim-quick-input').forEach(node => {
-      const eventName = node.tagName === 'SELECT' ? 'change' : 'input';
-      node.addEventListener(eventName, () => {
-        setQuickAnswer(node.dataset.field, node.value);
-        if (node.tagName === 'SELECT') render();
-      });
-    });
-    document.querySelectorAll('.aim-quick-radio').forEach(node => node.addEventListener('change', () => { if (node.checked) { setQuickAnswer(node.dataset.field, node.value); render(); } }));
-    document.querySelectorAll('.aim-quick-check').forEach(node => node.addEventListener('change', () => {
-      const list = new Set(ui.quickAnswers[node.dataset.field] || []);
-      if (node.checked) list.add(node.value);
-      else list.delete(node.value);
-      setQuickAnswer(node.dataset.field, Array.from(list));
-      render();
-    }));
-    document.querySelectorAll('.aim-quick-other-input').forEach(node => node.addEventListener('input', () => setQuickOtherAnswer(node.dataset.field, node.value)));
+    bindRecordAnswerControls(document);
+    bindQuickAnswerControls(document);
     bindAutoGrowingTextareas();
     initFormDesignAutoGrow();
     fitRecordPreviewBadges();
   }
 
+  function bindQuickAnswerControls(scope) {
+    const rootNode = scope || document;
+    rootNode.querySelectorAll('.aim-quick-input').forEach(node => {
+      const eventName = node.tagName === 'SELECT' ? 'change' : 'input';
+      node.addEventListener(eventName, () => {
+        const before = answerHasOther(ui.quickAnswers[node.dataset.field]);
+        setQuickAnswer(node.dataset.field, node.value);
+        refreshQuickAnswerListIfOtherChanged(before, ui.quickAnswers[node.dataset.field]);
+      });
+    });
+    rootNode.querySelectorAll('.aim-quick-radio').forEach(node => node.addEventListener('change', () => {
+      if (!node.checked) return;
+      const before = answerHasOther(ui.quickAnswers[node.dataset.field]);
+      setQuickAnswer(node.dataset.field, node.value);
+      refreshQuickAnswerListIfOtherChanged(before, ui.quickAnswers[node.dataset.field]);
+    }));
+    rootNode.querySelectorAll('.aim-quick-check').forEach(node => node.addEventListener('change', () => {
+      const before = answerHasOther(ui.quickAnswers[node.dataset.field]);
+      const list = new Set(ui.quickAnswers[node.dataset.field] || []);
+      if (node.checked) list.add(node.value);
+      else list.delete(node.value);
+      setQuickAnswer(node.dataset.field, Array.from(list));
+      refreshQuickAnswerListIfOtherChanged(before, ui.quickAnswers[node.dataset.field]);
+    }));
+    rootNode.querySelectorAll('.aim-quick-other-input').forEach(node => node.addEventListener('input', () => setQuickOtherAnswer(node.dataset.field, node.value)));
+  }
+
+  function bindRecordAnswerControls(scope) {
+    const rootNode = scope || document;
+    rootNode.querySelectorAll('.aim-record-input').forEach(node => {
+      const eventName = node.tagName === 'SELECT' ? 'change' : 'input';
+      node.addEventListener(eventName, () => {
+        const before = ui.drawer && ui.drawer.working ? answerHasOther(ui.drawer.working[node.dataset.field]) : false;
+        setWorking(node.dataset.field, node.value);
+        refreshRecordDrawerAnswerListIfOtherChanged(before, ui.drawer && ui.drawer.working && ui.drawer.working[node.dataset.field]);
+      });
+    });
+    rootNode.querySelectorAll('.aim-record-radio').forEach(node => node.addEventListener('change', () => {
+      if (!node.checked) return;
+      const before = ui.drawer && ui.drawer.working ? answerHasOther(ui.drawer.working[node.dataset.field]) : false;
+      setWorking(node.dataset.field, node.value);
+      refreshRecordDrawerAnswerListIfOtherChanged(before, ui.drawer && ui.drawer.working && ui.drawer.working[node.dataset.field]);
+    }));
+    rootNode.querySelectorAll('.aim-record-check').forEach(node => node.addEventListener('change', () => {
+      if (!ui.drawer || !ui.drawer.working) return;
+      const before = answerHasOther(ui.drawer.working[node.dataset.field]);
+      const list = new Set(ui.drawer.working[node.dataset.field] || []);
+      if (node.checked) list.add(node.value);
+      else list.delete(node.value);
+      setWorking(node.dataset.field, Array.from(list));
+      refreshRecordDrawerAnswerListIfOtherChanged(before, ui.drawer.working[node.dataset.field]);
+    }));
+    rootNode.querySelectorAll('.aim-record-other-input').forEach(node => node.addEventListener('input', () => setWorkingOther(node.dataset.field, node.value)));
+  }
+
+  function answerHasOther(value) {
+    return value === otherAnswerValue || (Array.isArray(value) && value.includes(otherAnswerValue));
+  }
+
+  function refreshQuickAnswerListIfOtherChanged(before, value) {
+    if (before !== answerHasOther(value)) refreshQuickAnswerList();
+  }
+
+  function refreshRecordDrawerAnswerListIfOtherChanged(before, value) {
+    if (before !== answerHasOther(value)) refreshRecordDrawerAnswerList();
+  }
+
+  function refreshQuickAnswerList() {
+    const activity = selectedActivity();
+    const list = document.querySelector('.aim-entry-form .aim-answer-list');
+    if (!activity || !list) return;
+    const open = activityStatus(activity).key === 'open';
+    list.innerHTML = quickEntryFields(activity).map(field => renderQuickField(field, open)).join('');
+    bindQuickAnswerControls(list);
+    bindAutoGrowingTextareasIn(list);
+  }
+
+  function refreshRecordDrawerAnswerList() {
+    if (!ui.drawer || ui.drawer.type !== 'record') return;
+    const activity = selectedActivity();
+    const record = ui.drawer.id ? state.records.find(r => r.id === ui.drawer.id) : null;
+    const list = document.querySelector('.aim-drawer .aim-answer-list');
+    if (!activity || !record || !list) return;
+    const editing = record.status !== 'void';
+    const working = ui.drawer.working || Store.clone(record.answers);
+    const workingOther = ui.drawer.workingOther || Store.clone(otherAnswersForRecord(record));
+    const workingCardLink = ui.drawer.workingCardLink || Store.clone(cardLinkForRecord(record));
+    const items = snapshotRecordItems(record, activity);
+    list.innerHTML = items.map(field => renderAnswer(field, working, editing, workingOther, workingCardLink)).join('');
+    bindRecordAnswerControls(list);
+    bindAutoGrowingTextareasIn(list);
+  }
+
   function bindAutoGrowingTextareas() {
-    document.querySelectorAll('.aim-auto-grow:not(.aim-field-design-input)').forEach(textarea => {
+    bindAutoGrowingTextareasIn(document);
+  }
+
+  function bindAutoGrowingTextareasIn(scope) {
+    const rootNode = scope || document;
+    rootNode.querySelectorAll('.aim-auto-grow:not(.aim-field-design-input)').forEach(textarea => {
       autoGrowTextarea(textarea);
       textarea.addEventListener('input', () => autoGrowTextarea(textarea));
     });
@@ -2760,7 +2847,7 @@
       const handleInput = () => {
         if (textarea.classList.contains('aim-auto-grow')) autoGrowTextarea(textarea);
         updateFormDesignDraft({ [designField]: textarea.value });
-        refreshFormPreview();
+        scheduleFormPreviewRefresh();
       };
       textarea.addEventListener('input', handleInput);
     });
@@ -2772,14 +2859,14 @@
     const allowOther = document.getElementById('aim-field-allow-other');
     if (allowOther) allowOther.addEventListener('change', () => {
       updateFormDesignDraft({ allowOther: allowOther.checked });
-      refreshFormPreview();
+      scheduleFormPreviewRefresh();
     });
     document.querySelectorAll('.aim-option-input').forEach(input => {
       input.addEventListener('input', () => {
         const options = (ui.formDesignDraft && ui.formDesignDraft.options ? ui.formDesignDraft.options : []).slice();
         options[Number(input.dataset.optionIndex)] = input.value;
         updateFormDesignDraft({ options });
-        refreshFormPreview();
+        scheduleFormPreviewRefresh();
       });
     });
   }
@@ -2796,7 +2883,7 @@
       input.addEventListener('input', () => {
         updateThumbnailSettings({ zoom: input.value });
         updateThumbnailPreviewStyles();
-        refreshFormPreview();
+        scheduleFormPreviewRefresh();
       });
       input.addEventListener('change', () => render());
     });
@@ -2883,7 +2970,7 @@
         focalY: start.focalY - deltaY
       });
       updateThumbnailPreviewStyles();
-      refreshFormPreview();
+      scheduleFormPreviewRefresh();
     };
 
     const stop = () => {
@@ -2911,7 +2998,7 @@
         const fieldId = node.dataset.previewField;
         if (node.value === '__other') ui.formPreviewAnswers[fieldId] = { other: true, otherText: '' };
         else ui.formPreviewAnswers[fieldId] = { value: node.value };
-        refreshFormPreview();
+        scheduleFormPreviewRefresh();
       });
     });
     document.querySelectorAll('.aim-form-preview-check').forEach(node => {
@@ -2928,14 +3015,14 @@
           current.values = Array.from(values);
         }
         ui.formPreviewAnswers[fieldId] = current;
-        refreshFormPreview();
+        scheduleFormPreviewRefresh();
       });
     });
     document.querySelectorAll('.aim-form-preview-select').forEach(node => {
       node.addEventListener('change', () => {
         const fieldId = node.dataset.previewField;
         ui.formPreviewAnswers[fieldId] = node.value === '__other' ? { other: true, otherText: '' } : { value: node.value };
-        refreshFormPreview();
+        scheduleFormPreviewRefresh();
       });
     });
     document.querySelectorAll('.aim-form-preview-other').forEach(node => {
