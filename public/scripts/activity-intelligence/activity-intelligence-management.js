@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   'use strict';
 
   const Store = window.AIMStore;
@@ -26,12 +26,13 @@
     { label: '串聯元件', types: ['card_link'] }
   ];
   const yesNoOptions = ['是', '否'];
-  const cardLinkItemId = 'designer-card-link';
-  const formThumbnailItemId = 'designer-form-thumbnail';
+  const formalDeferredMessage = 'This module will be connected in a later Activity Intelligence phase.';
   const otherAnswerValue = '其他';
 
-  let state = Store.load();
+  let state = { activities: [], records: [], selectedActivityId: null };
   let currentUser = null;
+  const formBundles = new Map();
+  let writeInFlight = false;
   let ui = {
     view: 'overview',
     tab: 'overview',
@@ -80,14 +81,96 @@
   init();
 
   async function init() {
-    currentUser = await Store.resolveCurrentUser();
+    currentUser = resolveFormalCurrentUser();
+    if (currentUser.authenticated) {
+      try {
+        await loadActivitiesFromApi();
+      } catch (error) {
+        toast(error.message || 'Activity Intelligence load failed.');
+      }
+    }
     applyRoleLanding();
     render();
   }
 
   function save() {
     state.selectedActivityId = ui.selectedActivityId;
-    Store.save(state);
+  }
+
+  function resolveFormalCurrentUser() {
+    const token = localStorage.getItem('crm-token') || localStorage.getItem('crmToken') || '';
+    const displayName = window.CRM_APP?.currentUser || localStorage.getItem('crmCurrentUserName') || 'CRM User';
+    const rawRole = window.CRM_APP?.currentUserRole || localStorage.getItem('crmUserRole') || 'recorder';
+    const role = ['super_admin', 'admin', 'recorder'].includes(rawRole) ? rawRole : 'recorder';
+
+    return {
+      authenticated: Boolean(token),
+      role,
+      userId: displayName,
+      displayName,
+      pictureUrl: '',
+      source: 'crm-auth'
+    };
+  }
+
+  async function loadActivitiesFromApi() {
+    const activities = await window.ActivityIntelligenceApi.listActivities();
+    state.activities = (activities || []).map(normalizeActivityDto);
+    if (!state.activities.some(activity => activity.id === ui.selectedActivityId)) {
+      ui.selectedActivityId = state.activities[0] && state.activities[0].id;
+    }
+    state.selectedActivityId = ui.selectedActivityId || null;
+    state.records = [];
+  }
+
+  function normalizeActivityDto(activity) {
+    return {
+      ...activity,
+      id: activity.activityId || activity.id,
+      name: activity.name || '',
+      description: activity.description || '',
+      formOpenStart: activity.formOpenStart || '',
+      formOpenEnd: activity.formOpenEnd || '',
+      exhibitionStart: activity.exhibitionStart || '',
+      exhibitionEnd: activity.exhibitionEnd || '',
+      formFields: []
+    };
+  }
+
+  async function loadFormForActivity(activityId) {
+    if (!activityId) return null;
+    if (formBundles.has(activityId)) return formBundles.get(activityId);
+    const form = await window.ActivityIntelligenceApi.getForm(activityId);
+    return updateActivityFormBundle(activityId, form);
+  }
+
+  function updateActivityFormBundle(activityId, form) {
+    const bundle = normalizeFormBundleDto(form);
+    formBundles.set(activityId, bundle);
+    const activity = state.activities.find(item => item.id === activityId);
+    if (activity) {
+      activity.formDesignRuntime = bundle;
+      activity.formFields = Store.clone((bundle.published && bundle.published.items) || []);
+    }
+    return bundle;
+  }
+
+  function normalizeFormBundleDto(form) {
+    return {
+      published: normalizeVersionDto(form && form.published),
+      draft: normalizeVersionDto(form && form.draft)
+    };
+  }
+
+  function normalizeVersionDto(version) {
+    return {
+      versionId: version && version.versionId,
+      versionNumber: version && version.versionNumber,
+      publishedAt: version && version.publishedAt,
+      publishedByUserId: version && version.publishedByUserId,
+      publishedByDisplayName: version && version.publishedByDisplayName,
+      items: ((version && version.items) || []).map(normalizeDesignerItem)
+    };
   }
 
   function applyRoleLanding() {
@@ -134,13 +217,16 @@
   }
 
   function openActivities() {
-    return state.activities.filter(activity => Store.activityStatus(activity).key === 'open');
+    return state.activities.filter(activity => activityStatus(activity).key === 'open');
   }
 
   function selectedActivity() {
     const activity = state.activities.find(a => a.id === ui.selectedActivityId) || state.activities[0];
-    if (activity) Store.normalizeFormDesignPrototype(activity);
     return activity;
+  }
+
+  function activityStatus(activity) {
+    return (activity && activity.status) || { key: 'upcoming', label: '尚未開放' };
   }
 
   function render() {
@@ -268,7 +354,7 @@
         </nav>
         <div class="aim-sidebar-foot">
           <span>${currentUser.authenticated ? productRoleLabel(currentUser.role) : '未登入'}</span>
-          <small>Prototype V2</small>
+          <small>Activity Intelligence</small>
         </div>
       </aside>
     `;
@@ -366,7 +452,7 @@
       return `<header class="aim-page-header"><div><h1>表單紀錄</h1><p>目前沒有可填寫的活動。</p></div></header>`;
     }
     if (!activity) return '';
-    const status = Store.activityStatus(activity);
+    const status = activityStatus(activity);
     const module = activeModule();
     const showSettingsButton = canManageActivities() && ui.tab === 'overview';
     return `
@@ -396,17 +482,9 @@
   }
 
   function renderPreviewControl() {
-    if (!Store.isLocalhost()) return '';
-    const selected = Store.previewSelection();
-    return `
-      <label class="aim-preview-control">本機角色預覽
-        <select class="aim-select" id="aim-role-preview" aria-label="本機角色預覽">
-          ${option('real', '實際白名單角色', selected)}
-          ${Store.ROLES.map(role => option(role, productRoleLabel(role), selected)).join('')}
-        </select>
-      </label>
-    `;
+    return '';
   }
+
 
   function renderAuthState() {
     return `
@@ -434,7 +512,7 @@
               <strong>${Store.escapeHtml(activity.name)}</strong>
               <span>${Store.formatDate(activity.formOpenStart)} - ${Store.formatDate(activity.formOpenEnd)}</span>
               ${Store.activitySubtitle(activity) ? `<span>${Store.escapeHtml(Store.activitySubtitle(activity))}</span>` : ''}
-              ${statusPill(Store.activityStatus(activity))}
+              ${statusPill(activityStatus(activity))}
             </button>
           `).join('')}
         </div>
@@ -506,7 +584,7 @@
 
   function renderActivityRow(activity) {
     const metrics = activityMetrics(activity.id);
-    const status = Store.activityStatus(activity);
+    const status = activityStatus(activity);
     const subtitle = Store.activitySubtitle(activity);
     const note = activity.description || '';
     return `
@@ -547,9 +625,18 @@
     return renderActivityOverview(activity);
   }
 
+  function renderDeferredModule() {
+    return `
+      <section class="aim-empty aim-deferred-module">
+        <h2>Activity Intelligence</h2>
+        <p>${Store.escapeHtml(formalDeferredMessage)}</p>
+      </section>
+    `;
+  }
+
   function renderActivityOverview(activity) {
     const metrics = activityMetrics(activity.id);
-    const status = Store.activityStatus(activity);
+    const status = activityStatus(activity);
     const latest = recordsFor(activity.id).filter(r => r.status !== 'void').sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
     return `
       <div class="aim-grid-2">
@@ -575,6 +662,7 @@
   }
 
   function renderRecordsWorkspace(activity) {
+    return renderDeferredModule();
     if (!['entry', 'all'].includes(ui.records.scope)) ui.records.scope = 'entry';
     return `
       ${renderRecordScopeSwitch()}
@@ -583,7 +671,7 @@
   }
 
   function renderQuickEntry(activity) {
-    const status = Store.activityStatus(activity);
+    const status = activityStatus(activity);
     const open = status.key === 'open';
     const personalRecords = visiblePersonalRecords(activity.id);
     return `
@@ -741,18 +829,18 @@
   }
 
   function snapshotRecordItems(record, activity) {
-    if (record && record.formPrototypeSnapshot && Array.isArray(record.formPrototypeSnapshot.items)) {
-      return record.formPrototypeSnapshot.items.map(normalizeDesignerItem);
+    if (record && record.formRuntimeSnapshot && Array.isArray(record.formRuntimeSnapshot.items)) {
+      return record.formRuntimeSnapshot.items.map(normalizeDesignerItem);
     }
     return recordEditFields(activity);
   }
 
   function otherAnswersForRecord(record) {
-    return record && record.prototypeOtherAnswers ? record.prototypeOtherAnswers : {};
+    return record && record.runtimeOtherAnswers ? record.runtimeOtherAnswers : {};
   }
 
   function cardLinkForRecord(record) {
-    return record && record.prototypeCardLink ? record.prototypeCardLink : { linked: false, variant: 'default' };
+    return record && record.runtimeCardLink ? record.runtimeCardLink : { linked: false, variant: 'default' };
   }
 
   function displayAnswerValue(field, value, otherAnswers) {
@@ -865,7 +953,7 @@
         <section class="aim-form-card-link aim-runtime-card-link">
           <h4>${Store.escapeHtml(item.title || '名片連結')}</h4>
           <p>${Store.escapeHtml(item.helperText || '可選擇名片與本次紀錄建立預覽關聯。')}</p>
-          ${enabled ? `<button class="aim-button aim-button-soft" data-action="prototype-link-card" data-context="${context}" type="button">選擇名片</button>` : '<span class="aim-small">未連結名片</span>'}
+          ${enabled ? `<button class="aim-button aim-button-soft" data-action="runtime-link-card" data-context="${context}" type="button">選擇名片</button>` : '<span class="aim-small">未連結名片</span>'}
         </section>
       `;
     }
@@ -875,32 +963,38 @@
         <button class="aim-form-card-link-thumb" data-action="open-card-lightbox" type="button" aria-label="開啟名片預覽">
           ${renderBusinessCardVisual('thumb')}
         </button>
-        ${enabled ? `<div class="aim-form-card-link-actions"><button class="aim-button aim-button-soft" data-action="prototype-link-card" data-context="${context}" type="button">更換</button><button class="aim-button" data-action="prototype-unlink-card" data-context="${context}" type="button">移除</button></div>` : ''}
+        ${enabled ? `<div class="aim-form-card-link-actions"><button class="aim-button aim-button-soft" data-action="runtime-link-card" data-context="${context}" type="button">更換</button><button class="aim-button" data-action="runtime-unlink-card" data-context="${context}" type="button">移除</button></div>` : ''}
       </section>
     `;
   }
 
   function formDesign(activity) {
-    Store.normalizeFormDesignPrototype(activity);
-    activity.formDesignPrototype.published.items = (activity.formDesignPrototype.published.items || []).map(normalizeDesignerItem);
-    activity.formDesignPrototype.draft.items = (activity.formDesignPrototype.draft.items || []).map(normalizeDesignerItem);
-    return activity.formDesignPrototype;
+    if (!activity.formDesignRuntime) {
+      activity.formDesignRuntime = normalizeFormBundleDto(null);
+    }
+    activity.formDesignRuntime.published.items = (activity.formDesignRuntime.published.items || []).map(normalizeDesignerItem);
+    activity.formDesignRuntime.draft.items = (activity.formDesignRuntime.draft.items || []).map(normalizeDesignerItem);
+    return activity.formDesignRuntime;
   }
 
   function normalizeDesignerItem(item) {
     if (!item || item.type === 'card_link') return makeCardLinkItem(item || {});
     if (item.type === 'form_thumbnail') return makeFormThumbnailItem(item || {});
     const type = item.type || 'short_text';
-    const fieldId = item.fieldId || item.itemId || Store.uid('fld');
+    const itemKey = item.itemKey || item.item_key || item.fieldId || item.itemId || newUuid();
+    const entries = normalizeOptionEntries(item);
     return {
-      itemId: item.itemId || fieldId,
-      fieldId,
+      formItemId: item.formItemId || item.form_item_id || '',
+      itemKey,
+      itemId: item.itemId || itemKey,
+      fieldId: item.fieldId || itemKey,
       category: ['section_heading', 'information_text'].includes(type) ? 'layout_component' : 'field',
       type,
       title: item.title || fieldTypeLabel(type),
       helperText: item.helperText || '',
       placeholder: item.placeholder || '',
-      options: Array.isArray(item.options) ? item.options.slice() : [],
+      options: entries.map(option => option.label),
+      optionEntries: entries,
       allowOther: Boolean(item.allowOther),
       visible: item.visible !== false,
       retired: Boolean(item.retired),
@@ -909,9 +1003,13 @@
   }
 
   function makeCardLinkItem(extra) {
+    const source = extra || {};
+    const itemKey = source.itemKey || source.item_key || source.fieldId || source.itemId || newUuid();
     return {
-      itemId: cardLinkItemId,
-      fieldId: cardLinkItemId,
+      formItemId: source.formItemId || source.form_item_id || '',
+      itemKey,
+      itemId: source.itemId || itemKey,
+      fieldId: source.fieldId || itemKey,
       category: 'integration_component',
       type: 'card_link',
       title: '名片連結',
@@ -922,14 +1020,18 @@
       visible: true,
       retired: false,
       removedInDraft: false,
-      ...(extra || {})
+      ...source
     };
   }
 
   function makeFormThumbnailItem(extra) {
+    const source = extra || {};
+    const itemKey = source.itemKey || source.item_key || source.fieldId || source.itemId || newUuid();
     return {
-      itemId: formThumbnailItemId,
-      fieldId: formThumbnailItemId,
+      formItemId: source.formItemId || source.form_item_id || '',
+      itemKey,
+      itemId: source.itemId || itemKey,
+      fieldId: source.fieldId || itemKey,
       category: 'layout_component',
       type: 'form_thumbnail',
       title: '表單縮圖',
@@ -943,12 +1045,46 @@
       thumbnailTitle: '活動表單封面',
       altText: '活動表單示意縮圖',
       thumbnailVariant: 'line',
-      ...(extra || {})
+      ...source
     };
   }
 
   function designerItemKey(item) {
-    return item && (item.itemId || item.fieldId);
+    return item && (item.itemKey || item.itemId || item.fieldId);
+  }
+
+  function normalizeOptionEntries(item) {
+    const raw = Array.isArray(item.optionEntries)
+      ? item.optionEntries
+      : (Array.isArray(item.option_entries) ? item.option_entries : item.options);
+    return (Array.isArray(raw) ? raw : []).map(option => {
+      const source = option && typeof option === 'object' ? option : { label: option };
+      const label = String(source.label || source.value || '').trim();
+      return {
+        optionKey: source.optionKey || source.option_key || newUuid(),
+        label,
+        value: source.value || label
+      };
+    });
+  }
+
+  function optionEntriesFromLabels(currentEntries, labels) {
+    const current = Array.isArray(currentEntries) ? currentEntries : [];
+    return labels.map((label, index) => {
+      const existing = current[index] || {};
+      const text = String(label || '');
+      return {
+        optionKey: existing.optionKey || existing.option_key || newUuid(),
+        label: text,
+        value: text,
+        sortOrder: index + 1
+      };
+    });
+  }
+
+  function newUuid() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID();
+    throw new Error('A browser with crypto.randomUUID is required for Activity Intelligence form identities.');
   }
 
   function designerItemSignature(item) {
@@ -1010,15 +1146,15 @@
   }
 
   function renderForm(activity) {
-    const status = Store.activityStatus(activity);
+    const status = activityStatus(activity);
     const design = formDesign(activity);
     const selected = syncSelectedDraft(activity);
     const draftChanged = formDesignChangeSummary(design).total > 0;
     return `
-      ${status.key === 'open' ? '<div class="aim-warning">表單目前開放中；本頁僅調整 Designer Prototype，不影響既有填寫資料。</div>' : ''}
+      ${status.key === 'open' ? '<div class="aim-warning">表單目前開放中；本頁僅調整 Designer，不影響既有填寫資料。</div>' : ''}
       <div class="aim-form-designer">
         <div class="aim-panel">
-          <div class="aim-prototype-notice">目前為表單設計 Prototype；正式發布尚未連動紀錄表單。</div>
+          <div class="aim-runtime-notice">表單設計已連接正式 Activity Intelligence 後端；紀錄表單將於後續階段開放。</div>
           <div class="aim-panel-title-row">
             <h2>表單設計</h2>
             <div class="aim-form-mode-tabs" role="tablist" aria-label="表單版本">
@@ -1052,9 +1188,10 @@
   function renderDraftDesignerWorkspace(activity, design, selected, draftChanged) {
     return `
       <div class="aim-draft-actions">
-        <button class="aim-button aim-button-primary" data-action="toggle-field-picker" type="button">新增項目</button>
-        <button class="aim-button" data-action="open-discard-draft" type="button" ${draftChanged ? '' : 'disabled'}>放棄草稿</button>
-        <button class="aim-button aim-button-primary" data-action="open-publish-form" type="button">發布表單</button>
+        <button class="aim-button aim-button-primary" data-action="toggle-field-picker" type="button" ${writeInFlight ? 'disabled' : ''}>新增項目</button>
+        <button class="aim-button aim-button-primary" data-action="save-form-draft" type="button" ${writeInFlight ? 'disabled' : ''}>儲存草稿</button>
+        <button class="aim-button" data-action="open-discard-draft" type="button" ${draftChanged && !writeInFlight ? '' : 'disabled'}>放棄草稿</button>
+        <button class="aim-button aim-button-primary" data-action="open-publish-form" type="button" ${writeInFlight ? 'disabled' : ''}>發布表單</button>
       </div>
       ${renderDraftChangeSummary(design)}
       ${ui.fieldTypePickerOpen ? renderFieldTypePicker(design) : ''}
@@ -1208,7 +1345,7 @@
     return `
       <div class="aim-field-editor">
         <div class="aim-field-editor-head">
-          <div><h3>表單縮圖設定</h3><p>縮圖只屬於 Designer Prototype，不會寫入紀錄答案。</p></div>
+          <div><h3>表單縮圖設定</h3><p>縮圖只屬於 Designer，不會寫入紀錄答案。</p></div>
           <div class="aim-field-editor-status">${ui.formDesignDraftDirty ? '<span class="aim-pill aim-pill-high">未套用</span>' : '<span class="aim-pill">已套用</span>'}</div>
         </div>
         <div class="aim-field-editor-body">
@@ -1445,6 +1582,7 @@
   }
 
   function renderAnalytics(activity) {
+    return renderDeferredModule();
     const records = analyticsRecords(activity);
     const metrics = analyticsMetrics(activity, records);
     const recorders = unique(recordsFor(activity.id).map(r => r.createdByDisplayName));
@@ -1546,8 +1684,7 @@
           <div class="aim-field"><label>活動名稱</label><input class="aim-input" id="aim-settings-name" value="${Store.escapeHtml(draft.name || '')}"></div>
           <div class="aim-modal-grid"><div class="aim-field"><label>表單開放開始日期</label><input class="aim-input" id="aim-settings-form-start" type="date" value="${draft.formOpenStart || ''}"></div><div class="aim-field"><label>表單開放結束日期</label><input class="aim-input" id="aim-settings-form-end" type="date" value="${draft.formOpenEnd || ''}"></div><div class="aim-field"><label>展期開始日期（選填）</label><input class="aim-input" id="aim-settings-ex-start" type="date" value="${draft.exhibitionStart || ''}"></div><div class="aim-field"><label>展期結束日期（選填）</label><input class="aim-input" id="aim-settings-ex-end" type="date" value="${draft.exhibitionEnd || ''}"></div></div>
           <div class="aim-field"><label>活動說明</label><textarea class="aim-textarea" id="aim-settings-description">${Store.escapeHtml(draft.description || '')}</textarea></div>
-          <dl class="aim-definition-list"><dt>建立者</dt><dd>${Store.escapeHtml(activity.createdByDisplayName)}</dd><dt>建立時間</dt><dd>${Store.formatDateTime(activity.createdAt)}</dd><dt>最近更新者</dt><dd>${Store.escapeHtml(activity.updatedByDisplayName)}</dd><dt>最近更新</dt><dd>${Store.formatDateTime(activity.updatedAt)}</dd><dt>狀態</dt><dd>${statusPill(Store.activityStatus({ ...activity, ...draft }))}</dd></dl>
-          <div class="aim-panel" style="margin-top:16px"><div class="aim-panel-title-row"><h3>Prototype 資料</h3><button class="aim-button aim-button-danger" data-action="reset" type="button">重設 Prototype 資料</button></div></div>
+          <dl class="aim-definition-list"><dt>建立者</dt><dd>${Store.escapeHtml(activity.createdByDisplayName)}</dd><dt>建立時間</dt><dd>${Store.formatDateTime(activity.createdAt)}</dd><dt>最近更新者</dt><dd>${Store.escapeHtml(activity.updatedByDisplayName)}</dd><dt>最近更新</dt><dd>${Store.formatDateTime(activity.updatedAt)}</dd><dt>狀態</dt><dd>${statusPill(activityStatus({ ...activity, ...draft }))}</dd></dl>
         </div>
         <div class="aim-drawer-foot"><button class="aim-button" data-action="close-drawer" type="button">關閉</button><button class="aim-button aim-button-primary" data-action="save-settings" type="button">儲存設定</button></div>
       </aside>
@@ -1639,25 +1776,28 @@
     render();
   });
 
-  root.addEventListener('click', event => {
+  root.addEventListener('click', async event => {
     const el = event.target.closest('[data-action]');
     if (!el) return;
     const action = el.dataset.action;
-    if (handleFormDesignAction(action, el, event)) return;
+    if (await handleFormDesignAction(action, el, event)) return;
     if (action === 'all' && canManageActivities()) { ui.view = 'overview'; ui.tab = 'overview'; }
-    if (action === 'open' && canManageActivities()) { ui.selectedActivityId = el.dataset.id; ui.view = 'workspace'; ui.tab = 'overview'; }
+    if (action === 'open' && canManageActivities()) { ui.selectedActivityId = el.dataset.id; ui.view = 'workspace'; ui.tab = 'overview'; await loadFormForActivity(ui.selectedActivityId); }
     if (action === 'recorder-open' && isRecorder()) { ui.selectedActivityId = el.dataset.id; ui.view = 'workspace'; ui.tab = 'records'; ui.records.scope = 'entry'; }
-    if (action === 'tab') selectTab(el.dataset.tab);
+    if (action === 'tab') {
+      selectTab(el.dataset.tab);
+      if (ui.tab === 'form') await loadFormForActivity(ui.selectedActivityId);
+    }
     if (action === 'sort' && canManageActivities()) sort(el.dataset.key);
     if (action === 'clear-overview' && canManageActivities()) ui.overview = { q: '', status: 'all', sort: 'name', dir: 'asc' };
     if (action === 'new-activity' && canManageActivities()) ui.dialog = freshActivityDraft();
     if (action === 'duplicate' && canManageActivities()) openDuplicate(el.dataset.id);
     if (action === 'close-dialog') ui.dialog = null;
-    if (action === 'save-activity-dialog' && canManageActivities() && !saveActivityDialog()) return;
+    if (action === 'save-activity-dialog' && canManageActivities() && !(await saveActivityDialog())) return;
     if (action === 'settings' && canManageActivities()) ui.drawer = settingsDraft(selectedActivity());
     if (action === 'close-drawer') ui.drawer = null;
-    if (action === 'save-settings' && canManageActivities()) saveSettings();
-    if (action === 'reset' && canManageActivities()) resetData();
+    if (action === 'save-settings' && canManageActivities()) await saveSettings();
+    if (action === 'reset' && canManageActivities()) toast(formalDeferredMessage);
     if (action === 'add-field' && canDesignForm()) addField();
     if (action === 'select-field' && canDesignForm()) ui.selectedFieldId = el.dataset.id;
     if (action === 'move-field' && canDesignForm()) moveField(el.dataset.id, Number(el.dataset.dir));
@@ -1707,7 +1847,7 @@
     render();
   });
 
-  function handleFormDesignAction(action, el, event) {
+  async function handleFormDesignAction(action, el, event) {
     if (action === 'noop') return true;
     if (action === 'close-form-design-dialog') {
       ui.formDesignConfirm = null;
@@ -1715,11 +1855,11 @@
       return true;
     }
     if (action === 'confirm-discard-draft') {
-      discardDesignerDraft();
+      await discardDesignerDraft();
       return true;
     }
     if (action === 'confirm-publish-form') {
-      publishDesignerDraft();
+      await publishDesignerDraft();
       return true;
     }
     if (action === 'close-card-lightbox') {
@@ -1743,13 +1883,13 @@
       refreshFormPreview();
       return true;
     }
-    if (action === 'prototype-link-card') {
-      setPrototypeCardLink(el.dataset.context, true);
+    if (action === 'runtime-link-card') {
+      setRuntimeCardLink(el.dataset.context, true);
       render();
       return true;
     }
-    if (action === 'prototype-unlink-card') {
-      setPrototypeCardLink(el.dataset.context, false);
+    if (action === 'runtime-unlink-card') {
+      setRuntimeCardLink(el.dataset.context, false);
       render();
       return true;
     }
@@ -1784,6 +1924,11 @@
       if (blockDirtyDesignerAction()) return true;
       openPublishFormDialog();
       render();
+      return true;
+    }
+    if (action === 'save-form-draft') {
+      if (blockDirtyDesignerAction()) return true;
+      await saveDesignerDraft();
       return true;
     }
     if (action === 'add-field-type' || action === 'add-field') {
@@ -1900,8 +2045,21 @@
   function updateFormDesignDraft(patch) {
     if (!ui.formDesignDraft) return;
     const next = { ...ui.formDesignDraft, ...patch };
+    if (Object.prototype.hasOwnProperty.call(patch, 'options')) {
+      const labels = Array.isArray(patch.options) ? patch.options : [];
+      next.optionEntries = Array.isArray(patch.optionEntries)
+        ? patch.optionEntries.map((entry, index) => ({
+          optionKey: entry.optionKey || entry.option_key || newUuid(),
+          label: String(entry.label || entry.value || labels[index] || ''),
+          value: entry.value || entry.label || labels[index] || '',
+          sortOrder: index + 1
+        }))
+        : optionEntriesFromLabels(ui.formDesignDraft.optionEntries || [], labels);
+      next.options = labels;
+    }
     if (next.type === 'card_link' || next.type === 'form_thumbnail') {
       next.options = [];
+      next.optionEntries = [];
       next.allowOther = false;
       ui.formDesignDraft = normalizeDesignerItem(next);
       ui.formDesignDraftDirty = true;
@@ -1921,9 +2079,18 @@
 
   function mutateDraftOptions(mutator) {
     if (!ui.formDesignDraft || !choiceFieldTypes.includes(ui.formDesignDraft.type)) return;
-    const options = (ui.formDesignDraft.options || []).slice();
-    mutator(options);
-    updateFormDesignDraft({ options: options.length ? options : [''] });
+    const entries = normalizeOptionEntries(ui.formDesignDraft);
+    mutator(entries);
+    const nextEntries = entries.length ? entries : [{ optionKey: newUuid(), label: '', value: '' }];
+    updateFormDesignDraft({
+      optionEntries: nextEntries.map((entry, index) => ({
+        optionKey: entry.optionKey || newUuid(),
+        label: String(entry.label || entry.value || ''),
+        value: entry.value || entry.label || '',
+        sortOrder: index + 1
+      })),
+      options: nextEntries.map(entry => String(entry.label || entry.value || ''))
+    });
   }
 
   function applyFieldDraft() {
@@ -2226,9 +2393,8 @@
     });
   }
 
-  async function switchPreviewRole(value) {
-    Store.setPreviewSelection(value);
-    currentUser = await Store.resolveCurrentUser();
+  async function switchPreviewRole() {
+    currentUser = resolveFormalCurrentUser();
     ui.drawer = null;
     ui.dialog = null;
     ui.expandedRecords.personal.clear();
@@ -2236,6 +2402,7 @@
     applyRoleLanding();
     render();
   }
+
 
   function bind(id, handler, eventName, rerender) {
     const node = document.getElementById(id);
@@ -2370,8 +2537,8 @@
 
   function filteredActivities() {
     const q = ui.overview.q.trim().toLowerCase();
-    return state.activities.map(a => ({ ...a, ...activityMetrics(a.id), status: Store.activityStatus(a).key }))
-      .filter(a => ui.overview.status === 'all' || Store.activityStatus(a).key === ui.overview.status)
+    return state.activities.map(a => ({ ...a, ...activityMetrics(a.id), status: activityStatus(a).key }))
+      .filter(a => ui.overview.status === 'all' || activityStatus(a).key === ui.overview.status)
       .filter(a => !q || a.name.toLowerCase().includes(q))
       .sort((a, b) => String(a[ui.overview.sort] || '').localeCompare(String(b[ui.overview.sort] || ''), undefined, { numeric: true }) * (ui.overview.dir === 'asc' ? 1 : -1));
   }
@@ -2445,7 +2612,7 @@
 
   function overviewKpis() {
     return {
-      open: state.activities.filter(a => Store.activityStatus(a).key === 'open').length,
+      open: state.activities.filter(a => activityStatus(a).key === 'open').length,
       activeRecords: state.records.filter(r => r.status !== 'void').length,
       today: state.records.filter(r => r.status !== 'void' && r.createdAt.slice(0, 10) === Store.CURRENT_DATE).length
     };
@@ -2528,7 +2695,18 @@
     };
   }
 
-  function saveActivityDialog() {
+  function activityPayloadFromDialog(dialog) {
+    return {
+      name: String(dialog.name || '').trim(),
+      formOpenStart: dialog.formOpenStart,
+      formOpenEnd: dialog.formOpenEnd,
+      exhibitionStart: dialog.exhibitionStart || '',
+      exhibitionEnd: dialog.exhibitionEnd || '',
+      description: dialog.description || ''
+    };
+  }
+
+  async function saveActivityDialog() {
     const d = ui.dialog || {};
     if (d.composing) {
       showActivityDialogError('請先完成文字輸入。');
@@ -2539,9 +2717,34 @@
       showActivityDialogError(validation);
       return false;
     }
+    if (writeInFlight) return false;
+    writeInFlight = true;
+    render();
+    try {
+      const payload = activityPayloadFromDialog(d);
+      const activity = d.sourceId
+        ? await window.ActivityIntelligenceApi.duplicateActivity(d.sourceId, payload)
+        : await window.ActivityIntelligenceApi.createActivity(payload);
+      const normalized = normalizeActivityDto(activity);
+      state.activities = d.sourceId
+        ? [...state.activities, normalized]
+        : [...state.activities.filter(item => item.id !== normalized.id), normalized];
+      ui.dialog = null;
+      ui.selectedActivityId = normalized.id;
+      ui.view = 'workspace';
+      ui.tab = 'overview';
+      await loadFormForActivity(normalized.id);
+      toast(d.sourceId ? 'Activity duplicated.' : 'Activity created.');
+      return true;
+    } catch (error) {
+      showActivityDialogError(error.message || 'Activity save failed.');
+      return false;
+    } finally {
+      writeInFlight = false;
+    }
     const source = d.sourceId ? state.activities.find(a => a.id === d.sourceId) : null;
     const activity = {
-      id: Store.uid('act'),
+      id: newUuid(),
       name: d.name.trim(),
       formOpenStart: d.formOpenStart,
       formOpenEnd: d.formOpenEnd,
@@ -2549,7 +2752,7 @@
       exhibitionEnd: d.exhibitionEnd || '',
       description: d.description || '',
       formFields: Store.clone(source ? source.formFields : Store.defaultFields()),
-      formDesignPrototype: Store.clone(source ? formDesign(source) : Store.formDesignFromFormFields(Store.defaultFields())),
+      formDesignRuntime: Store.clone(source ? formDesign(source) : Store.formDesignFromFormFields(Store.defaultFields())),
       createdByUserId: currentUser.userId,
       createdByDisplayName: currentUser.displayName,
       createdAt: Store.nowStamp(),
@@ -2558,8 +2761,8 @@
       updatedAt: Store.nowStamp()
     };
     if (source) {
-      activity.formFields = activity.formFields.map(f => ({ ...f, fieldId: Store.uid('fld') }));
-      rekeyFormDesignPrototype(activity.formDesignPrototype);
+      activity.formFields = activity.formFields.map(f => ({ ...f, fieldId: newUuid() }));
+      rekeyFormDesignRuntime(activity.formDesignRuntime);
     }
     state.activities.push(activity);
     ui.dialog = null;
@@ -2576,11 +2779,26 @@
     if (error) error.textContent = message;
   }
 
-  function saveSettings() {
+  async function saveSettings() {
     const a = selectedActivity();
     const d = { ...a, ...ui.drawer };
     const validation = validateActivity(d);
     if (validation) return toast(validation);
+    if (writeInFlight) return;
+    writeInFlight = true;
+    render();
+    try {
+      const updated = await window.ActivityIntelligenceApi.updateActivity(a.id, activityPayloadFromDialog(d));
+      const normalized = normalizeActivityDto(updated);
+      state.activities = state.activities.map(activity => activity.id === normalized.id ? { ...activity, ...normalized } : activity);
+      ui.drawer = null;
+      toast('Activity settings saved.');
+    } catch (error) {
+      toast(error.message || 'Activity settings save failed.');
+    } finally {
+      writeInFlight = false;
+    }
+    return;
     ['name', 'formOpenStart', 'formOpenEnd', 'exhibitionStart', 'exhibitionEnd', 'description'].forEach(key => {
       if (Object.prototype.hasOwnProperty.call(ui.drawer, key)) a[key] = ui.drawer[key];
     });
@@ -2686,8 +2904,81 @@
     ui.formDesignConfirm = { type: 'publish', summary: formDesignChangeSummary(design) };
   }
 
-  function discardDesignerDraft() {
+  async function saveDesignerDraft() {
     const activity = selectedActivity();
+    if (!activity || writeInFlight) return;
+    writeInFlight = true;
+    render();
+    try {
+      const form = await window.ActivityIntelligenceApi.saveDraft(activity.id, serializeDraftItems(formDesign(activity).draft.items));
+      const design = updateActivityFormBundle(activity.id, form);
+      ui.formDesignDraftDirty = false;
+      ui.formDesignMessage = '';
+      ui.selectedFieldId = design.draft.items.find(item => designerItemKey(item) === ui.selectedFieldId)
+        ? ui.selectedFieldId
+        : (design.draft.items[0] && designerItemKey(design.draft.items[0]));
+      const selected = design.draft.items.find(item => designerItemKey(item) === ui.selectedFieldId);
+      ui.formDesignDraft = selected ? Store.clone(selected) : null;
+      toast('Draft saved.');
+    } catch (error) {
+      toast(error.message || 'Draft save failed.');
+    } finally {
+      writeInFlight = false;
+      render();
+    }
+  }
+
+  function serializeDraftItems(items) {
+    return (items || []).map((item, index) => {
+      const normalized = normalizeDesignerItem(item);
+      return {
+        formItemId: normalized.formItemId || undefined,
+        itemKey: normalized.itemKey,
+        type: normalized.type,
+        title: normalized.title,
+        helperText: normalized.helperText || '',
+        placeholder: normalized.placeholder || '',
+        optionEntries: normalizeOptionEntries(normalized).map((option, optionIndex) => ({
+          optionKey: option.optionKey,
+          label: option.label,
+          value: option.value || option.label,
+          sortOrder: optionIndex + 1
+        })),
+        allowOther: Boolean(normalized.allowOther),
+        visible: normalized.visible !== false,
+        removedInDraft: Boolean(normalized.removedInDraft),
+        sortOrder: index + 1,
+        settings: {
+          ...(normalized.settings || {}),
+          ...(normalized.thumbnailTitle !== undefined ? { thumbnailTitle: normalized.thumbnailTitle } : {}),
+          ...(normalized.altText !== undefined ? { altText: normalized.altText } : {}),
+          ...(normalized.thumbnailVariant !== undefined ? { thumbnailVariant: normalized.thumbnailVariant } : {})
+        }
+      };
+    });
+  }
+
+  async function discardDesignerDraft() {
+    const activity = selectedActivity();
+    if (!activity || writeInFlight) return;
+    writeInFlight = true;
+    render();
+    try {
+      const form = await window.ActivityIntelligenceApi.discardDraft(activity.id);
+      const design = updateActivityFormBundle(activity.id, form);
+      ui.formDesignConfirm = null;
+      ui.formDesignDraftDirty = false;
+      ui.formDesignMessage = '';
+      ui.selectedFieldId = design.draft.items[0] && designerItemKey(design.draft.items[0]);
+      ui.formDesignDraft = design.draft.items[0] ? Store.clone(design.draft.items[0]) : null;
+      toast('Draft discarded.');
+    } catch (error) {
+      toast(error.message || 'Draft discard failed.');
+    } finally {
+      writeInFlight = false;
+      render();
+    }
+    return;
     const design = formDesign(activity);
     design.draft.items = Store.clone(design.published.items);
     ui.formDesignConfirm = null;
@@ -2700,8 +2991,29 @@
     render();
   }
 
-  function publishDesignerDraft() {
+  async function publishDesignerDraft() {
     const activity = selectedActivity();
+    if (!activity || writeInFlight) return;
+    writeInFlight = true;
+    render();
+    try {
+      await window.ActivityIntelligenceApi.saveDraft(activity.id, serializeDraftItems(formDesign(activity).draft.items));
+      const form = await window.ActivityIntelligenceApi.publishDraft(activity.id);
+      const design = updateActivityFormBundle(activity.id, form);
+      ui.formDesignConfirm = null;
+      ui.formDesignDraftDirty = false;
+      ui.formDesignMessage = '';
+      ui.formDesignMode = 'published';
+      ui.selectedFieldId = design.draft.items[0] && designerItemKey(design.draft.items[0]);
+      ui.formDesignDraft = design.draft.items[0] ? Store.clone(design.draft.items[0]) : null;
+      toast('Draft published.');
+    } catch (error) {
+      toast(error.message || 'Draft publish failed.');
+    } finally {
+      writeInFlight = false;
+      render();
+    }
+    return;
     const design = formDesign(activity);
     const validItems = design.draft.items
       .filter(item => !item.removedInDraft)
@@ -2727,13 +3039,20 @@
     updateFormDesignDraft({ thumbnailVariant: variants[(index + 1) % variants.length] });
   }
 
-  function rekeyFormDesignPrototype(design) {
+  function rekeyFormDesignRuntime(design) {
     ['published', 'draft'].forEach(version => {
       if (!design[version] || !Array.isArray(design[version].items)) return;
       design[version].items = design[version].items.map(item => {
         if (['card_link', 'form_thumbnail'].includes(item.type)) return item;
-        const nextId = Store.uid('fld');
-        return { ...item, fieldId: nextId, itemId: nextId };
+        const nextId = newUuid();
+        return {
+          ...item,
+          formItemId: '',
+          itemKey: nextId,
+          fieldId: nextId,
+          itemId: nextId,
+          optionEntries: normalizeOptionEntries(item).map(option => ({ ...option, optionKey: newUuid() }))
+        };
       });
     });
   }
@@ -2754,7 +3073,7 @@
     if (nextType === 'card_link') item = makeCardLinkItem();
     else if (nextType === 'form_thumbnail') item = makeFormThumbnailItem();
     else item = normalizeDesignerItem({
-      fieldId: Store.uid('fld'),
+      itemKey: newUuid(),
       type: nextType,
       title: fieldTypeLabel(nextType),
       helperText: '',
@@ -2806,7 +3125,19 @@
     const index = list.findIndex(f => designerItemKey(f) === fieldId);
     if (index < 0) return;
     if (['card_link', 'form_thumbnail'].includes(list[index].type)) return toast('此元件不可複製。');
-    const copy = { ...Store.clone(list[index]), fieldId: Store.uid('fld'), itemId: Store.uid('fld'), title: `${list[index].title} 複製`, retired: false, removedInDraft: false };
+    const nextId = newUuid();
+    const copy = {
+      ...Store.clone(list[index]),
+      formItemId: '',
+      itemKey: nextId,
+      fieldId: nextId,
+      itemId: nextId,
+      optionEntries: normalizeOptionEntries(list[index]).map(option => ({ ...option, optionKey: newUuid() })),
+      title: `${list[index].title} 複製`,
+      retired: false,
+      removedInDraft: false
+    };
+    copy.options = copy.optionEntries.map(option => option.label);
     list.splice(index + 1, 0, copy);
     ui.selectedFieldId = designerItemKey(copy);
     ui.formDesignDraft = Store.clone(copy);
@@ -2885,14 +3216,14 @@
     else delete ui.quickOtherAnswers[fieldId];
   }
 
-  function setPrototypeCardLink(context, linked) {
+  function setRuntimeCardLink(context, linked) {
     const next = { linked: Boolean(linked), variant: 'default' };
     if (context === 'drawer' && ui.drawer) ui.drawer.workingCardLink = next;
     else if (context === 'quick') ui.quickCardLink = next;
   }
 
   function canCreateRecord(activity) {
-    return currentUser && currentUser.authenticated && activity && Store.activityStatus(activity).key === 'open';
+    return currentUser && currentUser.authenticated && activity && activityStatus(activity).key === 'open';
   }
 
   function canViewRecord(record, activity) {
@@ -2924,6 +3255,8 @@
   }
 
   function saveQuickRecord() {
+    toast(formalDeferredMessage);
+    return;
     const activity = selectedActivity();
     if (!canCreateRecord(activity)) return toast('表單目前未開放，無法新增紀錄。');
     const items = publishedRecordItems(activity);
@@ -2940,13 +3273,13 @@
   function createRecord(activity, answers, otherAnswers, cardLink, items) {
     const snapshotItems = Store.clone(items || publishedRecordItems(activity));
     state.records.push({
-      id: Store.uid('rec'),
+      id: newUuid(),
       activityId: activity.id,
       status: 'active',
       answers,
-      prototypeOtherAnswers: otherAnswers || {},
-      prototypeCardLink: cardLink || { linked: false, variant: 'default' },
-      formPrototypeSnapshot: {
+      runtimeOtherAnswers: otherAnswers || {},
+      runtimeCardLink: cardLink || { linked: false, variant: 'default' },
+      formRuntimeSnapshot: {
         publishedAt: formDesign(activity).published.publishedAt || '',
         items: snapshotItems
       },
@@ -2964,8 +3297,8 @@
     if (!canEditRecord(record, selectedActivity())) return toast('沒有權限編輯此紀錄。');
     const items = snapshotRecordItems(record, selectedActivity());
     record.answers = cleanAnswersForItems(ui.drawer.working || {}, items);
-    record.prototypeOtherAnswers = cleanOtherAnswers(ui.drawer.workingOther || {}, ui.drawer.working || {}, items);
-    record.prototypeCardLink = cleanCardLink(ui.drawer.workingCardLink || cardLinkForRecord(record));
+    record.runtimeOtherAnswers = cleanOtherAnswers(ui.drawer.workingOther || {}, ui.drawer.working || {}, items);
+    record.runtimeCardLink = cleanCardLink(ui.drawer.workingCardLink || cardLinkForRecord(record));
     record.updatedByUserId = currentUser.userId;
     record.updatedByDisplayName = currentUser.displayName;
     record.updatedAt = Store.nowStamp();
@@ -3022,6 +3355,8 @@
   }
 
   function exportCsv(records, activity, scope) {
+    toast(formalDeferredMessage);
+    return;
     const rows = records;
     const fields = exportFields(activity, rows);
     const header = ['活動名稱', '紀錄 ID', '建立者', '建立時間', '最近更新者', '最近更新', '紀錄狀態', ...fields.map(f => f.title)];
@@ -3052,7 +3387,7 @@
   }
 
   function resetData() {
-    if (!window.confirm('確定要重設 Prototype 資料？這會還原 V2 繁體中文範例資料。')) return;
+    if (!window.confirm('確定要重設 本階段資料？這會還原 V2 繁體中文範例資料。')) return;
     state = Store.reset();
     ui.selectedActivityId = state.selectedActivityId;
     ui.view = 'overview';
@@ -3062,7 +3397,7 @@
     ui.expandedRecords.all.clear();
     ui.records.showVoidRecords = false;
     ui.records.state = 'normal';
-    toast('已重設 Prototype 資料。');
+    toast('已重設 本階段資料。');
   }
 
   function clean(answers) {
