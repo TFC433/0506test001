@@ -2292,13 +2292,23 @@ a:focus-visible {
 }
 
 .aim-raw-card-viewer {
-  width: min(960px, calc(100vw - 72px));
-  max-height: calc(100vh - 72px);
+  --aim-surface: #ffffff;
+  --aim-surface-muted: #f8fafb;
+  --aim-surface-strong: #edf1f5;
+  --aim-border: #dce2e9;
+  --aim-border-strong: #b9c4d1;
+  --aim-text: #1d2736;
+  --aim-muted: #667386;
+  --aim-blue: #315fba;
+  --aim-blue-dark: #234b98;
+  width: min(800px, calc(100vw - 64px));
+  max-height: min(86vh, 760px);
   padding: 0;
   overflow: hidden;
   border: 0;
   border-radius: 12px;
   background: transparent;
+  color: var(--aim-text, #1d2736);
 }
 
 .aim-raw-card-viewer::backdrop {
@@ -2307,12 +2317,12 @@ a:focus-visible {
 
 .aim-raw-card-viewer-panel {
   display: flex;
-  max-height: calc(100vh - 72px);
+  max-height: min(86vh, 760px);
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--aim-border);
+  border: 1px solid var(--aim-border, #dce2e9);
   border-radius: 12px;
-  background: var(--aim-surface);
+  background: var(--aim-surface, #ffffff);
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
 }
 
@@ -2322,40 +2332,61 @@ a:focus-visible {
   justify-content: space-between;
   gap: 12px;
   padding: 14px 16px;
-  border-bottom: 1px solid var(--aim-border);
+  border-bottom: 1px solid var(--aim-border, #dce2e9);
+  background: var(--aim-surface, #ffffff);
 }
 
 .aim-raw-card-viewer-head h2 {
   margin: 0;
+  color: var(--aim-text, #1d2736);
   font-size: 18px;
 }
 
 .aim-raw-card-viewer-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 260px;
-  gap: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   min-height: 0;
   padding: 18px;
   overflow: hidden;
+  background: var(--aim-surface, #ffffff);
 }
 
 .aim-raw-card-viewer-image {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
+  height: clamp(300px, 48vh, 500px);
   min-width: 0;
-  min-height: 420px;
   overflow: hidden;
-  border: 1px solid var(--aim-border);
+  border: 1px solid var(--aim-border, #dce2e9);
   border-radius: 8px;
-  background: #f1f5f9;
+  background: #f4f6f8;
+}
+
+.aim-raw-card-viewer-image-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: inherit;
+  text-decoration: none;
+  cursor: zoom-in;
+}
+
+.aim-raw-card-viewer-image-link:focus-visible {
+  outline: 3px solid rgba(49, 95, 186, 0.28);
+  outline-offset: -6px;
 }
 
 .aim-raw-card-viewer-image .aim-raw-card-thumb-large,
 .aim-raw-card-viewer-image .aim-mock-card-large {
   width: 100%;
   height: 100%;
-  max-height: calc(100vh - 190px);
+  max-width: 100%;
+  max-height: 100%;
   border: 0;
   box-shadow: none;
   object-fit: contain;
@@ -2366,8 +2397,7 @@ a:focus-visible {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  justify-content: center;
-  gap: 8px;
+  gap: 6px;
   text-align: left;
 }
 
@@ -2380,20 +2410,45 @@ a:focus-visible {
 }
 
 .aim-raw-card-viewer-info strong {
-  color: var(--aim-text);
-  font-size: 22px;
+  color: var(--aim-text, #1d2736);
+  font-size: 20px;
+  line-height: 1.3;
 }
 
 .aim-raw-card-viewer-company {
   width: fit-content;
   max-width: 100%;
   padding: 4px 10px;
-  border: 1px solid var(--aim-border);
+  border: 1px solid var(--aim-border, #dce2e9);
   border-radius: 6px;
-  background: var(--aim-surface-muted);
-  color: var(--aim-text);
+  background: var(--aim-surface-muted, #f8fafb);
+  color: var(--aim-text, #1d2736);
   font-size: 13px;
   font-weight: 600;
+}
+
+.aim-raw-card-viewer-info span {
+  color: var(--aim-muted, #667386);
+  font-size: 13px;
+}
+
+.aim-raw-card-viewer-drive {
+  width: fit-content;
+  max-width: 100%;
+  margin-top: 6px;
+  overflow: hidden;
+  color: var(--aim-blue, #315fba);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aim-raw-card-viewer-drive:hover,
+.aim-raw-card-viewer-drive:focus-visible {
+  color: var(--aim-blue-dark, #234b98);
+  text-decoration: underline;
 }
 
 .aim-raw-card-viewer-foot {
@@ -2401,8 +2456,8 @@ a:focus-visible {
   justify-content: flex-end;
   gap: 8px;
   padding: 14px 16px;
-  border-top: 1px solid var(--aim-border);
-  background: var(--aim-surface-muted);
+  border-top: 1px solid var(--aim-border, #dce2e9);
+  background: var(--aim-surface-muted, #f8fafb);
 }
 
 .aim-record-toolbar {

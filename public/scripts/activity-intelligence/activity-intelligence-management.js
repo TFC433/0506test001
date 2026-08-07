@@ -1921,6 +1921,12 @@
   function renderRawCardViewerContent(card, context) {
     const roleText = rawCardRoleText(card);
     const fromPicker = context === 'picker';
+    const driveLink = card.driveLink && card.driveLink !== 'undefined' && card.driveLink !== 'null' ? card.driveLink : '';
+    const viewerImage = renderRawCardVisual(card, 'large');
+    const driveLabel = '在 Google Drive 開啟原始檔';
+    const imageStage = driveLink
+      ? `<a class="aim-raw-card-viewer-image-link" href="${Store.escapeHtml(driveLink)}" target="_blank" rel="noopener noreferrer" aria-label="${driveLabel}" title="${driveLabel}">${viewerImage}</a>`
+      : viewerImage;
     return `
       <section class="aim-raw-card-viewer-panel" data-action="noop">
         <div class="aim-raw-card-viewer-head">
@@ -1928,18 +1934,16 @@
           <button class="aim-button aim-icon-button" data-action="close-raw-card-viewer" type="button" aria-label="關閉">×</button>
         </div>
         <div class="aim-raw-card-viewer-body">
-          <div class="aim-raw-card-viewer-image">${renderRawCardVisual(card, 'large')}</div>
+          <div class="aim-raw-card-viewer-image">${imageStage}</div>
           <div class="aim-raw-card-viewer-info">
             <strong>${Store.escapeHtml(card.name || '未命名名片')}</strong>
             ${card.company ? `<span class="aim-raw-card-viewer-company">${Store.escapeHtml(card.company)}</span>` : ''}
             ${roleText ? `<span>${Store.escapeHtml(roleText)}</span>` : ''}
-            ${card.mobile ? `<span>Mobile ${Store.escapeHtml(card.mobile)}</span>` : ''}
-            ${card.email ? `<span>Email ${Store.escapeHtml(card.email)}</span>` : ''}
-            ${card.phone && card.phone !== card.mobile ? `<span>Phone ${Store.escapeHtml(card.phone)}</span>` : ''}
+            ${driveLink ? `<a class="aim-raw-card-viewer-drive" href="${Store.escapeHtml(driveLink)}" target="_blank" rel="noopener noreferrer">${driveLabel}</a>` : ''}
           </div>
         </div>
         <div class="aim-raw-card-viewer-foot">
-          <button class="aim-button" data-action="close-raw-card-viewer" type="button">${fromPicker ? '取消' : '關閉'}</button>
+          <button class="aim-button" data-action="close-raw-card-viewer" type="button">${fromPicker ? '返回' : '關閉'}</button>
           ${fromPicker ? `<button class="aim-button aim-button-primary" data-action="select-viewer-card" data-card-id="${Store.escapeHtml(card.cardId)}" type="button">選擇此名片</button>` : ''}
         </div>
       </section>
