@@ -2132,6 +2132,13 @@ a:focus-visible {
   cursor: zoom-in;
 }
 
+.aim-raw-card-picker-thumb .aim-raw-card-thumb-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
 .aim-raw-card-picker-thumb:hover .aim-raw-card-thumb,
 .aim-form-card-link-thumb:hover .aim-raw-card-thumb,
 .aim-record-card-thumb-button:hover .aim-raw-card-thumb {

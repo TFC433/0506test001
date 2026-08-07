@@ -1849,7 +1849,7 @@
   }
 
   function rawCardRoleText(card) {
-    return [card.department, card.position].filter(Boolean).filter((value, index, list) => list.indexOf(value) === index).join(' / ');
+    return [card.department, card.position].filter(Boolean).filter((value, index, list) => list.indexOf(value) === index).join('／');
   }
 
   function rawCardById(cardId) {
