@@ -66,7 +66,6 @@
     quickOtherAnswers: {},
     quickCardLink: { linked: false, cardId: null, card: null },
     cardPicker: null,
-    cardPreviewLightboxOpen: false,
     hardDeleteConfirm: null,
     focusQuickFirst: false,
     quickAnswers: {},
@@ -315,13 +314,7 @@
   async function loadRawCards(options) {
     if (rawCardsLoaded && !(options && options.force)) return rawCards;
     const cards = await window.ActivityIntelligenceApi.listRawCards();
-    rawCards = (cards || [])
-      .map((card, index) => {
-        const normalized = normalizeRawCard(card);
-        return normalized ? { ...normalized, sourceOrder: index } : null;
-      })
-      .filter(card => card && card.cardId)
-      .sort(compareRawCardsByCreatedTime);
+    rawCards = (cards || []).map(normalizeRawCard).filter(card => card && card.cardId);
     rawCardsLoaded = true;
     return rawCards;
   }
@@ -332,7 +325,6 @@
     return {
       cardId: card.cardId || card.card_id || '',
       rowIndex: card.rowIndex || card.row_index || '',
-      sourceOrder: Number.isFinite(card.sourceOrder) ? card.sourceOrder : 0,
       name: card.name || '',
       company: card.company || card.companyName || '',
       department: card.department || '',
@@ -344,18 +336,17 @@
       driveLink: card.driveLink || card.drive_link || '',
       driveFilename: card.driveFilename || card.drive_filename || card.sourceFilename || '',
       createdTime: card.createdTime || card.created_time || card.createdAt || card.created_at || '',
-      thumbnailUrl: driveFileId ? `/api/external/thumbnail?fileId=${encodeURIComponent(driveFileId)}` : (card.thumbnailUrl || '')
+      thumbnailUrl: rawCardImageUrl({ driveLink: card.driveLink || card.drive_link || '', driveFileId })
     };
   }
 
-  function compareRawCardsByCreatedTime(a, b) {
-    const at = Date.parse(a.createdTime || '');
-    const bt = Date.parse(b.createdTime || '');
-    const aValid = Number.isFinite(at);
-    const bValid = Number.isFinite(bt);
-    if (aValid && bValid && bt !== at) return bt - at;
-    if (aValid !== bValid) return aValid ? -1 : 1;
-    return (a.sourceOrder || 0) - (b.sourceOrder || 0);
+  function rawCardImageUrl(card) {
+    if (!card) return '';
+    const driveLink = card.driveLink || card.drive_link || '';
+    const driveFileId = card.driveFileId || card.drive_file_id || '';
+    if (driveLink && driveLink !== 'undefined' && driveLink !== 'null') return `/api/drive/thumbnail?link=${encodeURIComponent(driveLink)}`;
+    if (driveFileId && driveFileId !== 'undefined' && driveFileId !== 'null') return `/api/drive/thumbnail?fileId=${encodeURIComponent(driveFileId)}`;
+    return '';
   }
 
   function applyRoleLanding() {
@@ -471,7 +462,6 @@
       ${renderFormDesignConfirmDialog()}
       ${renderHardDeleteConfirmDialog()}
       ${renderCardPickerDialog()}
-      ${renderCardPreviewLightbox()}
       ${ui.toast ? `<div class="aim-toast" role="status">${Store.escapeHtml(ui.toast)}</div>` : ''}
     `;
   }
@@ -739,7 +729,6 @@
     ui.drawer = null;
     ui.dialog = null;
     ui.cardPicker = null;
-    ui.cardPreviewLightboxOpen = false;
     if (isRecorder()) {
       applyRoleLanding();
       return;
@@ -941,7 +930,7 @@
           </div>
           <div class="aim-record-card-right-rail">
             ${renderRecordReviewActions(record, activity, context, expanded)}
-            <div class="aim-record-card-biz-slot" aria-hidden="true">${renderRecordCardThumb(record)}</div>
+            <div class="aim-record-card-biz-slot">${renderRecordCardThumb(record)}</div>
           </div>
         </div>
         ${expanded ? renderInlineRecordDetail(record, activity) : ''}
@@ -952,7 +941,7 @@
   function renderRecordCardThumb(record) {
     const link = cardLinkForRecord(record);
     if (!link.linked) return '未連結名片';
-    return renderRawCardVisual(link.card, 'thumb');
+    return `<button class="aim-record-card-thumb-button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(link.cardId || '')}" type="button" aria-label="開啟名片預覽">${renderRawCardVisual(link.card, 'thumb')}</button>`;
   }
 
   function renderRecordCardMeta(record, activity, coverage) {
@@ -1197,7 +1186,7 @@
   function renderRawCardVisual(card, size) {
     const normalized = normalizeRawCard(card);
     if (!normalized || !normalized.thumbnailUrl) return renderBusinessCardVisual(size || 'thumb');
-    return `<img class="aim-raw-card-thumb aim-raw-card-thumb-${Store.escapeHtml(size || 'thumb')}" src="${Store.escapeHtml(normalized.thumbnailUrl)}" alt="${Store.escapeHtml(normalized.driveFilename || normalized.name || 'RAW card')}" loading="lazy" onerror="this.style.display='none'; this.parentElement.classList.add('aim-card-thumb-fallback');">`;
+    return `<img class="aim-raw-card-thumb aim-raw-card-thumb-${Store.escapeHtml(size || 'thumb')}" src="${Store.escapeHtml(normalized.thumbnailUrl)}" alt="${Store.escapeHtml(normalized.driveFilename || normalized.name || 'RAW card')}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'aim-raw-card-placeholder',textContent:'名片'}));">`;
   }
 
   function formDesign(activity) {
@@ -1765,20 +1754,6 @@
     `;
   }
 
-  function renderCardPreviewLightbox() {
-    if (!ui.cardPreviewLightboxOpen) return '';
-    const cardId = typeof ui.cardPreviewLightboxOpen === 'string' ? ui.cardPreviewLightboxOpen : '';
-    const card = cardId ? rawCardById(cardId) || cardLinkForRecord(state.records.find(record => record.cardId === cardId)).card : null;
-    return `
-      <div class="aim-dialog-backdrop aim-card-preview-lightbox" data-action="close-card-lightbox">
-        <div class="aim-dialog aim-card-preview-dialog" role="dialog" aria-modal="true" aria-label="名片預覽" data-action="noop">
-          <div class="aim-dialog-head"><h2>名片預覽</h2><button class="aim-button aim-icon-button" data-action="close-card-lightbox" type="button" aria-label="關閉">×</button></div>
-          <div class="aim-dialog-body">${renderRawCardDetail(card)}</div>
-        </div>
-      </div>
-    `;
-  }
-
   function driveThumbnailUrl(fileId) {
     return `/api/drive/thumbnail?fileId=${encodeURIComponent(fileId)}`;
   }
@@ -1795,13 +1770,13 @@
     if (!ui.cardPicker) return '';
     return `
       <div class="aim-dialog-backdrop" data-action="close-card-picker"></div>
-      <section class="aim-dialog" role="dialog" aria-modal="true" aria-label="選擇 RAW 名片">
+      <section class="aim-dialog aim-card-picker-dialog" role="dialog" aria-modal="true" aria-label="選擇 RAW 名片">
         <div class="aim-dialog-head"><h2>選擇 RAW 名片</h2><button class="aim-button aim-icon-button" data-action="close-card-picker" type="button" aria-label="關閉">x</button></div>
         <div class="aim-dialog-body">
-          <div class="aim-field"><label for="aim-card-picker-q">搜尋名片</label><input class="aim-input" id="aim-card-picker-q" value="${Store.escapeHtml(ui.cardPicker.q || '')}" placeholder="姓名、公司、電話或檔名"></div>
+          <div class="aim-card-picker-search aim-field"><label for="aim-card-picker-q">搜尋名片</label><input class="aim-input" id="aim-card-picker-q" value="${Store.escapeHtml(ui.cardPicker.q || '')}" placeholder="姓名、公司、部門、職稱、電話、Email 或檔名"></div>
           <div class="aim-card-picker-results" id="aim-card-picker-results">${renderCardPickerResults()}</div>
         </div>
-        <div class="aim-dialog-foot"><button class="aim-button" data-action="close-card-picker" type="button">取消</button></div>
+        <div class="aim-dialog-foot aim-card-picker-foot"><div id="aim-card-picker-pagination">${renderCardPickerPaginationForCurrent()}</div><button class="aim-button" data-action="close-card-picker" type="button">取消</button></div>
       </section>
     `;
   }
@@ -1825,8 +1800,15 @@
     if (ui.cardPicker) ui.cardPicker.page = page;
     const offset = (page - 1) * rawCardPickerPageSize;
     const pageRows = rows.slice(offset, offset + rawCardPickerPageSize);
-    const list = pageRows.map(card => renderRawCardPickerRow(card)).join('') || '<div class="aim-empty">目前沒有可選擇的 RAW 名片。</div>';
-    return `${list}${renderCardPickerPagination(rows.length, page, totalPages)}`;
+    return pageRows.map(card => renderRawCardPickerRow(card)).join('') || '<div class="aim-empty">目前沒有可選擇的 RAW 名片。</div>';
+  }
+
+  function renderCardPickerPaginationForCurrent() {
+    const rows = filteredRawCards(ui.cardPicker && ui.cardPicker.q);
+    const totalPages = Math.max(1, Math.ceil(rows.length / rawCardPickerPageSize));
+    const page = Math.min(Math.max(Number((ui.cardPicker && ui.cardPicker.page) || 1), 1), totalPages);
+    if (ui.cardPicker) ui.cardPicker.page = page;
+    return renderCardPickerPagination(rows.length, page, totalPages);
   }
 
   function renderCardPickerPagination(total, page, totalPages) {
@@ -1842,42 +1824,27 @@
 
   function renderRawCardPickerRow(card) {
     const roleText = rawCardRoleText(card);
-    const contacts = rawCardContactRows(card);
     return `
       <article class="aim-raw-card-picker-row">
         <button class="aim-raw-card-picker-thumb" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" type="button" aria-label="開啟名片預覽">
           ${renderRawCardVisual(card, 'thumb')}
         </button>
-        <button class="aim-raw-card-picker-info" data-action="choose-card" data-card-id="${Store.escapeHtml(card.cardId)}" type="button">
-          <strong class="aim-raw-card-name">${Store.escapeHtml(card.name || '未命名名片')}</strong>
-          ${card.company ? `<span class="aim-raw-card-company">${Store.escapeHtml(card.company)}</span>` : ''}
-          ${roleText ? `<span class="aim-raw-card-role">${Store.escapeHtml(roleText)}</span>` : ''}
-          ${contacts.map(row => `<span class="aim-raw-card-contact">${Store.escapeHtml(row)}</span>`).join('')}
-        </button>
-      </article>
-    `;
-  }
-
-  function renderRawCardDetail(card) {
-    const normalized = normalizeRawCard(card);
-    if (!normalized) return renderBusinessCardVisual('large');
-    const roleText = rawCardRoleText(normalized);
-    return `
-      <div class="aim-raw-card-preview-layout">
-        <div class="aim-raw-card-preview-image">${renderRawCardVisual(normalized, 'large')}</div>
-        <aside class="aim-raw-card-preview-pane">
-          <div class="aim-raw-card-preview-info">
-            <strong class="aim-raw-card-preview-name">${Store.escapeHtml(normalized.name || '未命名名片')}</strong>
-            ${normalized.company ? `<span class="aim-raw-card-preview-company">${Store.escapeHtml(normalized.company)}</span>` : ''}
-            ${roleText ? `<span class="aim-raw-card-preview-role">${Store.escapeHtml(roleText)}</span>` : ''}
-            <dl class="aim-raw-card-preview-contacts">
-              ${normalized.mobile ? `<div><dt>Mobile</dt><dd>${Store.escapeHtml(normalized.mobile)}</dd></div>` : ''}
-              ${normalized.phone ? `<div><dt>Phone</dt><dd>${Store.escapeHtml(normalized.phone)}</dd></div>` : ''}
-              ${normalized.email ? `<div><dt>Email</dt><dd>${Store.escapeHtml(normalized.email)}</dd></div>` : ''}
-            </dl>
+        <div class="aim-raw-card-picker-info">
+          <div class="aim-raw-card-identity">
+            <strong class="aim-raw-card-name">${Store.escapeHtml(card.name || '未命名名片')}</strong>
+            <div class="aim-raw-card-company-row">
+              ${card.company ? `<span class="aim-raw-card-company">${Store.escapeHtml(card.company)}</span>` : ''}
+              ${roleText ? `<span class="aim-raw-card-role">${Store.escapeHtml(roleText)}</span>` : ''}
+            </div>
           </div>
-        </aside>
-      </div>
+          <div class="aim-raw-card-contact-list">
+            ${card.mobile ? `<span class="aim-raw-card-contact">Mobile ${Store.escapeHtml(card.mobile)}</span>` : ''}
+            ${card.email ? `<span class="aim-raw-card-contact">Email ${Store.escapeHtml(card.email)}</span>` : ''}
+            ${card.phone && card.phone !== card.mobile ? `<span class="aim-raw-card-contact">Phone ${Store.escapeHtml(card.phone)}</span>` : ''}
+          </div>
+          <div class="aim-raw-card-picker-actions"><button class="aim-button aim-button-primary" data-action="choose-card" data-card-id="${Store.escapeHtml(card.cardId)}" type="button">選擇</button></div>
+        </div>
+      </article>
     `;
   }
 
@@ -1885,12 +1852,66 @@
     return [card.department, card.position].filter(Boolean).filter((value, index, list) => list.indexOf(value) === index).join(' / ');
   }
 
-  function rawCardContactRows(card) {
-    return [card.mobile, card.phone, card.email].filter(Boolean);
-  }
-
   function rawCardById(cardId) {
     return rawCards.find(card => card.cardId === cardId) || null;
+  }
+
+  function rawCardForViewer(cardId) {
+    if (!cardId) return null;
+    return rawCardById(cardId) || (state.records || []).map(record => cardLinkForRecord(record).card).find(card => normalizeRawCard(card)?.cardId === cardId) || null;
+  }
+
+  function ensureRawCardViewer() {
+    let dialog = document.getElementById('aim-raw-card-viewer');
+    if (dialog) return dialog;
+    dialog = document.createElement('dialog');
+    dialog.id = 'aim-raw-card-viewer';
+    dialog.className = 'aim-raw-card-viewer';
+    dialog.addEventListener('click', event => {
+      if (event.target === dialog || event.target.closest('[data-action="close-raw-card-viewer"]')) closeRawCardViewer();
+    });
+    document.body.appendChild(dialog);
+    return dialog;
+  }
+
+  function openRawCardViewer(card) {
+    const normalized = normalizeRawCard(card);
+    if (!normalized) return;
+    const dialog = ensureRawCardViewer();
+    if (dialog.open && typeof dialog.close === 'function') dialog.close();
+    dialog.innerHTML = renderRawCardViewerContent(normalized);
+    if (typeof dialog.showModal === 'function') dialog.showModal();
+    else dialog.setAttribute('open', '');
+  }
+
+  function closeRawCardViewer() {
+    const dialog = document.getElementById('aim-raw-card-viewer');
+    if (!dialog) return;
+    if (typeof dialog.close === 'function' && dialog.open) dialog.close();
+    else dialog.removeAttribute('open');
+  }
+
+  function renderRawCardViewerContent(card) {
+    const roleText = rawCardRoleText(card);
+    return `
+      <section class="aim-raw-card-viewer-panel" data-action="noop">
+        <div class="aim-raw-card-viewer-head">
+          <h2>名片預覽</h2>
+          <button class="aim-button aim-icon-button" data-action="close-raw-card-viewer" type="button" aria-label="關閉">×</button>
+        </div>
+        <div class="aim-raw-card-viewer-body">
+          <div class="aim-raw-card-viewer-image">${renderRawCardVisual(card, 'large')}</div>
+          <div class="aim-raw-card-viewer-info">
+            <strong>${Store.escapeHtml(card.name || '未命名名片')}</strong>
+            ${card.company ? `<span class="aim-raw-card-viewer-company">${Store.escapeHtml(card.company)}</span>` : ''}
+            ${roleText ? `<span>${Store.escapeHtml(roleText)}</span>` : ''}
+            ${card.mobile ? `<span>Mobile ${Store.escapeHtml(card.mobile)}</span>` : ''}
+            ${card.email ? `<span>Email ${Store.escapeHtml(card.email)}</span>` : ''}
+            ${card.phone && card.phone !== card.mobile ? `<span>Phone ${Store.escapeHtml(card.phone)}</span>` : ''}
+          </div>
+        </div>
+      </section>
+    `;
   }
 
   function renderHardDeleteConfirmDialog() {
@@ -2175,13 +2196,6 @@
       render();
       return;
     }
-    if (event.key === 'Escape' && ui.cardPreviewLightboxOpen) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      ui.cardPreviewLightboxOpen = false;
-      render();
-      return;
-    }
     const activityLink = event.target.closest('.aim-activity-link');
     if (!activityLink || !['Enter', ' '].includes(event.key)) return;
     event.preventDefault();
@@ -2192,7 +2206,6 @@
     if (event.key !== 'Escape') return;
     if (ui.formDesignConfirm) ui.formDesignConfirm = null;
     else if (ui.hardDeleteConfirm) ui.hardDeleteConfirm = null;
-    else if (ui.cardPreviewLightboxOpen) ui.cardPreviewLightboxOpen = false;
     else if (ui.cardPicker) ui.cardPicker = null;
     else return;
     render();
@@ -2308,14 +2321,9 @@
       await publishDesignerDraft();
       return true;
     }
-    if (action === 'close-card-lightbox') {
-      ui.cardPreviewLightboxOpen = false;
-      render();
-      return true;
-    }
     if (action === 'open-card-lightbox') {
-      ui.cardPreviewLightboxOpen = el.dataset.cardId || true;
-      render();
+      const card = rawCardForViewer(el.dataset.cardId);
+      if (card) openRawCardViewer(card);
       return true;
     }
     if (action === 'card-picker-page') {
@@ -2339,7 +2347,6 @@
     }
     if (action === 'mock-unlink-card') {
       ui.formPreviewCardLinked = false;
-      ui.cardPreviewLightboxOpen = false;
       refreshFormPreview();
       return true;
     }
@@ -2988,8 +2995,7 @@
       if (!ui.cardPicker) return;
       ui.cardPicker.q = node.value;
       ui.cardPicker.page = 1;
-      const results = document.getElementById('aim-card-picker-results');
-      if (results) results.innerHTML = renderCardPickerResults();
+      refreshCardPickerResults();
     };
     node.addEventListener('compositionstart', () => { composing = true; });
     node.addEventListener('compositionend', () => {
@@ -3829,7 +3835,6 @@
       const next = { linked: false, cardId: null, card: null };
       if (context === 'drawer' && ui.drawer) ui.drawer.workingCardLink = next;
       else if (context === 'quick') ui.quickCardLink = next;
-      ui.cardPreviewLightboxOpen = false;
       return;
     }
     try {
@@ -3843,8 +3848,14 @@
   function setCardPickerPage(page) {
     if (!ui.cardPicker) return;
     ui.cardPicker.page = Math.max(Number(page) || 1, 1);
+    refreshCardPickerResults();
+  }
+
+  function refreshCardPickerResults() {
     const results = document.getElementById('aim-card-picker-results');
     if (results) results.innerHTML = renderCardPickerResults();
+    const pagination = document.getElementById('aim-card-picker-pagination');
+    if (pagination) pagination.innerHTML = renderCardPickerPaginationForCurrent();
   }
 
   function selectRawCard(cardId) {
@@ -4062,7 +4073,6 @@
     ui.drawer = null;
     ui.dialog = null;
     ui.cardPicker = null;
-    ui.cardPreviewLightboxOpen = false;
     ui.view = 'overview';
     ui.tab = 'overview';
     toast('已永久刪除活動。');

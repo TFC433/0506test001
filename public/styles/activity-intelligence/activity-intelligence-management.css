@@ -1786,6 +1786,7 @@ a:focus-visible {
   width: 180px;
   max-width: 100%;
   padding: 0;
+  overflow: hidden;
   border: 0;
   background: transparent;
   cursor: zoom-in;
@@ -1799,6 +1800,7 @@ a:focus-visible {
 .aim-raw-card-thumb {
   display: block;
   width: 100%;
+  height: 100%;
   border: 1px solid #cbd5e1;
   border-radius: 4px;
   background: #f8fafc;
@@ -1818,6 +1820,20 @@ a:focus-visible {
   min-height: 0;
   object-fit: contain;
   object-position: center;
+}
+
+.aim-raw-card-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: var(--aim-muted-2);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .aim-card-thumb-fallback::after {
@@ -2039,54 +2055,56 @@ a:focus-visible {
   background: repeating-linear-gradient(90deg, #94a3b8 0 8px, transparent 8px 14px);
 }
 
-.aim-card-preview-lightbox {
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+.aim-card-picker-dialog {
+  top: 28px;
+  width: min(920px, calc(100vw - 56px));
+  max-height: calc(100vh - 56px);
+  transform: translateX(-50%);
 }
 
-.aim-card-preview-dialog {
-  top: 50%;
-  width: min(1040px, calc(100vw - 72px));
-  height: min(760px, calc(100vh - 72px));
-  max-height: calc(100vh - 72px);
-  overflow: hidden;
-  transform: translate(-50%, -50%);
-  z-index: 1010;
-}
-
-.aim-card-preview-dialog .aim-dialog-body {
+.aim-card-picker-dialog .aim-dialog-body {
+  display: flex;
   flex: 1 1 auto;
   min-height: 0;
-  padding: 18px;
+  flex-direction: column;
+  gap: 12px;
   overflow: hidden;
+}
+
+.aim-card-picker-search {
+  flex: 0 0 auto;
 }
 
 .aim-card-picker-results {
   display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
   flex-direction: column;
-  gap: 10px;
-  max-height: min(58vh, 560px);
+  gap: 12px;
   overflow: auto;
+}
+
+.aim-card-picker-foot {
+  align-items: center;
+  justify-content: space-between;
 }
 
 .aim-card-picker-pagination {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 10px;
-  padding: 4px 0 0;
   color: var(--aim-muted);
   font-size: 12px;
 }
 
 .aim-raw-card-picker-row {
-  display: grid;
-  grid-template-columns: 180px minmax(0, 1fr);
-  align-items: stretch;
+  display: flex;
+  flex: 0 0 auto;
+  min-height: 139px;
   overflow: hidden;
   border: 1px solid var(--aim-border);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--aim-surface);
   transition: box-shadow 0.16s ease, border-color 0.16s ease;
 }
@@ -2104,9 +2122,10 @@ a:focus-visible {
 }
 
 .aim-raw-card-picker-thumb {
-  width: 180px;
-  height: 114px;
-  min-height: 114px;
+  flex: 0 0 220px;
+  width: 220px;
+  height: 139px;
+  min-height: 139px;
   overflow: hidden;
   padding: 0;
   border-right: 1px solid var(--aim-border);
@@ -2114,44 +2133,63 @@ a:focus-visible {
 }
 
 .aim-raw-card-picker-thumb:hover .aim-raw-card-thumb,
-.aim-form-card-link-thumb:hover .aim-raw-card-thumb {
+.aim-form-card-link-thumb:hover .aim-raw-card-thumb,
+.aim-record-card-thumb-button:hover .aim-raw-card-thumb {
   filter: brightness(0.96);
 }
 
 .aim-raw-card-picker-info {
   display: flex;
+  flex: 1 1 auto;
   min-width: 0;
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
-  gap: 3px;
-  padding: 12px 14px;
+  gap: 10px;
+  padding: 16px 18px;
   text-align: left;
-  cursor: pointer;
-}
-
-.aim-raw-card-name,
-.aim-raw-card-preview-name {
-  color: var(--aim-text);
-  font-weight: 700;
-  line-height: 1.35;
 }
 
 .aim-raw-card-name {
-  font-size: 15px;
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--aim-text);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aim-raw-card-identity {
+  display: grid;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+}
+
+.aim-raw-card-company-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
 }
 
 .aim-raw-card-company {
   display: inline-flex;
   width: fit-content;
   max-width: 100%;
-  padding: 3px 9px;
+  padding: 4px 10px;
+  overflow: hidden;
   border: 1px solid var(--aim-border);
   border-radius: 6px;
   background: var(--aim-surface-muted);
   color: var(--aim-text);
   font-size: 12px;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .aim-raw-card-role,
@@ -2165,113 +2203,140 @@ a:focus-visible {
   white-space: nowrap;
 }
 
-.aim-raw-card-preview-layout {
+.aim-raw-card-contact-list {
   display: grid;
-  grid-template-columns: minmax(420px, 1.45fr) minmax(260px, 0.8fr);
-  gap: 22px;
-  align-items: stretch;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--aim-border);
+}
+
+.aim-raw-card-picker-actions {
+  display: flex;
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.aim-record-card-thumb-button {
+  display: block;
+  width: 100%;
   height: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.aim-record-card-biz-slot .aim-raw-card-thumb-thumb {
+  width: 72px;
+  height: 46px;
+}
+
+.aim-raw-card-viewer {
+  width: min(960px, calc(100vw - 72px));
+  max-height: calc(100vh - 72px);
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+}
+
+.aim-raw-card-viewer::backdrop {
+  background: rgba(15, 23, 42, 0.46);
+}
+
+.aim-raw-card-viewer-panel {
+  display: flex;
+  max-height: calc(100vh - 72px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--aim-border);
+  border-radius: 12px;
+  background: var(--aim-surface);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+}
+
+.aim-raw-card-viewer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--aim-border);
+}
+
+.aim-raw-card-viewer-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.aim-raw-card-viewer-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 18px;
   min-height: 0;
+  padding: 18px;
   overflow: hidden;
 }
 
-.aim-raw-card-preview-image {
+.aim-raw-card-viewer-image {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 360px;
+  min-width: 0;
+  min-height: 420px;
   overflow: hidden;
-  padding: 14px;
   border: 1px solid var(--aim-border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: #f1f5f9;
 }
 
-.aim-raw-card-preview-image .aim-raw-card-thumb-large,
-.aim-raw-card-preview-image .aim-mock-card-large {
+.aim-raw-card-viewer-image .aim-raw-card-thumb-large,
+.aim-raw-card-viewer-image .aim-mock-card-large {
   width: 100%;
   height: 100%;
-  max-height: 100%;
+  max-height: calc(100vh - 190px);
   border: 0;
   box-shadow: none;
   object-fit: contain;
   object-position: center;
 }
 
-.aim-raw-card-preview-pane {
+.aim-raw-card-viewer-info {
   display: flex;
-  align-items: center;
-  min-width: 0;
-  padding: 18px 6px;
-}
-
-.aim-raw-card-preview-info {
-  display: flex;
-  width: 100%;
   min-width: 0;
   flex-direction: column;
-  align-items: flex-start;
+  justify-content: center;
   gap: 8px;
   text-align: left;
 }
 
-.aim-raw-card-preview-name {
-  max-width: 100%;
-  overflow: hidden;
-  font-size: 22px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.aim-raw-card-preview-company {
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--aim-text);
-  font-size: 15px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.aim-raw-card-preview-role {
-  max-width: 100%;
-  overflow: hidden;
-  color: var(--aim-muted);
-  font-size: 14px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.aim-raw-card-preview-contacts {
-  display: grid;
-  gap: 8px;
-  width: 100%;
-  margin: 14px 0 0;
-  padding-top: 14px;
-  border-top: 1px solid var(--aim-border);
-}
-
-.aim-raw-card-preview-contacts div {
-  display: grid;
-  grid-template-columns: 72px minmax(0, 1fr);
-  gap: 10px;
-  align-items: baseline;
-}
-
-.aim-raw-card-preview-contacts dt {
-  color: var(--aim-muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.aim-raw-card-preview-contacts dd {
+.aim-raw-card-viewer-info strong,
+.aim-raw-card-viewer-info span {
   min-width: 0;
-  margin: 0;
   overflow: hidden;
-  color: var(--aim-text);
-  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.aim-raw-card-viewer-info strong {
+  color: var(--aim-text);
+  font-size: 22px;
+}
+
+.aim-raw-card-viewer-company {
+  width: fit-content;
+  max-width: 100%;
+  padding: 4px 10px;
+  border: 1px solid var(--aim-border);
+  border-radius: 6px;
+  background: var(--aim-surface-muted);
+  color: var(--aim-text);
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .aim-record-toolbar {
