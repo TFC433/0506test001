@@ -26,7 +26,7 @@
     { label: '串聯元件', types: ['card_link'] }
   ];
   const yesNoOptions = ['是', '否'];
-  const formalDeferredMessage = 'This module will be connected in a later Activity Intelligence phase.';
+  const formalDeferredMessage = '甇斗芋蝯??澆?蝥?畾萄??迤撘??蝺?';
   const otherAnswerValue = '其他';
 
   let state = { activities: [], records: [], selectedActivityId: null };
@@ -81,7 +81,7 @@
   init();
 
   async function init() {
-    currentUser = resolveFormalCurrentUser();
+    currentUser = await resolveFormalCurrentUser();
     if (currentUser.authenticated) {
       try {
         await loadActivitiesFromApi();
@@ -97,19 +97,32 @@
     state.selectedActivityId = ui.selectedActivityId;
   }
 
-  function resolveFormalCurrentUser() {
-    const token = localStorage.getItem('crm-token') || localStorage.getItem('crmToken') || '';
-    const displayName = window.CRM_APP?.currentUser || localStorage.getItem('crmCurrentUserName') || 'CRM User';
-    const rawRole = window.CRM_APP?.currentUserRole || localStorage.getItem('crmUserRole') || 'recorder';
-    const role = ['super_admin', 'admin', 'recorder'].includes(rawRole) ? rawRole : 'recorder';
+  async function resolveFormalCurrentUser() {
+    if (!window.ActivityIntelligenceSession || typeof window.ActivityIntelligenceSession.ensureSession !== 'function') {
+      return {
+        authenticated: false,
+        role: 'recorder',
+        userId: '',
+        displayName: '尚未登入',
+        pictureUrl: '',
+        message: 'Activity Intelligence LINE 工作階段尚未準備完成。'
+      };
+    }
 
+    const session = await window.ActivityIntelligenceSession.ensureSession();
     return {
-      authenticated: Boolean(token),
-      role,
-      userId: displayName,
-      displayName,
-      pictureUrl: '',
-      source: 'crm-auth'
+      authenticated: Boolean(session && session.authenticated),
+      role: session && session.role ? session.role : 'recorder',
+      realRole: session && session.realRole,
+      localPreviewRole: session && session.localPreviewRole,
+      localPreviewEnabled: Boolean(session && session.localPreviewEnabled),
+      userId: session && session.userId ? session.userId : '',
+      displayName: session && session.displayName ? session.displayName : '尚未登入',
+      pictureUrl: session && session.pictureUrl ? session.pictureUrl : '',
+      message: session && session.message,
+      forbidden: Boolean(session && session.forbidden),
+      canLineLogin: Boolean(session && session.canLineLogin),
+      source: 'line-session'
     };
   }
 
@@ -482,7 +495,17 @@
   }
 
   function renderPreviewControl() {
-    return '';
+    if (!currentUser || !currentUser.localPreviewEnabled || !window.ActivityIntelligenceSession?.isLocalDevelopment()) return '';
+    const selected = currentUser.localPreviewRole || currentUser.role || 'recorder';
+    return `
+      <label class="aim-preview-control">本機測試角色
+        <select class="aim-select" id="aim-role-preview" aria-label="本機測試角色">
+          ${option('super_admin', productRoleLabel('super_admin'), selected)}
+          ${option('admin', productRoleLabel('admin'), selected)}
+          ${option('recorder', productRoleLabel('recorder'), selected)}
+        </select>
+      </label>
+    `;
   }
 
 
@@ -491,7 +514,7 @@
       <section class="aim-empty">
         <h2>尚未取得實際白名單角色</h2>
         <p>${Store.escapeHtml(currentUser.message || '請先建立有效的 LINE 工作階段。')}</p>
-        ${Store.isLocalhost() ? '<p class="aim-small">本機審查仍可透過頁首角色預覽選單檢視三種角色，但「實際白名單角色」不會被偽裝。</p>' : ''}
+        ${currentUser.canLineLogin ? '<button class="aim-button aim-button-primary" data-action="line-login" type="button">使用 LINE 登入</button>' : ''}
       </section>
     `;
   }
@@ -1782,7 +1805,7 @@
     const action = el.dataset.action;
     if (await handleFormDesignAction(action, el, event)) return;
     if (action === 'all' && canManageActivities()) { ui.view = 'overview'; ui.tab = 'overview'; }
-    if (action === 'open' && canManageActivities()) { ui.selectedActivityId = el.dataset.id; ui.view = 'workspace'; ui.tab = 'overview'; await loadFormForActivity(ui.selectedActivityId); }
+    if (action === 'open' && canManageActivities()) { ui.selectedActivityId = el.dataset.id; ui.view = 'workspace'; ui.tab = 'overview'; }
     if (action === 'recorder-open' && isRecorder()) { ui.selectedActivityId = el.dataset.id; ui.view = 'workspace'; ui.tab = 'records'; ui.records.scope = 'entry'; }
     if (action === 'tab') {
       selectTab(el.dataset.tab);
@@ -1798,6 +1821,7 @@
     if (action === 'close-drawer') ui.drawer = null;
     if (action === 'save-settings' && canManageActivities()) await saveSettings();
     if (action === 'reset' && canManageActivities()) toast(formalDeferredMessage);
+    if (action === 'line-login' && window.ActivityIntelligenceSession?.loginWithLine) await window.ActivityIntelligenceSession.loginWithLine();
     if (action === 'add-field' && canDesignForm()) addField();
     if (action === 'select-field' && canDesignForm()) ui.selectedFieldId = el.dataset.id;
     if (action === 'move-field' && canDesignForm()) moveField(el.dataset.id, Number(el.dataset.dir));
@@ -2393,8 +2417,11 @@
     });
   }
 
-  async function switchPreviewRole() {
-    currentUser = resolveFormalCurrentUser();
+  async function switchPreviewRole(value) {
+    if (window.ActivityIntelligenceSession?.setLocalPreviewRole) {
+      window.ActivityIntelligenceSession.setLocalPreviewRole(value);
+    }
+    currentUser = await resolveFormalCurrentUser();
     ui.drawer = null;
     ui.dialog = null;
     ui.expandedRecords.personal.clear();

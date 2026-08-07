@@ -1,23 +1,29 @@
 (function () {
   'use strict';
 
-  const BASE_URL = '/api/activity-intelligence';
+  const BASE_URL = '/api/line/activity-intelligence';
 
-  function requireAuthedFetch() {
-    if (typeof window.authedFetch !== 'function') {
-      throw new Error('Activity Intelligence requires the shared authedFetch service.');
-    }
-    return window.authedFetch;
-  }
-
-  async function request(path, options) {
-    const authedFetch = requireAuthedFetch();
-    const result = await authedFetch(`${BASE_URL}${path}`, {
-      skipRefresh: true,
-      ...(options || {})
+  async function request(path, options, retrying) {
+    const sessionHeaders = window.ActivityIntelligenceSession && typeof window.ActivityIntelligenceSession.requestHeaders === 'function'
+      ? window.ActivityIntelligenceSession.requestHeaders()
+      : {};
+    const requestOptions = options || {};
+    const response = await fetch(`${BASE_URL}${path}`, {
+      ...requestOptions,
+      credentials: 'same-origin',
+      headers: {
+        ...(requestOptions.headers || {}),
+        ...sessionHeaders
+      }
     });
+    const result = await response.json().catch(() => ({}));
 
-    if (!result || result.success === false) {
+    if (response.status === 401 && !retrying && window.ActivityIntelligenceSession && typeof window.ActivityIntelligenceSession.recoverSession === 'function') {
+      const recovered = await window.ActivityIntelligenceSession.recoverSession();
+      if (recovered) return request(path, options, true);
+    }
+
+    if (!response.ok || !result || result.success === false) {
       throw new Error((result && (result.error || result.message)) || 'Activity Intelligence request failed.');
     }
 
@@ -41,6 +47,10 @@
       return jsonRequest('POST', '/activities', payload);
     },
 
+    getActivity(activityId) {
+      return request(`/activities/${encodeURIComponent(activityId)}`);
+    },
+
     updateActivity(activityId, payload) {
       return jsonRequest('PATCH', `/activities/${encodeURIComponent(activityId)}`, payload);
     },
@@ -51,6 +61,14 @@
 
     getForm(activityId) {
       return request(`/activities/${encodeURIComponent(activityId)}/form`);
+    },
+
+    getDraftForm(activityId) {
+      return request(`/activities/${encodeURIComponent(activityId)}/form/draft`);
+    },
+
+    getPublishedForm(activityId) {
+      return request(`/activities/${encodeURIComponent(activityId)}/form/published`);
     },
 
     saveDraft(activityId, items) {

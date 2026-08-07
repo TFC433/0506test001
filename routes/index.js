@@ -28,6 +28,45 @@ const externalRoutes = require('./external.routes');
 const calendarRoutes = require('./calendar.routes');
 const internalOpsRoutes = require('./internal-ops.routes');
 const activityIntelligenceRoutes = require('./activity-intelligence.routes');
+const {
+    requireLineLeadSession,
+    isAllowedLocalDevRequest,
+    normalizeLineLeadRole
+} = require('../middleware/line-lead-session.middleware');
+
+const ACTIVITY_INTELLIGENCE_LOCAL_ROLE_HEADER = 'x-activity-intelligence-local-role';
+
+function bridgeLineUserToActivityIntelligenceUser(req, res, next) {
+    const lineUser = req.lineUser || {};
+    let role = normalizeLineLeadRole(lineUser.role);
+    const localRoleOverride = req.get(ACTIVITY_INTELLIGENCE_LOCAL_ROLE_HEADER);
+
+    if (localRoleOverride) {
+        const requestedRole = String(localRoleOverride).trim().toLowerCase();
+        const normalizedRole = normalizeLineLeadRole(requestedRole);
+        const allowedLocalOverride = lineUser.isLocalDev === true && isAllowedLocalDevRequest(req);
+
+        if (!allowedLocalOverride || requestedRole !== normalizedRole) {
+            return res.status(403).json({
+                success: false,
+                error: 'Activity Intelligence local role override is not allowed.',
+                code: 'ACTIVITY_INTELLIGENCE_LOCAL_ROLE_FORBIDDEN'
+            });
+        }
+
+        role = normalizedRole;
+    }
+
+    req.user = {
+        userId: lineUser.userId,
+        displayName: lineUser.displayName || lineUser.userId,
+        pictureUrl: lineUser.pictureUrl || null,
+        role,
+        isLocalDev: lineUser.isLocalDev === true
+    };
+
+    return next();
+}
 
 // ==========================================
 // 1. 公開/特殊驗證路由 (Public / Custom Auth)
@@ -36,6 +75,12 @@ router.use('/auth', authRoutes);
 
 // ★★★ 關鍵修正：LINE 路由必須移出標準 Auth 保護區 ★★★
 router.use('/line', lineLeadsRoutes);
+router.use(
+    '/line/activity-intelligence',
+    requireLineLeadSession,
+    bridgeLineUserToActivityIntelligenceUser,
+    activityIntelligenceRoutes
+);
 
 // Legacy: 名片預覽
 router.get('/drive/thumbnail', externalController.getDriveThumbnail);
@@ -64,7 +109,6 @@ router.use('/interactions', interactionRoutes);
 router.use('/events', eventRoutes);
 router.use('/calendar', calendarRoutes);
 router.use('/internal-ops', internalOpsRoutes);
-router.use('/activity-intelligence', activityIntelligenceRoutes);
 
 // ==========================================
 // 3. 404 與 根路徑
