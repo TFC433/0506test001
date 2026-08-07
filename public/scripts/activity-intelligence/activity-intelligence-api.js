@@ -38,6 +38,21 @@
     });
   }
 
+  async function lineRequest(path) {
+    const sessionHeaders = window.ActivityIntelligenceSession && typeof window.ActivityIntelligenceSession.requestHeaders === 'function'
+      ? window.ActivityIntelligenceSession.requestHeaders()
+      : {};
+    const response = await fetch(path, {
+      credentials: 'same-origin',
+      headers: sessionHeaders
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result || result.success === false) {
+      throw new Error((result && (result.error || result.message)) || 'LINE request failed.');
+    }
+    return result.data;
+  }
+
   window.ActivityIntelligenceApi = Object.freeze({
     listActivities() {
       return request('/activities');
@@ -81,6 +96,39 @@
 
     publishDraft(activityId) {
       return jsonRequest('POST', `/activities/${encodeURIComponent(activityId)}/form/publish`);
+    },
+
+    listSubmissions(activityId, query) {
+      const params = new URLSearchParams();
+      Object.entries(query || {}).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') params.set(key, value);
+      });
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      return request(`/activities/${encodeURIComponent(activityId)}/submissions${suffix}`);
+    },
+
+    createSubmission(activityId, payload) {
+      return jsonRequest('POST', `/activities/${encodeURIComponent(activityId)}/submissions`, payload);
+    },
+
+    getSubmission(submissionId) {
+      return request(`/submissions/${encodeURIComponent(submissionId)}`);
+    },
+
+    updateSubmission(submissionId, payload) {
+      return jsonRequest('PATCH', `/submissions/${encodeURIComponent(submissionId)}`, payload);
+    },
+
+    voidSubmission(submissionId) {
+      return jsonRequest('POST', `/submissions/${encodeURIComponent(submissionId)}/void`);
+    },
+
+    restoreSubmission(submissionId) {
+      return jsonRequest('POST', `/submissions/${encodeURIComponent(submissionId)}/restore`);
+    },
+
+    listRawCards() {
+      return lineRequest('/api/line/leads');
     }
   });
 })();

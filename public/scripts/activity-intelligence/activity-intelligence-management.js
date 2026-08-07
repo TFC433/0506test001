@@ -32,6 +32,9 @@
   let state = { activities: [], records: [], selectedActivityId: null };
   let currentUser = null;
   const formBundles = new Map();
+  const recordLoadState = new Map();
+  let rawCards = [];
+  let rawCardsLoaded = false;
   let writeInFlight = false;
   let ui = {
     view: 'overview',
@@ -51,7 +54,8 @@
     formPreviewCardLinked: false,
     formPreviewCardVariant: 'default',
     quickOtherAnswers: {},
-    quickCardLink: { linked: false, variant: 'default' },
+    quickCardLink: { linked: false, cardId: null, card: null },
+    cardPicker: null,
     cardPreviewLightboxOpen: false,
     focusQuickFirst: false,
     quickAnswers: {},
@@ -90,6 +94,9 @@
       }
     }
     applyRoleLanding();
+    if (currentUser.authenticated && ui.selectedActivityId && (ui.tab === 'records' || ui.tab === 'analytics')) {
+      await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
+    }
     render();
   }
 
@@ -134,6 +141,7 @@
     }
     state.selectedActivityId = ui.selectedActivityId || null;
     state.records = [];
+    recordLoadState.clear();
   }
 
   function normalizeActivityDto(activity) {
@@ -155,6 +163,24 @@
     if (formBundles.has(activityId)) return formBundles.get(activityId);
     const form = await window.ActivityIntelligenceApi.getForm(activityId);
     return updateActivityFormBundle(activityId, form);
+  }
+
+  async function loadPublishedFormForActivity(activityId) {
+    if (!activityId) return null;
+    const existing = formBundles.get(activityId);
+    if (existing && existing.published && existing.published.versionId && existing.published.items.length) return existing;
+    const published = await window.ActivityIntelligenceApi.getPublishedForm(activityId);
+    const merged = {
+      ...(existing || normalizeFormBundleDto(null)),
+      published: normalizeVersionDto(published)
+    };
+    formBundles.set(activityId, merged);
+    const activity = state.activities.find(item => item.id === activityId);
+    if (activity) {
+      activity.formDesignRuntime = merged;
+      activity.formFields = Store.clone(merged.published.items || []);
+    }
+    return merged;
   }
 
   function updateActivityFormBundle(activityId, form) {
@@ -183,6 +209,118 @@
       publishedByUserId: version && version.publishedByUserId,
       publishedByDisplayName: version && version.publishedByDisplayName,
       items: ((version && version.items) || []).map(normalizeDesignerItem)
+    };
+  }
+
+  async function loadRecordsForActivity(activityId, options) {
+    if (!activityId || !window.ActivityIntelligenceApi) return [];
+    const includeVoid = options && options.includeVoid !== undefined ? options.includeVoid : true;
+    const loadKey = `${activityId}:${includeVoid ? 'all' : 'active'}`;
+    const current = recordLoadState.get(loadKey);
+    if (current === 'loaded') return recordsFor(activityId);
+    if (current === 'loading') return recordsFor(activityId);
+
+    recordLoadState.set(loadKey, 'loading');
+    try {
+      await loadPublishedFormForActivity(activityId);
+      const submissions = await window.ActivityIntelligenceApi.listSubmissions(activityId, {
+        state: includeVoid ? 'all' : 'active'
+      });
+      const normalized = (submissions || []).map(normalizeSubmissionDto);
+      const submissionIds = new Set(normalized.map(record => record.id));
+      state.records = state.records.filter(record => record.activityId !== activityId || !submissionIds.has(record.id));
+      state.records = state.records.filter(record => record.activityId !== activityId).concat(normalized);
+      recordLoadState.set(loadKey, 'loaded');
+      return recordsFor(activityId);
+    } catch (error) {
+      recordLoadState.delete(loadKey);
+      toast(error.message || 'Submission load failed.');
+      return recordsFor(activityId);
+    }
+  }
+
+  function replaceRecord(record) {
+    const normalized = normalizeSubmissionDto(record);
+    state.records = state.records.filter(item => item.id !== normalized.id).concat(normalized);
+    return normalized;
+  }
+
+  function normalizeSubmissionDto(submission) {
+    const formSnapshot = submission && (submission.formSnapshot || submission.formRuntimeSnapshot);
+    const card = normalizeRawCard(submission && submission.card);
+    return {
+      ...submission,
+      id: submission.submissionId || submission.id,
+      submissionId: submission.submissionId || submission.id,
+      activityId: submission.activityId,
+      formVersionId: submission.formVersionId,
+      status: submission.status || 'active',
+      cardId: submission.cardId || (card && card.cardId) || null,
+      answers: normalizeAnswerValues(submission.answers || {}, formSnapshot && formSnapshot.items),
+      runtimeOtherAnswers: submission.otherAnswers || submission.runtimeOtherAnswers || {},
+      runtimeCardLink: card ? { linked: true, cardId: card.cardId, card } : (submission.cardId ? { linked: true, cardId: submission.cardId, card: null } : { linked: false, cardId: null, card: null }),
+      formRuntimeSnapshot: formSnapshot ? {
+        versionId: formSnapshot.versionId,
+        versionNumber: formSnapshot.versionNumber,
+        publishedAt: formSnapshot.publishedAt || '',
+        items: ((formSnapshot.items) || []).map(normalizeDesignerItem)
+      } : null
+    };
+  }
+
+  function normalizeAnswerValues(answers, items) {
+    const itemMap = new Map(((items || []).map(normalizeDesignerItem)).map(item => [item.fieldId, item]));
+    return Object.entries(answers || {}).reduce((acc, [fieldId, value]) => {
+      acc[fieldId] = normalizeAnswerValue(value, itemMap.get(fieldId));
+      return acc;
+    }, {});
+  }
+
+  function normalizeAnswerValue(value, item) {
+    if (item && item.type === 'yes_no') {
+      if (value === true) return yesNoOptions[0];
+      if (value === false) return yesNoOptions[1];
+    }
+    if (!item || !choiceFieldTypes.includes(item.type)) return value;
+    if (Array.isArray(value)) return value.map(entry => optionLabel(entry, item)).filter(hasValue);
+    return optionLabel(value, item);
+  }
+
+  function optionLabel(value, item) {
+    if (value && typeof value === 'object') {
+      if (value.optionKey) {
+        const match = (item.optionEntries || []).find(option => option.optionKey === value.optionKey);
+        if (match) return match.label;
+      }
+      return value.label || value.value || '';
+    }
+    return value;
+  }
+
+  async function loadRawCards() {
+    if (rawCardsLoaded) return rawCards;
+    const cards = await window.ActivityIntelligenceApi.listRawCards();
+    rawCards = (cards || []).map(normalizeRawCard).filter(card => card && card.cardId);
+    rawCardsLoaded = true;
+    return rawCards;
+  }
+
+  function normalizeRawCard(card) {
+    if (!card) return null;
+    const driveFileId = card.driveFileId || card.drive_file_id || '';
+    return {
+      cardId: card.cardId || card.card_id || '',
+      rowIndex: card.rowIndex || card.row_index || '',
+      name: card.name || '',
+      company: card.company || card.companyName || '',
+      position: card.position || card.jobTitle || '',
+      email: card.email || '',
+      phone: card.phone || '',
+      mobile: card.mobile || '',
+      driveFileId,
+      driveLink: card.driveLink || card.drive_link || '',
+      driveFilename: card.driveFilename || card.drive_filename || card.sourceFilename || '',
+      thumbnailUrl: card.thumbnailUrl || (driveFileId ? `/api/external/thumbnail?fileId=${encodeURIComponent(driveFileId)}` : '')
     };
   }
 
@@ -293,6 +431,7 @@
       ${renderDialog()}
       ${renderDrawer()}
       ${renderFormDesignConfirmDialog()}
+      ${renderCardPickerDialog()}
       ${renderCardPreviewLightbox()}
       ${ui.toast ? `<div class="aim-toast" role="status">${Store.escapeHtml(ui.toast)}</div>` : ''}
     `;
@@ -500,9 +639,9 @@
     return `
       <label class="aim-preview-control">本機測試角色
         <select class="aim-select" id="aim-role-preview" aria-label="本機測試角色">
-          ${option('super_admin', productRoleLabel('super_admin'), selected)}
-          ${option('admin', productRoleLabel('admin'), selected)}
-          ${option('recorder', productRoleLabel('recorder'), selected)}
+          ${option('super_admin', 'super_admin', selected)}
+          ${option('admin', 'admin', selected)}
+          ${option('recorder', 'recorder', selected)}
         </select>
       </label>
     `;
@@ -672,7 +811,7 @@
           </div>
           <div class="aim-grid-2 aim-overview-summary-grid">
             <div class="aim-panel"><h3>表單狀態</h3><dl class="aim-definition-list"><dt>欄位數</dt><dd>${activity.formFields.filter(f => !f.retired).length}</dd><dt>可填寫狀態</dt><dd>${formState(status.key)}</dd></dl></div>
-            <div class="aim-panel"><h3>追蹤品質</h3><dl class="aim-definition-list"><dt>高優先</dt><dd>${metrics.high}</dd><dt>低完整度</dt><dd>${metrics.low}</dd></dl></div>
+            <div class="aim-panel"><h3>追蹤品質</h3><dl class="aim-definition-list"><dt>低完整度</dt><dd>${metrics.low}</dd><dt>最近紀錄</dt><dd>${metrics.lastRecord ? Store.formatDateTime(metrics.lastRecord) : '<span class="aim-muted-dash">—</span>'}</dd></dl></div>
           </div>
           <div class="aim-panel aim-activity-note-panel"><h3>活動註解</h3><p>${activity.description ? Store.escapeHtml(activity.description) : '<span class="aim-muted-dash">—</span>'}</p></div>
         </div>
@@ -685,8 +824,8 @@
   }
 
   function renderRecordsWorkspace(activity) {
-    return renderDeferredModule();
-    if (!['entry', 'all'].includes(ui.records.scope)) ui.records.scope = 'entry';
+    const allowedScopes = canManageRecords() ? ['entry', 'all'] : ['entry', 'mine'];
+    if (!allowedScopes.includes(ui.records.scope)) ui.records.scope = 'entry';
     return `
       ${renderRecordScopeSwitch()}
       ${ui.records.scope === 'entry' ? renderQuickEntry(activity) : renderRecords(activity, ui.records.scope)}
@@ -745,12 +884,18 @@
           </div>
           <div class="aim-record-card-right-rail">
             ${renderRecordReviewActions(record, activity, context, expanded)}
-            <div class="aim-record-card-biz-slot" aria-hidden="true">未連結名片</div>
+            <div class="aim-record-card-biz-slot" aria-hidden="true">${renderRecordCardThumb(record)}</div>
           </div>
         </div>
         ${expanded ? renderInlineRecordDetail(record, activity) : ''}
       </article>
     `;
+  }
+
+  function renderRecordCardThumb(record) {
+    const link = cardLinkForRecord(record);
+    if (!link.linked) return '未連結名片';
+    return renderRawCardVisual(link.card, 'thumb');
   }
 
   function renderRecordCardMeta(record, activity, coverage) {
@@ -983,12 +1128,18 @@
     return `
       <section class="aim-form-card-link aim-form-card-link-preview aim-runtime-card-link">
         <h4>${Store.escapeHtml(item.title || '名片連結')}</h4>
-        <button class="aim-form-card-link-thumb" data-action="open-card-lightbox" type="button" aria-label="開啟名片預覽">
-          ${renderBusinessCardVisual('thumb')}
+        <button class="aim-form-card-link-thumb" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(cardLink.cardId || '')}" type="button" aria-label="開啟名片預覽">
+          ${renderRawCardVisual(cardLink.card, 'thumb')}
         </button>
         ${enabled ? `<div class="aim-form-card-link-actions"><button class="aim-button aim-button-soft" data-action="runtime-link-card" data-context="${context}" type="button">更換</button><button class="aim-button" data-action="runtime-unlink-card" data-context="${context}" type="button">移除</button></div>` : ''}
       </section>
     `;
+  }
+
+  function renderRawCardVisual(card, size) {
+    const normalized = normalizeRawCard(card);
+    if (!normalized || !normalized.thumbnailUrl) return renderBusinessCardVisual(size || 'thumb');
+    return `<img class="aim-raw-card-thumb aim-raw-card-thumb-${Store.escapeHtml(size || 'thumb')}" src="${Store.escapeHtml(normalized.thumbnailUrl)}" alt="${Store.escapeHtml(normalized.driveFilename || normalized.name || 'RAW card')}">`;
   }
 
   function formDesign(activity) {
@@ -1503,14 +1654,69 @@
 
   function renderCardPreviewLightbox() {
     if (!ui.cardPreviewLightboxOpen) return '';
+    const cardId = typeof ui.cardPreviewLightboxOpen === 'string' ? ui.cardPreviewLightboxOpen : '';
+    const card = cardId ? rawCardById(cardId) || cardLinkForRecord(state.records.find(record => record.cardId === cardId)).card : null;
     return `
       <div class="aim-dialog-backdrop aim-card-preview-lightbox" data-action="close-card-lightbox">
         <div class="aim-dialog aim-card-preview-dialog" role="dialog" aria-modal="true" aria-label="名片預覽" data-action="noop">
           <div class="aim-dialog-head"><h2>名片預覽</h2><button class="aim-button aim-icon-button" data-action="close-card-lightbox" type="button" aria-label="關閉">×</button></div>
-          <div class="aim-dialog-body">${renderBusinessCardVisual('large')}</div>
+          <div class="aim-dialog-body">${renderRawCardDetail(card)}</div>
         </div>
       </div>
     `;
+  }
+
+  function renderCardPickerDialog() {
+    if (!ui.cardPicker) return '';
+    const q = String(ui.cardPicker.q || '').trim().toLowerCase();
+    const rows = rawCards.filter(card => {
+      if (!q) return true;
+      return [card.name, card.company, card.position, card.email, card.phone, card.mobile, card.driveFilename]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(q);
+    }).slice(0, 80);
+    return `
+      <div class="aim-dialog-backdrop" data-action="close-card-picker"></div>
+      <section class="aim-dialog" role="dialog" aria-modal="true" aria-label="選擇 RAW 名片">
+        <div class="aim-dialog-head"><h2>選擇 RAW 名片</h2><button class="aim-button aim-icon-button" data-action="close-card-picker" type="button" aria-label="關閉">x</button></div>
+        <div class="aim-dialog-body">
+          <div class="aim-field"><label for="aim-card-picker-q">搜尋名片</label><input class="aim-input" id="aim-card-picker-q" value="${Store.escapeHtml(ui.cardPicker.q || '')}" placeholder="姓名、公司、電話或檔名"></div>
+          <div class="aim-latest-list">
+            ${rows.map(card => `
+              <button class="aim-latest-item" data-action="choose-card" data-card-id="${Store.escapeHtml(card.cardId)}" type="button" style="text-align:left">
+                <span class="aim-record-card-biz-slot">${renderRawCardVisual(card, 'thumb')}</span>
+                <strong>${Store.escapeHtml(card.name || '未命名名片')}</strong>
+                <span class="aim-small">${Store.escapeHtml([card.company, card.position, card.email || card.mobile || card.phone].filter(Boolean).join(' / ') || card.driveFilename || card.cardId)}</span>
+              </button>
+            `).join('') || '<div class="aim-empty">目前沒有可選擇的 RAW 名片。</div>'}
+          </div>
+        </div>
+        <div class="aim-dialog-foot"><button class="aim-button" data-action="close-card-picker" type="button">取消</button></div>
+      </section>
+    `;
+  }
+
+  function renderRawCardDetail(card) {
+    const normalized = normalizeRawCard(card);
+    if (!normalized) return renderBusinessCardVisual('large');
+    return `
+      <div class="aim-grid-2">
+        <div>${renderRawCardVisual(normalized, 'large')}</div>
+        <dl class="aim-definition-list">
+          <dt>姓名</dt><dd>${Store.escapeHtml(normalized.name || '-')}</dd>
+          <dt>公司</dt><dd>${Store.escapeHtml(normalized.company || '-')}</dd>
+          <dt>職稱</dt><dd>${Store.escapeHtml(normalized.position || '-')}</dd>
+          <dt>Email</dt><dd>${Store.escapeHtml(normalized.email || '-')}</dd>
+          <dt>電話</dt><dd>${Store.escapeHtml(normalized.mobile || normalized.phone || '-')}</dd>
+        </dl>
+      </div>
+    `;
+  }
+
+  function rawCardById(cardId) {
+    return rawCards.find(card => card.cardId === cardId) || null;
   }
 
   function renderFormDesignConfirmDialog() {
@@ -1588,7 +1794,6 @@
         ${ui.records.moreOpen ? `
           <div class="aim-filter-panel aim-more-filters-panel">
             <div class="aim-field"><label for="aim-record-recorder">紀錄者</label><select class="aim-select" id="aim-record-recorder">${option('all', '全部紀錄者', ui.records.recorder)}${recorders.map(r => option(r, r, ui.records.recorder)).join('')}</select></div>
-            <div class="aim-field"><label for="aim-record-priority">後續優先度</label><select class="aim-select" id="aim-record-priority">${option('all', '全部優先度', ui.records.priority)}${['高', '中', '低', '未判斷'].map(p => option(p, p, ui.records.priority)).join('')}</select></div>
             <div class="aim-field"><label for="aim-record-state">紀錄狀態</label><select class="aim-select" id="aim-record-state">${option('normal', '有效', ui.records.state)}${option('void', '作廢', ui.records.state)}${option('all', '有效與作廢', ui.records.state)}</select></div>
             <label class="aim-checkbox"><input id="aim-record-low" type="checkbox" ${ui.records.low ? 'checked' : ''}> 低完整度</label>
             <button class="aim-button" data-action="reset-more-filters" type="button">重設進階篩選</button>
@@ -1600,12 +1805,11 @@
   }
 
   function renderRecordScopeSwitch() {
-    const choices = [['entry', '新增紀錄'], ['all', '全部紀錄']];
+    const choices = canManageRecords() ? [['entry', '新增紀錄'], ['all', '全部紀錄']] : [['entry', '新增紀錄'], ['mine', '我的紀錄']];
     return `<div class="aim-record-subviews" aria-label="表單紀錄檢視">${choices.map(([scope, label]) => `<button data-action="scope" data-scope="${scope}" aria-pressed="${ui.records.scope === scope}" type="button">${label}</button>`).join('')}</div>`;
   }
 
   function renderAnalytics(activity) {
-    return renderDeferredModule();
     const records = analyticsRecords(activity);
     const metrics = analyticsMetrics(activity, records);
     const recorders = unique(recordsFor(activity.id).map(r => r.createdByDisplayName));
@@ -1638,7 +1842,7 @@
   }
 
   function choiceCharts(activity, records) {
-    return activity.formFields.filter(f => ['single_choice', 'multiple_choice', 'dropdown'].includes(f.type)).map(field => {
+    return analyticFields(activity, records).filter(f => ['single_choice', 'multiple_choice', 'dropdown'].includes(f.type)).map(field => {
       const counts = {};
       (field.options || []).forEach(o => { counts[o] = 0; });
       records.forEach(record => {
@@ -1651,7 +1855,7 @@
   }
 
   function numberCharts(activity, records) {
-    return activity.formFields.filter(f => f.type === 'number').map(field => {
+    return analyticFields(activity, records).filter(f => f.type === 'number').map(field => {
       const values = records.map(r => Number(r.answers[field.fieldId])).filter(Number.isFinite);
       const sum = values.reduce((a, b) => a + b, 0);
       return `<div class="aim-panel"><h2>${Store.escapeHtml(field.title)}</h2><dl class="aim-definition-list"><dt>筆數</dt><dd>${values.length}</dd><dt>平均</dt><dd>${values.length ? (sum / values.length).toFixed(1) : '-'}</dd><dt>最小</dt><dd>${values.length ? Math.min(...values) : '-'}</dd><dt>最大</dt><dd>${values.length ? Math.max(...values) : '-'}</dd></dl></div>`;
@@ -1659,7 +1863,7 @@
   }
 
   function textBrowser(activity, records) {
-    const fields = activity.formFields.filter(f => f.type === 'long_text');
+    const fields = analyticFields(activity, records).filter(f => f.type === 'long_text');
     const q = ui.analytics.q.trim().toLowerCase();
     const rows = [];
     fields.forEach(field => records.forEach(record => {
@@ -1794,6 +1998,7 @@
   window.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
     if (ui.formDesignConfirm) ui.formDesignConfirm = null;
+    else if (ui.cardPicker) ui.cardPicker = null;
     else if (ui.cardPreviewLightboxOpen) ui.cardPreviewLightboxOpen = false;
     else return;
     render();
@@ -1805,11 +2010,23 @@
     const action = el.dataset.action;
     if (await handleFormDesignAction(action, el, event)) return;
     if (action === 'all' && canManageActivities()) { ui.view = 'overview'; ui.tab = 'overview'; }
-    if (action === 'open' && canManageActivities()) { ui.selectedActivityId = el.dataset.id; ui.view = 'workspace'; ui.tab = 'overview'; }
-    if (action === 'recorder-open' && isRecorder()) { ui.selectedActivityId = el.dataset.id; ui.view = 'workspace'; ui.tab = 'records'; ui.records.scope = 'entry'; }
+    if (action === 'open' && canManageActivities()) {
+      ui.selectedActivityId = el.dataset.id;
+      ui.view = 'workspace';
+      ui.tab = 'overview';
+      await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
+    }
+    if (action === 'recorder-open' && isRecorder()) {
+      ui.selectedActivityId = el.dataset.id;
+      ui.view = 'workspace';
+      ui.tab = 'records';
+      ui.records.scope = 'entry';
+      await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
+    }
     if (action === 'tab') {
       selectTab(el.dataset.tab);
       if (ui.tab === 'form') await loadFormForActivity(ui.selectedActivityId);
+      if (ui.tab === 'records' || ui.tab === 'analytics') await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
     }
     if (action === 'sort' && canManageActivities()) sort(el.dataset.key);
     if (action === 'clear-overview' && canManageActivities()) ui.overview = { q: '', status: 'all', sort: 'name', dir: 'asc' };
@@ -1861,10 +2078,10 @@
         workingCardLink: Store.clone(cardLinkForRecord(record))
       };
     }
-    if (action === 'save-record') saveRecord();
-    if (action === 'void-record') voidRecord(el.dataset.id);
-    if (action === 'cancel-void-record') cancelVoidRecord(el.dataset.id);
-    if (action === 'quick-save-next') saveQuickRecord();
+    if (action === 'save-record') await saveRecord();
+    if (action === 'void-record') await voidRecord(el.dataset.id);
+    if (action === 'cancel-void-record') await cancelVoidRecord(el.dataset.id);
+    if (action === 'quick-save-next') await saveQuickRecord();
     if (action === 'export-filtered' && canExport()) exportCsv(filteredRecords(selectedActivity(), ui.records.scope), selectedActivity(), 'filtered');
     if (action === 'clear-analytics' && canUseAnalytics()) ui.analytics = { recorder: 'all', start: '', end: '', q: '' };
     save();
@@ -1892,7 +2109,17 @@
       return true;
     }
     if (action === 'open-card-lightbox') {
-      ui.cardPreviewLightboxOpen = true;
+      ui.cardPreviewLightboxOpen = el.dataset.cardId || true;
+      render();
+      return true;
+    }
+    if (action === 'close-card-picker') {
+      ui.cardPicker = null;
+      render();
+      return true;
+    }
+    if (action === 'choose-card') {
+      selectRawCard(el.dataset.cardId);
       render();
       return true;
     }
@@ -1908,7 +2135,7 @@
       return true;
     }
     if (action === 'runtime-link-card') {
-      setRuntimeCardLink(el.dataset.context, true);
+      await setRuntimeCardLink(el.dataset.context, true);
       render();
       return true;
     }
@@ -2190,11 +2417,11 @@
     bindFormPreviewControls();
     bind('aim-record-q', value => { ui.records.q = value; });
     bind('aim-record-recorder', value => { ui.records.recorder = value; }, 'change');
-    bind('aim-record-priority', value => { ui.records.priority = value; }, 'change');
     bind('aim-record-state', value => {
       ui.records.state = value;
       ui.records.showVoidRecords = value !== 'normal';
     }, 'change');
+    bind('aim-card-picker-q', value => { if (ui.cardPicker) ui.cardPicker.q = value; });
     bindRecordDateField('aim-record-start', 'start');
     bindRecordDateField('aim-record-end', 'end');
     bindCheck('aim-record-low', value => { ui.records.low = value; });
@@ -2511,7 +2738,6 @@
 
   function resetMoreFilters() {
     ui.records.recorder = 'all';
-    ui.records.priority = 'all';
     ui.records.state = 'normal';
     ui.records.showVoidRecords = false;
     ui.records.low = false;
@@ -2521,7 +2747,6 @@
     const stateFilterIsExplicit = ui.records.showVoidRecords ? ui.records.state !== 'all' : ui.records.state !== 'normal';
     return [
       ui.records.recorder !== 'all',
-      ui.records.priority !== 'all',
       stateFilterIsExplicit,
       ui.records.low
     ].filter(Boolean).length;
@@ -2631,7 +2856,7 @@
       active: active.length,
       today: active.filter(r => r.createdAt.slice(0, 10) === Store.CURRENT_DATE).length,
       recorders: unique(active.map(r => r.createdByUserId)).length,
-      high: active.filter(r => r.answers.fld_priority === '高').length,
+      high: 0,
       low: active.filter(r => recordCoverage(r, activity).answered <= 1).length,
       lastRecord: latest && latest.createdAt
     };
@@ -2659,7 +2884,6 @@
       if (!ui.records.showVoidRecords && r.status === 'void') return false;
       if (ui.records.state !== 'all' && (ui.records.state === 'void') !== (r.status === 'void')) return false;
       if (ui.records.recorder !== 'all' && r.createdByDisplayName !== ui.records.recorder) return false;
-      if (ui.records.priority !== 'all' && (r.answers.fld_priority || '未判斷') !== ui.records.priority) return false;
       if (dateStart && r.createdAt.slice(0, 10) < dateStart) return false;
       if (dateEnd && r.createdAt.slice(0, 10) > dateEnd) return false;
       if (ui.records.low && recordCoverage(r, activity).answered > 1) return false;
@@ -3243,10 +3467,30 @@
     else delete ui.quickOtherAnswers[fieldId];
   }
 
-  function setRuntimeCardLink(context, linked) {
-    const next = { linked: Boolean(linked), variant: 'default' };
+  async function setRuntimeCardLink(context, linked) {
+    if (!linked) {
+      const next = { linked: false, cardId: null, card: null };
+      if (context === 'drawer' && ui.drawer) ui.drawer.workingCardLink = next;
+      else if (context === 'quick') ui.quickCardLink = next;
+      ui.cardPreviewLightboxOpen = false;
+      return;
+    }
+    try {
+      await loadRawCards();
+      ui.cardPicker = { context, q: '' };
+    } catch (error) {
+      toast(error.message || 'RAW card load failed.');
+    }
+  }
+
+  function selectRawCard(cardId) {
+    const card = rawCardById(cardId);
+    if (!card) return toast('找不到選擇的 RAW 名片。');
+    const next = { linked: true, cardId: card.cardId, card };
+    const context = ui.cardPicker && ui.cardPicker.context;
     if (context === 'drawer' && ui.drawer) ui.drawer.workingCardLink = next;
     else if (context === 'quick') ui.quickCardLink = next;
+    ui.cardPicker = null;
   }
 
   function canCreateRecord(activity) {
@@ -3281,56 +3525,66 @@
     return record.status === 'void' ? canCancelVoidRecord(record, activity) : canEditRecord(record, activity);
   }
 
-  function saveQuickRecord() {
-    toast(formalDeferredMessage);
-    return;
+  async function saveQuickRecord() {
     const activity = selectedActivity();
     if (!canCreateRecord(activity)) return toast('表單目前未開放，無法新增紀錄。');
+    if (writeInFlight) return;
     const items = publishedRecordItems(activity);
-    createRecord(activity, cleanAnswersForItems(ui.quickAnswers || {}, items), cleanOtherAnswers(ui.quickOtherAnswers || {}, ui.quickAnswers || {}, items), cleanCardLink(ui.quickCardLink), items);
-    ui.quickAnswers = {};
-    ui.quickOtherAnswers = {};
-    ui.quickCardLink = { linked: false, variant: 'default' };
-    ui.focusQuickFirst = true;
-    ui.tab = 'records';
-    ui.records.scope = 'entry';
-    toast('已儲存一筆紀錄。');
+    writeInFlight = true;
+    try {
+      const answers = cleanAnswersForItems(ui.quickAnswers || {}, items);
+      const cardLink = cleanCardLink(ui.quickCardLink);
+      const submission = await window.ActivityIntelligenceApi.createSubmission(activity.id, {
+        answers: payloadAnswersForItems(answers, items),
+        otherAnswers: cleanOtherAnswers(ui.quickOtherAnswers || {}, ui.quickAnswers || {}, items),
+        cardId: cardLink.cardId || null
+      });
+      replaceRecord(submission);
+      ui.quickAnswers = {};
+      ui.quickOtherAnswers = {};
+      ui.quickCardLink = { linked: false, cardId: null, card: null };
+      ui.focusQuickFirst = true;
+      ui.tab = 'records';
+      ui.records.scope = 'entry';
+      toast('已儲存一筆紀錄。');
+    } catch (error) {
+      toast(error.message || 'Submission save failed.');
+    } finally {
+      writeInFlight = false;
+    }
   }
 
-  function createRecord(activity, answers, otherAnswers, cardLink, items) {
-    const snapshotItems = Store.clone(items || publishedRecordItems(activity));
-    state.records.push({
-      id: newUuid(),
-      activityId: activity.id,
-      status: 'active',
-      answers,
-      runtimeOtherAnswers: otherAnswers || {},
-      runtimeCardLink: cardLink || { linked: false, variant: 'default' },
-      formRuntimeSnapshot: {
-        publishedAt: formDesign(activity).published.publishedAt || '',
-        items: snapshotItems
-      },
-      createdByUserId: currentUser.userId,
-      createdByDisplayName: currentUser.displayName,
-      createdAt: Store.nowStamp(),
-      updatedByUserId: currentUser.userId,
-      updatedByDisplayName: currentUser.displayName,
-      updatedAt: Store.nowStamp()
-    });
-  }
-
-  function saveRecord() {
+  async function saveRecord() {
     const record = state.records.find(r => r.id === ui.drawer.id);
     if (!canEditRecord(record, selectedActivity())) return toast('沒有權限編輯此紀錄。');
+    if (writeInFlight) return;
     const items = snapshotRecordItems(record, selectedActivity());
-    record.answers = cleanAnswersForItems(ui.drawer.working || {}, items);
-    record.runtimeOtherAnswers = cleanOtherAnswers(ui.drawer.workingOther || {}, ui.drawer.working || {}, items);
-    record.runtimeCardLink = cleanCardLink(ui.drawer.workingCardLink || cardLinkForRecord(record));
-    record.updatedByUserId = currentUser.userId;
-    record.updatedByDisplayName = currentUser.displayName;
-    record.updatedAt = Store.nowStamp();
-    ui.drawer = null;
-    toast('已儲存紀錄。');
+    writeInFlight = true;
+    try {
+      const answers = cleanAnswersForItems(ui.drawer.working || {}, items);
+      const cardLink = cleanCardLink(ui.drawer.workingCardLink || cardLinkForRecord(record));
+      const updated = await window.ActivityIntelligenceApi.updateSubmission(record.id, {
+        answers: payloadAnswersForItems(answers, items),
+        otherAnswers: cleanOtherAnswers(ui.drawer.workingOther || {}, ui.drawer.working || {}, items),
+        cardId: cardLink.cardId || null
+      });
+      replaceRecord(updated);
+      ui.drawer = null;
+      toast('已儲存紀錄。');
+    } catch (error) {
+      toast(error.message || 'Submission update failed.');
+    } finally {
+      writeInFlight = false;
+    }
+  }
+
+  function payloadAnswersForItems(answers, items) {
+    const itemsByField = new Map((items || []).map(item => [item.fieldId, item]));
+    return Object.entries(answers || {}).reduce((acc, [fieldId, value]) => {
+      const item = itemsByField.get(fieldId);
+      acc[fieldId] = item && item.type === 'yes_no' ? value === yesNoOptions[0] : value;
+      return acc;
+    }, {});
   }
 
   function cleanAnswersForItems(source, items) {
@@ -3354,40 +3608,66 @@
   }
 
   function cleanCardLink(cardLink) {
-    return cardLink && cardLink.linked ? { linked: true, variant: cardLink.variant || 'default' } : { linked: false, variant: 'default' };
+    return cardLink && cardLink.linked && cardLink.cardId ? { linked: true, cardId: cardLink.cardId, card: cardLink.card || null } : { linked: false, cardId: null, card: null };
   }
 
-  function voidRecord(id) {
+  async function voidRecord(id) {
     const record = state.records.find(r => r.id === id);
     if (!canVoidRecord(record, selectedActivity())) return toast('沒有權限作廢此紀錄。');
     if (!window.confirm('確定要作廢此紀錄？')) return;
-    record.status = 'void';
-    record.updatedByUserId = currentUser.userId;
-    record.updatedByDisplayName = currentUser.displayName;
-    record.updatedAt = Store.nowStamp();
-    if (ui.drawer && ui.drawer.type === 'record' && ui.drawer.id === record.id) ui.drawer = null;
-    toast('已作廢紀錄。');
+    if (writeInFlight) return;
+    writeInFlight = true;
+    try {
+      const updated = await window.ActivityIntelligenceApi.voidSubmission(id);
+      replaceRecord(updated);
+      if (ui.drawer && ui.drawer.type === 'record' && ui.drawer.id === record.id) ui.drawer = null;
+      toast('已作廢紀錄。');
+    } catch (error) {
+      toast(error.message || 'Submission void failed.');
+    } finally {
+      writeInFlight = false;
+    }
   }
 
-  function cancelVoidRecord(id) {
+  async function cancelVoidRecord(id) {
     const record = state.records.find(r => r.id === id);
     if (!canCancelVoidRecord(record, selectedActivity())) return toast('沒有權限取消作廢此紀錄。');
     if (!window.confirm('確定要取消作廢此紀錄？')) return;
-    record.status = 'active';
-    record.updatedByUserId = currentUser.userId;
-    record.updatedByDisplayName = currentUser.displayName;
-    record.updatedAt = Store.nowStamp();
-    if (ui.drawer && ui.drawer.type === 'record' && ui.drawer.id === record.id) ui.drawer = null;
-    toast('已取消作廢紀錄。');
+    if (writeInFlight) return;
+    writeInFlight = true;
+    try {
+      const updated = await window.ActivityIntelligenceApi.restoreSubmission(id);
+      replaceRecord(updated);
+      if (ui.drawer && ui.drawer.type === 'record' && ui.drawer.id === record.id) ui.drawer = null;
+      toast('已取消作廢紀錄。');
+    } catch (error) {
+      toast(error.message || 'Submission restore failed.');
+    } finally {
+      writeInFlight = false;
+    }
   }
 
   function exportCsv(records, activity, scope) {
-    toast(formalDeferredMessage);
-    return;
     const rows = records;
     const fields = exportFields(activity, rows);
-    const header = ['活動名稱', '紀錄 ID', '建立者', '建立時間', '最近更新者', '最近更新', '紀錄狀態', ...fields.map(f => f.title)];
-    const body = rows.map(r => [activity.name, r.id, r.createdByDisplayName, Store.formatDateTime(r.createdAt), r.updatedByDisplayName, Store.formatDateTime(r.updatedAt), r.status === 'void' ? '作廢' : '有效', ...fields.map(f => Store.answerText(r.answers[f.fieldId]))]);
+    const header = ['活動名稱', '紀錄 ID', '表單版本 ID', '建立者', '建立時間', '最近更新者', '最近更新', '紀錄狀態', 'RAW card ID', 'RAW card name', 'RAW card company', ...fields.map(f => f.title)];
+    const body = rows.map(r => {
+      const card = cardLinkForRecord(r).card || {};
+      return [
+        activity.name,
+        r.id,
+        r.formVersionId || '',
+        r.createdByDisplayName,
+        Store.formatDateTime(r.createdAt),
+        r.updatedByDisplayName,
+        Store.formatDateTime(r.updatedAt),
+        r.status === 'void' ? '作廢' : '有效',
+        r.cardId || '',
+        card.name || '',
+        card.company || '',
+        ...fields.map(f => Store.answerText(displayAnswerValue(f, r.answers[f.fieldId], otherAnswersForRecord(r))))
+      ];
+    });
     const csv = '\uFEFF' + [header, ...body].map(row => row.map(csvCell).join(',')).join('\r\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const link = document.createElement('a');
@@ -3401,16 +3681,21 @@
   }
 
   function exportFields(activity, records) {
-    const current = activity.formFields.filter(f => f.type !== 'section_heading');
-    const known = new Set(current.map(f => f.fieldId));
-    const historical = [];
-    records.forEach(r => Object.keys(r.answers).forEach(fieldId => {
-      if (!known.has(fieldId)) {
-        known.add(fieldId);
-        historical.push({ fieldId, title: fieldId });
-      }
-    }));
-    return [...current, ...historical];
+    return analyticFields(activity, records).filter(f => !['section_heading', 'information_text', 'form_thumbnail', 'card_link'].includes(f.type));
+  }
+
+  function analyticFields(activity, records) {
+    const known = new Set();
+    const fields = [];
+    const add = item => {
+      const normalized = normalizeDesignerItem(item);
+      if (!normalized.fieldId || known.has(normalized.fieldId)) return;
+      known.add(normalized.fieldId);
+      fields.push(normalized);
+    };
+    (activity.formFields || []).forEach(add);
+    (records || []).forEach(record => snapshotRecordItems(record, activity).forEach(add));
+    return fields;
   }
 
   function resetData() {

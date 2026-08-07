@@ -1768,6 +1768,25 @@ a:focus-visible {
   outline-offset: 3px;
 }
 
+.aim-raw-card-thumb {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #f8fafc;
+  object-fit: cover;
+}
+
+.aim-raw-card-thumb-thumb {
+  width: 72px;
+  height: 46px;
+}
+
+.aim-raw-card-thumb-large {
+  min-height: 220px;
+}
+
 .aim-form-card-link-actions {
   display: flex;
   gap: 8px;
@@ -2133,7 +2152,7 @@ a:focus-visible {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 3px 7px;
+  padding: 3px;
   border: 1px dashed #cbd5e1;
   border-radius: 4px;
   color: var(--aim-muted-2);
