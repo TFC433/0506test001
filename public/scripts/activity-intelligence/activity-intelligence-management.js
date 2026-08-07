@@ -941,7 +941,7 @@
   function renderRecordCardThumb(record) {
     const link = cardLinkForRecord(record);
     if (!link.linked) return '未連結名片';
-    return `<button class="aim-record-card-thumb-button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(link.cardId || '')}" type="button" aria-label="開啟名片預覽">${renderRawCardVisual(link.card, 'thumb')}</button>`;
+    return `<button class="aim-record-card-thumb-button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(link.cardId || '')}" data-viewer-context="linked" type="button" aria-label="開啟名片預覽">${renderRawCardVisual(link.card, 'thumb')}</button>`;
   }
 
   function renderRecordCardMeta(record, activity, coverage) {
@@ -1172,13 +1172,26 @@
         </section>
       `;
     }
+    return renderLinkedCardSummary(item, enabled, cardLink, context);
+  }
+
+  function renderLinkedCardSummary(item, enabled, cardLink, context) {
+    const card = normalizeRawCard(cardLink.card) || { cardId: cardLink.cardId || '', name: '', company: '', department: '', position: '' };
+    const roleText = rawCardRoleText(card);
     return `
-      <section class="aim-form-card-link aim-form-card-link-preview aim-runtime-card-link">
+      <section class="aim-form-card-link aim-form-card-link-preview aim-runtime-card-link aim-linked-card-summary">
         <h4>${Store.escapeHtml(item.title || '名片連結')}</h4>
-        <button class="aim-form-card-link-thumb" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(cardLink.cardId || '')}" type="button" aria-label="開啟名片預覽">
-          ${renderRawCardVisual(cardLink.card, 'thumb')}
-        </button>
-        ${enabled ? `<div class="aim-form-card-link-actions"><button class="aim-button aim-button-soft" data-action="runtime-link-card" data-context="${context}" type="button">更換</button><button class="aim-button" data-action="runtime-unlink-card" data-context="${context}" type="button">移除</button></div>` : ''}
+        <div class="aim-linked-card-summary-body">
+          <button class="aim-form-card-link-thumb" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId || cardLink.cardId || '')}" data-viewer-context="linked" type="button" aria-label="開啟名片預覽">
+            ${renderRawCardVisual(card, 'thumb')}
+          </button>
+          <div class="aim-linked-card-summary-info">
+            <strong>${Store.escapeHtml(card.name || '已連結名片')}</strong>
+            ${card.company ? `<span>${Store.escapeHtml(card.company)}</span>` : ''}
+            ${roleText ? `<span>${Store.escapeHtml(roleText)}</span>` : ''}
+          </div>
+          ${enabled ? `<div class="aim-form-card-link-actions"><button class="aim-button aim-button-soft" data-action="runtime-link-card" data-context="${context}" type="button">更換</button><button class="aim-button" data-action="runtime-unlink-card" data-context="${context}" type="button">移除</button></div>` : ''}
+        </div>
       </section>
     `;
   }
@@ -1826,12 +1839,15 @@
     const roleText = rawCardRoleText(card);
     return `
       <article class="aim-raw-card-picker-row">
-        <button class="aim-raw-card-picker-thumb" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" type="button" aria-label="開啟名片預覽">
+        <button class="aim-raw-card-picker-thumb" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="picker" type="button" aria-label="開啟名片預覽">
           ${renderRawCardVisual(card, 'thumb')}
         </button>
         <div class="aim-raw-card-picker-info">
           <div class="aim-raw-card-identity">
-            <strong class="aim-raw-card-name">${Store.escapeHtml(card.name || '未命名名片')}</strong>
+            <div class="aim-raw-card-picker-title-row">
+              <strong class="aim-raw-card-name">${Store.escapeHtml(card.name || '未命名名片')}</strong>
+              <button class="aim-button aim-button-primary" data-action="choose-card" data-card-id="${Store.escapeHtml(card.cardId)}" type="button">選擇</button>
+            </div>
             <div class="aim-raw-card-company-row">
               ${card.company ? `<span class="aim-raw-card-company">${Store.escapeHtml(card.company)}</span>` : ''}
               ${roleText ? `<span class="aim-raw-card-role">${Store.escapeHtml(roleText)}</span>` : ''}
@@ -1842,7 +1858,6 @@
             ${card.email ? `<span class="aim-raw-card-contact">Email ${Store.escapeHtml(card.email)}</span>` : ''}
             ${card.phone && card.phone !== card.mobile ? `<span class="aim-raw-card-contact">Phone ${Store.escapeHtml(card.phone)}</span>` : ''}
           </div>
-          <div class="aim-raw-card-picker-actions"><button class="aim-button aim-button-primary" data-action="choose-card" data-card-id="${Store.escapeHtml(card.cardId)}" type="button">選擇</button></div>
         </div>
       </article>
     `;
@@ -1858,7 +1873,12 @@
 
   function rawCardForViewer(cardId) {
     if (!cardId) return null;
-    return rawCardById(cardId) || (state.records || []).map(record => cardLinkForRecord(record).card).find(card => normalizeRawCard(card)?.cardId === cardId) || null;
+    const linkedCards = [
+      ui.quickCardLink && ui.quickCardLink.card,
+      ui.drawer && ui.drawer.workingCardLink && ui.drawer.workingCardLink.card,
+      ...(state.records || []).map(record => cardLinkForRecord(record).card)
+    ];
+    return rawCardById(cardId) || linkedCards.find(card => normalizeRawCard(card)?.cardId === cardId) || null;
   }
 
   function ensureRawCardViewer() {
@@ -1868,18 +1888,25 @@
     dialog.id = 'aim-raw-card-viewer';
     dialog.className = 'aim-raw-card-viewer';
     dialog.addEventListener('click', event => {
+      const selectButton = event.target.closest('[data-action="select-viewer-card"]');
+      if (selectButton) {
+        closeRawCardViewer();
+        selectRawCard(selectButton.dataset.cardId);
+        render();
+        return;
+      }
       if (event.target === dialog || event.target.closest('[data-action="close-raw-card-viewer"]')) closeRawCardViewer();
     });
     document.body.appendChild(dialog);
     return dialog;
   }
 
-  function openRawCardViewer(card) {
+  function openRawCardViewer(card, context) {
     const normalized = normalizeRawCard(card);
     if (!normalized) return;
     const dialog = ensureRawCardViewer();
     if (dialog.open && typeof dialog.close === 'function') dialog.close();
-    dialog.innerHTML = renderRawCardViewerContent(normalized);
+    dialog.innerHTML = renderRawCardViewerContent(normalized, context);
     if (typeof dialog.showModal === 'function') dialog.showModal();
     else dialog.setAttribute('open', '');
   }
@@ -1891,8 +1918,9 @@
     else dialog.removeAttribute('open');
   }
 
-  function renderRawCardViewerContent(card) {
+  function renderRawCardViewerContent(card, context) {
     const roleText = rawCardRoleText(card);
+    const fromPicker = context === 'picker';
     return `
       <section class="aim-raw-card-viewer-panel" data-action="noop">
         <div class="aim-raw-card-viewer-head">
@@ -1909,6 +1937,10 @@
             ${card.email ? `<span>Email ${Store.escapeHtml(card.email)}</span>` : ''}
             ${card.phone && card.phone !== card.mobile ? `<span>Phone ${Store.escapeHtml(card.phone)}</span>` : ''}
           </div>
+        </div>
+        <div class="aim-raw-card-viewer-foot">
+          <button class="aim-button" data-action="close-raw-card-viewer" type="button">${fromPicker ? '取消' : '關閉'}</button>
+          ${fromPicker ? `<button class="aim-button aim-button-primary" data-action="select-viewer-card" data-card-id="${Store.escapeHtml(card.cardId)}" type="button">選擇此名片</button>` : ''}
         </div>
       </section>
     `;
@@ -2323,7 +2355,7 @@
     }
     if (action === 'open-card-lightbox') {
       const card = rawCardForViewer(el.dataset.cardId);
-      if (card) openRawCardViewer(card);
+      if (card) openRawCardViewer(card, el.dataset.viewerContext || 'linked');
       return true;
     }
     if (action === 'card-picker-page') {

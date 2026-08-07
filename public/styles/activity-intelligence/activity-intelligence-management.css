@@ -1782,6 +1782,45 @@ a:focus-visible {
   gap: 9px;
 }
 
+.aim-linked-card-summary-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.aim-linked-card-summary .aim-form-card-link-thumb {
+  flex: 0 0 128px;
+  width: 128px;
+  height: 81px;
+}
+
+.aim-linked-card-summary-info {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 4px;
+}
+
+.aim-linked-card-summary-info strong,
+.aim-linked-card-summary-info span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aim-linked-card-summary-info strong {
+  color: var(--aim-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.aim-linked-card-summary-info span {
+  color: var(--aim-muted);
+  font-size: 12px;
+}
+
 .aim-form-card-link-thumb {
   width: 180px;
   max-width: 100%;
@@ -1849,6 +1888,7 @@ a:focus-visible {
 
 .aim-form-card-link-actions {
   display: flex;
+  flex: 0 0 auto;
   gap: 8px;
 }
 
@@ -2101,6 +2141,7 @@ a:focus-visible {
 .aim-raw-card-picker-row {
   display: flex;
   flex: 0 0 auto;
+  height: 139px;
   min-height: 139px;
   overflow: hidden;
   border: 1px solid var(--aim-border);
@@ -2152,9 +2193,18 @@ a:focus-visible {
   flex-direction: column;
   justify-content: center;
   align-items: flex-start;
-  gap: 10px;
-  padding: 16px 18px;
+  gap: 5px;
+  padding: 9px 14px;
   text-align: left;
+}
+
+.aim-raw-card-picker-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
 }
 
 .aim-raw-card-name {
@@ -2162,7 +2212,7 @@ a:focus-visible {
   max-width: 100%;
   overflow: hidden;
   color: var(--aim-text);
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.35;
   text-overflow: ellipsis;
@@ -2171,7 +2221,7 @@ a:focus-visible {
 
 .aim-raw-card-identity {
   display: grid;
-  gap: 7px;
+  gap: 4px;
   width: 100%;
   min-width: 0;
 }
@@ -2212,10 +2262,10 @@ a:focus-visible {
 
 .aim-raw-card-contact-list {
   display: grid;
-  gap: 3px;
+  gap: 2px;
   width: 100%;
   min-width: 0;
-  padding-top: 8px;
+  padding-top: 5px;
   border-top: 1px solid var(--aim-border);
 }
 
@@ -2344,6 +2394,15 @@ a:focus-visible {
   color: var(--aim-text);
   font-size: 13px;
   font-weight: 600;
+}
+
+.aim-raw-card-viewer-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--aim-border);
+  background: var(--aim-surface-muted);
 }
 
 .aim-record-toolbar {
