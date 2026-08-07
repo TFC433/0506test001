@@ -15,7 +15,7 @@
     ['dropdown', '下拉選單']
   ];
   const specialDesignerTypes = [
-    ['form_thumbnail', '表單縮圖'],
+    ['form_thumbnail', '頁首橫幅'],
     ['card_link', '名片連結']
   ];
   const choiceFieldTypes = ['single_choice', 'multiple_choice', 'dropdown'];
@@ -26,7 +26,7 @@
     { label: '串聯元件', types: ['card_link'] }
   ];
   const yesNoOptions = ['是', '否'];
-  const cardLinkHelperCopy = '????祈”?桃??赤摰Ｙ???';
+  const cardLinkHelperCopy = '連結本表單紀錄訪客的名片';
   const formalDeferredMessage = '此功能尚未啟用。';
   const otherAnswerValue = '其他';
   const thumbnailDefaults = Object.freeze({
@@ -326,6 +326,7 @@
       rowIndex: card.rowIndex || card.row_index || '',
       name: card.name || '',
       company: card.company || card.companyName || '',
+      department: card.department || '',
       position: card.position || card.jobTitle || '',
       email: card.email || '',
       phone: card.phone || '',
@@ -979,7 +980,7 @@
   function renderRecordDetailItem(item, record) {
     if (item.type === 'section_heading') return `<section class="aim-record-detail-section"><h3>${Store.escapeHtml(item.title)}</h3>${item.helperText ? `<p>${Store.escapeHtml(item.helperText)}</p>` : ''}</section>`;
     if (item.type === 'information_text') return `<section class="aim-record-detail-info"><h3>${Store.escapeHtml(item.title)}</h3>${item.helperText ? `<p>${Store.escapeHtml(item.helperText)}</p>` : ''}</section>`;
-    if (item.type === 'form_thumbnail') return `<section class="aim-record-detail-component">${renderFormThumbnailPreview(item)}</section>`;
+    if (item.type === 'form_thumbnail') return '';
     if (item.type === 'card_link') {
       const cardLink = cardLinkForRecord(record);
       if (!cardLink.linked) return '';
@@ -1244,7 +1245,7 @@
       fieldId: source.fieldId || itemKey,
       category: 'layout_component',
       type: 'form_thumbnail',
-      title: '表單縮圖',
+      title: '頁首橫幅',
       helperText: '',
       placeholder: '',
       options: [],
@@ -1469,7 +1470,7 @@
       single_choice: '單一選項回答',
       multiple_choice: '多個選項回答',
       dropdown: '下拉選單回答',
-      form_thumbnail: disabled ? '已加入此表單' : '在指定位置顯示活動表單縮圖',
+      form_thumbnail: disabled ? '已加入此表單' : '在表單上方顯示 4:1 頁首橫幅',
       card_link: disabled ? '已加入此表單' : '在指定位置顯示名片縮圖'
     }[type];
     return `<button class="aim-field-type-option" data-action="add-designer-item" data-type="${Store.escapeHtml(type)}" ${disabled ? 'disabled' : ''} type="button"><strong>${Store.escapeHtml(label)}</strong><span>${Store.escapeHtml(desc)}</span></button>`;
@@ -1585,7 +1586,7 @@
     return `
       <div class="aim-field-editor">
         <div class="aim-field-editor-head">
-          <div><h3>表單縮圖設定</h3><p>縮圖只屬於 Designer，不會寫入紀錄答案。</p></div>
+          <div><h3>表單頁首橫幅設定</h3><p>頁首橫幅只屬於表單顯示，不會寫入紀錄答案。</p></div>
           <div class="aim-field-editor-status">${ui.formDesignDraftDirty ? '<span class="aim-pill aim-pill-high">未套用</span>' : '<span class="aim-pill">已套用</span>'}</div>
         </div>
         <div class="aim-field-editor-body">
@@ -1651,9 +1652,8 @@
 
   function renderFormThumbnailPreview(item) {
     return `
-      <section class="aim-form-thumbnail-preview" aria-label="${Store.escapeHtml(item.altText || item.thumbnailTitle || '表單縮圖')}">
+      <section class="aim-form-thumbnail-preview" aria-label="${Store.escapeHtml(item.altText || item.thumbnailTitle || '表單頁首橫幅')}">
         ${renderFormThumbnailVisual(item)}
-        ${item.thumbnailTitle ? `<h4>${Store.escapeHtml(item.thumbnailTitle)}</h4>` : ''}
       </section>
     `;
   }
@@ -1663,7 +1663,7 @@
     if (thumbnail.driveFileId) {
       return `
         <div class="aim-form-thumbnail-visual aim-form-thumbnail-image aim-thumbnail-position-target" data-thumbnail-drag="true">
-          <img src="${Store.escapeHtml(driveThumbnailUrl(thumbnail.driveFileId))}" alt="${Store.escapeHtml(item.altText || item.thumbnailTitle || '表單縮圖')}" style="${Store.escapeHtml(thumbnailImageStyle(thumbnail))}" loading="lazy" onerror="this.style.display='none'; this.parentElement.classList.add('aim-form-thumbnail-fallback');">
+          <img src="${Store.escapeHtml(driveThumbnailUrl(thumbnail.driveFileId))}" alt="${Store.escapeHtml(item.altText || item.thumbnailTitle || '表單頁首橫幅')}" style="${Store.escapeHtml(thumbnailImageStyle(thumbnail))}" loading="lazy" onerror="this.style.display='none'; this.parentElement.classList.add('aim-form-thumbnail-fallback');">
         </div>
       `;
     }
@@ -1772,7 +1772,7 @@
         <div class="aim-dialog-head"><h2>選擇 RAW 名片</h2><button class="aim-button aim-icon-button" data-action="close-card-picker" type="button" aria-label="關閉">x</button></div>
         <div class="aim-dialog-body">
           <div class="aim-field"><label for="aim-card-picker-q">搜尋名片</label><input class="aim-input" id="aim-card-picker-q" value="${Store.escapeHtml(ui.cardPicker.q || '')}" placeholder="姓名、公司、電話或檔名"></div>
-          <div class="aim-latest-list" id="aim-card-picker-results">${renderCardPickerRows(ui.cardPicker.q || '')}</div>
+          <div class="aim-card-picker-results" id="aim-card-picker-results">${renderCardPickerRows(ui.cardPicker.q || '')}</div>
         </div>
         <div class="aim-dialog-foot"><button class="aim-button" data-action="close-card-picker" type="button">取消</button></div>
       </section>
@@ -1789,30 +1789,56 @@
         .toLowerCase()
         .includes(q);
     }).slice(0, 80);
-    return rows.map(card => `
-      <button class="aim-latest-item" data-action="choose-card" data-card-id="${Store.escapeHtml(card.cardId)}" type="button" style="text-align:left">
-        <span class="aim-record-card-biz-slot">${renderRawCardVisual(card, 'thumb')}</span>
-        <strong>${Store.escapeHtml(card.name || '未命名名片')}</strong>
-        <span class="aim-small">${Store.escapeHtml([card.company, card.position, card.email || card.mobile || card.phone].filter(Boolean).join(' / ') || card.driveFilename || card.cardId)}</span>
-      </button>
-    `).join('') || '<div class="aim-empty">目前沒有可選擇的 RAW 名片。</div>';
+    return rows.map(card => renderRawCardPickerRow(card)).join('') || '<div class="aim-empty">目前沒有可選擇的 RAW 名片。</div>';
+  }
+
+  function renderRawCardPickerRow(card) {
+    const roleText = rawCardRoleText(card);
+    const contacts = rawCardContactRows(card);
+    return `
+      <article class="aim-raw-card-picker-row">
+        <button class="aim-raw-card-picker-thumb" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" type="button" aria-label="開啟名片預覽">
+          ${renderRawCardVisual(card, 'thumb')}
+        </button>
+        <button class="aim-raw-card-picker-info" data-action="choose-card" data-card-id="${Store.escapeHtml(card.cardId)}" type="button">
+          <strong class="aim-raw-card-name">${Store.escapeHtml(card.name || '未命名名片')}</strong>
+          ${card.company ? `<span class="aim-raw-card-company">${Store.escapeHtml(card.company)}</span>` : ''}
+          ${roleText ? `<span class="aim-raw-card-role">${Store.escapeHtml(roleText)}</span>` : ''}
+          ${contacts.map(row => `<span class="aim-raw-card-contact">${Store.escapeHtml(row)}</span>`).join('')}
+        </button>
+      </article>
+    `;
   }
 
   function renderRawCardDetail(card) {
     const normalized = normalizeRawCard(card);
     if (!normalized) return renderBusinessCardVisual('large');
+    const roleText = rawCardRoleText(normalized);
     return `
-      <div class="aim-grid-2">
-        <div>${renderRawCardVisual(normalized, 'large')}</div>
-        <dl class="aim-definition-list">
-          <dt>姓名</dt><dd>${Store.escapeHtml(normalized.name || '-')}</dd>
-          <dt>公司</dt><dd>${Store.escapeHtml(normalized.company || '-')}</dd>
-          <dt>職稱</dt><dd>${Store.escapeHtml(normalized.position || '-')}</dd>
-          <dt>Email</dt><dd>${Store.escapeHtml(normalized.email || '-')}</dd>
-          <dt>電話</dt><dd>${Store.escapeHtml(normalized.mobile || normalized.phone || '-')}</dd>
-        </dl>
+      <div class="aim-raw-card-preview-layout">
+        <div class="aim-raw-card-preview-image">${renderRawCardVisual(normalized, 'large')}</div>
+        <aside class="aim-raw-card-preview-pane">
+          <div class="aim-raw-card-preview-info">
+            <strong class="aim-raw-card-preview-name">${Store.escapeHtml(normalized.name || '未命名名片')}</strong>
+            ${normalized.company ? `<span class="aim-raw-card-preview-company">${Store.escapeHtml(normalized.company)}</span>` : ''}
+            ${roleText ? `<span class="aim-raw-card-preview-role">${Store.escapeHtml(roleText)}</span>` : ''}
+            <dl class="aim-raw-card-preview-contacts">
+              ${normalized.mobile ? `<div><dt>Mobile</dt><dd>${Store.escapeHtml(normalized.mobile)}</dd></div>` : ''}
+              ${normalized.phone ? `<div><dt>Phone</dt><dd>${Store.escapeHtml(normalized.phone)}</dd></div>` : ''}
+              ${normalized.email ? `<div><dt>Email</dt><dd>${Store.escapeHtml(normalized.email)}</dd></div>` : ''}
+            </dl>
+          </div>
+        </aside>
       </div>
     `;
+  }
+
+  function rawCardRoleText(card) {
+    return [card.department, card.position].filter(Boolean).filter((value, index, list) => list.indexOf(value) === index).join(' / ');
+  }
+
+  function rawCardContactRows(card) {
+    return [card.mobile, card.phone, card.email].filter(Boolean);
   }
 
   function rawCardById(cardId) {
@@ -2059,7 +2085,7 @@
   function renderAnswer(field, answers, editable, otherAnswers, cardLink) {
     if (field.type === 'section_heading') return `<section class="aim-runtime-section"><h3>${Store.escapeHtml(field.title)}</h3>${field.helperText ? `<p>${Store.escapeHtml(field.helperText)}</p>` : ''}</section>`;
     if (field.type === 'information_text') return `<section class="aim-runtime-info"><h3>${Store.escapeHtml(field.title)}</h3>${field.helperText ? `<p>${Store.escapeHtml(field.helperText)}</p>` : ''}</section>`;
-    if (field.type === 'form_thumbnail') return `<section class="aim-runtime-component">${renderFormThumbnailPreview(field)}</section>`;
+    if (field.type === 'form_thumbnail') return editable ? `<section class="aim-runtime-component">${renderFormThumbnailPreview(field)}</section>` : '';
     if (field.type === 'card_link') return renderRuntimeCardLink(field, editable, cardLink, 'drawer');
     const value = answers[field.fieldId];
     const otherValue = otherAnswers && otherAnswers[field.fieldId] ? otherAnswers[field.fieldId] : '';
@@ -3382,7 +3408,7 @@
 
   function designerItemSummary(item) {
     if (item.type === 'card_link') return 'Preview-only；不寫入紀錄答案';
-    if (item.type === 'form_thumbnail') return item.thumbnailTitle || item.altText || '16:9 表單縮圖';
+    if (item.type === 'form_thumbnail') return item.thumbnailTitle || item.altText || '4:1 表單頁首橫幅';
     if (choiceFieldTypes.includes(item.type) && item.options.length) return item.options.join('、');
     return item.helperText || item.placeholder || '';
   }
