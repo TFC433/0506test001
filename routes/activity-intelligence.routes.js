@@ -4,6 +4,7 @@ const router = express.Router();
 const ADMIN_ROLES = new Set(['admin', 'super_admin']);
 const DESIGNER_ROLES = new Set(['super_admin']);
 const SUBMISSION_ROLES = new Set(['recorder', 'admin', 'super_admin']);
+const HARD_DELETE_ROLES = new Set(['super_admin']);
 const MEDIA_UPLOAD_LIMIT = '5mb';
 
 function getController(req) {
@@ -83,6 +84,7 @@ router.get('/activities', (req, res, next) => getController(req).listActivities(
 router.post('/activities', requireRole(ADMIN_ROLES), (req, res, next) => getController(req).createActivity(req, res, next));
 router.get('/activities/:activityId', (req, res, next) => getController(req).getActivity(req, res, next));
 router.patch('/activities/:activityId', requireRole(ADMIN_ROLES), (req, res, next) => getController(req).updateActivity(req, res, next));
+router.delete('/activities/:activityId', requireRole(HARD_DELETE_ROLES), (req, res, next) => getController(req).hardDeleteActivity(req, res, next));
 router.post('/activities/:activityId/duplicate', requireRole(ADMIN_ROLES), (req, res, next) => getController(req).duplicateActivity(req, res, next));
 
 router.get('/activities/:activityId/form', requireRole(DESIGNER_ROLES), (req, res, next) => getController(req).getForm(req, res, next));
@@ -105,6 +107,7 @@ router.get('/activities/:activityId/submissions', requireRole(SUBMISSION_ROLES),
 router.post('/activities/:activityId/submissions', requireRole(SUBMISSION_ROLES), (req, res, next) => getController(req).createSubmission(req, res, next));
 router.get('/submissions/:submissionId', requireRole(SUBMISSION_ROLES), (req, res, next) => getController(req).getSubmission(req, res, next));
 router.patch('/submissions/:submissionId', requireRole(SUBMISSION_ROLES), requireSubmissionAccess, (req, res, next) => getController(req).updateSubmission(req, res, next));
+router.delete('/submissions/:submissionId', requireRole(HARD_DELETE_ROLES), (req, res, next) => getController(req).hardDeleteSubmission(req, res, next));
 router.post('/submissions/:submissionId/void', requireRole(SUBMISSION_ROLES), requireSubmissionAccess, (req, res, next) => getController(req).voidSubmission(req, res, next));
 router.post('/submissions/:submissionId/restore', requireRole(SUBMISSION_ROLES), requireSubmissionAccess, (req, res, next) => getController(req).restoreSubmission(req, res, next));
 

@@ -112,6 +112,15 @@ class ActivityIntelligenceService {
         return this._activityDto(activity);
     }
 
+    async hardDeleteActivity(activityId, user = {}) {
+        const activity = await this._requireActivity(activityId);
+        this._actorFromUser(user);
+        await this.writer.hardDeleteActivity({
+            p_activity_id: activityId
+        });
+        return { activityId: activity.id, deleted: true };
+    }
+
     async getForm(activityId) {
         await this._requireActivity(activityId);
         const form = await this.reader.getFormBundle(activityId);
@@ -274,6 +283,16 @@ class ActivityIntelligenceService {
 
     async restoreSubmission(submissionId, user = {}) {
         return this._setSubmissionStatus(submissionId, 'active', user);
+    }
+
+    async hardDeleteSubmission(submissionId, user = {}) {
+        const current = await this.reader.getSubmissionById(submissionId);
+        if (!current) throw new ActivityIntelligenceError(404, 'Submission not found.', 'SUBMISSION_NOT_FOUND');
+        this._actorFromUser(user);
+        await this.writer.hardDeleteSubmission({
+            p_submission_id: submissionId
+        });
+        return { submissionId, activityId: current.activityId, deleted: true };
     }
 
     _validateActivityInput(payload, options = {}) {

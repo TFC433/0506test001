@@ -1783,7 +1783,8 @@ a:focus-visible {
 }
 
 .aim-form-card-link-thumb {
-  width: 100%;
+  width: 180px;
+  max-width: 100%;
   padding: 0;
   border: 0;
   background: transparent;
@@ -1798,7 +1799,6 @@ a:focus-visible {
 .aim-raw-card-thumb {
   display: block;
   width: 100%;
-  aspect-ratio: 16 / 10;
   border: 1px solid #cbd5e1;
   border-radius: 4px;
   background: #f8fafc;
@@ -1807,13 +1807,17 @@ a:focus-visible {
 }
 
 .aim-raw-card-thumb-thumb {
-  width: 72px;
-  height: 46px;
+  width: 180px;
+  height: 114px;
+  object-fit: cover;
+  object-position: center;
 }
 
 .aim-raw-card-thumb-large {
-  min-height: 220px;
+  height: 100%;
+  min-height: 0;
   object-fit: contain;
+  object-position: center;
 }
 
 .aim-card-thumb-fallback::after {
@@ -2038,17 +2042,24 @@ a:focus-visible {
 .aim-card-preview-lightbox {
   align-items: center;
   justify-content: center;
+  z-index: 1000;
 }
 
 .aim-card-preview-dialog {
   top: 50%;
   width: min(1040px, calc(100vw - 72px));
-  max-height: min(760px, 86vh);
+  height: min(760px, calc(100vh - 72px));
+  max-height: calc(100vh - 72px);
+  overflow: hidden;
   transform: translate(-50%, -50%);
+  z-index: 1010;
 }
 
 .aim-card-preview-dialog .aim-dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 18px;
+  overflow: hidden;
 }
 
 .aim-card-picker-results {
@@ -2059,9 +2070,19 @@ a:focus-visible {
   overflow: auto;
 }
 
+.aim-card-picker-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 4px 0 0;
+  color: var(--aim-muted);
+  font-size: 12px;
+}
+
 .aim-raw-card-picker-row {
   display: grid;
-  grid-template-columns: 128px minmax(0, 1fr);
+  grid-template-columns: 180px minmax(0, 1fr);
   align-items: stretch;
   overflow: hidden;
   border: 1px solid var(--aim-border);
@@ -2083,7 +2104,10 @@ a:focus-visible {
 }
 
 .aim-raw-card-picker-thumb {
-  min-height: 82px;
+  width: 180px;
+  height: 114px;
+  min-height: 114px;
+  overflow: hidden;
   padding: 0;
   border-right: 1px solid var(--aim-border);
   cursor: zoom-in;
@@ -2146,6 +2170,9 @@ a:focus-visible {
   grid-template-columns: minmax(420px, 1.45fr) minmax(260px, 0.8fr);
   gap: 22px;
   align-items: stretch;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .aim-raw-card-preview-image {
@@ -2153,6 +2180,7 @@ a:focus-visible {
   align-items: center;
   justify-content: center;
   min-height: 360px;
+  overflow: hidden;
   padding: 14px;
   border: 1px solid var(--aim-border);
   border-radius: 10px;
@@ -2162,9 +2190,12 @@ a:focus-visible {
 .aim-raw-card-preview-image .aim-raw-card-thumb-large,
 .aim-raw-card-preview-image .aim-mock-card-large {
   width: 100%;
-  max-height: min(58vh, 520px);
+  height: 100%;
+  max-height: 100%;
   border: 0;
   box-shadow: none;
+  object-fit: contain;
+  object-position: center;
 }
 
 .aim-raw-card-preview-pane {
@@ -2185,18 +2216,30 @@ a:focus-visible {
 }
 
 .aim-raw-card-preview-name {
+  max-width: 100%;
+  overflow: hidden;
   font-size: 22px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .aim-raw-card-preview-company {
+  max-width: 100%;
+  overflow: hidden;
   color: var(--aim-text);
   font-size: 15px;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .aim-raw-card-preview-role {
+  max-width: 100%;
+  overflow: hidden;
   color: var(--aim-muted);
   font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .aim-raw-card-preview-contacts {
@@ -2224,9 +2267,11 @@ a:focus-visible {
 .aim-raw-card-preview-contacts dd {
   min-width: 0;
   margin: 0;
+  overflow: hidden;
   color: var(--aim-text);
   font-size: 14px;
-  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .aim-record-toolbar {

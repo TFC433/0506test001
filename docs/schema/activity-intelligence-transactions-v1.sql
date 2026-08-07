@@ -843,6 +843,75 @@ begin
 end;
 $$;
 
+create or replace function public.activity_intelligence_hard_delete_submission(
+    p_submission_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_deleted_count integer;
+begin
+    delete from public.activity_intelligence_submission_answers
+    where submission_id = p_submission_id;
+
+    delete from public.activity_intelligence_submissions
+    where submission_id = p_submission_id;
+
+    get diagnostics v_deleted_count = row_count;
+    if v_deleted_count = 0 then
+        raise exception 'Submission not found' using errcode = '23514';
+    end if;
+
+    return jsonb_build_object('submission_id', p_submission_id);
+end;
+$$;
+
+create or replace function public.activity_intelligence_hard_delete_activity(
+    p_activity_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_deleted_count integer;
+begin
+    delete from public.activity_intelligence_submission_answers
+    where submission_id in (
+        select submission_id
+        from public.activity_intelligence_submissions
+        where activity_id = p_activity_id
+    );
+
+    delete from public.activity_intelligence_submissions
+    where activity_id = p_activity_id;
+
+    delete from public.activity_intelligence_form_items
+    where form_version_id in (
+        select form_version_id
+        from public.activity_intelligence_form_versions
+        where activity_id = p_activity_id
+    );
+
+    delete from public.activity_intelligence_form_versions
+    where activity_id = p_activity_id;
+
+    delete from public.activity_intelligence_activities
+    where activity_id = p_activity_id;
+
+    get diagnostics v_deleted_count = row_count;
+    if v_deleted_count = 0 then
+        raise exception 'Activity not found' using errcode = '23514';
+    end if;
+
+    return jsonb_build_object('activity_id', p_activity_id);
+end;
+$$;
+
 revoke execute on function public.activity_intelligence_private_rekey_options(jsonb) from PUBLIC;
 revoke execute on function public.activity_intelligence_private_rekey_options(jsonb) from anon;
 revoke execute on function public.activity_intelligence_private_rekey_options(jsonb) from authenticated;
@@ -886,6 +955,14 @@ revoke execute on function public.activity_intelligence_update_submission(uuid, 
 revoke execute on function public.activity_intelligence_update_submission(uuid, uuid, jsonb, jsonb) from anon;
 revoke execute on function public.activity_intelligence_update_submission(uuid, uuid, jsonb, jsonb) from authenticated;
 
+revoke execute on function public.activity_intelligence_hard_delete_submission(uuid) from PUBLIC;
+revoke execute on function public.activity_intelligence_hard_delete_submission(uuid) from anon;
+revoke execute on function public.activity_intelligence_hard_delete_submission(uuid) from authenticated;
+
+revoke execute on function public.activity_intelligence_hard_delete_activity(uuid) from PUBLIC;
+revoke execute on function public.activity_intelligence_hard_delete_activity(uuid) from anon;
+revoke execute on function public.activity_intelligence_hard_delete_activity(uuid) from authenticated;
+
 grant execute on function public.activity_intelligence_create_activity(jsonb, jsonb, jsonb) to service_role;
 grant execute on function public.activity_intelligence_duplicate_activity(uuid, jsonb, jsonb) to service_role;
 grant execute on function public.activity_intelligence_save_draft(uuid, jsonb, jsonb) to service_role;
@@ -893,5 +970,7 @@ grant execute on function public.activity_intelligence_discard_draft(uuid, jsonb
 grant execute on function public.activity_intelligence_publish_draft(uuid, jsonb) to service_role;
 grant execute on function public.activity_intelligence_create_submission(jsonb, jsonb, jsonb) to service_role;
 grant execute on function public.activity_intelligence_update_submission(uuid, uuid, jsonb, jsonb) to service_role;
+grant execute on function public.activity_intelligence_hard_delete_submission(uuid) to service_role;
+grant execute on function public.activity_intelligence_hard_delete_activity(uuid) to service_role;
 
 COMMIT;

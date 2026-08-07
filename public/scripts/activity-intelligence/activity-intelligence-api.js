@@ -74,6 +74,10 @@
       return jsonRequest('POST', `/activities/${encodeURIComponent(activityId)}/duplicate`, payload);
     },
 
+    hardDeleteActivity(activityId) {
+      return request(`/activities/${encodeURIComponent(activityId)}`, { method: 'DELETE' });
+    },
+
     getForm(activityId) {
       return request(`/activities/${encodeURIComponent(activityId)}/form`);
     },
@@ -129,6 +133,10 @@
 
     updateSubmission(submissionId, payload) {
       return jsonRequest('PATCH', `/submissions/${encodeURIComponent(submissionId)}`, payload);
+    },
+
+    hardDeleteSubmission(submissionId) {
+      return request(`/submissions/${encodeURIComponent(submissionId)}`, { method: 'DELETE' });
     },
 
     voidSubmission(submissionId) {

@@ -29,6 +29,7 @@
   const cardLinkHelperCopy = '連結本表單紀錄訪客的名片';
   const formalDeferredMessage = '此功能尚未啟用。';
   const otherAnswerValue = '其他';
+  const rawCardPickerPageSize = 15;
   const thumbnailDefaults = Object.freeze({
     driveFileId: '',
     fit: 'cover',
@@ -66,6 +67,7 @@
     quickCardLink: { linked: false, cardId: null, card: null },
     cardPicker: null,
     cardPreviewLightboxOpen: false,
+    hardDeleteConfirm: null,
     focusQuickFirst: false,
     quickAnswers: {},
     expandedRecords: {
@@ -310,10 +312,16 @@
     return value;
   }
 
-  async function loadRawCards() {
-    if (rawCardsLoaded) return rawCards;
+  async function loadRawCards(options) {
+    if (rawCardsLoaded && !(options && options.force)) return rawCards;
     const cards = await window.ActivityIntelligenceApi.listRawCards();
-    rawCards = (cards || []).map(normalizeRawCard).filter(card => card && card.cardId);
+    rawCards = (cards || [])
+      .map((card, index) => {
+        const normalized = normalizeRawCard(card);
+        return normalized ? { ...normalized, sourceOrder: index } : null;
+      })
+      .filter(card => card && card.cardId)
+      .sort(compareRawCardsByCreatedTime);
     rawCardsLoaded = true;
     return rawCards;
   }
@@ -324,6 +332,7 @@
     return {
       cardId: card.cardId || card.card_id || '',
       rowIndex: card.rowIndex || card.row_index || '',
+      sourceOrder: Number.isFinite(card.sourceOrder) ? card.sourceOrder : 0,
       name: card.name || '',
       company: card.company || card.companyName || '',
       department: card.department || '',
@@ -334,8 +343,19 @@
       driveFileId,
       driveLink: card.driveLink || card.drive_link || '',
       driveFilename: card.driveFilename || card.drive_filename || card.sourceFilename || '',
-      thumbnailUrl: card.driveLink || card.drive_link ? `/api/drive/thumbnail?link=${encodeURIComponent(card.driveLink || card.drive_link)}` : (card.thumbnailUrl || '')
+      createdTime: card.createdTime || card.created_time || card.createdAt || card.created_at || '',
+      thumbnailUrl: driveFileId ? `/api/external/thumbnail?fileId=${encodeURIComponent(driveFileId)}` : (card.thumbnailUrl || '')
     };
+  }
+
+  function compareRawCardsByCreatedTime(a, b) {
+    const at = Date.parse(a.createdTime || '');
+    const bt = Date.parse(b.createdTime || '');
+    const aValid = Number.isFinite(at);
+    const bValid = Number.isFinite(bt);
+    if (aValid && bValid && bt !== at) return bt - at;
+    if (aValid !== bValid) return aValid ? -1 : 1;
+    return (a.sourceOrder || 0) - (b.sourceOrder || 0);
   }
 
   function applyRoleLanding() {
@@ -366,6 +386,10 @@
   }
 
   function canDesignForm() {
+    return currentUser && currentUser.role === 'super_admin';
+  }
+
+  function canHardDelete() {
     return currentUser && currentUser.role === 'super_admin';
   }
 
@@ -445,6 +469,7 @@
       ${renderDialog()}
       ${renderDrawer()}
       ${renderFormDesignConfirmDialog()}
+      ${renderHardDeleteConfirmDialog()}
       ${renderCardPickerDialog()}
       ${renderCardPreviewLightbox()}
       ${ui.toast ? `<div class="aim-toast" role="status">${Store.escapeHtml(ui.toast)}</div>` : ''}
@@ -796,6 +821,7 @@
         <td>
           <div class="aim-actions">
             <button class="aim-button" type="button" data-action="duplicate" data-id="${activity.id}">複製活動</button>
+            ${canHardDelete() ? `<button class="aim-button aim-button-danger-soft" type="button" data-action="open-hard-delete-activity" data-id="${activity.id}">永久刪除</button>` : ''}
           </div>
         </td>
       </tr>
@@ -993,9 +1019,10 @@
 
   function renderRecordReviewActions(record, activity, context, expanded) {
     const toggle = `<button class="aim-button" data-action="toggle-record-expansion" data-context="${context}" data-id="${record.id}" aria-expanded="${expanded}" type="button">${expanded ? '收合' : '查看'}</button>`;
-    if (!expanded) return `<div class="aim-record-actions">${toggle}</div>`;
+    const hardDelete = canHardDelete() ? `<button class="aim-button aim-button-danger-soft" data-action="open-hard-delete-submission" data-id="${record.id}" type="button">永久刪除</button>` : '';
+    if (!expanded) return `<div class="aim-record-actions">${toggle}${hardDelete}</div>`;
     const edit = canOpenRecordDrawer(record, activity) ? `<button class="aim-button" data-action="edit-record" data-id="${record.id}" type="button">編輯</button>` : '';
-    return `<div class="aim-record-actions">${toggle}${edit}</div>`;
+    return `<div class="aim-record-actions">${toggle}${edit}${hardDelete}</div>`;
   }
 
   function isChoiceField(field) {
@@ -1772,24 +1799,45 @@
         <div class="aim-dialog-head"><h2>選擇 RAW 名片</h2><button class="aim-button aim-icon-button" data-action="close-card-picker" type="button" aria-label="關閉">x</button></div>
         <div class="aim-dialog-body">
           <div class="aim-field"><label for="aim-card-picker-q">搜尋名片</label><input class="aim-input" id="aim-card-picker-q" value="${Store.escapeHtml(ui.cardPicker.q || '')}" placeholder="姓名、公司、電話或檔名"></div>
-          <div class="aim-card-picker-results" id="aim-card-picker-results">${renderCardPickerRows(ui.cardPicker.q || '')}</div>
+          <div class="aim-card-picker-results" id="aim-card-picker-results">${renderCardPickerResults()}</div>
         </div>
         <div class="aim-dialog-foot"><button class="aim-button" data-action="close-card-picker" type="button">取消</button></div>
       </section>
     `;
   }
 
-  function renderCardPickerRows(query) {
+  function filteredRawCards(query) {
     const q = String(query || '').trim().toLowerCase();
-    const rows = rawCards.filter(card => {
+    return rawCards.filter(card => {
       if (!q) return true;
-      return [card.name, card.company, card.position, card.email, card.phone, card.mobile, card.driveFilename]
+      return [card.name, card.company, card.department, card.position, card.email, card.phone, card.mobile, card.driveFilename]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
         .includes(q);
-    }).slice(0, 80);
-    return rows.map(card => renderRawCardPickerRow(card)).join('') || '<div class="aim-empty">目前沒有可選擇的 RAW 名片。</div>';
+    });
+  }
+
+  function renderCardPickerResults() {
+    const rows = filteredRawCards(ui.cardPicker && ui.cardPicker.q);
+    const totalPages = Math.max(1, Math.ceil(rows.length / rawCardPickerPageSize));
+    const page = Math.min(Math.max(Number((ui.cardPicker && ui.cardPicker.page) || 1), 1), totalPages);
+    if (ui.cardPicker) ui.cardPicker.page = page;
+    const offset = (page - 1) * rawCardPickerPageSize;
+    const pageRows = rows.slice(offset, offset + rawCardPickerPageSize);
+    const list = pageRows.map(card => renderRawCardPickerRow(card)).join('') || '<div class="aim-empty">目前沒有可選擇的 RAW 名片。</div>';
+    return `${list}${renderCardPickerPagination(rows.length, page, totalPages)}`;
+  }
+
+  function renderCardPickerPagination(total, page, totalPages) {
+    if (totalPages <= 1) return '';
+    return `
+      <div class="aim-card-picker-pagination" aria-label="RAW 名片分頁">
+        <button class="aim-button" data-action="card-picker-page" data-page="${page - 1}" type="button" ${page <= 1 ? 'disabled' : ''}>上一頁</button>
+        <span>${page} / ${totalPages}，共 ${total} 張</span>
+        <button class="aim-button" data-action="card-picker-page" data-page="${page + 1}" type="button" ${page >= totalPages ? 'disabled' : ''}>下一頁</button>
+      </div>
+    `;
   }
 
   function renderRawCardPickerRow(card) {
@@ -1843,6 +1891,23 @@
 
   function rawCardById(cardId) {
     return rawCards.find(card => card.cardId === cardId) || null;
+  }
+
+  function renderHardDeleteConfirmDialog() {
+    if (!ui.hardDeleteConfirm || !canHardDelete()) return '';
+    const target = ui.hardDeleteConfirm;
+    const title = target.type === 'activity' ? '永久刪除活動' : '永久刪除紀錄';
+    const message = target.type === 'activity'
+      ? `永久刪除「${target.name || ''}」？\n此動作會刪除此活動、表單版本、表單項目與所有紀錄，且無法復原。`
+      : '確定要永久刪除此紀錄？\n此動作無法復原。';
+    return `
+      <div class="aim-dialog-backdrop" data-action="close-hard-delete-dialog"></div>
+      <section class="aim-dialog aim-hard-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="aim-hard-delete-title">
+        <div class="aim-dialog-head"><h2 id="aim-hard-delete-title">${Store.escapeHtml(title)}</h2><button class="aim-button aim-icon-button" data-action="close-hard-delete-dialog" type="button" aria-label="關閉">×</button></div>
+        <div class="aim-dialog-body">${message.split('\n').map(line => `<p>${Store.escapeHtml(line)}</p>`).join('')}</div>
+        <div class="aim-dialog-foot"><button class="aim-button" data-action="close-hard-delete-dialog" type="button">取消</button><button class="aim-button aim-button-danger" data-action="confirm-hard-delete" type="button">永久刪除</button></div>
+      </section>
+    `;
   }
 
   function renderFormDesignConfirmDialog() {
@@ -2076,7 +2141,7 @@
         <div class="aim-drawer-foot aim-record-drawer-foot">
           ${editing && canVoidRecord(record, activity) ? `<button class="aim-button aim-button-danger" data-action="void-record" data-id="${record.id}" type="button">作廢紀錄</button>` : ''}
           ${!editing && canCancelVoidRecord(record, activity) ? `<button class="aim-button aim-button-danger" data-action="cancel-void-record" data-id="${record.id}" type="button">取消作廢</button>` : ''}
-          <div class="aim-drawer-actions"><button class="aim-button" data-action="close-drawer" type="button">關閉</button>${editing ? '<button class="aim-button aim-button-primary" data-action="save-record" type="button">儲存修改</button>' : ''}</div>
+          <div class="aim-drawer-actions">${canHardDelete() ? `<button class="aim-button aim-button-danger-soft" data-action="open-hard-delete-submission" data-id="${record.id}" type="button">永久刪除</button>` : ''}<button class="aim-button" data-action="close-drawer" type="button">關閉</button>${editing ? '<button class="aim-button aim-button-primary" data-action="save-record" type="button">儲存修改</button>' : ''}</div>
         </div>
       </aside>
     `;
@@ -2111,6 +2176,8 @@
       return;
     }
     if (event.key === 'Escape' && ui.cardPreviewLightboxOpen) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
       ui.cardPreviewLightboxOpen = false;
       render();
       return;
@@ -2124,8 +2191,9 @@
   window.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
     if (ui.formDesignConfirm) ui.formDesignConfirm = null;
-    else if (ui.cardPicker) ui.cardPicker = null;
+    else if (ui.hardDeleteConfirm) ui.hardDeleteConfirm = null;
     else if (ui.cardPreviewLightboxOpen) ui.cardPreviewLightboxOpen = false;
+    else if (ui.cardPicker) ui.cardPicker = null;
     else return;
     render();
   });
@@ -2165,6 +2233,10 @@
     if (action === 'clear-overview' && canManageActivities()) ui.overview = { q: '', status: 'all', sort: 'name', dir: 'asc' };
     if (action === 'new-activity' && canManageActivities()) ui.dialog = freshActivityDraft();
     if (action === 'duplicate' && canManageActivities()) openDuplicate(el.dataset.id);
+    if (action === 'open-hard-delete-activity' && canHardDelete()) openHardDeleteActivity(el.dataset.id);
+    if (action === 'open-hard-delete-submission' && canHardDelete()) openHardDeleteSubmission(el.dataset.id);
+    if (action === 'close-hard-delete-dialog') ui.hardDeleteConfirm = null;
+    if (action === 'confirm-hard-delete' && canHardDelete()) await confirmHardDelete();
     if (action === 'close-dialog') ui.dialog = null;
     if (action === 'save-activity-dialog' && canManageActivities() && !(await saveActivityDialog())) return;
     if (action === 'settings' && canManageActivities()) ui.drawer = settingsDraft(selectedActivity());
@@ -2244,6 +2316,10 @@
     if (action === 'open-card-lightbox') {
       ui.cardPreviewLightboxOpen = el.dataset.cardId || true;
       render();
+      return true;
+    }
+    if (action === 'card-picker-page') {
+      setCardPickerPage(Number(el.dataset.page));
       return true;
     }
     if (action === 'close-card-picker') {
@@ -2911,8 +2987,9 @@
     const update = () => {
       if (!ui.cardPicker) return;
       ui.cardPicker.q = node.value;
+      ui.cardPicker.page = 1;
       const results = document.getElementById('aim-card-picker-results');
-      if (results) results.innerHTML = renderCardPickerRows(node.value);
+      if (results) results.innerHTML = renderCardPickerResults();
     };
     node.addEventListener('compositionstart', () => { composing = true; });
     node.addEventListener('compositionend', () => {
@@ -3756,11 +3833,18 @@
       return;
     }
     try {
-      await loadRawCards();
-      ui.cardPicker = { context, q: '' };
+      await loadRawCards({ force: true });
+      ui.cardPicker = { context, q: '', page: 1 };
     } catch (error) {
       toast(error.message || 'RAW card load failed.');
     }
+  }
+
+  function setCardPickerPage(page) {
+    if (!ui.cardPicker) return;
+    ui.cardPicker.page = Math.max(Number(page) || 1, 1);
+    const results = document.getElementById('aim-card-picker-results');
+    if (results) results.innerHTML = renderCardPickerResults();
   }
 
   function selectRawCard(cardId) {
@@ -3925,6 +4009,63 @@
     } finally {
       writeInFlight = false;
     }
+  }
+
+  function openHardDeleteActivity(activityId) {
+    const activity = state.activities.find(item => item.id === activityId);
+    if (!activity) return toast('找不到活動。');
+    ui.hardDeleteConfirm = { type: 'activity', id: activity.id, name: activity.name };
+  }
+
+  function openHardDeleteSubmission(submissionId) {
+    const record = state.records.find(item => item.id === submissionId);
+    if (!record) return toast('找不到紀錄。');
+    ui.hardDeleteConfirm = { type: 'submission', id: record.id };
+  }
+
+  async function confirmHardDelete() {
+    if (!ui.hardDeleteConfirm || writeInFlight) return;
+    const target = ui.hardDeleteConfirm;
+    writeInFlight = true;
+    try {
+      if (target.type === 'activity') await hardDeleteActivity(target.id);
+      if (target.type === 'submission') await hardDeleteSubmission(target.id);
+      ui.hardDeleteConfirm = null;
+    } catch (error) {
+      toast(error.message || 'Permanent delete failed.');
+    } finally {
+      writeInFlight = false;
+    }
+  }
+
+  async function hardDeleteSubmission(submissionId) {
+    await window.ActivityIntelligenceApi.hardDeleteSubmission(submissionId);
+    state.records = state.records.filter(record => record.id !== submissionId);
+    ui.expandedRecords.personal.delete(submissionId);
+    ui.expandedRecords.all.delete(submissionId);
+    if (ui.drawer && ui.drawer.type === 'record' && ui.drawer.id === submissionId) ui.drawer = null;
+    toast('已永久刪除紀錄。');
+  }
+
+  async function hardDeleteActivity(activityId) {
+    await window.ActivityIntelligenceApi.hardDeleteActivity(activityId);
+    state.activities = state.activities.filter(activity => activity.id !== activityId);
+    state.records = state.records.filter(record => record.activityId !== activityId);
+    formBundles.delete(activityId);
+    [...recordLoadState.keys()].forEach(key => {
+      if (String(key).startsWith(`${activityId}:`)) recordLoadState.delete(key);
+    });
+    ui.expandedRecords.personal.clear();
+    ui.expandedRecords.all.clear();
+    if (ui.selectedActivityId === activityId) ui.selectedActivityId = (state.activities[0] && state.activities[0].id) || null;
+    state.selectedActivityId = ui.selectedActivityId;
+    ui.drawer = null;
+    ui.dialog = null;
+    ui.cardPicker = null;
+    ui.cardPreviewLightboxOpen = false;
+    ui.view = 'overview';
+    ui.tab = 'overview';
+    toast('已永久刪除活動。');
   }
 
   function exportCsv(records, activity, scope) {

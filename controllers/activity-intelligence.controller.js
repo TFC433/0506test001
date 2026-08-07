@@ -38,6 +38,13 @@ class ActivityIntelligenceController {
         });
     };
 
+    hardDeleteActivity = async (req, res) => {
+        await this._handle(res, async () => {
+            const data = await this.activityIntelligenceService.hardDeleteActivity(req.params.activityId, req.user);
+            res.json({ success: true, data });
+        });
+    };
+
     getForm = async (req, res) => {
         await this._handle(res, async () => {
             const data = await this.activityIntelligenceService.getForm(req.params.activityId);
@@ -116,6 +123,13 @@ class ActivityIntelligenceController {
     updateSubmission = async (req, res) => {
         await this._handle(res, async () => {
             const data = await this.activityIntelligenceService.updateSubmission(req.params.submissionId, req.body, req.user);
+            res.json({ success: true, data });
+        });
+    };
+
+    hardDeleteSubmission = async (req, res) => {
+        await this._handle(res, async () => {
+            const data = await this.activityIntelligenceService.hardDeleteSubmission(req.params.submissionId, req.user);
             res.json({ success: true, data });
         });
     };

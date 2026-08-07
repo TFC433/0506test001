@@ -34,6 +34,14 @@ class ActivityIntelligenceSqlWriter {
         return this._rpc('activity_intelligence_update_submission', payload);
     }
 
+    async hardDeleteSubmission(payload) {
+        return this._rpc('activity_intelligence_hard_delete_submission', payload);
+    }
+
+    async hardDeleteActivity(payload) {
+        return this._rpc('activity_intelligence_hard_delete_activity', payload);
+    }
+
     async updateActivity(activityId, updates) {
         const { data, error } = await supabase
             .from(this.activitiesTable)
