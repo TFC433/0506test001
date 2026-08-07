@@ -86,11 +86,11 @@
         authenticated: false,
         forbidden: true,
         userId: body.yourUserId,
-        message: body.message || '此 LINE 帳號未列入白名單。'
+        message: body.message || '此 LINE 帳號尚未開通活動情報權限。'
       };
     }
 
-    return { authenticated: false, message: body.message || '無法建立 LINE 工作階段。' };
+    return { authenticated: false, message: body.message || '建立 LINE 工作階段失敗。' };
   }
 
   async function ensureSession(options = {}) {
@@ -106,7 +106,7 @@
           authenticated: false,
           forbidden: true,
           userId: existing.body.yourUserId,
-          message: existing.body.message || '此 LINE 帳號未列入白名單。'
+          message: existing.body.message || '此 LINE 帳號尚未開通活動情報權限。'
         };
         return currentSession;
       }

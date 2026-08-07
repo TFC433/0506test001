@@ -29,6 +29,14 @@
   const cardLinkHelperCopy = '????祈”?桃??赤摰Ｙ???';
   const formalDeferredMessage = '此功能尚未啟用。';
   const otherAnswerValue = '其他';
+  const thumbnailDefaults = Object.freeze({
+    driveFileId: '',
+    fit: 'cover',
+    focalX: 50,
+    focalY: 50,
+    zoom: 1
+  });
+  const thumbnailFitOptions = new Set(['cover', 'contain']);
 
   let state = { activities: [], records: [], selectedActivityId: null };
   let currentUser = null;
@@ -1191,7 +1199,8 @@
       placeholder: item.placeholder || '',
       options: entries.map(option => option.label),
       optionEntries: entries,
-      allowOther: Boolean(item.allowOther),
+      allowOther: Boolean(item.allowOther || (item.settings && item.settings.allowOther)),
+      settings: item.settings && typeof item.settings === 'object' ? Store.clone(item.settings) : {},
       visible: item.visible !== false,
       retired: Boolean(item.retired),
       removedInDraft: Boolean(item.removedInDraft)
@@ -1223,6 +1232,11 @@
   function makeFormThumbnailItem(extra) {
     const source = extra || {};
     const itemKey = source.itemKey || source.item_key || source.fieldId || source.itemId || newUuid();
+    const sourceSettings = source.settings && typeof source.settings === 'object' ? Store.clone(source.settings) : {};
+    const settings = {
+      ...sourceSettings,
+      thumbnail: normalizeThumbnailSettings(source)
+    };
     return {
       formItemId: source.formItemId || source.form_item_id || '',
       itemKey,
@@ -1238,11 +1252,38 @@
       visible: true,
       retired: false,
       removedInDraft: false,
-      thumbnailTitle: '活動表單封面',
-      altText: '活動表單示意縮圖',
-      thumbnailVariant: 'line',
-      ...source
+      settings,
+      thumbnailTitle: source.thumbnailTitle || sourceSettings.thumbnailTitle || '活動表單封面',
+      altText: source.altText || sourceSettings.altText || '活動表單示意縮圖',
+      thumbnailVariant: source.thumbnailVariant || sourceSettings.thumbnailVariant || 'line',
+      ...source,
+      settings
     };
+  }
+
+  function normalizeThumbnailSettings(source) {
+    const sourceSettings = source && source.settings && typeof source.settings === 'object' ? source.settings : {};
+    const thumbnail = source && source.thumbnail && typeof source.thumbnail === 'object'
+      ? source.thumbnail
+      : (sourceSettings.thumbnail && typeof sourceSettings.thumbnail === 'object' ? sourceSettings.thumbnail : {});
+    const fit = thumbnailFitOptions.has(thumbnail.fit) ? thumbnail.fit : thumbnailDefaults.fit;
+    return {
+      driveFileId: String(thumbnail.driveFileId || source.driveFileId || source.drive_file_id || thumbnailDefaults.driveFileId).trim(),
+      fit,
+      focalX: clampNumber(thumbnail.focalX, 0, 100, thumbnailDefaults.focalX),
+      focalY: clampNumber(thumbnail.focalY, 0, 100, thumbnailDefaults.focalY),
+      zoom: clampNumber(thumbnail.zoom, 1, 3, thumbnailDefaults.zoom)
+    };
+  }
+
+  function thumbnailSettingsForItem(item) {
+    return normalizeThumbnailSettings(item || {});
+  }
+
+  function clampNumber(value, min, max, fallback) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return fallback;
+    return Math.min(max, Math.max(min, number));
   }
 
   function designerItemKey(item) {
@@ -1298,7 +1339,8 @@
       removedInDraft: Boolean(normalized.removedInDraft),
       thumbnailTitle: normalized.thumbnailTitle || '',
       altText: normalized.altText || '',
-      thumbnailVariant: normalized.thumbnailVariant || ''
+      thumbnailVariant: normalized.thumbnailVariant || '',
+      thumbnail: thumbnailSettingsForItem(normalized)
     });
   }
 
@@ -1538,6 +1580,8 @@
   }
 
   function renderFormThumbnailEditor(field) {
+    const thumbnail = thumbnailSettingsForItem(field);
+    const hasImage = Boolean(thumbnail.driveFileId);
     return `
       <div class="aim-field-editor">
         <div class="aim-field-editor-head">
@@ -1550,10 +1594,22 @@
             <div class="aim-field"><label for="aim-field-thumbnail-title">縮圖標題（選填）</label><input class="aim-input aim-field-design-input" id="aim-field-thumbnail-title" data-design-field="thumbnailTitle" value="${Store.escapeHtml(field.thumbnailTitle || '')}"></div>
             <div class="aim-field"><label for="aim-field-thumbnail-alt">替代文字（選填）</label><input class="aim-input aim-field-design-input" id="aim-field-thumbnail-alt" data-design-field="altText" value="${Store.escapeHtml(field.altText || '')}"></div>
           </div>
+          <div class="aim-thumbnail-media-panel">
+            <div class="aim-thumbnail-upload-row">
+              <label class="aim-button aim-button-soft" for="aim-thumbnail-upload">上傳圖片</label>
+              <input class="aim-thumbnail-file-input" id="aim-thumbnail-upload" type="file" accept="image/jpeg,image/png,image/webp">
+              <span>${hasImage ? '已選擇圖片' : '尚未上傳圖片'}</span>
+            </div>
+            <div class="aim-thumbnail-position-row">
+              <label for="aim-thumbnail-zoom">縮放</label>
+              <input id="aim-thumbnail-zoom" class="aim-thumbnail-range" data-thumbnail-control="zoom" type="range" min="1" max="3" step="0.05" value="${Store.escapeHtml(thumbnail.zoom)}">
+              <button class="aim-button aim-button-soft" data-action="reset-thumbnail-media" type="button">重設</button>
+            </div>
+          </div>
           ${renderFormThumbnailVisual(field)}
         </div>
         <div class="aim-field-editor-actions">
-          <button class="aim-button aim-button-soft" data-action="cycle-thumbnail" type="button">更換範例圖</button>
+          <button class="aim-button aim-button-soft" data-action="cycle-thumbnail" type="button" ${hasImage ? 'disabled' : ''}>更換範例圖</button>
           <button class="aim-button aim-button-danger-soft" data-action="delete-field" data-id="${Store.escapeHtml(designerItemKey(field))}" type="button">移除縮圖</button>
           <button class="aim-button" data-action="cancel-field-draft" type="button" ${!ui.formDesignDraftDirty ? 'disabled' : ''}>取消修改</button>
           <button class="aim-button aim-button-primary" data-action="apply-field-draft" type="button">套用至草稿</button>
@@ -1603,6 +1659,14 @@
   }
 
   function renderFormThumbnailVisual(item) {
+    const thumbnail = thumbnailSettingsForItem(item);
+    if (thumbnail.driveFileId) {
+      return `
+        <div class="aim-form-thumbnail-visual aim-form-thumbnail-image aim-thumbnail-position-target" data-thumbnail-drag="true">
+          <img src="${Store.escapeHtml(driveThumbnailUrl(thumbnail.driveFileId))}" alt="${Store.escapeHtml(item.altText || item.thumbnailTitle || '表單縮圖')}" style="${Store.escapeHtml(thumbnailImageStyle(thumbnail))}" loading="lazy" onerror="this.style.display='none'; this.parentElement.classList.add('aim-form-thumbnail-fallback');">
+        </div>
+      `;
+    }
     const variant = item.thumbnailVariant || 'line';
     return `
       <div class="aim-form-thumbnail-visual aim-form-thumbnail-${Store.escapeHtml(variant)}" aria-hidden="true">
@@ -1686,6 +1750,18 @@
         </div>
       </div>
     `;
+  }
+
+  function driveThumbnailUrl(fileId) {
+    return `/api/drive/thumbnail?fileId=${encodeURIComponent(fileId)}`;
+  }
+
+  function thumbnailImageStyle(thumbnail) {
+    const focalX = clampNumber(thumbnail.focalX, 0, 100, thumbnailDefaults.focalX);
+    const focalY = clampNumber(thumbnail.focalY, 0, 100, thumbnailDefaults.focalY);
+    const zoom = clampNumber(thumbnail.zoom, 1, 3, thumbnailDefaults.zoom);
+    const fit = thumbnailFitOptions.has(thumbnail.fit) ? thumbnail.fit : thumbnailDefaults.fit;
+    return `object-fit:${fit};object-position:${focalX}% ${focalY}%;transform:scale(${zoom});transform-origin:${focalX}% ${focalY}%;`;
   }
 
   function renderCardPickerDialog() {
@@ -2303,6 +2379,17 @@
       render();
       return true;
     }
+    if (action === 'reset-thumbnail-media') {
+      updateThumbnailSettings({
+        fit: thumbnailDefaults.fit,
+        focalX: thumbnailDefaults.focalX,
+        focalY: thumbnailDefaults.focalY,
+        zoom: thumbnailDefaults.zoom
+      });
+      refreshFormPreview();
+      render();
+      return true;
+    }
     return false;
   }
 
@@ -2445,6 +2532,7 @@
     bindSettingsField('aim-settings-ex-end', 'exhibitionEnd', 'change');
     bindSettingsField('aim-settings-description', 'description');
     bindFormDesignTextareas();
+    bindThumbnailMediaControls();
     bindFormPreviewControls();
     bind('aim-record-q', value => { ui.records.q = value; });
     bind('aim-record-recorder', value => { ui.records.recorder = value; }, 'change');
@@ -2549,6 +2637,121 @@
         refreshFormPreview();
       });
     });
+  }
+
+  function bindThumbnailMediaControls() {
+    const upload = document.getElementById('aim-thumbnail-upload');
+    if (upload) {
+      upload.addEventListener('change', async () => {
+        if (upload.files && upload.files[0]) await uploadThumbnailImage(upload.files[0]);
+      });
+    }
+
+    document.querySelectorAll('[data-thumbnail-control="zoom"]').forEach(input => {
+      input.addEventListener('input', () => {
+        updateThumbnailSettings({ zoom: input.value });
+        updateThumbnailPreviewStyles();
+        refreshFormPreview();
+      });
+      input.addEventListener('change', () => render());
+    });
+
+    document.querySelectorAll('[data-thumbnail-drag="true"]').forEach(target => {
+      target.addEventListener('pointerdown', event => startThumbnailDrag(event, target));
+    });
+  }
+
+  async function uploadThumbnailImage(file) {
+    if (!ui.formDesignDraft || ui.formDesignDraft.type !== 'form_thumbnail' || writeInFlight) return;
+    const activity = selectedActivity();
+    if (!activity) return;
+    const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+    if (!allowedTypes.has(file.type)) {
+      toast('請上傳 JPG、PNG 或 WebP 圖片。');
+      return;
+    }
+
+    writeInFlight = true;
+    render();
+    try {
+      const uploaded = await window.ActivityIntelligenceApi.uploadMedia(file, {
+        activityId: activity.id,
+        itemKey: designerItemKey(ui.formDesignDraft)
+      });
+      updateThumbnailSettings({
+        driveFileId: uploaded.fileId,
+        fit: thumbnailDefaults.fit,
+        focalX: thumbnailDefaults.focalX,
+        focalY: thumbnailDefaults.focalY,
+        zoom: thumbnailDefaults.zoom
+      });
+      toast('圖片已上傳，請儲存草稿以保留設定。');
+    } catch (error) {
+      toast(error.message || '圖片上傳失敗。');
+    } finally {
+      writeInFlight = false;
+      render();
+    }
+  }
+
+  function updateThumbnailSettings(patch) {
+    if (!ui.formDesignDraft || ui.formDesignDraft.type !== 'form_thumbnail') return;
+    const current = thumbnailSettingsForItem(ui.formDesignDraft);
+    const nextThumbnail = normalizeThumbnailSettings({
+      settings: {
+        thumbnail: {
+          ...current,
+          ...patch
+        }
+      }
+    });
+    updateFormDesignDraft({
+      settings: {
+        ...(ui.formDesignDraft.settings || {}),
+        thumbnail: nextThumbnail
+      }
+    });
+  }
+
+  function updateThumbnailPreviewStyles() {
+    const thumbnail = thumbnailSettingsForItem(ui.formDesignDraft || {});
+    document.querySelectorAll('.aim-form-thumbnail-image img').forEach(img => {
+      img.setAttribute('style', thumbnailImageStyle(thumbnail));
+    });
+  }
+
+  function startThumbnailDrag(event, target) {
+    if (!ui.formDesignDraft || ui.formDesignDraft.type !== 'form_thumbnail') return;
+    const rect = target.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const start = thumbnailSettingsForItem(ui.formDesignDraft);
+    const origin = { x: event.clientX, y: event.clientY };
+    target.setPointerCapture(event.pointerId);
+    target.classList.add('aim-thumbnail-dragging');
+    event.preventDefault();
+
+    const move = moveEvent => {
+      const deltaX = ((moveEvent.clientX - origin.x) / rect.width) * 100;
+      const deltaY = ((moveEvent.clientY - origin.y) / rect.height) * 100;
+      updateThumbnailSettings({
+        focalX: start.focalX - deltaX,
+        focalY: start.focalY - deltaY
+      });
+      updateThumbnailPreviewStyles();
+      refreshFormPreview();
+    };
+
+    const stop = () => {
+      target.classList.remove('aim-thumbnail-dragging');
+      target.removeEventListener('pointermove', move);
+      target.removeEventListener('pointerup', stop);
+      target.removeEventListener('pointercancel', stop);
+      render();
+    };
+
+    target.addEventListener('pointermove', move);
+    target.addEventListener('pointerup', stop);
+    target.addEventListener('pointercancel', stop);
   }
 
   function bindFormPreviewControls() {

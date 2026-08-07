@@ -98,6 +98,18 @@
       return jsonRequest('POST', `/activities/${encodeURIComponent(activityId)}/form/publish`);
     },
 
+    uploadMedia(file, metadata) {
+      const formData = new FormData();
+      formData.append('file', file);
+      Object.entries(metadata || {}).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') formData.append(key, value);
+      });
+      return request('/media', {
+        method: 'POST',
+        body: formData
+      });
+    },
+
     listSubmissions(activityId, query) {
       const params = new URLSearchParams();
       Object.entries(query || {}).forEach(([key, value]) => {

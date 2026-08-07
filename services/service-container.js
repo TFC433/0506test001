@@ -80,6 +80,7 @@ const SubscriptionOpsService = require('./subscription-ops-service');
 const AuditLoggerService = require('./audit-logger-service');
 const ActivityTimelineService = require('./activity-timeline-service');
 const ActivityIntelligenceService = require('./activity-intelligence-service');
+const ExternalService = require('./external-service');
 
 // --- Import Controllers ---
 const AuthController = require('../controllers/auth.controller');
@@ -313,10 +314,13 @@ async function initializeServices() {
             opportunitySqlReader,
             companySqlReader
         });
+        const externalService = new ExternalService(googleClientService);
         const activityIntelligenceService = new ActivityIntelligenceService({
             activityIntelligenceSqlReader,
             activityIntelligenceSqlWriter,
-            rawContactSqlReader
+            rawContactSqlReader,
+            externalService,
+            config
         });
 
         // 5. Controllers
@@ -352,6 +356,7 @@ async function initializeServices() {
             subscriptionOpsService,
             auditLoggerService,
             activityTimelineService,
+            externalService,
             activityIntelligenceService,
             authController,
             systemController,

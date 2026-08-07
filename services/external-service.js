@@ -6,6 +6,7 @@
  * @description 封裝 Gemini AI 策略、Prompt 建構與 Google Drive 串流邏輯。
  */
 
+const { Readable } = require('stream');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
 class ExternalService {
@@ -124,6 +125,35 @@ class ExternalService {
             console.error(`[Drive Service] 讀取失敗 (ID: ${targetFileId}):`, error.message);
             throw error; // 拋出給 Controller 處理 HTTP 狀態
         }
+    }
+
+    async uploadDriveFile({ folderId, fileName, mimeType, buffer }) {
+        if (!folderId) throw new Error('Drive folder ID is required');
+        if (!fileName) throw new Error('Drive file name is required');
+        if (!mimeType) throw new Error('Drive MIME type is required');
+        if (!Buffer.isBuffer(buffer) || buffer.length === 0) throw new Error('Drive file buffer is required');
+        if (!this.googleClientService) throw new Error('GoogleClientService not initialized');
+
+        const drive = await this.googleClientService.getDriveClient();
+        const response = await drive.files.create({
+            requestBody: {
+                name: fileName,
+                mimeType,
+                parents: [folderId]
+            },
+            media: {
+                mimeType,
+                body: Readable.from(buffer)
+            },
+            fields: 'id,name,mimeType',
+            supportsAllDrives: true
+        });
+
+        return {
+            fileId: response.data.id,
+            fileName: response.data.name,
+            mimeType: response.data.mimeType
+        };
     }
 }
 

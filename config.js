@@ -70,6 +70,10 @@ module.exports = {
     
     // Google Drive 設定
     DRIVE_FOLDER_ID: process.env.DRIVE_FOLDER_ID,
+
+    ACTIVITY_INTELLIGENCE: {
+        FORM_MEDIA_FOLDER_ID: process.env.ACTIVITY_INTELLIGENCE_FORM_MEDIA_FOLDER_ID
+    },
     
     // Google Calendar 設定
     CALENDAR_ID: process.env.CALENDAR_ID,

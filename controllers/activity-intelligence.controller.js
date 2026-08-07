@@ -80,6 +80,18 @@ class ActivityIntelligenceController {
         });
     };
 
+    uploadMedia = async (req, res) => {
+        await this._handle(res, async () => {
+            const upload = parseMultipartImageUpload(req);
+            const data = await this.activityIntelligenceService.uploadFormMedia({
+                file: upload.file,
+                activityId: upload.fields.activityId,
+                itemKey: upload.fields.itemKey
+            });
+            res.status(201).json({ success: true, data });
+        });
+    };
+
     listSubmissions = async (req, res) => {
         await this._handle(res, async () => {
             const data = await this.activityIntelligenceService.listSubmissions(req.params.activityId, req.query);
@@ -150,6 +162,91 @@ class ActivityIntelligenceController {
         if (error.message.includes('invalid') || error.message.includes('required')) return 400;
         return 500;
     }
+}
+
+const ALLOWED_MEDIA_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+function parseMultipartImageUpload(req) {
+    const contentType = String(req.headers['content-type'] || '');
+    const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
+    if (!boundaryMatch) throw mediaUploadError('Multipart image upload is required.', 'FORM_MEDIA_MULTIPART_REQUIRED');
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) throw mediaUploadError('Image file is required.', 'FORM_MEDIA_FILE_REQUIRED');
+
+    const boundary = boundaryMatch[1] || boundaryMatch[2];
+    const parts = multipartParts(req.body, boundary);
+    const fields = {};
+    let file = null;
+    let fileCount = 0;
+
+    parts.forEach(part => {
+        const disposition = part.headers['content-disposition'] || '';
+        const name = headerParam(disposition, 'name');
+        const filename = headerParam(disposition, 'filename');
+        if (!name) return;
+        if (filename) {
+            fileCount += 1;
+            if (fileCount > 1) throw mediaUploadError('Upload exactly one image file.', 'FORM_MEDIA_SINGLE_FILE_REQUIRED');
+            const mimeType = String(part.headers['content-type'] || '').toLowerCase();
+            if (!ALLOWED_MEDIA_TYPES.has(mimeType)) {
+                throw mediaUploadError('Unsupported image type. Use JPG, PNG, or WebP.', 'FORM_MEDIA_TYPE_NOT_ALLOWED');
+            }
+            file = {
+                originalName: filename,
+                mimeType,
+                buffer: part.body
+            };
+        } else {
+            fields[name] = part.body.toString('utf8').trim();
+        }
+    });
+
+    if (!file || !file.buffer.length) throw mediaUploadError('Image file is required.', 'FORM_MEDIA_FILE_REQUIRED');
+    return { fields, file };
+}
+
+function multipartParts(body, boundary) {
+    const boundaryBuffer = Buffer.from(`--${boundary}`);
+    const headerSeparator = Buffer.from('\r\n\r\n');
+    const parts = [];
+    let cursor = 0;
+
+    while (cursor < body.length) {
+        const boundaryStart = body.indexOf(boundaryBuffer, cursor);
+        if (boundaryStart < 0) break;
+        let partStart = boundaryStart + boundaryBuffer.length;
+        if (body.slice(partStart, partStart + 2).toString('latin1') === '--') break;
+        if (body.slice(partStart, partStart + 2).toString('latin1') === '\r\n') partStart += 2;
+
+        const headerEnd = body.indexOf(headerSeparator, partStart);
+        if (headerEnd < 0) break;
+        const bodyStart = headerEnd + headerSeparator.length;
+        const nextBoundary = body.indexOf(Buffer.from(`\r\n--${boundary}`), bodyStart);
+        if (nextBoundary < 0) break;
+
+        const headerText = body.slice(partStart, headerEnd).toString('utf8');
+        const headers = {};
+        headerText.split('\r\n').forEach(line => {
+            const index = line.indexOf(':');
+            if (index > 0) headers[line.slice(0, index).trim().toLowerCase()] = line.slice(index + 1).trim();
+        });
+
+        parts.push({ headers, body: body.slice(bodyStart, nextBoundary) });
+        cursor = nextBoundary + 2;
+    }
+
+    return parts;
+}
+
+function headerParam(headerValue, key) {
+    const match = String(headerValue || '').match(new RegExp(`${key}="([^"]*)"`, 'i'));
+    return match ? match[1] : '';
+}
+
+function mediaUploadError(message, code) {
+    const error = new Error(message);
+    error.statusCode = 400;
+    error.code = code;
+    return error;
 }
 
 module.exports = ActivityIntelligenceController;

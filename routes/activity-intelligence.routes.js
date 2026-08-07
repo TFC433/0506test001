@@ -4,6 +4,7 @@ const router = express.Router();
 const ADMIN_ROLES = new Set(['admin', 'super_admin']);
 const DESIGNER_ROLES = new Set(['super_admin']);
 const SUBMISSION_ROLES = new Set(['recorder', 'admin', 'super_admin']);
+const MEDIA_UPLOAD_LIMIT = '5mb';
 
 function getController(req) {
     const services = req.app.get('services');
@@ -90,6 +91,15 @@ router.get('/activities/:activityId/form/published', (req, res, next) => getCont
 router.put('/activities/:activityId/form/draft', requireRole(DESIGNER_ROLES), (req, res, next) => getController(req).saveDraft(req, res, next));
 router.post('/activities/:activityId/form/discard-draft', requireRole(DESIGNER_ROLES), (req, res, next) => getController(req).discardDraft(req, res, next));
 router.post('/activities/:activityId/form/publish', requireRole(DESIGNER_ROLES), (req, res, next) => getController(req).publishDraft(req, res, next));
+router.post(
+    '/media',
+    requireRole(DESIGNER_ROLES),
+    express.raw({
+        type: req => String(req.headers['content-type'] || '').toLowerCase().startsWith('multipart/form-data'),
+        limit: MEDIA_UPLOAD_LIMIT
+    }),
+    (req, res, next) => getController(req).uploadMedia(req, res, next)
+);
 
 router.get('/activities/:activityId/submissions', requireRole(SUBMISSION_ROLES), scopeSubmissionList, (req, res, next) => getController(req).listSubmissions(req, res, next));
 router.post('/activities/:activityId/submissions', requireRole(SUBMISSION_ROLES), (req, res, next) => getController(req).createSubmission(req, res, next));

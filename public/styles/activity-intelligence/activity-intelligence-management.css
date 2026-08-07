@@ -1896,6 +1896,66 @@ a:focus-visible {
   background: rgba(37, 99, 235, 0.16);
 }
 
+.aim-thumbnail-media-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.aim-thumbnail-upload-row,
+.aim-thumbnail-position-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.aim-thumbnail-upload-row span {
+  color: var(--aim-muted);
+  font-size: 12px;
+}
+
+.aim-thumbnail-file-input {
+  display: none;
+}
+
+.aim-thumbnail-position-row label {
+  color: var(--aim-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.aim-thumbnail-range {
+  width: min(220px, 100%);
+  accent-color: var(--aim-blue);
+}
+
+.aim-form-thumbnail-image {
+  cursor: grab;
+  touch-action: none;
+  background: #e5e7eb;
+}
+
+.aim-form-thumbnail-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  will-change: transform, object-position;
+}
+
+.aim-thumbnail-dragging {
+  cursor: grabbing;
+}
+
+.aim-form-thumbnail-fallback::after {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--aim-muted);
+  background: #f8fafc;
+  content: "圖片無法載入";
+}
+
 .aim-form-thumbnail-grid {
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.6) 1px, transparent 1px),

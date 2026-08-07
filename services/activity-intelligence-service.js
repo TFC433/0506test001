@@ -31,10 +31,12 @@ class ActivityIntelligenceError extends Error {
 }
 
 class ActivityIntelligenceService {
-    constructor({ activityIntelligenceSqlReader, activityIntelligenceSqlWriter, rawContactSqlReader }) {
+    constructor({ activityIntelligenceSqlReader, activityIntelligenceSqlWriter, rawContactSqlReader, externalService, config }) {
         this.reader = activityIntelligenceSqlReader;
         this.writer = activityIntelligenceSqlWriter;
         this.rawContactSqlReader = rawContactSqlReader;
+        this.externalService = externalService;
+        this.config = config || {};
     }
 
     async listActivities() {
@@ -166,6 +168,39 @@ class ActivityIntelligenceService {
         });
 
         return this.getForm(activityId);
+    }
+
+    async uploadFormMedia(payload = {}) {
+        const folderId = this.config.ACTIVITY_INTELLIGENCE && this.config.ACTIVITY_INTELLIGENCE.FORM_MEDIA_FOLDER_ID;
+        if (!folderId) {
+            throw new ActivityIntelligenceError(400, 'Activity Intelligence form media folder is not configured.', 'FORM_MEDIA_FOLDER_NOT_CONFIGURED');
+        }
+        if (!this.externalService || typeof this.externalService.uploadDriveFile !== 'function') {
+            throw new ActivityIntelligenceError(500, 'Activity Intelligence media upload is unavailable.', 'FORM_MEDIA_UPLOAD_UNAVAILABLE');
+        }
+
+        const file = payload.file || {};
+        const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+        if (!Buffer.isBuffer(file.buffer) || file.buffer.length === 0) {
+            throw new ActivityIntelligenceError(400, 'Image file is required.', 'FORM_MEDIA_FILE_REQUIRED');
+        }
+        if (!allowedTypes.has(file.mimeType)) {
+            throw new ActivityIntelligenceError(400, 'Unsupported image type. Use JPG, PNG, or WebP.', 'FORM_MEDIA_TYPE_NOT_ALLOWED');
+        }
+        if (payload.activityId) this._assertUuid(payload.activityId, 'activityId');
+        if (payload.itemKey) this._assertUuid(payload.itemKey, 'itemKey');
+
+        const extension = this._extensionForMimeType(file.mimeType);
+        const activityPart = payload.activityId || 'activity';
+        const itemPart = payload.itemKey || 'item';
+        const fileName = `activity-intelligence-${activityPart}-${itemPart}-${Date.now()}-${randomUUID()}${extension}`;
+
+        return this.externalService.uploadDriveFile({
+            folderId,
+            fileName,
+            mimeType: file.mimeType,
+            buffer: file.buffer
+        });
     }
 
     async listSubmissions(activityId, query = {}) {
@@ -303,13 +338,12 @@ class ActivityIntelligenceService {
 
     _deriveActivityStatus(activity) {
         const today = new Date().toISOString().slice(0, 10);
-        if (today < activity.formOpenStart) return { key: 'upcoming', label: '尚未開放' };
-        if (today >= activity.formOpenStart && today <= activity.formOpenEnd) return { key: 'open', label: '開放中' };
+        if (today < activity.formOpenStart) return { key: 'upcoming', label: '尚未開始' };
+        if (today >= activity.formOpenStart && today <= activity.formOpenEnd) return { key: 'open', label: '進行中' };
         return { key: 'ended', label: '已結束' };
     }
 
-    _formBundleDto(form) {
-        return {
+    _formBundleDto(form) {        return {
             published: form && form.published ? this._versionDto(form.published) : null,
             draft: form && form.draft ? this._versionDto(form.draft) : null
         };
@@ -387,7 +421,7 @@ class ActivityIntelligenceService {
 
     _normalizeItemSettings(item) {
         const sourceSettings = item.settings && typeof item.settings === 'object' ? item.settings : {};
-        const settings = {};
+        const settings = { ...sourceSettings };
 
         if (item.allowOther !== undefined || item.allow_other !== undefined || sourceSettings.allowOther !== undefined) {
             settings.allowOther = Boolean(item.allowOther || item.allow_other || sourceSettings.allowOther);
@@ -399,6 +433,12 @@ class ActivityIntelligenceService {
         });
 
         return settings;
+    }
+
+    _extensionForMimeType(mimeType) {
+        if (mimeType === 'image/png') return '.png';
+        if (mimeType === 'image/webp') return '.webp';
+        return '.jpg';
     }
 
     _normalizeOptions(item, type) {
