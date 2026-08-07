@@ -4,14 +4,31 @@
   const Store = window.AIMStore;
   const root = document.getElementById('aim-root');
   const fieldTypes = [
+    ['section_heading', '區段標題'],
+    ['information_text', '說明文字'],
     ['short_text', '短文字'],
     ['long_text', '長文字'],
+    ['number', '數字'],
+    ['yes_no', '是／否'],
     ['single_choice', '單選'],
     ['multiple_choice', '多選'],
-    ['dropdown', '下拉選單'],
-    ['number', '數字'],
-    ['section_heading', '區段標題']
+    ['dropdown', '下拉選單']
   ];
+  const specialDesignerTypes = [
+    ['form_thumbnail', '表單縮圖'],
+    ['card_link', '名片連結']
+  ];
+  const choiceFieldTypes = ['single_choice', 'multiple_choice', 'dropdown'];
+  const fieldTypeGroups = [
+    { label: '版面元件', types: ['section_heading', 'information_text', 'form_thumbnail'] },
+    { label: '文字與數值', types: ['short_text', 'long_text', 'number'] },
+    { label: '選擇控制', types: ['yes_no', 'single_choice', 'multiple_choice', 'dropdown'] },
+    { label: '串聯元件', types: ['card_link'] }
+  ];
+  const yesNoOptions = ['是', '否'];
+  const cardLinkItemId = 'designer-card-link';
+  const formThumbnailItemId = 'designer-form-thumbnail';
+  const otherAnswerValue = '其他';
 
   let state = Store.load();
   let currentUser = null;
@@ -23,6 +40,18 @@
     dialog: null,
     drawer: null,
     toast: '',
+    fieldTypePickerOpen: false,
+    formDesignMode: 'draft',
+    formDesignDraft: null,
+    formDesignDraftDirty: false,
+    formDesignMessage: '',
+    formDesignConfirm: null,
+    formPreviewAnswers: {},
+    formPreviewCardLinked: false,
+    formPreviewCardVariant: 'default',
+    quickOtherAnswers: {},
+    quickCardLink: { linked: false, variant: 'default' },
+    cardPreviewLightboxOpen: false,
     focusQuickFirst: false,
     quickAnswers: {},
     expandedRecords: {
@@ -109,7 +138,9 @@
   }
 
   function selectedActivity() {
-    return state.activities.find(a => a.id === ui.selectedActivityId) || state.activities[0];
+    const activity = state.activities.find(a => a.id === ui.selectedActivityId) || state.activities[0];
+    if (activity) Store.normalizeFormDesignPrototype(activity);
+    return activity;
   }
 
   function render() {
@@ -162,6 +193,8 @@
       </div>
       ${renderDialog()}
       ${renderDrawer()}
+      ${renderFormDesignConfirmDialog()}
+      ${renderCardPreviewLightbox()}
       ${ui.toast ? `<div class="aim-toast" role="status">${Store.escapeHtml(ui.toast)}</div>` : ''}
     `;
   }
@@ -637,8 +670,8 @@
 
   function renderInlineRecordDetail(record, activity) {
     if (!canViewRecord(record, activity)) return '';
-    const populatedFields = activity.formFields.filter(field => field.type !== 'section_heading' && !field.retired && hasValue(record.answers[field.fieldId]));
-    const questionCards = populatedFields.map(field => renderRecordQuestionCard(field, record.answers[field.fieldId])).join('');
+    const items = snapshotRecordItems(record, activity);
+    const questionCards = items.map(item => renderRecordDetailItem(item, record)).join('');
     return `
       <div class="aim-inline-record-detail">
         <div class="aim-record-detail-tree">
@@ -657,6 +690,20 @@
     `;
   }
 
+  function renderRecordDetailItem(item, record) {
+    if (item.type === 'section_heading') return `<section class="aim-record-detail-section"><h3>${Store.escapeHtml(item.title)}</h3>${item.helperText ? `<p>${Store.escapeHtml(item.helperText)}</p>` : ''}</section>`;
+    if (item.type === 'information_text') return `<section class="aim-record-detail-info"><h3>${Store.escapeHtml(item.title)}</h3>${item.helperText ? `<p>${Store.escapeHtml(item.helperText)}</p>` : ''}</section>`;
+    if (item.type === 'form_thumbnail') return `<section class="aim-record-detail-component">${renderFormThumbnailPreview(item)}</section>`;
+    if (item.type === 'card_link') {
+      const cardLink = cardLinkForRecord(record);
+      if (!cardLink.linked) return '';
+      return `<section class="aim-record-detail-component">${renderRuntimeCardLink(item, false, cardLink, 'detail')}</section>`;
+    }
+    const value = displayAnswerValue(item, record.answers[item.fieldId], otherAnswersForRecord(record));
+    if (!hasValue(value)) return '';
+    return renderRecordQuestionCard(item, value);
+  }
+
   function renderRecordReviewActions(record, activity, context, expanded) {
     const toggle = `<button class="aim-button" data-action="toggle-record-expansion" data-context="${context}" data-id="${record.id}" aria-expanded="${expanded}" type="button">${expanded ? '收合' : '查看'}</button>`;
     if (!expanded) return `<div class="aim-record-actions">${toggle}</div>`;
@@ -665,10 +712,14 @@
   }
 
   function isChoiceField(field) {
-    return ['single_choice', 'multiple_choice', 'dropdown', 'boolean', 'checkbox', 'toggle'].includes(field.type);
+    return ['yes_no', 'single_choice', 'multiple_choice', 'dropdown', 'boolean', 'checkbox', 'toggle'].includes(field.type);
   }
 
   function quickEntryFields(activity) {
+    return publishedRecordItems(activity);
+  }
+
+  function legacyQuickEntryFields(activity) {
     const fields = activity.formFields.filter(field => field.visible && !field.retired);
     if (fields[0] && fields[0].type === 'section_heading' && fields[0].title === '基本資訊') return fields.slice(1);
     return fields;
@@ -680,23 +731,54 @@
     return fields;
   }
 
+  function publishedRecordItems(activity) {
+    const design = formDesign(activity);
+    return Store.clone(design.published.items || []).map(normalizeDesignerItem).filter(item => item.visible !== false && !item.retired && !item.removedInDraft);
+  }
+
+  function answerProducingItems(items) {
+    return (items || []).filter(item => ['short_text', 'long_text', 'number', 'yes_no', 'single_choice', 'multiple_choice', 'dropdown'].includes(item.type));
+  }
+
+  function snapshotRecordItems(record, activity) {
+    if (record && record.formPrototypeSnapshot && Array.isArray(record.formPrototypeSnapshot.items)) {
+      return record.formPrototypeSnapshot.items.map(normalizeDesignerItem);
+    }
+    return recordEditFields(activity);
+  }
+
+  function otherAnswersForRecord(record) {
+    return record && record.prototypeOtherAnswers ? record.prototypeOtherAnswers : {};
+  }
+
+  function cardLinkForRecord(record) {
+    return record && record.prototypeCardLink ? record.prototypeCardLink : { linked: false, variant: 'default' };
+  }
+
+  function displayAnswerValue(field, value, otherAnswers) {
+    if (!field || !otherAnswers || !hasValue(otherAnswers[field.fieldId])) return value;
+    if (Array.isArray(value)) return value.map(item => item === otherAnswerValue ? `${otherAnswerValue}：${otherAnswers[field.fieldId]}` : item);
+    return value === otherAnswerValue ? `${otherAnswerValue}：${otherAnswers[field.fieldId]}` : value;
+  }
+
   function recordPreview(record, activity) {
-    const fields = activity.formFields.filter(field => field.type !== 'section_heading' && !field.retired && hasValue(record.answers[field.fieldId]));
+    const fields = answerProducingItems(snapshotRecordItems(record, activity)).filter(field => hasValue(record.answers[field.fieldId]));
+    const otherAnswers = otherAnswersForRecord(record);
     const customerField = fields.find(field => field.fieldId === 'fld_customer_name') || fields.find(field => /客戶|受訪者|姓名/.test(field.title));
     const companyField = fields.find(field => field.fieldId === 'fld_company') || fields.find(field => /公司|企業|組織/.test(field.title));
     const priorityField = fields.find(field => field.fieldId === 'fld_priority') || fields.find(field => /優先/.test(field.title));
     const badgeGroups = [];
     fields.filter(field => isChoiceField(field) && field !== priorityField).forEach(field => {
-      const values = categoricalValues(record.answers[field.fieldId]);
+      const values = categoricalValues(displayAnswerValue(field, record.answers[field.fieldId], otherAnswers));
       if (values.length) badgeGroups.push({ field, values });
     });
     const textField = fields.find(field => field.type === 'long_text');
     return {
-      customer: customerField ? Store.answerText(record.answers[customerField.fieldId]) : '',
-      company: companyField ? Store.answerText(record.answers[companyField.fieldId]) : '',
-      priority: priorityField ? Store.answerText(record.answers[priorityField.fieldId]) : '',
+      customer: customerField ? Store.answerText(displayAnswerValue(customerField, record.answers[customerField.fieldId], otherAnswers)) : '',
+      company: companyField ? Store.answerText(displayAnswerValue(companyField, record.answers[companyField.fieldId], otherAnswers)) : '',
+      priority: priorityField ? Store.answerText(displayAnswerValue(priorityField, record.answers[priorityField.fieldId], otherAnswers)) : '',
       badgeGroups,
-      text: textField ? { label: textField.title, value: Store.answerText(record.answers[textField.fieldId]) } : null
+      text: textField ? { label: textField.title, value: Store.answerText(displayAnswerValue(textField, record.answers[textField.fieldId], otherAnswers)) } : null
     };
   }
 
@@ -752,99 +834,553 @@
   }
 
   function renderQuickField(field, enabled) {
-    if (field.type === 'section_heading') return `<div class="aim-answer"><h4>${Store.escapeHtml(field.title)}</h4></div>`;
+    if (field.type === 'section_heading') return `<section class="aim-runtime-section"><h3>${Store.escapeHtml(field.title)}</h3>${field.helperText ? `<p>${Store.escapeHtml(field.helperText)}</p>` : ''}</section>`;
+    if (field.type === 'information_text') return `<section class="aim-runtime-info"><h3>${Store.escapeHtml(field.title)}</h3>${field.helperText ? `<p>${Store.escapeHtml(field.helperText)}</p>` : ''}</section>`;
+    if (field.type === 'form_thumbnail') return `<section class="aim-runtime-component">${renderFormThumbnailPreview(field)}</section>`;
+    if (field.type === 'card_link') return renderRuntimeCardLink(field, enabled, ui.quickCardLink, 'quick');
     const value = ui.quickAnswers[field.fieldId];
+    const otherValue = ui.quickOtherAnswers[field.fieldId] || '';
     const label = `<label>${Store.escapeHtml(field.title)}</label>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}`;
-    if (field.type === 'long_text') return `<div class="aim-field">${label}<textarea class="aim-textarea aim-auto-grow aim-quick-input" data-field="${field.fieldId}" rows="1" ${enabled ? '' : 'disabled'}>${Store.escapeHtml(value || '')}</textarea></div>`;
-    if (field.type === 'number') return `<div class="aim-field">${label}<input class="aim-input aim-quick-input" type="number" data-field="${field.fieldId}" value="${Store.escapeHtml(value || '')}" ${enabled ? '' : 'disabled'}></div>`;
-    if (field.type === 'dropdown') return `<div class="aim-field">${label}<select class="aim-select aim-quick-input" data-field="${field.fieldId}" ${enabled ? '' : 'disabled'}>${option('', '請選擇', value || '')}${(field.options || []).map(o => option(o, o, value || '')).join('')}</select></div>`;
-    if (field.type === 'single_choice') return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${(field.options || []).map(o => `<label class="aim-checkbox"><input class="aim-quick-radio" name="quick-${field.fieldId}" data-field="${field.fieldId}" type="radio" value="${Store.escapeHtml(o)}" ${value === o ? 'checked' : ''} ${enabled ? '' : 'disabled'}> ${Store.escapeHtml(o)}</label>`).join('')}</div>`;
+    if (field.type === 'long_text') return `<div class="aim-field">${label}<textarea class="aim-textarea aim-auto-grow aim-quick-input" data-field="${field.fieldId}" rows="1" placeholder="${Store.escapeHtml(field.placeholder || '')}" ${enabled ? '' : 'disabled'}>${Store.escapeHtml(value || '')}</textarea></div>`;
+    if (field.type === 'number') return `<div class="aim-field">${label}<input class="aim-input aim-quick-input" type="number" data-field="${field.fieldId}" value="${Store.escapeHtml(value || '')}" placeholder="${Store.escapeHtml(field.placeholder || '')}" ${enabled ? '' : 'disabled'}></div>`;
+    if (field.type === 'yes_no') return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}<div class="aim-runtime-choice-list">${yesNoOptions.map(o => `<label class="aim-checkbox"><input class="aim-quick-radio" name="quick-${field.fieldId}" data-field="${field.fieldId}" type="radio" value="${Store.escapeHtml(o)}" ${value === o ? 'checked' : ''} ${enabled ? '' : 'disabled'}> ${Store.escapeHtml(o)}</label>`).join('')}</div></div>`;
+    if (field.type === 'dropdown') return `<div class="aim-field">${label}<select class="aim-select aim-quick-input" data-field="${field.fieldId}" ${enabled ? '' : 'disabled'}>${option('', '請選擇', value || '')}${(field.options || []).map(o => option(o, o, value || '')).join('')}${field.allowOther ? option(otherAnswerValue, otherAnswerValue, value || '') : ''}</select>${field.allowOther && value === otherAnswerValue ? renderOtherInput(field, 'quick', otherValue, enabled) : ''}</div>`;
+    if (field.type === 'single_choice') return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}<div class="aim-runtime-choice-list">${(field.options || []).map(o => `<label class="aim-checkbox"><input class="aim-quick-radio" name="quick-${field.fieldId}" data-field="${field.fieldId}" type="radio" value="${Store.escapeHtml(o)}" ${value === o ? 'checked' : ''} ${enabled ? '' : 'disabled'}> ${Store.escapeHtml(o)}</label>`).join('')}${field.allowOther ? `<label class="aim-checkbox"><input class="aim-quick-radio" name="quick-${field.fieldId}" data-field="${field.fieldId}" type="radio" value="${otherAnswerValue}" ${value === otherAnswerValue ? 'checked' : ''} ${enabled ? '' : 'disabled'}> ${otherAnswerValue}</label>` : ''}</div>${field.allowOther && value === otherAnswerValue ? renderOtherInput(field, 'quick', otherValue, enabled) : ''}</div>`;
     if (field.type === 'multiple_choice') {
       const values = Array.isArray(value) ? value : [];
-      return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${(field.options || []).map(o => `<label class="aim-checkbox"><input class="aim-quick-check" data-field="${field.fieldId}" type="checkbox" value="${Store.escapeHtml(o)}" ${values.includes(o) ? 'checked' : ''} ${enabled ? '' : 'disabled'}> ${Store.escapeHtml(o)}</label>`).join('')}</div>`;
+      return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}<div class="aim-runtime-choice-list">${(field.options || []).map(o => `<label class="aim-checkbox"><input class="aim-quick-check" data-field="${field.fieldId}" type="checkbox" value="${Store.escapeHtml(o)}" ${values.includes(o) ? 'checked' : ''} ${enabled ? '' : 'disabled'}> ${Store.escapeHtml(o)}</label>`).join('')}${field.allowOther ? `<label class="aim-checkbox"><input class="aim-quick-check" data-field="${field.fieldId}" type="checkbox" value="${otherAnswerValue}" ${values.includes(otherAnswerValue) ? 'checked' : ''} ${enabled ? '' : 'disabled'}> ${otherAnswerValue}</label>` : ''}</div>${field.allowOther && values.includes(otherAnswerValue) ? renderOtherInput(field, 'quick', otherValue, enabled) : ''}</div>`;
     }
-    return `<div class="aim-field">${label}<input class="aim-input aim-quick-input" data-field="${field.fieldId}" value="${Store.escapeHtml(value || '')}" ${enabled ? '' : 'disabled'}></div>`;
+    return `<div class="aim-field">${label}<input class="aim-input aim-quick-input" data-field="${field.fieldId}" value="${Store.escapeHtml(value || '')}" placeholder="${Store.escapeHtml(field.placeholder || '')}" ${enabled ? '' : 'disabled'}></div>`;
+  }
+
+  function renderOtherInput(field, context, value, enabled) {
+    const klass = context === 'quick' ? 'aim-quick-other-input' : 'aim-record-other-input';
+    return `<input class="aim-input aim-runtime-other-input ${klass}" data-field="${Store.escapeHtml(field.fieldId)}" value="${Store.escapeHtml(value || '')}" placeholder="請輸入其他內容" ${enabled ? '' : 'disabled'}>`;
+  }
+
+  function renderRuntimeCardLink(item, enabled, cardLink, context) {
+    const linked = cardLink && cardLink.linked;
+    if (!linked) {
+      return `
+        <section class="aim-form-card-link aim-runtime-card-link">
+          <h4>${Store.escapeHtml(item.title || '名片連結')}</h4>
+          <p>${Store.escapeHtml(item.helperText || '可選擇名片與本次紀錄建立預覽關聯。')}</p>
+          ${enabled ? `<button class="aim-button aim-button-soft" data-action="prototype-link-card" data-context="${context}" type="button">選擇名片</button>` : '<span class="aim-small">未連結名片</span>'}
+        </section>
+      `;
+    }
+    return `
+      <section class="aim-form-card-link aim-form-card-link-preview aim-runtime-card-link">
+        <h4>${Store.escapeHtml(item.title || '名片連結')}</h4>
+        <button class="aim-form-card-link-thumb" data-action="open-card-lightbox" type="button" aria-label="開啟名片預覽">
+          ${renderBusinessCardVisual('thumb')}
+        </button>
+        ${enabled ? `<div class="aim-form-card-link-actions"><button class="aim-button aim-button-soft" data-action="prototype-link-card" data-context="${context}" type="button">更換</button><button class="aim-button" data-action="prototype-unlink-card" data-context="${context}" type="button">移除</button></div>` : ''}
+      </section>
+    `;
+  }
+
+  function formDesign(activity) {
+    Store.normalizeFormDesignPrototype(activity);
+    activity.formDesignPrototype.published.items = (activity.formDesignPrototype.published.items || []).map(normalizeDesignerItem);
+    activity.formDesignPrototype.draft.items = (activity.formDesignPrototype.draft.items || []).map(normalizeDesignerItem);
+    return activity.formDesignPrototype;
+  }
+
+  function normalizeDesignerItem(item) {
+    if (!item || item.type === 'card_link') return makeCardLinkItem(item || {});
+    if (item.type === 'form_thumbnail') return makeFormThumbnailItem(item || {});
+    const type = item.type || 'short_text';
+    const fieldId = item.fieldId || item.itemId || Store.uid('fld');
+    return {
+      itemId: item.itemId || fieldId,
+      fieldId,
+      category: ['section_heading', 'information_text'].includes(type) ? 'layout_component' : 'field',
+      type,
+      title: item.title || fieldTypeLabel(type),
+      helperText: item.helperText || '',
+      placeholder: item.placeholder || '',
+      options: Array.isArray(item.options) ? item.options.slice() : [],
+      allowOther: Boolean(item.allowOther),
+      visible: item.visible !== false,
+      retired: Boolean(item.retired),
+      removedInDraft: Boolean(item.removedInDraft)
+    };
+  }
+
+  function makeCardLinkItem(extra) {
+    return {
+      itemId: cardLinkItemId,
+      fieldId: cardLinkItemId,
+      category: 'integration_component',
+      type: 'card_link',
+      title: '名片連結',
+      helperText: '以名片縮圖建立預覽關聯，不產生表單答案。',
+      placeholder: '',
+      options: [],
+      allowOther: false,
+      visible: true,
+      retired: false,
+      removedInDraft: false,
+      ...(extra || {})
+    };
+  }
+
+  function makeFormThumbnailItem(extra) {
+    return {
+      itemId: formThumbnailItemId,
+      fieldId: formThumbnailItemId,
+      category: 'layout_component',
+      type: 'form_thumbnail',
+      title: '表單縮圖',
+      helperText: '',
+      placeholder: '',
+      options: [],
+      allowOther: false,
+      visible: true,
+      retired: false,
+      removedInDraft: false,
+      thumbnailTitle: '活動表單封面',
+      altText: '活動表單示意縮圖',
+      thumbnailVariant: 'line',
+      ...(extra || {})
+    };
+  }
+
+  function designerItemKey(item) {
+    return item && (item.itemId || item.fieldId);
+  }
+
+  function designerItemSignature(item) {
+    const normalized = normalizeDesignerItem(item || {});
+    return JSON.stringify({
+      category: normalized.category,
+      type: normalized.type,
+      title: normalized.title || '',
+      helperText: normalized.helperText || '',
+      placeholder: normalized.placeholder || '',
+      options: normalized.options || [],
+      allowOther: Boolean(normalized.allowOther),
+      visible: normalized.visible !== false,
+      retired: Boolean(normalized.retired),
+      removedInDraft: Boolean(normalized.removedInDraft),
+      thumbnailTitle: normalized.thumbnailTitle || '',
+      altText: normalized.altText || '',
+      thumbnailVariant: normalized.thumbnailVariant || ''
+    });
+  }
+
+  function designerItemsEqual(a, b) {
+    return designerItemSignature(a) === designerItemSignature(b);
+  }
+
+  function syncSelectedDraft(activity) {
+    const design = formDesign(activity);
+    if (ui.formDesignMode !== 'draft') {
+      ui.formDesignDraft = null;
+      ui.formDesignDraftDirty = false;
+      return null;
+    }
+    const selected = design.draft.items.find(f => designerItemKey(f) === ui.selectedFieldId) || design.draft.items[0] || null;
+    if (!selected) {
+      ui.selectedFieldId = null;
+      ui.formDesignDraft = null;
+      ui.formDesignDraftDirty = false;
+      return null;
+    }
+    if (!ui.formDesignDraft || ui.formDesignDraft.fieldId !== selected.fieldId) {
+      ui.selectedFieldId = selected.fieldId;
+      ui.formDesignDraft = Store.clone(selected);
+      ui.formDesignDraftDirty = false;
+    }
+    return selected;
+  }
+
+  function previewItems(activity) {
+    const design = formDesign(activity);
+    const source = ui.formDesignMode === 'published' ? design.published.items : design.draft.items;
+    return source.map(item => {
+      if (ui.formDesignMode === 'draft' && ui.formDesignDraft && designerItemKey(ui.formDesignDraft) === designerItemKey(item)) return normalizeDesignerItem(ui.formDesignDraft);
+      return item;
+    });
   }
 
   function renderCardLinkPlaceholder() {
-    return `
-      <div class="aim-card-link-placeholder">
-        <div class="aim-card-link-placeholder-content">
-          <div class="aim-card-link-placeholder-header">
-            <span class="aim-card-link-placeholder-title">名片連結</span>
-            <span class="aim-card-link-placeholder-status">尚未啟用</span>
-          </div>
-          <p class="aim-card-link-placeholder-desc">未來將表單紀錄與名片 Card ID 串聯，目前尚未啟用。</p>
-        </div>
-      </div>
-    `;
+    return '';
   }
 
   function renderForm(activity) {
     const status = Store.activityStatus(activity);
-    const selected = activity.formFields.find(f => f.fieldId === ui.selectedFieldId) || activity.formFields[0];
-    if (selected) ui.selectedFieldId = selected.fieldId;
+    const design = formDesign(activity);
+    const selected = syncSelectedDraft(activity);
+    const draftChanged = formDesignChangeSummary(design).total > 0;
     return `
-      ${status.key === 'open' ? '<div class="aim-warning">此活動表單正在開放中，調整欄位會影響後續紀錄填寫。</div>' : ''}
+      ${status.key === 'open' ? '<div class="aim-warning">表單目前開放中；本頁僅調整 Designer Prototype，不影響既有填寫資料。</div>' : ''}
       <div class="aim-form-designer">
         <div class="aim-panel">
-          ${renderCardLinkPlaceholder()}
-          <div class="aim-panel-title-row"><h2>表單欄位設計</h2><div class="aim-actions"><select class="aim-select" id="aim-add-field-type">${fieldTypes.map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select><button class="aim-button aim-button-primary" data-action="add-field" type="button">新增欄位</button></div></div>
-          <div class="aim-field-list">${activity.formFields.map((field, index) => renderFieldRow(activity, field, index)).join('')}</div>
-          ${selected ? renderFieldEditor(activity, selected) : ''}
+          <div class="aim-prototype-notice">目前為表單設計 Prototype；正式發布尚未連動紀錄表單。</div>
+          <div class="aim-panel-title-row">
+            <h2>表單設計</h2>
+            <div class="aim-form-mode-tabs" role="tablist" aria-label="表單版本">
+              <button class="aim-mode-tab" role="tab" aria-selected="${ui.formDesignMode === 'published'}" data-action="form-design-mode" data-mode="published" type="button">正式版本</button>
+              <button class="aim-mode-tab" role="tab" aria-selected="${ui.formDesignMode === 'draft'}" data-action="form-design-mode" data-mode="draft" type="button">編輯草稿</button>
+            </div>
+          </div>
+          ${ui.formDesignMode === 'published' ? renderPublishedDesignerWorkspace(design) : renderDraftDesignerWorkspace(activity, design, selected, draftChanged)}
         </div>
-        <aside class="aim-panel"><h2>填寫預覽</h2><div class="aim-preview">${activity.formFields.filter(f => f.visible && !f.retired).map(renderPreviewField).join('') || '<div class="aim-empty">尚未建立可顯示欄位。</div>'}</div></aside>
+        <aside class="aim-panel aim-form-preview-panel">
+          <div class="aim-panel-title-row"><h2>${ui.formDesignMode === 'published' ? '正式版本預覽' : '草稿版本預覽'}</h2><span class="aim-pill">${ui.formDesignMode === 'published' ? 'Read-only' : 'Draft'}</span></div>
+          <div class="aim-preview">${renderFormPreview(activity)}</div>
+        </aside>
       </div>
     `;
   }
 
-  function renderFieldRow(activity, field, index) {
-    const hasAnswers = fieldHasAnswers(activity.id, field.fieldId);
-    const isSelected = ui.selectedFieldId === field.fieldId;
+  function renderPublishedDesignerWorkspace(design) {
+    const publishedAt = design.published.publishedAt ? Store.formatDateTime(design.published.publishedAt) : '尚未發布';
     return `
-      <div class="aim-field-row${isSelected ? ' aim-field-row-selected' : ''}" aria-selected="${isSelected}">
-        <button class="aim-field-row-select" type="button" data-action="select-field" data-id="${field.fieldId}">
-          <div class="aim-field-row-title"><span>${Store.escapeHtml(field.title || '未命名欄位')}</span><span class="aim-pill">${fieldTypeLabel(field.type)}</span>${field.visible ? '' : '<span class="aim-pill aim-pill-hidden">已隱藏</span>'}${field.retired ? '<span class="aim-pill aim-pill-retired">已停用</span>' : ''}${hasAnswers ? '<span class="aim-pill">已有回答</span>' : ''}</div>
-        </button>
-        <div class="aim-field-row-actions"><button class="aim-button aim-icon-button" data-action="move-field" data-id="${field.fieldId}" data-dir="-1" ${index === 0 ? 'disabled' : ''} type="button">^</button><button class="aim-button aim-icon-button" data-action="move-field" data-id="${field.fieldId}" data-dir="1" ${index === activity.formFields.length - 1 ? 'disabled' : ''} type="button">v</button></div>
+      <section class="aim-form-version-summary">
+        <div><span>最後發布</span><strong>${Store.escapeHtml(publishedAt)}</strong></div>
+        <div><span>正式項目</span><strong>${design.published.items.length}</strong></div>
+      </section>
+      <div class="aim-field-list aim-designer-item-list aim-designer-item-list-readonly">
+        ${design.published.items.map((item, index) => renderDesignerItemCard(item, index, design.published.items, { mode: 'published' })).join('') || '<div class="aim-empty">尚未發布正式版本。</div>'}
       </div>
     `;
+  }
+
+  function renderDraftDesignerWorkspace(activity, design, selected, draftChanged) {
+    return `
+      <div class="aim-draft-actions">
+        <button class="aim-button aim-button-primary" data-action="toggle-field-picker" type="button">新增項目</button>
+        <button class="aim-button" data-action="open-discard-draft" type="button" ${draftChanged ? '' : 'disabled'}>放棄草稿</button>
+        <button class="aim-button aim-button-primary" data-action="open-publish-form" type="button">發布表單</button>
+      </div>
+      ${renderDraftChangeSummary(design)}
+      ${ui.fieldTypePickerOpen ? renderFieldTypePicker(design) : ''}
+      <div class="aim-field-list aim-designer-item-list">
+        ${design.draft.items.map((item, index) => renderDesignerItemCard(item, index, design.draft.items, { mode: 'draft', activity, selected })).join('') || '<div class="aim-empty">尚未建立項目。</div>'}
+      </div>
+    `;
+  }
+
+  function renderFieldTypePicker(design) {
+    return `
+      <div class="aim-field-type-picker" aria-label="新增欄位類型">
+        ${fieldTypeGroups.map(group => `
+          <section class="aim-field-type-group">
+            <h3>${Store.escapeHtml(group.label)}</h3>
+            <div class="aim-field-type-options">
+              ${group.types.map(type => renderFieldTypeOption(type, design)).join('')}
+            </div>
+          </section>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function renderFieldTypeOption(type, design) {
+    const isCardLink = type === 'card_link';
+    const isThumbnail = type === 'form_thumbnail';
+    const disabled = (isCardLink || isThumbnail) && design.draft.items.some(item => item.type === type);
+    const label = fieldTypeLabel(type);
+    const desc = {
+      section_heading: '分隔表單段落',
+      information_text: '顯示填寫提示',
+      short_text: '單行文字回答',
+      long_text: '多行備註回答',
+      number: '數字輸入預覽',
+      yes_no: '固定是／否選擇',
+      single_choice: '單一選項回答',
+      multiple_choice: '多個選項回答',
+      dropdown: '下拉選單回答',
+      form_thumbnail: disabled ? '已加入此表單' : '在指定位置顯示活動表單縮圖',
+      card_link: disabled ? '已加入此表單' : '在指定位置顯示名片縮圖'
+    }[type];
+    return `<button class="aim-field-type-option" data-action="add-designer-item" data-type="${Store.escapeHtml(type)}" ${disabled ? 'disabled' : ''} type="button"><strong>${Store.escapeHtml(label)}</strong><span>${Store.escapeHtml(desc)}</span></button>`;
+  }
+
+  function renderDesignerItemCard(item, index, list, context) {
+    const key = designerItemKey(item);
+    const isDraft = context.mode === 'draft';
+    const isSelected = isDraft && key === ui.selectedFieldId;
+    const status = isDraft ? draftItemStatus(formDesign(context.activity), item) : { key: 'published', label: '正式使用中' };
+    const summary = designerItemSummary(item);
+    const classes = [
+      'aim-form-field-card',
+      'aim-designer-item-card',
+      `aim-designer-item-${status.key}`,
+      item.removedInDraft ? 'aim-designer-item-removed' : '',
+      item.visible === false ? 'aim-designer-item-hidden' : '',
+      isSelected ? 'aim-form-field-card-selected aim-designer-item-editing' : '',
+      context.mode === 'published' ? 'aim-designer-item-readonly' : ''
+    ].filter(Boolean).join(' ');
+    return `
+      <article class="${classes}" aria-selected="${isSelected}" data-designer-item="${Store.escapeHtml(key)}">
+        <button class="aim-field-row-select" type="button" data-action="${isDraft ? 'select-field' : 'noop'}" data-id="${Store.escapeHtml(key)}">
+          <span class="aim-form-field-card-type">${Store.escapeHtml(fieldTypeLabel(item.type))}</span>
+          <strong>${Store.escapeHtml(item.title || '未命名項目')}</strong>
+          ${summary ? `<small>${Store.escapeHtml(summary)}</small>` : ''}
+          <span class="aim-status-row">${renderDraftStatusBadges(status, isSelected && ui.formDesignDraftDirty)}</span>
+        </button>
+        ${isSelected ? renderDesignerToolbar(item, index, list) : ''}
+        ${isSelected ? renderFieldEditor(context.activity, ui.formDesignDraft || item) : ''}
+      </article>
+    `;
+  }
+
+  function renderDesignerToolbar(item, index, list) {
+    const key = designerItemKey(item);
+    const removable = !item.removedInDraft;
+    const duplicate = !['card_link', 'form_thumbnail'].includes(item.type);
+    return `
+      <div class="aim-designer-toolbar" aria-label="項目操作">
+        <button class="aim-button aim-button-soft" data-action="move-field" data-id="${Store.escapeHtml(key)}" data-dir="-1" ${index === 0 ? 'disabled' : ''} type="button" aria-label="上移 ${Store.escapeHtml(item.title)}">↑ 上移</button>
+        <button class="aim-button aim-button-soft" data-action="move-field" data-id="${Store.escapeHtml(key)}" data-dir="1" ${index === list.length - 1 ? 'disabled' : ''} type="button" aria-label="下移 ${Store.escapeHtml(item.title)}">↓ 下移</button>
+        ${duplicate ? `<button class="aim-button aim-button-soft" data-action="copy-field" data-id="${Store.escapeHtml(key)}" type="button" aria-label="複製 ${Store.escapeHtml(item.title)}">⧉ 複製</button>` : ''}
+        <button class="aim-button aim-button-soft" data-action="toggle-field" data-id="${Store.escapeHtml(key)}" ${item.removedInDraft ? 'disabled' : ''} type="button">${item.visible === false ? '○ 顯示' : '◐ 隱藏'}</button>
+        ${item.removedInDraft ? `<button class="aim-button aim-button-soft" data-action="restore-field" data-id="${Store.escapeHtml(key)}" type="button">↩ 復原</button>` : `<button class="aim-button aim-button-danger-soft" data-action="delete-field" data-id="${Store.escapeHtml(key)}" type="button">${removable ? '× 移除' : '移除'}</button>`}
+      </div>
+    `;
+  }
+
+  function renderDraftStatusBadges(status, editing) {
+    const badges = [`<span class="aim-designer-status aim-designer-status-${status.key}">${Store.escapeHtml(status.label)}</span>`];
+    if (editing) badges.push('<span class="aim-designer-status aim-designer-status-editing">編輯中</span>');
+    return badges.join('');
   }
 
   function renderFieldEditor(activity, field) {
-    const hasAnswers = fieldHasAnswers(activity.id, field.fieldId);
-    const optionTypes = ['single_choice', 'multiple_choice', 'dropdown'];
+    if (field.type === 'card_link') return renderCardLinkEditor(field);
+    if (field.type === 'form_thumbnail') return renderFormThumbnailEditor(field);
+    const canHavePlaceholder = ['short_text', 'long_text', 'number'].includes(field.type);
     return `
       <div class="aim-field-editor" data-editor-field="${field.fieldId}">
         <div class="aim-field-editor-head">
-          <h3>欄位設定</h3>
+          <div>
+            <h3>項目設定</h3>
+            <p>${ui.formDesignDraftDirty ? '尚未套用的變更只會顯示在草稿預覽。' : '目前顯示草稿已套用設定。'}</p>
+          </div>
           <div class="aim-field-editor-status">
-            ${field.retired ? '<span class="aim-pill aim-pill-retired">已停用</span>' : ''}
-            ${!field.visible && !field.retired ? '<span class="aim-pill aim-pill-hidden">已隱藏</span>' : ''}
-            ${hasAnswers ? '<span class="aim-pill">已有回答</span>' : ''}
+            ${ui.formDesignDraftDirty ? '<span class="aim-pill aim-pill-high">未套用</span>' : '<span class="aim-pill">已套用</span>'}
           </div>
         </div>
         <div class="aim-field-editor-body">
+          ${ui.formDesignMessage ? `<div class="aim-field-editor-message" role="alert">${Store.escapeHtml(ui.formDesignMessage)}</div>` : ''}
           <div class="aim-editor-grid">
-            <div class="aim-field"><label>標題</label><textarea class="aim-textarea aim-auto-grow aim-field-design-input" id="aim-field-title" data-design-field="title" rows="1" ${field.retired ? 'disabled' : ''}>${Store.escapeHtml(field.title)}</textarea></div>
-            <div class="aim-field"><label>類型</label><select class="aim-select" id="aim-field-type" ${field.retired || hasAnswers ? 'disabled' : ''}>${fieldTypes.map(([k, l]) => option(k, l, field.type)).join('')}</select></div>
+            <div class="aim-field"><label for="aim-field-title">標題</label><textarea class="aim-textarea aim-auto-grow aim-field-design-input" id="aim-field-title" data-design-field="title" rows="1" ${field.retired ? 'disabled' : ''}>${Store.escapeHtml(field.title)}</textarea></div>
+            <div class="aim-field"><label for="aim-field-type">類型</label><select class="aim-select" id="aim-field-type" ${field.retired ? 'disabled' : ''}>${fieldTypes.map(([k, l]) => option(k, l, field.type)).join('')}</select></div>
           </div>
-          <div class="aim-field"><label>說明文字</label><textarea class="aim-textarea aim-auto-grow aim-field-design-input" id="aim-field-helper" data-design-field="helperText" rows="1" ${field.retired ? 'disabled' : ''}>${Store.escapeHtml(field.helperText || '')}</textarea></div>
-          ${optionTypes.includes(field.type) ? `<div class="aim-field"><label>選項，每行一個</label><textarea class="aim-textarea aim-auto-grow aim-field-design-input" id="aim-field-options" data-design-field="options" rows="2" ${field.retired ? 'disabled' : ''}>${Store.escapeHtml((field.options || []).join('\n'))}</textarea></div>` : ''}
+          <div class="aim-field"><label for="aim-field-helper">${field.type === 'information_text' ? '描述內容' : '說明文字'}</label><textarea class="aim-textarea aim-auto-grow aim-field-design-input" id="aim-field-helper" data-design-field="helperText" rows="2" ${field.retired ? 'disabled' : ''}>${Store.escapeHtml(field.helperText || '')}</textarea></div>
+          ${canHavePlaceholder ? `<div class="aim-field"><label for="aim-field-placeholder">提示文字</label><input class="aim-input aim-field-design-input" id="aim-field-placeholder" data-design-field="placeholder" value="${Store.escapeHtml(field.placeholder || '')}" ${field.retired ? 'disabled' : ''}></div>` : ''}
+          ${choiceFieldTypes.includes(field.type) ? renderOptionEditor(field) : ''}
+          ${choiceFieldTypes.includes(field.type) ? `<label class="aim-checkbox aim-form-other-toggle"><input id="aim-field-allow-other" type="checkbox" ${field.allowOther ? 'checked' : ''} ${field.retired ? 'disabled' : ''}> 允許填寫「其他」補充答案</label>` : ''}
         </div>
-        <div class="aim-field-editor-actions"><button class="aim-button" data-action="toggle-field" data-id="${field.fieldId}" ${field.retired ? 'disabled' : ''} type="button">${field.visible ? '隱藏欄位' : '顯示欄位'}</button><button class="aim-button" data-action="copy-field" data-id="${field.fieldId}" type="button">複製欄位</button><button class="aim-button aim-button-danger" data-action="${hasAnswers ? 'retire-field' : 'delete-field'}" data-id="${field.fieldId}" ${field.retired ? 'disabled' : ''} type="button">${hasAnswers ? '停用欄位' : '刪除欄位'}</button></div>
+        <div class="aim-field-editor-actions">
+          <button class="aim-button" data-action="cancel-field-draft" type="button" ${!ui.formDesignDraftDirty ? 'disabled' : ''}>取消修改</button>
+          <button class="aim-button aim-button-primary" data-action="apply-field-draft" type="button" ${field.retired ? 'disabled' : ''}>套用至草稿</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderCardLinkEditor(field) {
+    return `
+      <div class="aim-field-editor">
+        <div class="aim-field-editor-head">
+          <div><h3>名片串聯設定</h3><p>此元件只在 Designer 預覽中呈現，不產生表單答案。</p></div>
+          <div class="aim-field-editor-status">${ui.formDesignDraftDirty ? '<span class="aim-pill aim-pill-high">未套用</span>' : '<span class="aim-pill">已套用</span>'}</div>
+        </div>
+        <div class="aim-field-editor-body">
+          ${ui.formDesignMessage ? `<div class="aim-field-editor-message" role="alert">${Store.escapeHtml(ui.formDesignMessage)}</div>` : ''}
+          <div class="aim-field"><label for="aim-field-title">標題</label><input class="aim-input aim-field-design-input" id="aim-field-title" data-design-field="title" value="${Store.escapeHtml(field.title)}"></div>
+          <div class="aim-preview-field aim-preview-info"><h4>預覽行為</h4><p>連結後只顯示名片縮圖，可點擊放大預覽。</p></div>
+        </div>
+        <div class="aim-field-editor-actions">
+          <button class="aim-button" data-action="cancel-field-draft" type="button" ${!ui.formDesignDraftDirty ? 'disabled' : ''}>取消修改</button>
+          <button class="aim-button aim-button-primary" data-action="apply-field-draft" type="button">套用至草稿</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderFormThumbnailEditor(field) {
+    return `
+      <div class="aim-field-editor">
+        <div class="aim-field-editor-head">
+          <div><h3>表單縮圖設定</h3><p>縮圖只屬於 Designer Prototype，不會寫入紀錄答案。</p></div>
+          <div class="aim-field-editor-status">${ui.formDesignDraftDirty ? '<span class="aim-pill aim-pill-high">未套用</span>' : '<span class="aim-pill">已套用</span>'}</div>
+        </div>
+        <div class="aim-field-editor-body">
+          ${ui.formDesignMessage ? `<div class="aim-field-editor-message" role="alert">${Store.escapeHtml(ui.formDesignMessage)}</div>` : ''}
+          <div class="aim-editor-grid">
+            <div class="aim-field"><label for="aim-field-thumbnail-title">縮圖標題（選填）</label><input class="aim-input aim-field-design-input" id="aim-field-thumbnail-title" data-design-field="thumbnailTitle" value="${Store.escapeHtml(field.thumbnailTitle || '')}"></div>
+            <div class="aim-field"><label for="aim-field-thumbnail-alt">替代文字（選填）</label><input class="aim-input aim-field-design-input" id="aim-field-thumbnail-alt" data-design-field="altText" value="${Store.escapeHtml(field.altText || '')}"></div>
+          </div>
+          ${renderFormThumbnailVisual(field)}
+        </div>
+        <div class="aim-field-editor-actions">
+          <button class="aim-button aim-button-soft" data-action="cycle-thumbnail" type="button">更換範例圖</button>
+          <button class="aim-button aim-button-danger-soft" data-action="delete-field" data-id="${Store.escapeHtml(designerItemKey(field))}" type="button">移除縮圖</button>
+          <button class="aim-button" data-action="cancel-field-draft" type="button" ${!ui.formDesignDraftDirty ? 'disabled' : ''}>取消修改</button>
+          <button class="aim-button aim-button-primary" data-action="apply-field-draft" type="button">套用至草稿</button>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderOptionEditor(field) {
+    const options = field.options.length ? field.options : [''];
+    return `
+      <div class="aim-option-list" aria-label="選項編輯">
+        ${options.map((value, index) => `
+          <div class="aim-option-row">
+            <input class="aim-input aim-option-input" data-option-index="${index}" value="${Store.escapeHtml(value)}" aria-label="選項 ${index + 1}">
+            <div class="aim-option-actions">
+              <button class="aim-button aim-icon-button" data-action="move-option" data-index="${index}" data-dir="-1" ${index === 0 ? 'disabled' : ''} aria-label="上移選項" title="上移" type="button">↑</button>
+              <button class="aim-button aim-icon-button" data-action="move-option" data-index="${index}" data-dir="1" ${index === options.length - 1 ? 'disabled' : ''} aria-label="下移選項" title="下移" type="button">↓</button>
+              <button class="aim-button aim-icon-button aim-button-danger" data-action="delete-option" data-index="${index}" ${options.length <= 1 ? 'disabled' : ''} aria-label="刪除選項" title="刪除" type="button">×</button>
+            </div>
+          </div>
+        `).join('')}
+        <button class="aim-button aim-button-soft" data-action="add-option" type="button">新增選項</button>
+      </div>
+    `;
+  }
+
+  function renderFormPreview(activity) {
+    const items = previewItems(activity).filter(item => item.visible !== false && !item.retired && !item.removedInDraft);
+    const parts = items.map(renderPreviewItem);
+    return parts.join('') || '<div class="aim-empty">尚未建立可顯示欄位。</div>';
+  }
+
+  function renderPreviewItem(item) {
+    if (item.type === 'card_link') return renderFormCardLinkPreview(item);
+    if (item.type === 'form_thumbnail') return renderFormThumbnailPreview(item);
+    return renderPreviewField(item);
+  }
+
+  function renderFormThumbnailPreview(item) {
+    return `
+      <section class="aim-form-thumbnail-preview" aria-label="${Store.escapeHtml(item.altText || item.thumbnailTitle || '表單縮圖')}">
+        ${renderFormThumbnailVisual(item)}
+        ${item.thumbnailTitle ? `<h4>${Store.escapeHtml(item.thumbnailTitle)}</h4>` : ''}
+      </section>
+    `;
+  }
+
+  function renderFormThumbnailVisual(item) {
+    const variant = item.thumbnailVariant || 'line';
+    return `
+      <div class="aim-form-thumbnail-visual aim-form-thumbnail-${Store.escapeHtml(variant)}" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
       </div>
     `;
   }
 
   function renderPreviewField(field) {
-    if (field.type === 'section_heading') return `<div class="aim-preview-field"><h4>${Store.escapeHtml(field.title)}</h4></div>`;
+    if (field.type === 'section_heading') {
+      return `<section class="aim-preview-section"><h4>${Store.escapeHtml(field.title)}</h4>${field.helperText ? `<p>${Store.escapeHtml(field.helperText)}</p>` : ''}</section>`;
+    }
+    if (field.type === 'information_text') {
+      return `<div class="aim-preview-field aim-preview-info"><h4>${Store.escapeHtml(field.title)}</h4>${field.helperText ? `<p>${Store.escapeHtml(field.helperText)}</p>` : ''}</div>`;
+    }
     const label = `<h4>${Store.escapeHtml(field.title)}</h4>${field.helperText ? `<p>${Store.escapeHtml(field.helperText)}</p>` : ''}`;
-    if (field.type === 'long_text') return `<div class="aim-preview-field">${label}<textarea class="aim-textarea" disabled></textarea></div>`;
-    if (field.type === 'number') return `<div class="aim-preview-field">${label}<input class="aim-input" type="number" disabled></div>`;
-    if (field.type === 'dropdown') return `<div class="aim-preview-field">${label}<select class="aim-select" disabled><option>請選擇...</option>${(field.options || []).map(o => `<option>${Store.escapeHtml(o)}</option>`).join('')}</select></div>`;
-    if (field.type === 'single_choice' || field.type === 'multiple_choice') return `<div class="aim-preview-field">${label}<div class="aim-preview-options">${(field.options || []).map(o => `<label><input type="${field.type === 'single_choice' ? 'radio' : 'checkbox'}" disabled> ${Store.escapeHtml(o)}</label>`).join('')}</div></div>`;
-    return `<div class="aim-preview-field">${label}<input class="aim-input" disabled></div>`;
+    const answer = ui.formPreviewAnswers[field.fieldId] || {};
+    if (field.type === 'long_text') return `<div class="aim-preview-field">${label}<textarea class="aim-textarea aim-form-preview-control" data-preview-field="${field.fieldId}" placeholder="${Store.escapeHtml(field.placeholder || '')}">${Store.escapeHtml(answer.value || '')}</textarea></div>`;
+    if (field.type === 'number') return `<div class="aim-preview-field">${label}<input class="aim-input aim-form-preview-control" data-preview-field="${field.fieldId}" type="number" value="${Store.escapeHtml(answer.value || '')}" placeholder="${Store.escapeHtml(field.placeholder || '')}"></div>`;
+    if (field.type === 'yes_no') return `<div class="aim-preview-field">${label}<div class="aim-preview-options">${yesNoOptions.map(o => `<label><input class="aim-form-preview-radio" name="preview-${field.fieldId}" data-preview-field="${field.fieldId}" type="radio" value="${Store.escapeHtml(o)}" ${answer.value === o ? 'checked' : ''}> ${Store.escapeHtml(o)}</label>`).join('')}</div></div>`;
+    if (field.type === 'single_choice') {
+      const options = field.options || [];
+      return `<div class="aim-preview-field">${label}<div class="aim-preview-options">${options.map(o => `<label><input class="aim-form-preview-radio" name="preview-${field.fieldId}" data-preview-field="${field.fieldId}" type="radio" value="${Store.escapeHtml(o)}" ${answer.value === o ? 'checked' : ''}> ${Store.escapeHtml(o)}</label>`).join('')}${field.allowOther ? `<label><input class="aim-form-preview-radio" name="preview-${field.fieldId}" data-preview-field="${field.fieldId}" type="radio" value="__other" ${answer.other ? 'checked' : ''}> 其他</label>` : ''}</div>${field.allowOther && answer.other ? `<input class="aim-input aim-form-preview-other" data-preview-other="${field.fieldId}" value="${Store.escapeHtml(answer.otherText || '')}" placeholder="請輸入其他答案">` : ''}</div>`;
+    }
+    if (field.type === 'multiple_choice') {
+      const values = new Set(answer.values || []);
+      return `<div class="aim-preview-field">${label}<div class="aim-preview-options">${(field.options || []).map(o => `<label><input class="aim-form-preview-check" data-preview-field="${field.fieldId}" type="checkbox" value="${Store.escapeHtml(o)}" ${values.has(o) ? 'checked' : ''}> ${Store.escapeHtml(o)}</label>`).join('')}${field.allowOther ? `<label><input class="aim-form-preview-check" data-preview-field="${field.fieldId}" type="checkbox" value="__other" ${answer.other ? 'checked' : ''}> 其他</label>` : ''}</div>${field.allowOther && answer.other ? `<input class="aim-input aim-form-preview-other" data-preview-other="${field.fieldId}" value="${Store.escapeHtml(answer.otherText || '')}" placeholder="請輸入其他答案">` : ''}</div>`;
+    }
+    if (field.type === 'dropdown') {
+      const otherSelected = answer.other;
+      return `<div class="aim-preview-field">${label}<select class="aim-select aim-form-preview-select" data-preview-field="${field.fieldId}"><option value="">請選擇</option>${(field.options || []).map(o => `<option value="${Store.escapeHtml(o)}" ${answer.value === o ? 'selected' : ''}>${Store.escapeHtml(o)}</option>`).join('')}${field.allowOther ? `<option value="__other" ${otherSelected ? 'selected' : ''}>其他</option>` : ''}</select>${field.allowOther && otherSelected ? `<input class="aim-input aim-form-preview-other" data-preview-other="${field.fieldId}" value="${Store.escapeHtml(answer.otherText || '')}" placeholder="請輸入其他答案">` : ''}</div>`;
+    }
+    return `<div class="aim-preview-field">${label}<input class="aim-input aim-form-preview-control" data-preview-field="${field.fieldId}" value="${Store.escapeHtml(answer.value || '')}" placeholder="${Store.escapeHtml(field.placeholder || '')}"></div>`;
+  }
+
+  function renderFormCardLinkPreview() {
+    if (!ui.formPreviewCardLinked) {
+      return `
+        <section class="aim-form-card-link">
+          <h4>名片連結</h4>
+          <p>可選擇名片與本次紀錄建立預覽關聯。</p>
+          <button class="aim-button aim-button-soft" data-action="mock-link-card" type="button">選擇名片</button>
+        </section>
+      `;
+    }
+    return `
+      <section class="aim-form-card-link aim-form-card-link-preview">
+        <button class="aim-form-card-link-thumb" data-action="open-card-lightbox" type="button" aria-label="開啟名片預覽">
+          ${renderBusinessCardVisual('thumb')}
+        </button>
+        <div class="aim-form-card-link-actions">
+          <button class="aim-button aim-button-soft" data-action="mock-link-card" type="button">更換</button>
+          <button class="aim-button" data-action="mock-unlink-card" type="button">移除</button>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderBusinessCardVisual(size) {
+    return `
+      <div class="aim-mock-card aim-mock-card-${size || 'thumb'}" aria-hidden="true">
+        <span class="aim-mock-card-logo"></span>
+        <span class="aim-mock-card-line aim-mock-card-line-wide"></span>
+        <span class="aim-mock-card-line"></span>
+        <span class="aim-mock-card-bar"></span>
+        <span class="aim-mock-card-line aim-mock-card-line-short"></span>
+        <span class="aim-mock-card-line aim-mock-card-line-wide"></span>
+      </div>
+    `;
+  }
+
+  function renderCardPreviewLightbox() {
+    if (!ui.cardPreviewLightboxOpen) return '';
+    return `
+      <div class="aim-dialog-backdrop aim-card-preview-lightbox" data-action="close-card-lightbox">
+        <div class="aim-dialog aim-card-preview-dialog" role="dialog" aria-modal="true" aria-label="名片預覽" data-action="noop">
+          <div class="aim-dialog-head"><h2>名片預覽</h2><button class="aim-button aim-icon-button" data-action="close-card-lightbox" type="button" aria-label="關閉">×</button></div>
+          <div class="aim-dialog-body">${renderBusinessCardVisual('large')}</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderFormDesignConfirmDialog() {
+    if (!ui.formDesignConfirm) return '';
+    if (ui.formDesignConfirm.type === 'discard') {
+      return `
+        <div class="aim-dialog-backdrop aim-form-confirm-backdrop" data-action="close-form-design-dialog"></div>
+        <section class="aim-dialog aim-form-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="aim-discard-draft-title">
+          <div class="aim-dialog-head"><h2 id="aim-discard-draft-title">放棄草稿</h2><button class="aim-button aim-icon-button" data-action="close-form-design-dialog" type="button" aria-label="關閉">×</button></div>
+          <div class="aim-dialog-body"><p>這會將編輯草稿還原為目前正式版本，草稿新增、修改與預計移除都會被清除。</p></div>
+          <div class="aim-dialog-foot"><button class="aim-button" data-action="close-form-design-dialog" type="button">取消</button><button class="aim-button aim-button-danger-soft" data-action="confirm-discard-draft" type="button">放棄草稿</button></div>
+        </section>
+      `;
+    }
+    const summary = ui.formDesignConfirm.summary || { added: 0, modified: 0, removed: 0 };
+    return `
+      <div class="aim-dialog-backdrop aim-form-confirm-backdrop" data-action="close-form-design-dialog"></div>
+      <section class="aim-dialog aim-form-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="aim-publish-form-title">
+        <div class="aim-dialog-head"><h2 id="aim-publish-form-title">發布表單</h2><button class="aim-button aim-icon-button" data-action="close-form-design-dialog" type="button" aria-label="關閉">×</button></div>
+        <div class="aim-dialog-body">
+          <p>發布後會更新 Designer 的正式版本快照，但不會連動紀錄表單或既有資料。</p>
+          <div class="aim-publish-summary">
+            <div><span>新增</span><strong>${summary.added}</strong></div>
+            <div><span>修改</span><strong>${summary.modified}</strong></div>
+            <div><span>移除</span><strong>${summary.removed}</strong></div>
+          </div>
+        </div>
+        <div class="aim-dialog-foot"><button class="aim-button" data-action="close-form-design-dialog" type="button">取消</button><button class="aim-button aim-button-primary" data-action="confirm-publish-form" type="button">發布表單</button></div>
+      </section>
+    `;
   }
 
   function renderRecords(activity, forcedScope) {
@@ -1036,13 +1572,16 @@
     if (!canOpenRecordDrawer(record, activity)) return '';
     const editing = record.status !== 'void';
     const working = ui.drawer.working || Store.clone(record.answers);
+    const workingOther = ui.drawer.workingOther || Store.clone(otherAnswersForRecord(record));
+    const workingCardLink = ui.drawer.workingCardLink || Store.clone(cardLinkForRecord(record));
+    const items = snapshotRecordItems(record, activity);
     return `
       <div class="aim-drawer-backdrop" data-action="close-drawer"></div>
       <aside class="aim-drawer" role="dialog" aria-modal="true">
         <div class="aim-drawer-head"><div><h2>編輯紀錄</h2>${editing ? '' : '<span class="aim-pill aim-pill-void">已作廢</span>'}</div><button class="aim-button aim-icon-button" data-action="close-drawer" type="button" aria-label="關閉紀錄">x</button></div>
         <div class="aim-drawer-body">
           <dl class="aim-definition-list" style="margin-bottom:14px"><dt>建立者</dt><dd>${Store.escapeHtml(record.createdByDisplayName)}</dd><dt>建立時間</dt><dd>${Store.formatDateTime(record.createdAt)}</dd><dt>最近更新者</dt><dd>${Store.escapeHtml(record.updatedByDisplayName)}</dd><dt>最近更新</dt><dd>${Store.formatDateTime(record.updatedAt)}</dd>${editing ? '' : '<dt>狀態</dt><dd><span class="aim-pill aim-pill-void">已作廢</span></dd>'}</dl>
-          <div class="aim-answer-list">${recordEditFields(activity).map(field => renderAnswer(field, working, editing)).join('')}</div>
+          <div class="aim-answer-list">${items.map(field => renderAnswer(field, working, editing, workingOther, workingCardLink)).join('')}</div>
         </div>
         <div class="aim-drawer-foot aim-record-drawer-foot">
           ${editing && canVoidRecord(record, activity) ? `<button class="aim-button aim-button-danger" data-action="void-record" data-id="${record.id}" type="button">作廢紀錄</button>` : ''}
@@ -1053,33 +1592,58 @@
     `;
   }
 
-  function renderAnswer(field, answers, editable) {
-    if (field.type === 'section_heading') return `<div class="aim-answer"><h4>${Store.escapeHtml(field.title)}</h4></div>`;
+  function renderAnswer(field, answers, editable, otherAnswers, cardLink) {
+    if (field.type === 'section_heading') return `<section class="aim-runtime-section"><h3>${Store.escapeHtml(field.title)}</h3>${field.helperText ? `<p>${Store.escapeHtml(field.helperText)}</p>` : ''}</section>`;
+    if (field.type === 'information_text') return `<section class="aim-runtime-info"><h3>${Store.escapeHtml(field.title)}</h3>${field.helperText ? `<p>${Store.escapeHtml(field.helperText)}</p>` : ''}</section>`;
+    if (field.type === 'form_thumbnail') return `<section class="aim-runtime-component">${renderFormThumbnailPreview(field)}</section>`;
+    if (field.type === 'card_link') return renderRuntimeCardLink(field, editable, cardLink, 'drawer');
     const value = answers[field.fieldId];
-    if (!editable) return `<div class="aim-answer"><h4>${Store.escapeHtml(field.title)} ${field.retired ? '<span class="aim-pill aim-pill-retired">已停用</span>' : ''}</h4><div>${Store.escapeHtml(Store.answerText(value) || '-')}</div></div>`;
+    const otherValue = otherAnswers && otherAnswers[field.fieldId] ? otherAnswers[field.fieldId] : '';
+    if (!editable) return `<div class="aim-answer"><h4>${Store.escapeHtml(field.title)} ${field.retired ? '<span class="aim-pill aim-pill-retired">已停用</span>' : ''}</h4><div>${Store.escapeHtml(Store.answerText(displayAnswerValue(field, value, otherAnswers)) || '-')}</div></div>`;
     if (field.retired) return '';
-    if (field.type === 'long_text') return `<div class="aim-field"><label>${Store.escapeHtml(field.title)}</label><textarea class="aim-textarea aim-auto-grow aim-record-input" data-field="${field.fieldId}" rows="1">${Store.escapeHtml(value || '')}</textarea></div>`;
-    if (field.type === 'number') return `<div class="aim-field"><label>${Store.escapeHtml(field.title)}</label><input class="aim-input aim-record-input" type="number" data-field="${field.fieldId}" value="${Store.escapeHtml(value || '')}"></div>`;
-    if (field.type === 'dropdown') return `<div class="aim-field"><label>${Store.escapeHtml(field.title)}</label><select class="aim-select aim-record-input" data-field="${field.fieldId}">${option('', '請選擇', value || '')}${(field.options || []).map(o => option(o, o, value || '')).join('')}</select></div>`;
-    if (field.type === 'single_choice') return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${(field.options || []).map(o => `<label class="aim-checkbox"><input class="aim-record-radio" name="${field.fieldId}" data-field="${field.fieldId}" type="radio" value="${Store.escapeHtml(o)}" ${value === o ? 'checked' : ''}> ${Store.escapeHtml(o)}</label>`).join('')}</div>`;
+    const label = `<label>${Store.escapeHtml(field.title)}</label>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}`;
+    if (field.type === 'long_text') return `<div class="aim-field">${label}<textarea class="aim-textarea aim-auto-grow aim-record-input" data-field="${field.fieldId}" rows="1" placeholder="${Store.escapeHtml(field.placeholder || '')}">${Store.escapeHtml(value || '')}</textarea></div>`;
+    if (field.type === 'number') return `<div class="aim-field">${label}<input class="aim-input aim-record-input" type="number" data-field="${field.fieldId}" value="${Store.escapeHtml(value || '')}" placeholder="${Store.escapeHtml(field.placeholder || '')}"></div>`;
+    if (field.type === 'yes_no') return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}<div class="aim-runtime-choice-list">${yesNoOptions.map(o => `<label class="aim-checkbox"><input class="aim-record-radio" name="${field.fieldId}" data-field="${field.fieldId}" type="radio" value="${Store.escapeHtml(o)}" ${value === o ? 'checked' : ''}> ${Store.escapeHtml(o)}</label>`).join('')}</div></div>`;
+    if (field.type === 'dropdown') return `<div class="aim-field">${label}<select class="aim-select aim-record-input" data-field="${field.fieldId}">${option('', '請選擇', value || '')}${(field.options || []).map(o => option(o, o, value || '')).join('')}${field.allowOther ? option(otherAnswerValue, otherAnswerValue, value || '') : ''}</select>${field.allowOther && value === otherAnswerValue ? renderOtherInput(field, 'record', otherValue, true) : ''}</div>`;
+    if (field.type === 'single_choice') return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}<div class="aim-runtime-choice-list">${(field.options || []).map(o => `<label class="aim-checkbox"><input class="aim-record-radio" name="${field.fieldId}" data-field="${field.fieldId}" type="radio" value="${Store.escapeHtml(o)}" ${value === o ? 'checked' : ''}> ${Store.escapeHtml(o)}</label>`).join('')}${field.allowOther ? `<label class="aim-checkbox"><input class="aim-record-radio" name="${field.fieldId}" data-field="${field.fieldId}" type="radio" value="${otherAnswerValue}" ${value === otherAnswerValue ? 'checked' : ''}> ${otherAnswerValue}</label>` : ''}</div>${field.allowOther && value === otherAnswerValue ? renderOtherInput(field, 'record', otherValue, true) : ''}</div>`;
     if (field.type === 'multiple_choice') {
       const values = Array.isArray(value) ? value : [];
-      return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${(field.options || []).map(o => `<label class="aim-checkbox"><input class="aim-record-check" data-field="${field.fieldId}" type="checkbox" value="${Store.escapeHtml(o)}" ${values.includes(o) ? 'checked' : ''}> ${Store.escapeHtml(o)}</label>`).join('')}</div>`;
+      return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}<div class="aim-runtime-choice-list">${(field.options || []).map(o => `<label class="aim-checkbox"><input class="aim-record-check" data-field="${field.fieldId}" type="checkbox" value="${Store.escapeHtml(o)}" ${values.includes(o) ? 'checked' : ''}> ${Store.escapeHtml(o)}</label>`).join('')}${field.allowOther ? `<label class="aim-checkbox"><input class="aim-record-check" data-field="${field.fieldId}" type="checkbox" value="${otherAnswerValue}" ${values.includes(otherAnswerValue) ? 'checked' : ''}> ${otherAnswerValue}</label>` : ''}</div>${field.allowOther && values.includes(otherAnswerValue) ? renderOtherInput(field, 'record', otherValue, true) : ''}</div>`;
     }
-    return `<div class="aim-field"><label>${Store.escapeHtml(field.title)}</label><input class="aim-input aim-record-input" data-field="${field.fieldId}" value="${Store.escapeHtml(value || '')}"></div>`;
+    return `<div class="aim-field">${label}<input class="aim-input aim-record-input" data-field="${field.fieldId}" value="${Store.escapeHtml(value || '')}" placeholder="${Store.escapeHtml(field.placeholder || '')}"></div>`;
   }
 
   root.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && ui.formDesignConfirm) {
+      ui.formDesignConfirm = null;
+      render();
+      return;
+    }
+    if (event.key === 'Escape' && ui.cardPreviewLightboxOpen) {
+      ui.cardPreviewLightboxOpen = false;
+      render();
+      return;
+    }
     const activityLink = event.target.closest('.aim-activity-link');
     if (!activityLink || !['Enter', ' '].includes(event.key)) return;
     event.preventDefault();
     activityLink.click();
   });
 
+  window.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    if (ui.formDesignConfirm) ui.formDesignConfirm = null;
+    else if (ui.cardPreviewLightboxOpen) ui.cardPreviewLightboxOpen = false;
+    else return;
+    render();
+  });
+
   root.addEventListener('click', event => {
     const el = event.target.closest('[data-action]');
     if (!el) return;
     const action = el.dataset.action;
+    if (handleFormDesignAction(action, el, event)) return;
     if (action === 'all' && canManageActivities()) { ui.view = 'overview'; ui.tab = 'overview'; }
     if (action === 'open' && canManageActivities()) { ui.selectedActivityId = el.dataset.id; ui.view = 'workspace'; ui.tab = 'overview'; }
     if (action === 'recorder-open' && isRecorder()) { ui.selectedActivityId = el.dataset.id; ui.view = 'workspace'; ui.tab = 'records'; ui.records.scope = 'entry'; }
@@ -1124,7 +1688,14 @@
     if (action === 'toggle-all-records') toggleAllRecordExpansions(el.dataset.context);
     if (action === 'edit-record') {
       const record = state.records.find(r => r.id === el.dataset.id);
-      if (canOpenRecordDrawer(record, selectedActivity())) ui.drawer = { type: 'record', mode: record.status === 'void' ? 'void' : 'edit', id: record.id, working: Store.clone(record.answers) };
+      if (canOpenRecordDrawer(record, selectedActivity())) ui.drawer = {
+        type: 'record',
+        mode: record.status === 'void' ? 'void' : 'edit',
+        id: record.id,
+        working: Store.clone(record.answers || {}),
+        workingOther: Store.clone(otherAnswersForRecord(record)),
+        workingCardLink: Store.clone(cardLinkForRecord(record))
+      };
     }
     if (action === 'save-record') saveRecord();
     if (action === 'void-record') voidRecord(el.dataset.id);
@@ -1135,6 +1706,277 @@
     save();
     render();
   });
+
+  function handleFormDesignAction(action, el, event) {
+    if (action === 'noop') return true;
+    if (action === 'close-form-design-dialog') {
+      ui.formDesignConfirm = null;
+      render();
+      return true;
+    }
+    if (action === 'confirm-discard-draft') {
+      discardDesignerDraft();
+      return true;
+    }
+    if (action === 'confirm-publish-form') {
+      publishDesignerDraft();
+      return true;
+    }
+    if (action === 'close-card-lightbox') {
+      ui.cardPreviewLightboxOpen = false;
+      render();
+      return true;
+    }
+    if (action === 'open-card-lightbox') {
+      ui.cardPreviewLightboxOpen = true;
+      render();
+      return true;
+    }
+    if (action === 'mock-link-card') {
+      ui.formPreviewCardLinked = true;
+      refreshFormPreview();
+      return true;
+    }
+    if (action === 'mock-unlink-card') {
+      ui.formPreviewCardLinked = false;
+      ui.cardPreviewLightboxOpen = false;
+      refreshFormPreview();
+      return true;
+    }
+    if (action === 'prototype-link-card') {
+      setPrototypeCardLink(el.dataset.context, true);
+      render();
+      return true;
+    }
+    if (action === 'prototype-unlink-card') {
+      setPrototypeCardLink(el.dataset.context, false);
+      render();
+      return true;
+    }
+    if (!canDesignForm()) return false;
+    if (action === 'form-design-mode') {
+      if (blockDirtyDesignerAction()) return true;
+      ui.formDesignMode = el.dataset.mode === 'published' ? 'published' : 'draft';
+      ui.fieldTypePickerOpen = false;
+      ui.formDesignMessage = '';
+      render();
+      return true;
+    }
+    if (action === 'toggle-field-picker') {
+      ui.fieldTypePickerOpen = !ui.fieldTypePickerOpen;
+      render();
+      return true;
+    }
+    if (action === 'add-designer-item') {
+      if (blockDirtyDesignerAction()) return true;
+      addDesignerItem(el.dataset.type);
+      save();
+      render();
+      return true;
+    }
+    if (action === 'open-discard-draft') {
+      if (blockDirtyDesignerAction()) return true;
+      openDiscardDraftDialog();
+      render();
+      return true;
+    }
+    if (action === 'open-publish-form') {
+      if (blockDirtyDesignerAction()) return true;
+      openPublishFormDialog();
+      render();
+      return true;
+    }
+    if (action === 'add-field-type' || action === 'add-field') {
+      if (blockDirtyDesignerAction()) return true;
+      addDesignerItem(el.dataset.type || 'short_text');
+      save();
+      render();
+      return true;
+    }
+    if (action === 'select-field') {
+      if (blockDirtyDesignerAction()) return true;
+      selectDesignerField(el.dataset.id);
+      render();
+      return true;
+    }
+    if (action === 'move-field') {
+      if (blockDirtyDesignerAction()) return true;
+      moveField(el.dataset.id, Number(el.dataset.dir));
+      save();
+      render();
+      return true;
+    }
+    if (action === 'toggle-field') {
+      if (blockDirtyDesignerAction()) return true;
+      toggleField(el.dataset.id);
+      save();
+      render();
+      return true;
+    }
+    if (action === 'copy-field') {
+      if (blockDirtyDesignerAction()) return true;
+      copyField(el.dataset.id);
+      save();
+      render();
+      return true;
+    }
+    if (action === 'delete-field') {
+      if (blockDirtyDesignerAction()) return true;
+      deleteField(el.dataset.id);
+      save();
+      render();
+      return true;
+    }
+    if (action === 'restore-field') {
+      if (blockDirtyDesignerAction()) return true;
+      restoreDesignerItem(el.dataset.id);
+      save();
+      render();
+      return true;
+    }
+    if (action === 'retire-field') {
+      if (blockDirtyDesignerAction()) return true;
+      deleteField(el.dataset.id);
+      save();
+      render();
+      return true;
+    }
+    if (action === 'apply-field-draft') {
+      applyFieldDraft();
+      return true;
+    }
+    if (action === 'cancel-field-draft') {
+      cancelFieldDraft();
+      return true;
+    }
+    if (action === 'add-option') {
+      mutateDraftOptions(options => { options.push(`選項 ${options.length + 1}`); });
+      render();
+      return true;
+    }
+    if (action === 'delete-option') {
+      mutateDraftOptions(options => { options.splice(Number(el.dataset.index), 1); });
+      render();
+      return true;
+    }
+    if (action === 'move-option') {
+      mutateDraftOptions(options => {
+        const index = Number(el.dataset.index);
+        const next = index + Number(el.dataset.dir);
+        if (index < 0 || next < 0 || next >= options.length) return;
+        const [value] = options.splice(index, 1);
+        options.splice(next, 0, value);
+      });
+      render();
+      return true;
+    }
+    if (action === 'cycle-thumbnail') {
+      cycleThumbnailVariant();
+      refreshFormPreview();
+      render();
+      return true;
+    }
+    return false;
+  }
+
+  function blockDirtyDesignerAction() {
+    if (!ui.formDesignDraftDirty) return false;
+    ui.formDesignMessage = '請先套用至草稿或取消目前修改。';
+    toast('請先套用至草稿或取消目前修改。');
+    render();
+    return true;
+  }
+
+  function selectDesignerField(fieldId) {
+    const activity = selectedActivity();
+    const field = formDesign(activity).draft.items.find(f => designerItemKey(f) === fieldId);
+    if (!field) return;
+    ui.selectedFieldId = designerItemKey(field);
+    ui.formDesignDraft = Store.clone(field);
+    ui.formDesignDraftDirty = false;
+    ui.formDesignMessage = '';
+  }
+
+  function updateFormDesignDraft(patch) {
+    if (!ui.formDesignDraft) return;
+    const next = { ...ui.formDesignDraft, ...patch };
+    if (next.type === 'card_link' || next.type === 'form_thumbnail') {
+      next.options = [];
+      next.allowOther = false;
+      ui.formDesignDraft = normalizeDesignerItem(next);
+      ui.formDesignDraftDirty = true;
+      ui.formDesignMessage = '';
+      return;
+    }
+    if (!choiceFieldTypes.includes(next.type)) {
+      next.allowOther = false;
+      next.options = next.type === 'yes_no' ? yesNoOptions.slice() : [];
+    } else if (!Array.isArray(next.options) || !next.options.length) {
+      next.options = ['選項 1', '選項 2'];
+    }
+    ui.formDesignDraft = normalizeDesignerItem(next);
+    ui.formDesignDraftDirty = true;
+    ui.formDesignMessage = '';
+  }
+
+  function mutateDraftOptions(mutator) {
+    if (!ui.formDesignDraft || !choiceFieldTypes.includes(ui.formDesignDraft.type)) return;
+    const options = (ui.formDesignDraft.options || []).slice();
+    mutator(options);
+    updateFormDesignDraft({ options: options.length ? options : [''] });
+  }
+
+  function applyFieldDraft() {
+    const activity = selectedActivity();
+    const design = formDesign(activity);
+    const draft = normalizeDesignerItem(ui.formDesignDraft || {});
+    const title = draft.title.trim();
+    if (!title) {
+      ui.formDesignMessage = '項目標題不可空白。';
+      render();
+      return;
+    }
+    draft.title = title;
+    draft.helperText = draft.helperText.trim();
+    draft.placeholder = draft.placeholder.trim();
+    if (choiceFieldTypes.includes(draft.type)) {
+      draft.options = draft.options.map(value => value.trim()).filter(Boolean);
+      if (!draft.options.length) {
+        ui.formDesignMessage = '請至少保留一個非空白選項。';
+        render();
+        return;
+      }
+    } else {
+      draft.options = draft.type === 'yes_no' ? yesNoOptions.slice() : [];
+      draft.allowOther = false;
+    }
+    const index = design.draft.items.findIndex(f => designerItemKey(f) === designerItemKey(draft));
+    if (index < 0) return;
+    design.draft.items[index] = draft;
+    ui.formDesignDraft = Store.clone(draft);
+    ui.formDesignDraftDirty = false;
+    ui.formDesignMessage = '';
+    Store.touch(activity, currentUser);
+    save();
+    render();
+  }
+
+  function cancelFieldDraft() {
+    const activity = selectedActivity();
+    const field = formDesign(activity).draft.items.find(f => designerItemKey(f) === ui.selectedFieldId);
+    if (!field) return;
+    ui.formDesignDraft = Store.clone(field);
+    ui.formDesignDraftDirty = false;
+    ui.formDesignMessage = '';
+    render();
+  }
+
+  function refreshFormPreview() {
+    const preview = document.querySelector('.aim-preview');
+    if (!preview) return;
+    preview.innerHTML = renderFormPreview(selectedActivity());
+    bindFormPreviewControls();
+  }
 
   function bindInputs() {
     const preview = document.getElementById('aim-role-preview');
@@ -1153,8 +1995,8 @@
     bindSettingsField('aim-settings-ex-start', 'exhibitionStart', 'change');
     bindSettingsField('aim-settings-ex-end', 'exhibitionEnd', 'change');
     bindSettingsField('aim-settings-description', 'description');
-    bind('aim-field-type', value => updateField({ type: value, options: ['single_choice', 'multiple_choice', 'dropdown'].includes(value) ? ['選項 1', '選項 2'] : [] }), 'change');
     bindFormDesignTextareas();
+    bindFormPreviewControls();
     bind('aim-record-q', value => { ui.records.q = value; });
     bind('aim-record-recorder', value => { ui.records.recorder = value; }, 'change');
     bind('aim-record-priority', value => { ui.records.priority = value; }, 'change');
@@ -1173,22 +2015,38 @@
     bind('aim-analytics-end', value => { ui.analytics.end = value; }, 'change');
     bind('aim-analytics-recorder', value => { ui.analytics.recorder = value; }, 'change');
     bind('aim-analytics-q', value => { ui.analytics.q = value; });
-    document.querySelectorAll('.aim-record-input').forEach(node => node.addEventListener('input', () => setWorking(node.dataset.field, node.value)));
-    document.querySelectorAll('.aim-record-radio').forEach(node => node.addEventListener('change', () => { if (node.checked) setWorking(node.dataset.field, node.value); }));
+    document.querySelectorAll('.aim-record-input').forEach(node => {
+      const eventName = node.tagName === 'SELECT' ? 'change' : 'input';
+      node.addEventListener(eventName, () => {
+        setWorking(node.dataset.field, node.value);
+        if (node.tagName === 'SELECT') render();
+      });
+    });
+    document.querySelectorAll('.aim-record-radio').forEach(node => node.addEventListener('change', () => { if (node.checked) { setWorking(node.dataset.field, node.value); render(); } }));
     document.querySelectorAll('.aim-record-check').forEach(node => node.addEventListener('change', () => {
       const list = new Set(ui.drawer.working[node.dataset.field] || []);
       if (node.checked) list.add(node.value);
       else list.delete(node.value);
       setWorking(node.dataset.field, Array.from(list));
+      render();
     }));
-    document.querySelectorAll('.aim-quick-input').forEach(node => node.addEventListener('input', () => setQuickAnswer(node.dataset.field, node.value)));
-    document.querySelectorAll('.aim-quick-radio').forEach(node => node.addEventListener('change', () => { if (node.checked) setQuickAnswer(node.dataset.field, node.value); }));
+    document.querySelectorAll('.aim-record-other-input').forEach(node => node.addEventListener('input', () => setWorkingOther(node.dataset.field, node.value)));
+    document.querySelectorAll('.aim-quick-input').forEach(node => {
+      const eventName = node.tagName === 'SELECT' ? 'change' : 'input';
+      node.addEventListener(eventName, () => {
+        setQuickAnswer(node.dataset.field, node.value);
+        if (node.tagName === 'SELECT') render();
+      });
+    });
+    document.querySelectorAll('.aim-quick-radio').forEach(node => node.addEventListener('change', () => { if (node.checked) { setQuickAnswer(node.dataset.field, node.value); render(); } }));
     document.querySelectorAll('.aim-quick-check').forEach(node => node.addEventListener('change', () => {
       const list = new Set(ui.quickAnswers[node.dataset.field] || []);
       if (node.checked) list.add(node.value);
       else list.delete(node.value);
       setQuickAnswer(node.dataset.field, Array.from(list));
+      render();
     }));
+    document.querySelectorAll('.aim-quick-other-input').forEach(node => node.addEventListener('input', () => setQuickOtherAnswer(node.dataset.field, node.value)));
     bindAutoGrowingTextareas();
     initFormDesignAutoGrow();
     fitRecordPreviewBadges();
@@ -1218,16 +2076,76 @@
       const designField = textarea.dataset.designField;
       if (!designField) return;
       const handleInput = () => {
-        autoGrowTextarea(textarea);
-        if (designField === 'options') {
-          updateField({ options: textarea.value.split('\n').map(v => v.trim()).filter(Boolean) });
-        } else {
-          updateField({ [designField]: textarea.value });
-        }
-        save();
+        if (textarea.classList.contains('aim-auto-grow')) autoGrowTextarea(textarea);
+        updateFormDesignDraft({ [designField]: textarea.value });
+        refreshFormPreview();
       };
       textarea.addEventListener('input', handleInput);
-      textarea.addEventListener('change', handleInput);
+    });
+    const type = document.getElementById('aim-field-type');
+    if (type) type.addEventListener('change', () => {
+      updateFormDesignDraft({ type: type.value });
+      render();
+    });
+    const allowOther = document.getElementById('aim-field-allow-other');
+    if (allowOther) allowOther.addEventListener('change', () => {
+      updateFormDesignDraft({ allowOther: allowOther.checked });
+      refreshFormPreview();
+    });
+    document.querySelectorAll('.aim-option-input').forEach(input => {
+      input.addEventListener('input', () => {
+        const options = (ui.formDesignDraft && ui.formDesignDraft.options ? ui.formDesignDraft.options : []).slice();
+        options[Number(input.dataset.optionIndex)] = input.value;
+        updateFormDesignDraft({ options });
+        refreshFormPreview();
+      });
+    });
+  }
+
+  function bindFormPreviewControls() {
+    document.querySelectorAll('.aim-form-preview-control').forEach(node => {
+      node.addEventListener('input', () => {
+        ui.formPreviewAnswers[node.dataset.previewField] = { value: node.value };
+      });
+    });
+    document.querySelectorAll('.aim-form-preview-radio').forEach(node => {
+      node.addEventListener('change', () => {
+        if (!node.checked) return;
+        const fieldId = node.dataset.previewField;
+        if (node.value === '__other') ui.formPreviewAnswers[fieldId] = { other: true, otherText: '' };
+        else ui.formPreviewAnswers[fieldId] = { value: node.value };
+        refreshFormPreview();
+      });
+    });
+    document.querySelectorAll('.aim-form-preview-check').forEach(node => {
+      node.addEventListener('change', () => {
+        const fieldId = node.dataset.previewField;
+        const current = ui.formPreviewAnswers[fieldId] || {};
+        if (node.value === '__other') {
+          current.other = node.checked;
+          if (!node.checked) current.otherText = '';
+        } else {
+          const values = new Set(current.values || []);
+          if (node.checked) values.add(node.value);
+          else values.delete(node.value);
+          current.values = Array.from(values);
+        }
+        ui.formPreviewAnswers[fieldId] = current;
+        refreshFormPreview();
+      });
+    });
+    document.querySelectorAll('.aim-form-preview-select').forEach(node => {
+      node.addEventListener('change', () => {
+        const fieldId = node.dataset.previewField;
+        ui.formPreviewAnswers[fieldId] = node.value === '__other' ? { other: true, otherText: '' } : { value: node.value };
+        refreshFormPreview();
+      });
+    });
+    document.querySelectorAll('.aim-form-preview-other').forEach(node => {
+      node.addEventListener('input', () => {
+        const fieldId = node.dataset.previewOther;
+        ui.formPreviewAnswers[fieldId] = { ...(ui.formPreviewAnswers[fieldId] || {}), other: true, otherText: node.value };
+      });
     });
   }
 
@@ -1534,7 +2452,7 @@
   }
 
   function recordCoverage(record, activity) {
-    const fields = activity.formFields.filter(f => f.type !== 'section_heading' && !f.retired);
+    const fields = answerProducingItems(snapshotRecordItems(record, activity)).filter(f => !f.retired);
     const answered = fields.filter(f => hasValue(record.answers[f.fieldId])).length;
     return { answered, total: fields.length, percent: fields.length ? Math.round(answered / fields.length * 100) : 0 };
   }
@@ -1631,6 +2549,7 @@
       exhibitionEnd: d.exhibitionEnd || '',
       description: d.description || '',
       formFields: Store.clone(source ? source.formFields : Store.defaultFields()),
+      formDesignPrototype: Store.clone(source ? formDesign(source) : Store.formDesignFromFormFields(Store.defaultFields())),
       createdByUserId: currentUser.userId,
       createdByDisplayName: currentUser.displayName,
       createdAt: Store.nowStamp(),
@@ -1638,7 +2557,10 @@
       updatedByDisplayName: currentUser.displayName,
       updatedAt: Store.nowStamp()
     };
-    if (source) activity.formFields = activity.formFields.map(f => ({ ...f, fieldId: Store.uid('fld') }));
+    if (source) {
+      activity.formFields = activity.formFields.map(f => ({ ...f, fieldId: Store.uid('fld') }));
+      rekeyFormDesignPrototype(activity.formDesignPrototype);
+    }
     state.activities.push(activity);
     ui.dialog = null;
     ui.selectedActivityId = activity.id;
@@ -1676,67 +2598,262 @@
     return '';
   }
 
-  function addField() {
+  function formDesignChangeSummary(design) {
+    const publishedMap = new Map(design.published.items.map(item => [designerItemKey(item), item]));
+    let added = 0;
+    let modified = 0;
+    let removed = 0;
+    const addedItems = [];
+    const modifiedItems = [];
+    const removedItems = [];
+    design.draft.items.forEach(item => {
+      const key = designerItemKey(item);
+      const published = publishedMap.get(key);
+      if (item.removedInDraft && published) {
+        removed += 1;
+        removedItems.push(item);
+      } else if (!published) {
+        added += 1;
+        addedItems.push(item);
+      } else if (!designerItemsEqual(item, published)) {
+        modified += 1;
+        modifiedItems.push(item);
+      }
+    });
+    return { added, modified, removed, total: added + modified + removed, addedItems, modifiedItems, removedItems };
+  }
+
+  function renderDraftChangeSummary(design) {
+    const summary = formDesignChangeSummary(design);
+    const groups = [
+      ['新增未發布', summary.addedItems],
+      ['有未發布變更', summary.modifiedItems],
+      ['發布後將移除', summary.removedItems]
+    ];
+    return `
+      <section class="aim-draft-summary">
+        <div>
+          <strong>草稿有 ${summary.total} 項尚未發布的變更</strong>
+          <p>新增 ${summary.added}｜修改 ${summary.modified}｜預計移除 ${summary.removed}</p>
+        </div>
+        <div class="aim-draft-summary-groups">
+          ${groups.map(([label, items]) => `
+            <div class="aim-draft-summary-group">
+              <span>${Store.escapeHtml(label)}</span>
+              <strong>${items.length}</strong>
+            </div>
+          `).join('')}
+        </div>
+      </section>
+    `;
+  }
+
+  function draftItemStatus(design, item) {
+    const published = design.published.items.find(entry => designerItemKey(entry) === designerItemKey(item));
+    if (item.removedInDraft && published) return { key: 'removed', label: '草稿中移除' };
+    if (item.visible === false) return { key: 'hidden', label: '已隱藏' };
+    if (!published) return { key: 'new', label: '新增未發布' };
+    if (!designerItemsEqual(item, published)) return { key: 'modified', label: '有未發布變更' };
+    return { key: 'active', label: '正式使用中' };
+  }
+
+  function designerItemSummary(item) {
+    if (item.type === 'card_link') return 'Preview-only；不寫入紀錄答案';
+    if (item.type === 'form_thumbnail') return item.thumbnailTitle || item.altText || '16:9 表單縮圖';
+    if (choiceFieldTypes.includes(item.type) && item.options.length) return item.options.join('、');
+    return item.helperText || item.placeholder || '';
+  }
+
+  function invalidDesignerChoiceItem(items) {
+    return (items || []).find(item => choiceFieldTypes.includes(item.type) && !item.removedInDraft && (item.options || []).some(value => !String(value || '').trim()));
+  }
+
+  function openDiscardDraftDialog() {
+    const design = formDesign(selectedActivity());
+    if (!formDesignChangeSummary(design).total) return toast('草稿沒有尚未發布的變更。');
+    ui.formDesignConfirm = { type: 'discard' };
+  }
+
+  function openPublishFormDialog() {
+    const design = formDesign(selectedActivity());
+    const invalid = invalidDesignerChoiceItem(design.draft.items);
+    if (invalid) {
+      ui.selectedFieldId = designerItemKey(invalid);
+      ui.formDesignDraft = Store.clone(invalid);
+      ui.formDesignMessage = '請先移除空白選項，才能發布表單。';
+      return;
+    }
+    ui.formDesignConfirm = { type: 'publish', summary: formDesignChangeSummary(design) };
+  }
+
+  function discardDesignerDraft() {
     const activity = selectedActivity();
-    const type = document.getElementById('aim-add-field-type').value;
-    const field = { fieldId: Store.uid('fld'), type, title: fieldTypeLabel(type), helperText: '', options: ['single_choice', 'multiple_choice', 'dropdown'].includes(type) ? ['選項 1', '選項 2'] : [], visible: true, retired: false };
-    activity.formFields.push(field);
-    ui.selectedFieldId = field.fieldId;
+    const design = formDesign(activity);
+    design.draft.items = Store.clone(design.published.items);
+    ui.formDesignConfirm = null;
+    ui.formDesignDraftDirty = false;
+    ui.formDesignMessage = '';
+    ui.selectedFieldId = design.draft.items[0] && designerItemKey(design.draft.items[0]);
+    ui.formDesignDraft = design.draft.items[0] ? Store.clone(design.draft.items[0]) : null;
     Store.touch(activity, currentUser);
-    toast('已新增欄位。');
+    save();
+    render();
+  }
+
+  function publishDesignerDraft() {
+    const activity = selectedActivity();
+    const design = formDesign(activity);
+    const validItems = design.draft.items
+      .filter(item => !item.removedInDraft)
+      .map(item => ({ ...normalizeDesignerItem(item), removedInDraft: false }));
+    design.published.items = Store.clone(validItems);
+    design.published.publishedAt = Store.nowStamp();
+    design.draft.items = Store.clone(validItems);
+    ui.formDesignConfirm = null;
+    ui.formDesignDraftDirty = false;
+    ui.formDesignMessage = '';
+    ui.formDesignMode = 'published';
+    ui.selectedFieldId = design.draft.items[0] && designerItemKey(design.draft.items[0]);
+    ui.formDesignDraft = design.draft.items[0] ? Store.clone(design.draft.items[0]) : null;
+    Store.touch(activity, currentUser);
+    save();
+    render();
+  }
+
+  function cycleThumbnailVariant() {
+    if (!ui.formDesignDraft || ui.formDesignDraft.type !== 'form_thumbnail') return;
+    const variants = ['line', 'grid', 'stage'];
+    const index = variants.indexOf(ui.formDesignDraft.thumbnailVariant || 'line');
+    updateFormDesignDraft({ thumbnailVariant: variants[(index + 1) % variants.length] });
+  }
+
+  function rekeyFormDesignPrototype(design) {
+    ['published', 'draft'].forEach(version => {
+      if (!design[version] || !Array.isArray(design[version].items)) return;
+      design[version].items = design[version].items.map(item => {
+        if (['card_link', 'form_thumbnail'].includes(item.type)) return item;
+        const nextId = Store.uid('fld');
+        return { ...item, fieldId: nextId, itemId: nextId };
+      });
+    });
+  }
+
+  function addField(type) {
+    addDesignerItem(type || 'short_text');
+  }
+
+  function addDesignerItem(type) {
+    const activity = selectedActivity();
+    const nextType = type || 'short_text';
+    const design = formDesign(activity);
+    if (['card_link', 'form_thumbnail'].includes(nextType) && design.draft.items.some(item => item.type === nextType)) {
+      toast('此元件已加入表單。');
+      return;
+    }
+    let item;
+    if (nextType === 'card_link') item = makeCardLinkItem();
+    else if (nextType === 'form_thumbnail') item = makeFormThumbnailItem();
+    else item = normalizeDesignerItem({
+      fieldId: Store.uid('fld'),
+      type: nextType,
+      title: fieldTypeLabel(nextType),
+      helperText: '',
+      placeholder: '',
+      options: choiceFieldTypes.includes(nextType) ? ['選項 1', '選項 2'] : nextType === 'yes_no' ? yesNoOptions.slice() : [],
+      allowOther: false,
+      visible: true,
+      retired: false
+    });
+    const insertIndex = nextType === 'form_thumbnail' ? Math.min(1, design.draft.items.length) : design.draft.items.length;
+    design.draft.items.splice(insertIndex, 0, item);
+    ui.selectedFieldId = designerItemKey(item);
+    ui.formDesignDraft = Store.clone(item);
+    ui.formDesignDraftDirty = false;
+    ui.formDesignMessage = '';
+    Store.touch(activity, currentUser);
+    toast('已新增項目。');
   }
 
   function updateField(patch) {
     if (!canDesignForm()) return;
-    const field = selectedActivity().formFields.find(f => f.fieldId === ui.selectedFieldId);
-    if (!field) return;
-    Object.assign(field, patch);
-    Store.touch(selectedActivity(), currentUser);
+    updateFormDesignDraft(patch);
   }
 
   function moveField(fieldId, dir) {
-    const list = selectedActivity().formFields;
-    const index = list.findIndex(f => f.fieldId === fieldId);
+    const activity = selectedActivity();
+    const list = formDesign(activity).draft.items;
+    const index = list.findIndex(f => designerItemKey(f) === fieldId);
     const next = index + dir;
     if (index < 0 || next < 0 || next >= list.length) return;
-    const [field] = list.splice(index, 1);
-    list.splice(next, 0, field);
+    const [item] = list.splice(index, 1);
+    list.splice(next, 0, item);
     Store.touch(selectedActivity(), currentUser);
-    toast('已更新欄位順序。');
+    toast('已更新項目順序。');
   }
 
   function toggleField(fieldId) {
-    const field = selectedActivity().formFields.find(f => f.fieldId === fieldId);
-    field.visible = !field.visible;
+    const item = formDesign(selectedActivity()).draft.items.find(f => designerItemKey(f) === fieldId);
+    if (!item || item.removedInDraft) return;
+    item.visible = !item.visible;
+    if (ui.formDesignDraft && designerItemKey(ui.formDesignDraft) === fieldId) ui.formDesignDraft.visible = item.visible;
     Store.touch(selectedActivity(), currentUser);
-    toast(field.visible ? '已顯示欄位。' : '已隱藏欄位。');
+    toast(item.visible ? '已顯示項目。' : '已隱藏項目。');
   }
 
   function copyField(fieldId) {
-    const list = selectedActivity().formFields;
-    const index = list.findIndex(f => f.fieldId === fieldId);
-    const copy = { ...Store.clone(list[index]), fieldId: Store.uid('fld'), title: `${list[index].title} 複製`, retired: false };
+    const activity = selectedActivity();
+    const list = formDesign(activity).draft.items;
+    const index = list.findIndex(f => designerItemKey(f) === fieldId);
+    if (index < 0) return;
+    if (['card_link', 'form_thumbnail'].includes(list[index].type)) return toast('此元件不可複製。');
+    const copy = { ...Store.clone(list[index]), fieldId: Store.uid('fld'), itemId: Store.uid('fld'), title: `${list[index].title} 複製`, retired: false, removedInDraft: false };
     list.splice(index + 1, 0, copy);
-    ui.selectedFieldId = copy.fieldId;
+    ui.selectedFieldId = designerItemKey(copy);
+    ui.formDesignDraft = Store.clone(copy);
+    ui.formDesignDraftDirty = false;
+    ui.formDesignMessage = '';
     Store.touch(selectedActivity(), currentUser);
-    toast('已複製欄位。');
+    toast('已複製項目。');
   }
 
   function deleteField(fieldId) {
     const activity = selectedActivity();
-    activity.formFields = activity.formFields.filter(f => f.fieldId !== fieldId);
-    ui.selectedFieldId = activity.formFields[0] && activity.formFields[0].fieldId;
+    const design = formDesign(activity);
+    const index = design.draft.items.findIndex(f => designerItemKey(f) === fieldId);
+    if (index < 0) return;
+    const published = design.published.items.some(item => designerItemKey(item) === fieldId);
+    if (published) {
+      design.draft.items[index].removedInDraft = true;
+      design.draft.items[index].visible = false;
+      ui.formDesignDraft = Store.clone(design.draft.items[index]);
+      ui.selectedFieldId = fieldId;
+    } else {
+      design.draft.items.splice(index, 1);
+      const next = design.draft.items[Math.min(index, design.draft.items.length - 1)] || null;
+      ui.selectedFieldId = next && designerItemKey(next);
+      ui.formDesignDraft = next ? Store.clone(next) : null;
+    }
+    ui.formDesignDraftDirty = false;
+    ui.formDesignMessage = '';
     Store.touch(activity, currentUser);
-    toast('已刪除欄位。');
+    toast(published ? '已標記發布後移除。' : '已移除草稿項目。');
+  }
+
+  function restoreDesignerItem(fieldId) {
+    const item = formDesign(selectedActivity()).draft.items.find(f => designerItemKey(f) === fieldId);
+    if (!item) return;
+    item.removedInDraft = false;
+    item.visible = true;
+    ui.selectedFieldId = fieldId;
+    ui.formDesignDraft = Store.clone(item);
+    ui.formDesignDraftDirty = false;
+    ui.formDesignMessage = '';
+    Store.touch(selectedActivity(), currentUser);
+    toast('已復原項目。');
   }
 
   function retireField(fieldId) {
-    const field = selectedActivity().formFields.find(f => f.fieldId === fieldId);
-    if (!window.confirm(`確定要停用「${field.title}」？已有回答的資料會保留。`)) return;
-    field.retired = true;
-    field.visible = false;
-    Store.touch(selectedActivity(), currentUser);
-    toast('已停用欄位。');
+    deleteField(fieldId);
   }
 
   function fieldHasAnswers(activityId, fieldId) {
@@ -1747,11 +2864,31 @@
     if (!ui.drawer || !ui.drawer.working) return;
     if (Array.isArray(value) ? value.length : String(value || '').trim()) ui.drawer.working[fieldId] = value;
     else delete ui.drawer.working[fieldId];
+    if (value !== otherAnswerValue && (!Array.isArray(value) || !value.includes(otherAnswerValue))) setWorkingOther(fieldId, '');
   }
 
   function setQuickAnswer(fieldId, value) {
     if (Array.isArray(value) ? value.length : String(value || '').trim()) ui.quickAnswers[fieldId] = value;
     else delete ui.quickAnswers[fieldId];
+    if (value !== otherAnswerValue && (!Array.isArray(value) || !value.includes(otherAnswerValue))) setQuickOtherAnswer(fieldId, '');
+  }
+
+  function setWorkingOther(fieldId, value) {
+    if (!ui.drawer) return;
+    if (!ui.drawer.workingOther) ui.drawer.workingOther = {};
+    if (String(value || '').trim()) ui.drawer.workingOther[fieldId] = value;
+    else delete ui.drawer.workingOther[fieldId];
+  }
+
+  function setQuickOtherAnswer(fieldId, value) {
+    if (String(value || '').trim()) ui.quickOtherAnswers[fieldId] = value;
+    else delete ui.quickOtherAnswers[fieldId];
+  }
+
+  function setPrototypeCardLink(context, linked) {
+    const next = { linked: Boolean(linked), variant: 'default' };
+    if (context === 'drawer' && ui.drawer) ui.drawer.workingCardLink = next;
+    else if (context === 'quick') ui.quickCardLink = next;
   }
 
   function canCreateRecord(activity) {
@@ -1789,20 +2926,30 @@
   function saveQuickRecord() {
     const activity = selectedActivity();
     if (!canCreateRecord(activity)) return toast('表單目前未開放，無法新增紀錄。');
-    createRecord(activity, clean(ui.quickAnswers || {}));
+    const items = publishedRecordItems(activity);
+    createRecord(activity, cleanAnswersForItems(ui.quickAnswers || {}, items), cleanOtherAnswers(ui.quickOtherAnswers || {}, ui.quickAnswers || {}, items), cleanCardLink(ui.quickCardLink), items);
     ui.quickAnswers = {};
+    ui.quickOtherAnswers = {};
+    ui.quickCardLink = { linked: false, variant: 'default' };
     ui.focusQuickFirst = true;
     ui.tab = 'records';
     ui.records.scope = 'entry';
     toast('已儲存一筆紀錄。');
   }
 
-  function createRecord(activity, answers) {
+  function createRecord(activity, answers, otherAnswers, cardLink, items) {
+    const snapshotItems = Store.clone(items || publishedRecordItems(activity));
     state.records.push({
       id: Store.uid('rec'),
       activityId: activity.id,
       status: 'active',
       answers,
+      prototypeOtherAnswers: otherAnswers || {},
+      prototypeCardLink: cardLink || { linked: false, variant: 'default' },
+      formPrototypeSnapshot: {
+        publishedAt: formDesign(activity).published.publishedAt || '',
+        items: snapshotItems
+      },
       createdByUserId: currentUser.userId,
       createdByDisplayName: currentUser.displayName,
       createdAt: Store.nowStamp(),
@@ -1815,12 +2962,39 @@
   function saveRecord() {
     const record = state.records.find(r => r.id === ui.drawer.id);
     if (!canEditRecord(record, selectedActivity())) return toast('沒有權限編輯此紀錄。');
-    record.answers = clean(ui.drawer.working || {});
+    const items = snapshotRecordItems(record, selectedActivity());
+    record.answers = cleanAnswersForItems(ui.drawer.working || {}, items);
+    record.prototypeOtherAnswers = cleanOtherAnswers(ui.drawer.workingOther || {}, ui.drawer.working || {}, items);
+    record.prototypeCardLink = cleanCardLink(ui.drawer.workingCardLink || cardLinkForRecord(record));
     record.updatedByUserId = currentUser.userId;
     record.updatedByDisplayName = currentUser.displayName;
     record.updatedAt = Store.nowStamp();
     ui.drawer = null;
     toast('已儲存紀錄。');
+  }
+
+  function cleanAnswersForItems(source, items) {
+    const result = {};
+    answerProducingItems(items).forEach(item => {
+      const value = source[item.fieldId];
+      if (Array.isArray(value) ? value.length : String(value || '').trim()) result[item.fieldId] = value;
+    });
+    return result;
+  }
+
+  function cleanOtherAnswers(source, answers, items) {
+    const result = {};
+    answerProducingItems(items).filter(item => item.allowOther).forEach(item => {
+      const answer = answers[item.fieldId];
+      const usesOther = Array.isArray(answer) ? answer.includes(otherAnswerValue) : answer === otherAnswerValue;
+      const value = source[item.fieldId];
+      if (usesOther && String(value || '').trim()) result[item.fieldId] = String(value).trim();
+    });
+    return result;
+  }
+
+  function cleanCardLink(cardLink) {
+    return cardLink && cardLink.linked ? { linked: true, variant: cardLink.variant || 'default' } : { linked: false, variant: 'default' };
   }
 
   function voidRecord(id) {
@@ -1930,7 +3104,7 @@
   }
 
   function fieldTypeLabel(type) {
-    const found = fieldTypes.find(([key]) => key === type);
+    const found = fieldTypes.concat(specialDesignerTypes).find(([key]) => key === type);
     return found ? found[1] : type;
   }
 

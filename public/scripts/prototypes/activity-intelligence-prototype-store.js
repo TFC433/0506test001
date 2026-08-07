@@ -137,15 +137,20 @@
     return String(value).replace(/^(\d{4})-(\d{2})-(\d{2})/, '$1/$2/$3');
   }
 
-  function field(fieldId, type, title, options) {
+  function field(fieldId, type, title, options, extra) {
     return {
       fieldId,
+      itemId: fieldId,
+      category: ['section_heading', 'information_text'].includes(type) ? 'layout_component' : 'field',
       type,
       title,
       helperText: '',
+      placeholder: '',
       options: options || [],
+      allowOther: false,
       visible: true,
-      retired: false
+      retired: false,
+      ...(extra || {})
     };
   }
 
@@ -162,6 +167,163 @@
       field('fld_notes', 'long_text', '情報紀錄'),
       field('fld_followup', 'long_text', '後續處理')
     ];
+  }
+
+  function formDesignField(fieldId, type, title, extra) {
+    return field(fieldId, type, title, [], extra);
+  }
+
+  function formDesignItemFromField(item) {
+    const normalized = field(item.fieldId || item.itemId || uid('fld'), item.type || 'short_text', item.title || '', item.options || [], {
+      helperText: item.helperText || '',
+      placeholder: item.placeholder || '',
+      allowOther: Boolean(item.allowOther),
+      visible: item.visible !== false,
+      retired: Boolean(item.retired),
+      removedInDraft: Boolean(item.removedInDraft)
+    });
+    normalized.itemId = item.itemId || normalized.fieldId;
+    normalized.category = ['section_heading', 'information_text'].includes(normalized.type) ? 'layout_component' : 'field';
+    return normalized;
+  }
+
+  function cardLinkItem(extra) {
+    return {
+      itemId: 'designer-card-link',
+      fieldId: 'designer-card-link',
+      category: 'integration_component',
+      type: 'card_link',
+      title: '名片連結',
+      helperText: '以名片縮圖建立預覽關聯，不產生表單答案。',
+      placeholder: '',
+      options: [],
+      allowOther: false,
+      visible: true,
+      retired: false,
+      removedInDraft: false,
+      ...(extra || {})
+    };
+  }
+
+  function formThumbnailItem(extra) {
+    return {
+      itemId: 'designer-form-thumbnail',
+      fieldId: 'designer-form-thumbnail',
+      category: 'layout_component',
+      type: 'form_thumbnail',
+      title: '表單縮圖',
+      helperText: '',
+      placeholder: '',
+      options: [],
+      allowOther: false,
+      visible: true,
+      retired: false,
+      removedInDraft: false,
+      thumbnailTitle: '活動表單封面',
+      altText: '活動表單示意縮圖',
+      thumbnailVariant: 'line',
+      ...(extra || {})
+    };
+  }
+
+  function normalizeFormDesignItem(item) {
+    if (!item || item.type === 'card_link') return cardLinkItem(item || {});
+    if (item.type === 'form_thumbnail') return formThumbnailItem(item || {});
+    return formDesignItemFromField(item);
+  }
+
+  function versionedFormDesignFromItems(items, publishedAt) {
+    const normalized = (items || []).map(normalizeFormDesignItem);
+    return {
+      published: {
+        items: clone(normalized),
+        publishedAt: publishedAt || ''
+      },
+      draft: {
+        items: clone(normalized)
+      }
+    };
+  }
+
+  function sampleFormDesignPrototype() {
+    return versionedFormDesignFromItems([
+        cardLinkItem(),
+        formDesignField('fdp_section_visit', 'section_heading', '展場客戶訪談資訊', { helperText: '記錄本次展場接觸的基本背景。' }),
+        formDesignField('fdp_visit_purpose', 'multiple_choice', '客戶參觀目的', {
+          helperText: '可複選，必要時補充其他目的。',
+          options: ['設備更新評估', '產線自動化', '系統整合需求', '售後服務諮詢', '教育訓練或展示需求'],
+          allowOther: true
+        }),
+        formDesignField('fdp_customer_name', 'short_text', '客戶姓名', { placeholder: '請輸入客戶姓名' }),
+        formDesignField('fdp_company', 'short_text', '公司名稱', { placeholder: '請輸入公司或單位名稱' }),
+        formDesignField('fdp_title', 'short_text', '職稱', { placeholder: '請輸入職稱' }),
+        formDesignField('fdp_visitors', 'number', '同行人數', { placeholder: '請輸入人數' }),
+        formDesignField('fdp_contact', 'short_text', '聯絡方式', { placeholder: '例如電話、Email、LINE 或其他聯絡資訊' }),
+        formDesignField('fdp_section_business', 'section_heading', '需求與產業輪廓', { helperText: '協助後續業務判斷優先順序與適合方案。' }),
+        formDesignField('fdp_interest_topics', 'multiple_choice', '客戶關注議題', {
+          options: ['AI', '自動化', '節能減碳', '智慧物流', '售後維護'],
+          allowOther: true
+        }),
+        formDesignField('fdp_industry_broad', 'dropdown', '客戶產業大類', {
+          options: ['電子製造', '汽車與零組件', '金屬加工', '食品與包裝', '醫療與精密製造', '教育研究'],
+          allowOther: true
+        }),
+        formDesignField('fdp_industry_detail', 'dropdown', '客戶產業細項', {
+          options: ['機械手臂導入', 'CNC 周邊整合', '視覺檢測', '倉儲搬運', '保養維修', '教學展示'],
+          allowOther: true
+        }),
+        formDesignField('fdp_followup_priority', 'single_choice', '後續追蹤優先度', {
+          options: ['立即聯繫', '一週內回覆', '展後整理後聯繫', '暫不追蹤'],
+          allowOther: true
+        }),
+        formDesignField('fdp_section_notes', 'section_heading', '補充紀錄', { helperText: '可先快速紀錄，細節展後再補。' }),
+        formDesignField('fdp_info_later', 'information_text', '填寫提示', { helperText: '訪談過程可先記錄關鍵字，詳細需求與內部備註可於展後整理時完成。' }),
+        formDesignField('fdp_note_1', 'long_text', '補充紀錄 1', { placeholder: '請輸入第一段補充紀錄' }),
+        formDesignField('fdp_note_2', 'long_text', '補充紀錄 2', { placeholder: '請輸入第二段補充紀錄' }),
+        formDesignField('fdp_note_3', 'long_text', '補充紀錄 3', { placeholder: '請輸入第三段補充紀錄' })
+      ],
+      '2026-07-15 09:00'
+    );
+  }
+
+  function formDesignFromFormFields(fields) {
+    return versionedFormDesignFromItems((fields || []).map(item => field(item.fieldId, item.type, item.title, item.options || [], {
+        helperText: item.helperText || '',
+        placeholder: item.placeholder || '',
+        allowOther: Boolean(item.allowOther),
+        visible: item.visible !== false,
+        retired: Boolean(item.retired)
+      })));
+  }
+
+  function normalizeFormDesignPrototype(activity) {
+    if (!activity) return activity;
+    const current = activity.formDesignPrototype;
+    if (!current) {
+      activity.formDesignPrototype = activity.id === 'act-tairos-2026'
+        ? sampleFormDesignPrototype()
+        : formDesignFromFormFields(activity.formFields);
+      return activity;
+    }
+    if (current.published && current.draft) {
+      const publishedItems = Array.isArray(current.published.items) ? current.published.items.map(normalizeFormDesignItem) : [];
+      const draftItems = Array.isArray(current.draft.items) ? current.draft.items.map(normalizeFormDesignItem) : clone(publishedItems);
+      activity.formDesignPrototype = {
+        published: {
+          items: publishedItems,
+          publishedAt: current.published.publishedAt || ''
+        },
+        draft: {
+          items: draftItems
+        }
+      };
+      return activity;
+    }
+    const legacyItems = [];
+    if (current.cardLinkEnabled) legacyItems.push(cardLinkItem());
+    legacyItems.push(...(current.fields || []).map(formDesignItemFromField));
+    activity.formDesignPrototype = versionedFormDesignFromItems(legacyItems, current.publishedAt || '');
+    return activity;
   }
 
   function activityStatus(activity) {
@@ -181,6 +343,7 @@
       exhibitionEnd: exhibitionEnd || '',
       description: description || '',
       formFields: defaultFields(),
+      formDesignPrototype: id === 'act-tairos-2026' ? sampleFormDesignPrototype() : formDesignFromFormFields(defaultFields()),
       createdByUserId: 'mock-super-admin-user',
       createdByDisplayName: 'Josh Chen',
       createdAt: '2026-07-15 09:00',
@@ -346,7 +509,11 @@
   function load() {
     try {
       const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY));
-      if (parsed && Array.isArray(parsed.activities) && Array.isArray(parsed.records)) return parsed;
+      if (parsed && Array.isArray(parsed.activities) && Array.isArray(parsed.records)) {
+        parsed.activities.forEach(normalizeFormDesignPrototype);
+        save(parsed);
+        return parsed;
+      }
     } catch (_) {}
     return reset();
   }
@@ -415,6 +582,9 @@
     formatDate,
     formatDateTime,
     defaultFields,
+    sampleFormDesignPrototype,
+    formDesignFromFormFields,
+    normalizeFormDesignPrototype,
     activityStatus,
     load,
     save,
