@@ -45,7 +45,7 @@ class ActivityIntelligenceService {
     async createActivity(payload = {}, user = {}) {
         const input = this._validateActivityInput(payload, { requireAll: true });
         const actor = this._actorFromUser(user);
-        const items = this._normalizeFormItems(payload.items || this._defaultFormItems(), { assignMissingKeys: true });
+        const items = this._normalizeFormItems(this._defaultFormItems(), { assignMissingKeys: true });
 
         const result = await this.writer.createActivity({
             p_activity: {
@@ -217,7 +217,11 @@ class ActivityIntelligenceService {
 
         const actor = this._actorFromUser(user);
         const cardId = payload.cardId === undefined ? current.cardId : await this._validateOptionalCard(payload.cardId);
-        const answers = this._answerRowsFromPayload(payload, formVersion.items);
+        const answerPayload = {
+            answers: payload.answers === undefined ? current.answers : payload.answers,
+            otherAnswers: payload.otherAnswers === undefined ? current.otherAnswers : payload.otherAnswers
+        };
+        const answers = this._answerRowsFromPayload(answerPayload, formVersion.items);
 
         await this.writer.updateSubmission({
             p_submission_id: submissionId,

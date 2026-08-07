@@ -843,16 +843,48 @@ begin
 end;
 $$;
 
-revoke all on function public.activity_intelligence_private_rekey_options(jsonb) from public;
-revoke all on function public.activity_intelligence_private_insert_items(uuid, jsonb, boolean) from public;
-revoke all on function public.activity_intelligence_private_insert_answers(uuid, uuid, jsonb) from public;
-revoke all on function public.activity_intelligence_create_activity(jsonb, jsonb, jsonb) from public;
-revoke all on function public.activity_intelligence_duplicate_activity(uuid, jsonb, jsonb) from public;
-revoke all on function public.activity_intelligence_save_draft(uuid, jsonb, jsonb) from public;
-revoke all on function public.activity_intelligence_discard_draft(uuid, jsonb) from public;
-revoke all on function public.activity_intelligence_publish_draft(uuid, jsonb) from public;
-revoke all on function public.activity_intelligence_create_submission(jsonb, jsonb, jsonb) from public;
-revoke all on function public.activity_intelligence_update_submission(uuid, uuid, jsonb, jsonb) from public;
+revoke execute on function public.activity_intelligence_private_rekey_options(jsonb) from PUBLIC;
+revoke execute on function public.activity_intelligence_private_rekey_options(jsonb) from anon;
+revoke execute on function public.activity_intelligence_private_rekey_options(jsonb) from authenticated;
+revoke execute on function public.activity_intelligence_private_rekey_options(jsonb) from service_role;
+
+revoke execute on function public.activity_intelligence_private_insert_items(uuid, jsonb, boolean) from PUBLIC;
+revoke execute on function public.activity_intelligence_private_insert_items(uuid, jsonb, boolean) from anon;
+revoke execute on function public.activity_intelligence_private_insert_items(uuid, jsonb, boolean) from authenticated;
+revoke execute on function public.activity_intelligence_private_insert_items(uuid, jsonb, boolean) from service_role;
+
+revoke execute on function public.activity_intelligence_private_insert_answers(uuid, uuid, jsonb) from PUBLIC;
+revoke execute on function public.activity_intelligence_private_insert_answers(uuid, uuid, jsonb) from anon;
+revoke execute on function public.activity_intelligence_private_insert_answers(uuid, uuid, jsonb) from authenticated;
+revoke execute on function public.activity_intelligence_private_insert_answers(uuid, uuid, jsonb) from service_role;
+
+revoke execute on function public.activity_intelligence_create_activity(jsonb, jsonb, jsonb) from PUBLIC;
+revoke execute on function public.activity_intelligence_create_activity(jsonb, jsonb, jsonb) from anon;
+revoke execute on function public.activity_intelligence_create_activity(jsonb, jsonb, jsonb) from authenticated;
+
+revoke execute on function public.activity_intelligence_duplicate_activity(uuid, jsonb, jsonb) from PUBLIC;
+revoke execute on function public.activity_intelligence_duplicate_activity(uuid, jsonb, jsonb) from anon;
+revoke execute on function public.activity_intelligence_duplicate_activity(uuid, jsonb, jsonb) from authenticated;
+
+revoke execute on function public.activity_intelligence_save_draft(uuid, jsonb, jsonb) from PUBLIC;
+revoke execute on function public.activity_intelligence_save_draft(uuid, jsonb, jsonb) from anon;
+revoke execute on function public.activity_intelligence_save_draft(uuid, jsonb, jsonb) from authenticated;
+
+revoke execute on function public.activity_intelligence_discard_draft(uuid, jsonb) from PUBLIC;
+revoke execute on function public.activity_intelligence_discard_draft(uuid, jsonb) from anon;
+revoke execute on function public.activity_intelligence_discard_draft(uuid, jsonb) from authenticated;
+
+revoke execute on function public.activity_intelligence_publish_draft(uuid, jsonb) from PUBLIC;
+revoke execute on function public.activity_intelligence_publish_draft(uuid, jsonb) from anon;
+revoke execute on function public.activity_intelligence_publish_draft(uuid, jsonb) from authenticated;
+
+revoke execute on function public.activity_intelligence_create_submission(jsonb, jsonb, jsonb) from PUBLIC;
+revoke execute on function public.activity_intelligence_create_submission(jsonb, jsonb, jsonb) from anon;
+revoke execute on function public.activity_intelligence_create_submission(jsonb, jsonb, jsonb) from authenticated;
+
+revoke execute on function public.activity_intelligence_update_submission(uuid, uuid, jsonb, jsonb) from PUBLIC;
+revoke execute on function public.activity_intelligence_update_submission(uuid, uuid, jsonb, jsonb) from anon;
+revoke execute on function public.activity_intelligence_update_submission(uuid, uuid, jsonb, jsonb) from authenticated;
 
 grant execute on function public.activity_intelligence_create_activity(jsonb, jsonb, jsonb) to service_role;
 grant execute on function public.activity_intelligence_duplicate_activity(uuid, jsonb, jsonb) to service_role;

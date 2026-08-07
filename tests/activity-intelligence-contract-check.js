@@ -24,6 +24,7 @@ const IDS = {
     oldTextItem: '44444444-4444-4444-8444-444444444446',
     optionAlpha: '55555555-5555-4555-8555-555555555551',
     card: '66666666-6666-4666-8666-666666666661',
+    secondCard: '66666666-6666-4666-8666-666666666663',
     missingCard: '66666666-6666-4666-8666-666666666662',
     newSubmission: '77777777-7777-4777-8777-777777777771',
     oldSubmission: '77777777-7777-4777-8777-777777777772'
@@ -185,7 +186,7 @@ function makeHarness() {
         activityId: IDS.activity,
         formVersionId: IDS.oldVersion,
         status: 'active',
-        answers: {},
+        answers: { [IDS.oldTextKey]: 'existing answer' },
         otherAnswers: {},
         cardId: IDS.card,
         card: null,
@@ -229,11 +230,13 @@ async function main() {
         name: 'Created',
         formOpenStart: '2026-08-01',
         formOpenEnd: '2026-08-31',
-        createdByUserId: 'spoof'
+        createdByUserId: 'spoof',
+        items: [{ itemKey: IDS.textKey, type: 'short_text', title: 'Client Injected' }]
     }, actor());
     assert.strictEqual(calls.createActivity.p_activity.created_by_user_id, 'real-user');
     assert.strictEqual(calls.createActivity.p_activity.created_by_display_name, 'Real User');
     assert(calls.createActivity.p_items.every(item => /^[0-9a-f-]{36}$/i.test(item.item_key)));
+    assert(!calls.createActivity.p_items.some(item => item.title === 'Client Injected'));
 
     await assertRejectsStatus(() => service.createActivity({ formOpenStart: '2026-08-01', formOpenEnd: '2026-08-31' }, actor()), 400);
     await assertRejectsStatus(() => service.createActivity({ name: 'Bad', formOpenStart: '2026-08-31', formOpenEnd: '2026-08-01' }, actor()), 400);
@@ -282,8 +285,15 @@ async function main() {
     assert.strictEqual(answerByFormItemId.get(IDS.choiceItem).other_text, 'custom');
     assert(!answerByFormItemId.has(IDS.cardItem));
 
-    await service.updateSubmission(IDS.oldSubmission, { answers: { [IDS.oldTextKey]: 'historical edit' } }, actor());
+    await service.updateSubmission(IDS.oldSubmission, { cardId: IDS.secondCard }, actor());
+    assert.strictEqual(calls.updateSubmission.p_card_id, IDS.secondCard);
     assert.strictEqual(calls.updateSubmission.p_answers[0].form_item_id, IDS.oldTextItem);
+    assert.strictEqual(calls.updateSubmission.p_answers[0].value_text, 'existing answer');
+
+    await service.updateSubmission(IDS.oldSubmission, { answers: { [IDS.oldTextKey]: 'historical edit' } }, actor());
+    assert.strictEqual(calls.updateSubmission.p_card_id, IDS.card);
+    assert.strictEqual(calls.updateSubmission.p_answers[0].form_item_id, IDS.oldTextItem);
+    assert.strictEqual(calls.updateSubmission.p_answers[0].value_text, 'historical edit');
 
     await assertRejectsStatus(() => service.createSubmission(IDS.activity, { cardId: IDS.missingCard }, actor()), 404);
     const enriched = await service.getSubmission(IDS.oldSubmission);
