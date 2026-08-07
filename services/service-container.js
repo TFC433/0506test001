@@ -40,6 +40,7 @@ const ProductReader = require('../data/product-reader');
 const InternalOpsReader = require('../data/internal-ops-reader');
 const SubscriptionOpsSqlReader = require('../data/subscription-ops-sql-reader');
 const AuditLogSqlReader = require('../data/audit-log-sql-reader');
+const ActivityIntelligenceSqlReader = require('../data/activity-intelligence-sql-reader');
 
 // --- Import Writers ---
 const ContactWriter = require('../data/contact-writer'); // EXCLUSIVELY FOR RAW
@@ -56,6 +57,7 @@ const ProductWriter = require('../data/product-writer');
 const InternalOpsWriter = require('../data/internal-ops-writer');
 const SubscriptionOpsSqlWriter = require('../data/subscription-ops-sql-writer');
 const AuditLogSqlWriter = require('../data/audit-log-sql-writer');
+const ActivityIntelligenceSqlWriter = require('../data/activity-intelligence-sql-writer');
 
 // --- Import Domain Services ---
 const AuthService = require('./auth-service');
@@ -77,6 +79,7 @@ const InternalOpsService = require('./internal-ops-service');
 const SubscriptionOpsService = require('./subscription-ops-service');
 const AuditLoggerService = require('./audit-logger-service');
 const ActivityTimelineService = require('./activity-timeline-service');
+const ActivityIntelligenceService = require('./activity-intelligence-service');
 
 // --- Import Controllers ---
 const AuthController = require('../controllers/auth.controller');
@@ -88,6 +91,7 @@ const CompanyController = require('../controllers/company.controller');
 const InteractionController = require('../controllers/interaction.controller');
 const ProductController = require('../controllers/product.controller');
 const WeeklyController = require('../controllers/weekly.controller');
+const ActivityIntelligenceController = require('../controllers/activity-intelligence.controller');
 
 let services = null;
 
@@ -126,6 +130,7 @@ async function initializeServices() {
         internalOpsReader.googleClientService = googleClientService;
         const subscriptionOpsSqlReader = new SubscriptionOpsSqlReader();
         const auditLogSqlReader = new AuditLogSqlReader();
+        const activityIntelligenceSqlReader = new ActivityIntelligenceSqlReader();
 
         // 3. Writers
         // RAW Keep
@@ -147,6 +152,7 @@ async function initializeServices() {
         const internalOpsWriter = new InternalOpsWriter(sheets, config.IDS.INTERNAL_OPS, internalOpsReader, googleClientService);
         const subscriptionOpsSqlWriter = new SubscriptionOpsSqlWriter();
         const auditLogSqlWriter = new AuditLogSqlWriter();
+        const activityIntelligenceSqlWriter = new ActivityIntelligenceSqlWriter();
 
         // 4. Domain Services
         const calendarService = new CalendarService(calendar, googleClientService);
@@ -307,6 +313,11 @@ async function initializeServices() {
             opportunitySqlReader,
             companySqlReader
         });
+        const activityIntelligenceService = new ActivityIntelligenceService({
+            activityIntelligenceSqlReader,
+            activityIntelligenceSqlWriter,
+            rawContactSqlReader
+        });
 
         // 5. Controllers
         const authController = new AuthController(authService);
@@ -324,6 +335,7 @@ async function initializeServices() {
         const interactionController = new InteractionController(interactionService);
         const productController = new ProductController(productService);
         const weeklyController = new WeeklyController(weeklyBusinessService);
+        const activityIntelligenceController = new ActivityIntelligenceController(activityIntelligenceService);
 
         console.log('✅ Service Container 初始化完成');
 
@@ -340,6 +352,7 @@ async function initializeServices() {
             subscriptionOpsService,
             auditLoggerService,
             activityTimelineService,
+            activityIntelligenceService,
             authController,
             systemController,
             announcementController,
@@ -349,6 +362,7 @@ async function initializeServices() {
             interactionController,
             productController,
             weeklyController,
+            activityIntelligenceController,
             contactWriter,
             contactRawReader,
             rawContactSqlReader,
@@ -362,7 +376,9 @@ async function initializeServices() {
             subscriptionOpsSqlReader,
             subscriptionOpsSqlWriter,
             auditLogSqlWriter,
-            auditLogSqlReader
+            auditLogSqlReader,
+            activityIntelligenceSqlReader,
+            activityIntelligenceSqlWriter
         };
 
         return services;

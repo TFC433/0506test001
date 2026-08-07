@@ -27,6 +27,7 @@ const lineLeadsRoutes = require('./line-leads.routes');
 const externalRoutes = require('./external.routes');
 const calendarRoutes = require('./calendar.routes');
 const internalOpsRoutes = require('./internal-ops.routes');
+const activityIntelligenceRoutes = require('./activity-intelligence.routes');
 
 // ==========================================
 // 1. 公開/特殊驗證路由 (Public / Custom Auth)
@@ -63,6 +64,7 @@ router.use('/interactions', interactionRoutes);
 router.use('/events', eventRoutes);
 router.use('/calendar', calendarRoutes);
 router.use('/internal-ops', internalOpsRoutes);
+router.use('/activity-intelligence', activityIntelligenceRoutes);
 
 // ==========================================
 // 3. 404 與 根路徑

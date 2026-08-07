@@ -1,0 +1,389 @@
+const { supabase } = require('../config/supabase');
+
+const ACTIVITY_SELECT = '*';
+const VERSION_SELECT = '*';
+const ITEM_SELECT = '*';
+const SUBMISSION_SELECT = '*';
+const ANSWER_SELECT = '*';
+
+class ActivityIntelligenceSqlReader {
+    constructor() {
+        this.activitiesTable = 'activity_intelligence_activities';
+        this.formVersionsTable = 'activity_intelligence_form_versions';
+        this.formItemsTable = 'activity_intelligence_form_items';
+        this.submissionsTable = 'activity_intelligence_submissions';
+        this.answersTable = 'activity_intelligence_submission_answers';
+    }
+
+    async listActivities() {
+        const { data, error } = await supabase
+            .from(this.activitiesTable)
+            .select(ACTIVITY_SELECT)
+            .order('form_open_start', { ascending: false, nullsFirst: false })
+            .order('created_at', { ascending: false, nullsFirst: false });
+
+        if (error) throw this._dbError('listActivities', error);
+        return (data || []).map(row => this.mapActivityRow(row));
+    }
+
+    async getActivityById(activityId) {
+        const { data, error } = await supabase
+            .from(this.activitiesTable)
+            .select(ACTIVITY_SELECT)
+            .eq('activity_id', activityId)
+            .maybeSingle();
+
+        if (error) throw this._dbError('getActivityById', error);
+        return data ? this.mapActivityRow(data) : null;
+    }
+
+    async getFormBundle(activityId) {
+        const { data: versions, error: versionError } = await supabase
+            .from(this.formVersionsTable)
+            .select(VERSION_SELECT)
+            .eq('activity_id', activityId)
+            .in('status', ['draft', 'published'])
+            .order('version_number', { ascending: true });
+
+        if (versionError) throw this._dbError('getFormBundle.versions', versionError);
+
+        const mappedVersions = (versions || []).map(row => this.mapFormVersionRow(row));
+        const versionIds = mappedVersions.map(version => version.versionId);
+        const itemsByVersionId = await this.getItemsByVersionIds(versionIds);
+
+        return {
+            published: this._attachItems(mappedVersions.find(version => version.status === 'published'), itemsByVersionId),
+            draft: this._attachItems(mappedVersions.find(version => version.status === 'draft'), itemsByVersionId)
+        };
+    }
+
+    async getPublishedForm(activityId) {
+        return this._getSingleVersionWithItems(activityId, 'published');
+    }
+
+    async getDraftForm(activityId) {
+        return this._getSingleVersionWithItems(activityId, 'draft');
+    }
+
+    async getVersionWithItems(formVersionId) {
+        if (!formVersionId) return null;
+
+        const { data: version, error } = await supabase
+            .from(this.formVersionsTable)
+            .select(VERSION_SELECT)
+            .eq('form_version_id', formVersionId)
+            .maybeSingle();
+
+        if (error) throw this._dbError('getVersionWithItems.version', error);
+        if (!version) return null;
+
+        const mappedVersion = this.mapFormVersionRow(version);
+        const itemsByVersionId = await this.getItemsByVersionIds([mappedVersion.versionId]);
+        return this._attachItems(mappedVersion, itemsByVersionId);
+    }
+
+    async getItemsByVersionIds(versionIds) {
+        if (!Array.isArray(versionIds) || versionIds.length === 0) return new Map();
+
+        const { data, error } = await supabase
+            .from(this.formItemsTable)
+            .select(ITEM_SELECT)
+            .in('form_version_id', versionIds)
+            .order('sort_order', { ascending: true });
+
+        if (error) throw this._dbError('getItemsByVersionIds', error);
+
+        return (data || []).reduce((acc, row) => {
+            const item = this.mapFormItemRow(row);
+            const list = acc.get(item.formVersionId) || [];
+            list.push(item);
+            acc.set(item.formVersionId, list);
+            return acc;
+        }, new Map());
+    }
+
+    async listSubmissions(activityId, filters = {}) {
+        let query = supabase
+            .from(this.submissionsTable)
+            .select(SUBMISSION_SELECT)
+            .eq('activity_id', activityId);
+
+        if (filters.state && filters.state !== 'all') {
+            query = query.eq('status', filters.state);
+        } else if (!filters.includeVoid) {
+            query = query.neq('status', 'void');
+        }
+
+        if (filters.dateStart) query = query.gte('created_at', `${filters.dateStart}T00:00:00.000Z`);
+        if (filters.dateEnd) query = query.lte('created_at', `${filters.dateEnd}T23:59:59.999Z`);
+        if (filters.recorderUserId) query = query.eq('created_by_user_id', filters.recorderUserId);
+        if (filters.recorderDisplayName) query = query.eq('created_by_display_name', filters.recorderDisplayName);
+
+        const { data, error } = await query.order('created_at', { ascending: false });
+
+        if (error) throw this._dbError('listSubmissions', error);
+
+        const submissions = (data || []).map(row => this.mapSubmissionRow(row));
+        return this.hydrateSubmissionDetails(submissions, { search: filters.search });
+    }
+
+    async getSubmissionById(submissionId) {
+        const { data, error } = await supabase
+            .from(this.submissionsTable)
+            .select(SUBMISSION_SELECT)
+            .eq('submission_id', submissionId)
+            .maybeSingle();
+
+        if (error) throw this._dbError('getSubmissionById', error);
+        if (!data) return null;
+
+        const hydrated = await this.hydrateSubmissionDetails([this.mapSubmissionRow(data)]);
+        return hydrated[0] || null;
+    }
+
+    async hydrateSubmissionDetails(submissions, options = {}) {
+        if (!Array.isArray(submissions) || submissions.length === 0) return [];
+
+        const submissionIds = submissions.map(submission => submission.id);
+        const versionIds = [...new Set(submissions.map(submission => submission.formVersionId).filter(Boolean))];
+
+        const [answersBySubmissionId, itemsByVersionId, versionsById] = await Promise.all([
+            this.getAnswersBySubmissionIds(submissionIds),
+            this.getItemsByVersionIds(versionIds),
+            this.getVersionsByIds(versionIds)
+        ]);
+
+        const hydrated = submissions.map(submission => {
+            const answers = answersBySubmissionId.get(submission.id) || [];
+            const items = itemsByVersionId.get(submission.formVersionId) || [];
+            const version = versionsById.get(submission.formVersionId) || null;
+            return this.mapSubmissionDto(submission, answers, version, items);
+        });
+
+        if (!options.search) return hydrated;
+
+        const needle = String(options.search).trim().toLowerCase();
+        if (!needle) return hydrated;
+
+        return hydrated.filter(submission => {
+            const haystack = [
+                submission.createdByDisplayName,
+                submission.updatedByDisplayName,
+                submission.card && submission.card.name,
+                submission.card && submission.card.company,
+                ...Object.values(submission.answers || {}).flat(),
+                ...Object.values(submission.otherAnswers || {})
+            ].filter(value => value !== null && value !== undefined).join(' ').toLowerCase();
+
+            return haystack.includes(needle);
+        });
+    }
+
+    async getAnswersBySubmissionIds(submissionIds) {
+        if (!Array.isArray(submissionIds) || submissionIds.length === 0) return new Map();
+
+        const { data, error } = await supabase
+            .from(this.answersTable)
+            .select(ANSWER_SELECT)
+            .in('submission_id', submissionIds);
+
+        if (error) throw this._dbError('getAnswersBySubmissionIds', error);
+
+        return (data || []).reduce((acc, row) => {
+            const answer = this.mapAnswerRow(row);
+            const list = acc.get(answer.submissionId) || [];
+            list.push(answer);
+            acc.set(answer.submissionId, list);
+            return acc;
+        }, new Map());
+    }
+
+    async getVersionsByIds(versionIds) {
+        if (!Array.isArray(versionIds) || versionIds.length === 0) return new Map();
+
+        const { data, error } = await supabase
+            .from(this.formVersionsTable)
+            .select(VERSION_SELECT)
+            .in('form_version_id', versionIds);
+
+        if (error) throw this._dbError('getVersionsByIds', error);
+
+        return new Map((data || []).map(row => {
+            const version = this.mapFormVersionRow(row);
+            return [version.versionId, version];
+        }));
+    }
+
+    mapActivityRow(row) {
+        if (!row) return null;
+
+        return {
+            id: row.activity_id,
+            name: row.name,
+            description: row.description || '',
+            formOpenStart: row.form_open_start,
+            formOpenEnd: row.form_open_end,
+            exhibitionStart: row.exhibition_start,
+            exhibitionEnd: row.exhibition_end,
+            createdByUserId: row.created_by_user_id,
+            createdByDisplayName: row.created_by_display_name,
+            createdAt: row.created_at,
+            updatedByUserId: row.updated_by_user_id,
+            updatedByDisplayName: row.updated_by_display_name,
+            updatedAt: row.updated_at
+        };
+    }
+
+    mapFormVersionRow(row) {
+        if (!row) return null;
+
+        return {
+            versionId: row.form_version_id,
+            activityId: row.activity_id,
+            versionNumber: row.version_number,
+            status: row.status,
+            publishedAt: row.published_at,
+            publishedByUserId: row.published_by_user_id,
+            publishedByDisplayName: row.published_by_display_name,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+            items: []
+        };
+    }
+
+    mapFormItemRow(row) {
+        if (!row) return null;
+
+        const settings = row.settings && typeof row.settings === 'object' ? row.settings : {};
+
+        return {
+            formItemId: row.form_item_id,
+            formVersionId: row.form_version_id,
+            itemKey: row.item_key,
+            fieldId: row.item_key,
+            itemId: row.item_key,
+            type: row.item_type,
+            category: this._categoryForType(row.item_type),
+            title: row.title || '',
+            helperText: row.helper_text || '',
+            placeholder: row.placeholder || '',
+            options: this._mapOptions(row.options),
+            optionEntries: Array.isArray(row.options) ? row.options : [],
+            allowOther: Boolean(settings.allowOther),
+            settings,
+            visible: row.is_visible !== false,
+            retired: Boolean(row.is_retired),
+            removedInDraft: Boolean(row.removed_in_draft),
+            sortOrder: row.sort_order
+        };
+    }
+
+    mapSubmissionRow(row) {
+        if (!row) return null;
+
+        return {
+            id: row.submission_id,
+            activityId: row.activity_id,
+            formVersionId: row.form_version_id,
+            status: row.status,
+            cardId: row.card_id,
+            createdByUserId: row.created_by_user_id,
+            createdByDisplayName: row.created_by_display_name,
+            createdAt: row.created_at,
+            updatedByUserId: row.updated_by_user_id,
+            updatedByDisplayName: row.updated_by_display_name,
+            updatedAt: row.updated_at
+        };
+    }
+
+    mapAnswerRow(row) {
+        if (!row) return null;
+
+        return {
+            answerId: row.answer_id,
+            submissionId: row.submission_id,
+            formItemId: row.form_item_id,
+            itemKey: row.item_key,
+            valueText: row.value_text,
+            valueNumber: row.value_number,
+            valueBoolean: row.value_boolean,
+            valueJsonb: row.value_jsonb,
+            otherText: row.other_text
+        };
+    }
+
+    mapSubmissionDto(submission, answerRows, formVersion, items) {
+        const itemsByKey = new Map((items || []).map(item => [item.itemKey, item]));
+        const answers = {};
+        const otherAnswers = {};
+
+        (answerRows || []).forEach(answer => {
+            const item = itemsByKey.get(answer.itemKey);
+            if (!item) return;
+
+            if (answer.otherText) otherAnswers[answer.itemKey] = answer.otherText;
+
+            if (answer.valueText !== null && answer.valueText !== undefined) answers[answer.itemKey] = answer.valueText;
+            else if (answer.valueNumber !== null && answer.valueNumber !== undefined) answers[answer.itemKey] = answer.valueNumber;
+            else if (answer.valueBoolean !== null && answer.valueBoolean !== undefined) answers[answer.itemKey] = answer.valueBoolean;
+            else if (answer.valueJsonb !== null && answer.valueJsonb !== undefined) answers[answer.itemKey] = answer.valueJsonb;
+        });
+
+        return {
+            ...submission,
+            answers,
+            otherAnswers,
+            card: null,
+            formSnapshot: formVersion ? {
+                versionId: formVersion.versionId,
+                versionNumber: formVersion.versionNumber,
+                publishedAt: formVersion.publishedAt,
+                items: items || []
+            } : null
+        };
+    }
+
+    _attachItems(version, itemsByVersionId) {
+        if (!version) return null;
+        return {
+            ...version,
+            items: itemsByVersionId.get(version.versionId) || []
+        };
+    }
+
+    async _getSingleVersionWithItems(activityId, status) {
+        const { data, error } = await supabase
+            .from(this.formVersionsTable)
+            .select(VERSION_SELECT)
+            .eq('activity_id', activityId)
+            .eq('status', status)
+            .maybeSingle();
+
+        if (error) throw this._dbError(`getSingleVersion.${status}`, error);
+        if (!data) return null;
+
+        const version = this.mapFormVersionRow(data);
+        const itemsByVersionId = await this.getItemsByVersionIds([version.versionId]);
+        return this._attachItems(version, itemsByVersionId);
+    }
+
+    _mapOptions(options) {
+        if (!Array.isArray(options)) return [];
+        return options.map(option => {
+            if (option && typeof option === 'object') return option.label || option.value || '';
+            return option;
+        });
+    }
+
+    _categoryForType(type) {
+        if (['section_heading', 'information_text', 'form_thumbnail'].includes(type)) return 'layout_component';
+        if (type === 'card_link') return 'integration_component';
+        return 'field';
+    }
+
+    _dbError(method, error) {
+        return new Error(`[ActivityIntelligenceSqlReader] ${method} DB Error: ${error.message}`);
+    }
+}
+
+module.exports = ActivityIntelligenceSqlReader;

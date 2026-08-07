@@ -1,0 +1,805 @@
+-- ============================================================================
+-- Activity Intelligence Transaction RPCs v1
+-- ============================================================================
+-- Manual Supabase reference script only. This file is not an auto-run migration.
+--
+-- Preconditions:
+-- - The five Activity Intelligence tables already exist in public.
+-- - RLS and table grants have already been verified by the product owner.
+-- - These functions are intended for server-side Supabase service_role calls.
+--
+-- This script intentionally does not create tables, schemas, frontend grants, or
+-- compatibility fallbacks.
+
+create extension if not exists pgcrypto;
+
+create or replace function public.activity_intelligence_private_insert_items(
+    p_form_version_id uuid,
+    p_items jsonb,
+    p_rekey boolean default false
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_item jsonb;
+    v_sort_order integer;
+    v_item_key text;
+begin
+    if jsonb_typeof(coalesce(p_items, '[]'::jsonb)) <> 'array' then
+        raise exception 'p_items must be a JSON array' using errcode = '22023';
+    end if;
+
+    for v_item, v_sort_order in
+        select value, ordinality::integer
+        from jsonb_array_elements(coalesce(p_items, '[]'::jsonb)) with ordinality
+    loop
+        v_item_key := case
+            when p_rekey then gen_random_uuid()::text
+            else coalesce(v_item->>'item_key', gen_random_uuid()::text)
+        end;
+
+        insert into public.activity_intelligence_form_items (
+            form_item_id,
+            form_version_id,
+            item_key,
+            item_type,
+            title,
+            helper_text,
+            placeholder,
+            options,
+            settings,
+            is_visible,
+            is_retired,
+            removed_in_draft,
+            sort_order,
+            created_at,
+            updated_at
+        )
+        values (
+            gen_random_uuid(),
+            p_form_version_id,
+            v_item_key,
+            v_item->>'item_type',
+            v_item->>'title',
+            coalesce(v_item->>'helper_text', ''),
+            coalesce(v_item->>'placeholder', ''),
+            coalesce(v_item->'options', '[]'::jsonb),
+            coalesce(v_item->'settings', '{}'::jsonb),
+            coalesce((v_item->>'is_visible')::boolean, true),
+            coalesce((v_item->>'is_retired')::boolean, false),
+            coalesce((v_item->>'removed_in_draft')::boolean, false),
+            coalesce((v_item->>'sort_order')::integer, v_sort_order),
+            now(),
+            now()
+        );
+    end loop;
+end;
+$$;
+
+create or replace function public.activity_intelligence_create_activity(
+    p_activity jsonb,
+    p_items jsonb,
+    p_actor jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_activity_id uuid := coalesce((p_activity->>'activity_id')::uuid, gen_random_uuid());
+    v_published_version_id uuid := gen_random_uuid();
+    v_draft_version_id uuid := gen_random_uuid();
+begin
+    insert into public.activity_intelligence_activities (
+        activity_id,
+        name,
+        description,
+        form_open_start,
+        form_open_end,
+        exhibition_start,
+        exhibition_end,
+        created_by_user_id,
+        created_by_display_name,
+        updated_by_user_id,
+        updated_by_display_name,
+        created_at,
+        updated_at
+    )
+    values (
+        v_activity_id,
+        p_activity->>'name',
+        coalesce(p_activity->>'description', ''),
+        (p_activity->>'form_open_start')::date,
+        (p_activity->>'form_open_end')::date,
+        nullif(p_activity->>'exhibition_start', '')::date,
+        nullif(p_activity->>'exhibition_end', '')::date,
+        p_actor->>'userId',
+        p_actor->>'displayName',
+        p_actor->>'userId',
+        p_actor->>'displayName',
+        now(),
+        now()
+    );
+
+    insert into public.activity_intelligence_form_versions (
+        form_version_id,
+        activity_id,
+        version_number,
+        status,
+        published_at,
+        published_by_user_id,
+        published_by_display_name,
+        created_at,
+        updated_at
+    )
+    values (
+        v_published_version_id,
+        v_activity_id,
+        1,
+        'published',
+        now(),
+        p_actor->>'userId',
+        p_actor->>'displayName',
+        now(),
+        now()
+    );
+
+    perform public.activity_intelligence_private_insert_items(v_published_version_id, p_items, false);
+
+    insert into public.activity_intelligence_form_versions (
+        form_version_id,
+        activity_id,
+        version_number,
+        status,
+        published_at,
+        published_by_user_id,
+        published_by_display_name,
+        created_at,
+        updated_at
+    )
+    values (
+        v_draft_version_id,
+        v_activity_id,
+        2,
+        'draft',
+        null,
+        null,
+        null,
+        now(),
+        now()
+    );
+
+    insert into public.activity_intelligence_form_items (
+        form_item_id,
+        form_version_id,
+        item_key,
+        item_type,
+        title,
+        helper_text,
+        placeholder,
+        options,
+        settings,
+        is_visible,
+        is_retired,
+        removed_in_draft,
+        sort_order,
+        created_at,
+        updated_at
+    )
+    select
+        gen_random_uuid(),
+        v_draft_version_id,
+        item_key,
+        item_type,
+        title,
+        helper_text,
+        placeholder,
+        options,
+        settings,
+        is_visible,
+        is_retired,
+        removed_in_draft,
+        sort_order,
+        now(),
+        now()
+    from public.activity_intelligence_form_items
+    where form_version_id = v_published_version_id
+    order by sort_order;
+
+    return jsonb_build_object('activity_id', v_activity_id);
+end;
+$$;
+
+create or replace function public.activity_intelligence_duplicate_activity(
+    p_source_activity_id uuid,
+    p_activity jsonb,
+    p_actor jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_source_published_id uuid;
+    v_activity_id uuid := coalesce((p_activity->>'activity_id')::uuid, gen_random_uuid());
+    v_published_version_id uuid := gen_random_uuid();
+    v_draft_version_id uuid := gen_random_uuid();
+    v_item record;
+    v_key_map jsonb := '{}'::jsonb;
+    v_new_key text;
+begin
+    select form_version_id
+    into v_source_published_id
+    from public.activity_intelligence_form_versions
+    where activity_id = p_source_activity_id
+      and status = 'published';
+
+    if v_source_published_id is null then
+        raise exception 'Source activity has no current published form' using errcode = '23514';
+    end if;
+
+    insert into public.activity_intelligence_activities (
+        activity_id,
+        name,
+        description,
+        form_open_start,
+        form_open_end,
+        exhibition_start,
+        exhibition_end,
+        created_by_user_id,
+        created_by_display_name,
+        updated_by_user_id,
+        updated_by_display_name,
+        created_at,
+        updated_at
+    )
+    values (
+        v_activity_id,
+        p_activity->>'name',
+        coalesce(p_activity->>'description', ''),
+        (p_activity->>'form_open_start')::date,
+        (p_activity->>'form_open_end')::date,
+        nullif(p_activity->>'exhibition_start', '')::date,
+        nullif(p_activity->>'exhibition_end', '')::date,
+        p_actor->>'userId',
+        p_actor->>'displayName',
+        p_actor->>'userId',
+        p_actor->>'displayName',
+        now(),
+        now()
+    );
+
+    insert into public.activity_intelligence_form_versions (
+        form_version_id,
+        activity_id,
+        version_number,
+        status,
+        published_at,
+        published_by_user_id,
+        published_by_display_name,
+        created_at,
+        updated_at
+    )
+    values
+        (v_published_version_id, v_activity_id, 1, 'published', now(), p_actor->>'userId', p_actor->>'displayName', now(), now()),
+        (v_draft_version_id, v_activity_id, 2, 'draft', null, null, null, now(), now());
+
+    for v_item in
+        select *
+        from public.activity_intelligence_form_items
+        where form_version_id = v_source_published_id
+        order by sort_order
+    loop
+        v_new_key := gen_random_uuid()::text;
+        v_key_map := v_key_map || jsonb_build_object(v_item.item_key, v_new_key);
+
+        insert into public.activity_intelligence_form_items (
+            form_item_id,
+            form_version_id,
+            item_key,
+            item_type,
+            title,
+            helper_text,
+            placeholder,
+            options,
+            settings,
+            is_visible,
+            is_retired,
+            removed_in_draft,
+            sort_order,
+            created_at,
+            updated_at
+        )
+        values (
+            gen_random_uuid(),
+            v_published_version_id,
+            v_new_key,
+            v_item.item_type,
+            v_item.title,
+            v_item.helper_text,
+            v_item.placeholder,
+            v_item.options,
+            v_item.settings,
+            v_item.is_visible,
+            v_item.is_retired,
+            false,
+            v_item.sort_order,
+            now(),
+            now()
+        );
+    end loop;
+
+    insert into public.activity_intelligence_form_items (
+        form_item_id,
+        form_version_id,
+        item_key,
+        item_type,
+        title,
+        helper_text,
+        placeholder,
+        options,
+        settings,
+        is_visible,
+        is_retired,
+        removed_in_draft,
+        sort_order,
+        created_at,
+        updated_at
+    )
+    select
+        gen_random_uuid(),
+        v_draft_version_id,
+        item_key,
+        item_type,
+        title,
+        helper_text,
+        placeholder,
+        options,
+        settings,
+        is_visible,
+        is_retired,
+        removed_in_draft,
+        sort_order,
+        now(),
+        now()
+    from public.activity_intelligence_form_items
+    where form_version_id = v_published_version_id
+    order by sort_order;
+
+    return jsonb_build_object('activity_id', v_activity_id);
+end;
+$$;
+
+create or replace function public.activity_intelligence_save_draft(
+    p_activity_id uuid,
+    p_items jsonb,
+    p_actor jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_draft_version_id uuid;
+begin
+    select form_version_id
+    into v_draft_version_id
+    from public.activity_intelligence_form_versions
+    where activity_id = p_activity_id
+      and status = 'draft';
+
+    if v_draft_version_id is null then
+        raise exception 'Draft form not found' using errcode = '23514';
+    end if;
+
+    delete from public.activity_intelligence_form_items
+    where form_version_id = v_draft_version_id;
+
+    perform public.activity_intelligence_private_insert_items(v_draft_version_id, p_items, false);
+
+    update public.activity_intelligence_form_versions
+    set updated_at = now()
+    where form_version_id = v_draft_version_id;
+
+    update public.activity_intelligence_activities
+    set updated_by_user_id = p_actor->>'userId',
+        updated_by_display_name = p_actor->>'displayName',
+        updated_at = now()
+    where activity_id = p_activity_id;
+
+    return jsonb_build_object('activity_id', p_activity_id, 'form_version_id', v_draft_version_id);
+end;
+$$;
+
+create or replace function public.activity_intelligence_discard_draft(
+    p_activity_id uuid,
+    p_actor jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_published_version_id uuid;
+    v_draft_version_id uuid;
+begin
+    select form_version_id
+    into v_published_version_id
+    from public.activity_intelligence_form_versions
+    where activity_id = p_activity_id
+      and status = 'published';
+
+    select form_version_id
+    into v_draft_version_id
+    from public.activity_intelligence_form_versions
+    where activity_id = p_activity_id
+      and status = 'draft';
+
+    if v_published_version_id is null or v_draft_version_id is null then
+        raise exception 'Published or draft form not found' using errcode = '23514';
+    end if;
+
+    delete from public.activity_intelligence_form_items
+    where form_version_id = v_draft_version_id;
+
+    insert into public.activity_intelligence_form_items (
+        form_item_id,
+        form_version_id,
+        item_key,
+        item_type,
+        title,
+        helper_text,
+        placeholder,
+        options,
+        settings,
+        is_visible,
+        is_retired,
+        removed_in_draft,
+        sort_order,
+        created_at,
+        updated_at
+    )
+    select
+        gen_random_uuid(),
+        v_draft_version_id,
+        item_key,
+        item_type,
+        title,
+        helper_text,
+        placeholder,
+        options,
+        settings,
+        is_visible,
+        is_retired,
+        false,
+        sort_order,
+        now(),
+        now()
+    from public.activity_intelligence_form_items
+    where form_version_id = v_published_version_id
+    order by sort_order;
+
+    update public.activity_intelligence_activities
+    set updated_by_user_id = p_actor->>'userId',
+        updated_by_display_name = p_actor->>'displayName',
+        updated_at = now()
+    where activity_id = p_activity_id;
+
+    return jsonb_build_object('activity_id', p_activity_id, 'form_version_id', v_draft_version_id);
+end;
+$$;
+
+create or replace function public.activity_intelligence_publish_draft(
+    p_activity_id uuid,
+    p_actor jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_current_published_id uuid;
+    v_current_draft_id uuid;
+    v_next_draft_id uuid := gen_random_uuid();
+    v_next_version_number integer;
+begin
+    select form_version_id
+    into v_current_published_id
+    from public.activity_intelligence_form_versions
+    where activity_id = p_activity_id
+      and status = 'published';
+
+    select form_version_id, version_number + 1
+    into v_current_draft_id, v_next_version_number
+    from public.activity_intelligence_form_versions
+    where activity_id = p_activity_id
+      and status = 'draft';
+
+    if v_current_published_id is null or v_current_draft_id is null then
+        raise exception 'Published or draft form not found' using errcode = '23514';
+    end if;
+
+    update public.activity_intelligence_form_versions
+    set status = 'archived',
+        updated_at = now()
+    where form_version_id = v_current_published_id;
+
+    update public.activity_intelligence_form_versions
+    set status = 'published',
+        published_at = now(),
+        published_by_user_id = p_actor->>'userId',
+        published_by_display_name = p_actor->>'displayName',
+        updated_at = now()
+    where form_version_id = v_current_draft_id;
+
+    delete from public.activity_intelligence_form_items
+    where form_version_id = v_current_draft_id
+      and removed_in_draft = true;
+
+    update public.activity_intelligence_form_items
+    set removed_in_draft = false,
+        updated_at = now()
+    where form_version_id = v_current_draft_id;
+
+    insert into public.activity_intelligence_form_versions (
+        form_version_id,
+        activity_id,
+        version_number,
+        status,
+        published_at,
+        published_by_user_id,
+        published_by_display_name,
+        created_at,
+        updated_at
+    )
+    values (
+        v_next_draft_id,
+        p_activity_id,
+        v_next_version_number,
+        'draft',
+        null,
+        null,
+        null,
+        now(),
+        now()
+    );
+
+    insert into public.activity_intelligence_form_items (
+        form_item_id,
+        form_version_id,
+        item_key,
+        item_type,
+        title,
+        helper_text,
+        placeholder,
+        options,
+        settings,
+        is_visible,
+        is_retired,
+        removed_in_draft,
+        sort_order,
+        created_at,
+        updated_at
+    )
+    select
+        gen_random_uuid(),
+        v_next_draft_id,
+        item_key,
+        item_type,
+        title,
+        helper_text,
+        placeholder,
+        options,
+        settings,
+        is_visible,
+        is_retired,
+        false,
+        sort_order,
+        now(),
+        now()
+    from public.activity_intelligence_form_items
+    where form_version_id = v_current_draft_id
+    order by sort_order;
+
+    update public.activity_intelligence_activities
+    set updated_by_user_id = p_actor->>'userId',
+        updated_by_display_name = p_actor->>'displayName',
+        updated_at = now()
+    where activity_id = p_activity_id;
+
+    return jsonb_build_object(
+        'activity_id', p_activity_id,
+        'published_form_version_id', v_current_draft_id,
+        'draft_form_version_id', v_next_draft_id
+    );
+end;
+$$;
+
+create or replace function public.activity_intelligence_private_insert_answers(
+    p_submission_id uuid,
+    p_form_version_id uuid,
+    p_answers jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_answer jsonb;
+    v_item record;
+begin
+    if jsonb_typeof(coalesce(p_answers, '[]'::jsonb)) <> 'array' then
+        raise exception 'p_answers must be a JSON array' using errcode = '22023';
+    end if;
+
+    for v_answer in
+        select value
+        from jsonb_array_elements(coalesce(p_answers, '[]'::jsonb))
+    loop
+        select form_item_id, item_key, item_type
+        into v_item
+        from public.activity_intelligence_form_items
+        where form_version_id = p_form_version_id
+          and item_key = v_answer->>'item_key';
+
+        if v_item.form_item_id is null then
+            raise exception 'Answer item does not belong to the submission form version' using errcode = '23514';
+        end if;
+
+        if v_item.item_type not in ('short_text', 'long_text', 'number', 'yes_no', 'single_choice', 'multiple_choice', 'dropdown') then
+            raise exception 'Answer item type is not answer-producing' using errcode = '23514';
+        end if;
+
+        insert into public.activity_intelligence_submission_answers (
+            answer_id,
+            submission_id,
+            form_item_id,
+            item_key,
+            value_text,
+            value_number,
+            value_boolean,
+            value_jsonb,
+            other_text,
+            created_at,
+            updated_at
+        )
+        values (
+            gen_random_uuid(),
+            p_submission_id,
+            v_item.form_item_id,
+            v_item.item_key,
+            nullif(v_answer->>'value_text', ''),
+            case when v_answer ? 'value_number' and v_answer->>'value_number' is not null then (v_answer->>'value_number')::numeric else null end,
+            case when v_answer ? 'value_boolean' and v_answer->>'value_boolean' is not null then (v_answer->>'value_boolean')::boolean else null end,
+            case when v_answer ? 'value_jsonb' then v_answer->'value_jsonb' else null end,
+            nullif(v_answer->>'other_text', ''),
+            now(),
+            now()
+        );
+    end loop;
+end;
+$$;
+
+create or replace function public.activity_intelligence_create_submission(
+    p_submission jsonb,
+    p_answers jsonb,
+    p_actor jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_submission_id uuid := coalesce((p_submission->>'submission_id')::uuid, gen_random_uuid());
+    v_activity_id uuid := (p_submission->>'activity_id')::uuid;
+    v_form_version_id uuid;
+begin
+    select form_version_id
+    into v_form_version_id
+    from public.activity_intelligence_form_versions
+    where activity_id = v_activity_id
+      and status = 'published';
+
+    if v_form_version_id is null then
+        raise exception 'Activity has no current published form' using errcode = '23514';
+    end if;
+
+    insert into public.activity_intelligence_submissions (
+        submission_id,
+        activity_id,
+        form_version_id,
+        status,
+        card_id,
+        created_by_user_id,
+        created_by_display_name,
+        updated_by_user_id,
+        updated_by_display_name,
+        created_at,
+        updated_at
+    )
+    values (
+        v_submission_id,
+        v_activity_id,
+        v_form_version_id,
+        'active',
+        nullif(p_submission->>'card_id', ''),
+        p_actor->>'userId',
+        p_actor->>'displayName',
+        p_actor->>'userId',
+        p_actor->>'displayName',
+        now(),
+        now()
+    );
+
+    perform public.activity_intelligence_private_insert_answers(v_submission_id, v_form_version_id, p_answers);
+
+    return jsonb_build_object('submission_id', v_submission_id);
+end;
+$$;
+
+create or replace function public.activity_intelligence_update_submission(
+    p_submission_id uuid,
+    p_card_id text,
+    p_answers jsonb,
+    p_actor jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_form_version_id uuid;
+begin
+    select form_version_id
+    into v_form_version_id
+    from public.activity_intelligence_submissions
+    where submission_id = p_submission_id;
+
+    if v_form_version_id is null then
+        raise exception 'Submission not found' using errcode = '23514';
+    end if;
+
+    update public.activity_intelligence_submissions
+    set card_id = nullif(p_card_id, ''),
+        updated_by_user_id = p_actor->>'userId',
+        updated_by_display_name = p_actor->>'displayName',
+        updated_at = now()
+    where submission_id = p_submission_id;
+
+    delete from public.activity_intelligence_submission_answers
+    where submission_id = p_submission_id;
+
+    perform public.activity_intelligence_private_insert_answers(p_submission_id, v_form_version_id, p_answers);
+
+    return jsonb_build_object('submission_id', p_submission_id);
+end;
+$$;
+
+revoke all on function public.activity_intelligence_private_insert_items(uuid, jsonb, boolean) from public;
+revoke all on function public.activity_intelligence_private_insert_answers(uuid, uuid, jsonb) from public;
+revoke all on function public.activity_intelligence_create_activity(jsonb, jsonb, jsonb) from public;
+revoke all on function public.activity_intelligence_duplicate_activity(uuid, jsonb, jsonb) from public;
+revoke all on function public.activity_intelligence_save_draft(uuid, jsonb, jsonb) from public;
+revoke all on function public.activity_intelligence_discard_draft(uuid, jsonb) from public;
+revoke all on function public.activity_intelligence_publish_draft(uuid, jsonb) from public;
+revoke all on function public.activity_intelligence_create_submission(jsonb, jsonb, jsonb) from public;
+revoke all on function public.activity_intelligence_update_submission(uuid, text, jsonb, jsonb) from public;
+
+grant execute on function public.activity_intelligence_create_activity(jsonb, jsonb, jsonb) to service_role;
+grant execute on function public.activity_intelligence_duplicate_activity(uuid, jsonb, jsonb) to service_role;
+grant execute on function public.activity_intelligence_save_draft(uuid, jsonb, jsonb) to service_role;
+grant execute on function public.activity_intelligence_discard_draft(uuid, jsonb) to service_role;
+grant execute on function public.activity_intelligence_publish_draft(uuid, jsonb) to service_role;
+grant execute on function public.activity_intelligence_create_submission(jsonb, jsonb, jsonb) to service_role;
+grant execute on function public.activity_intelligence_update_submission(uuid, text, jsonb, jsonb) to service_role;
