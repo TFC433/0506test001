@@ -20,6 +20,8 @@ const ALLOWED_ITEM_TYPES = new Set([
     'form_thumbnail'
 ]);
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 class ActivityIntelligenceError extends Error {
     constructor(statusCode, message, code) {
         super(message);
@@ -355,6 +357,7 @@ class ActivityIntelligenceService {
         const suppliedKey = item.itemKey || item.item_key || item.fieldId || item.field_id || item.itemId || item.item_id;
         const itemKey = suppliedKey || (options.assignMissingKeys ? randomUUID() : null);
         if (!itemKey) throw new ActivityIntelligenceError(400, 'Form item key is required.', 'MISSING_ITEM_KEY');
+        this._assertUuid(itemKey, 'itemKey');
         if (seenKeys.has(itemKey)) throw new ActivityIntelligenceError(400, `Duplicate form item key: ${itemKey}`, 'DUPLICATE_ITEM_KEY');
         seenKeys.add(itemKey);
 
@@ -362,7 +365,7 @@ class ActivityIntelligenceService {
         if (!title) throw new ActivityIntelligenceError(400, 'Form item title is required.', 'MISSING_ITEM_TITLE');
 
         const settings = this._normalizeItemSettings(item);
-        const optionEntries = this._normalizeOptions(item.options || item.optionEntries || [], type);
+        const optionEntries = this._normalizeOptions(item, type);
 
         return {
             item_key: itemKey,
@@ -372,9 +375,8 @@ class ActivityIntelligenceService {
             placeholder: String(item.placeholder || ''),
             options: optionEntries,
             settings,
-            is_visible: item.visible !== false && item.isVisible !== false && item.is_visible !== false,
-            is_retired: Boolean(item.retired || item.isRetired || item.is_retired),
-            removed_in_draft: Boolean(item.removedInDraft || item.removed_in_draft),
+            is_hidden: item.visible === false || item.isHidden === true || item.is_hidden === true,
+            is_removed: Boolean(item.removedInDraft || item.isRemoved || item.is_removed),
             sort_order: Number.isInteger(item.sortOrder) ? item.sortOrder : index + 1
         };
     }
@@ -395,8 +397,12 @@ class ActivityIntelligenceService {
         return settings;
     }
 
-    _normalizeOptions(options, type) {
+    _normalizeOptions(item, type) {
         if (!CHOICE_ITEM_TYPES.has(type)) return [];
+        const options = Array.isArray(item.optionEntries)
+            ? item.optionEntries
+            : (Array.isArray(item.option_entries) ? item.option_entries : item.options);
+
         if (!Array.isArray(options) || options.length === 0) {
             throw new ActivityIntelligenceError(400, 'Choice fields must include at least one option.', 'MISSING_OPTIONS');
         }
@@ -405,8 +411,10 @@ class ActivityIntelligenceService {
             const source = option && typeof option === 'object' ? option : { label: option };
             const label = String(source.label || source.value || '').trim();
             if (!label) throw new ActivityIntelligenceError(400, 'Choice option labels cannot be blank.', 'INVALID_OPTION');
+            const optionKey = source.optionKey || source.option_key || randomUUID();
+            this._assertUuid(optionKey, 'optionKey');
             return {
-                optionKey: source.optionKey || source.option_key || randomUUID(),
+                optionKey,
                 label,
                 value: source.value || label,
                 sortOrder: index + 1
@@ -427,10 +435,10 @@ class ActivityIntelligenceService {
     _answerRowForItem(item, value, otherText) {
         const hasOtherText = String(otherText || '').trim() !== '';
         if (this._isEmptyAnswer(value) && !hasOtherText) return null;
+        this._assertUuid(item.formItemId, 'formItemId');
 
         const row = {
             form_item_id: item.formItemId,
-            item_key: item.itemKey,
             value_text: null,
             value_number: null,
             value_boolean: null,
@@ -458,7 +466,15 @@ class ActivityIntelligenceService {
         const cleaned = values
             .filter(entry => !this._isEmptyAnswer(entry))
             .map(entry => {
-                if (entry && typeof entry === 'object') return entry;
+                if (entry && typeof entry === 'object') {
+                    const optionKey = entry.optionKey || entry.option_key || null;
+                    if (optionKey) this._assertUuid(optionKey, 'optionKey');
+                    return {
+                        optionKey,
+                        label: entry.label || entry.value || '',
+                        value: entry.value || entry.label || ''
+                    };
+                }
                 const option = (item.optionEntries || []).find(candidate => candidate.optionKey === entry || candidate.value === entry || candidate.label === entry);
                 return option ? { optionKey: option.optionKey, label: option.label, value: option.value } : { value: entry };
             });
@@ -510,6 +526,7 @@ class ActivityIntelligenceService {
 
     async _validateOptionalCard(cardId) {
         if (cardId === undefined || cardId === null || cardId === '') return null;
+        this._assertUuid(cardId, 'cardId');
         const card = await this.rawContactSqlReader.getRawContactByCardId(cardId);
         if (!card) throw new ActivityIntelligenceError(404, 'RAW card not found.', 'RAW_CARD_NOT_FOUND');
         return cardId;
@@ -537,7 +554,7 @@ class ActivityIntelligenceService {
                     driveFileId: card.driveFileId,
                     driveLink: card.driveLink,
                     driveFilename: card.driveFilename,
-                    thumbnailUrl: card.driveFileId ? `/api/drive/thumbnail?fileId=${encodeURIComponent(card.driveFileId)}` : null
+                    thumbnailUrl: card.driveFileId ? `/api/external/thumbnail?fileId=${encodeURIComponent(card.driveFileId)}` : null
                 } : null
             });
         }
@@ -583,6 +600,12 @@ class ActivityIntelligenceService {
         return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : null;
     }
 
+    _assertUuid(value, label) {
+        if (!UUID_REGEX.test(String(value || ''))) {
+            throw new ActivityIntelligenceError(400, `${label} must be a valid UUID.`, 'INVALID_UUID');
+        }
+    }
+
     _normalizeOptionalDate(value) {
         if (!value) return null;
         const normalized = this._normalizeDate(value);
@@ -606,24 +629,24 @@ class ActivityIntelligenceService {
 
     _defaultFormItems() {
         return [
-            { itemKey: 'designer-card-link', type: 'card_link', title: '名片連結', helperText: '連結本次紀錄使用的 RAW 名片。' },
-            { itemKey: 'fdp_section_visit', type: 'section_heading', title: '展場客戶訪談資訊', helperText: '記錄本次展場接觸的基本背景。' },
-            { itemKey: 'fdp_visit_purpose', type: 'multiple_choice', title: '客戶參觀目的', options: ['了解產品方案', '尋找合作夥伴', '評估導入需求', '既有客戶交流', '其他'], allowOther: true },
-            { itemKey: 'fdp_customer_name', type: 'short_text', title: '客戶姓名', placeholder: '請輸入客戶姓名' },
-            { itemKey: 'fdp_company', type: 'short_text', title: '公司名稱', placeholder: '請輸入公司或單位名稱' },
-            { itemKey: 'fdp_title', type: 'short_text', title: '職稱', placeholder: '請輸入職稱' },
-            { itemKey: 'fdp_visitors', type: 'number', title: '同行人數', placeholder: '請輸入人數' },
-            { itemKey: 'fdp_contact', type: 'short_text', title: '聯絡方式', placeholder: '例如電話、Email、LINE 或其他聯絡資訊' },
-            { itemKey: 'fdp_section_business', type: 'section_heading', title: '需求與產業輪廓', helperText: '協助後續業務判斷優先順序與適合方案。' },
-            { itemKey: 'fdp_interest_topics', type: 'multiple_choice', title: '客戶關注議題', options: ['AI', '自動化', '數位轉型', '資訊安全', '系統整合'], allowOther: true },
-            { itemKey: 'fdp_industry_broad', type: 'dropdown', title: '客戶產業大類', options: ['製造業', '科技業', '醫療照護', '金融服務', '政府與教育', '其他'], allowOther: true },
-            { itemKey: 'fdp_industry_detail', type: 'dropdown', title: '客戶產業細項', options: ['半導體', 'CNC 加工', '電子組裝', '機械設備', '通路代理', '其他'], allowOther: true },
-            { itemKey: 'fdp_followup_priority', type: 'single_choice', title: '後續追蹤優先度', options: ['高', '中', '低', '暫不追蹤'], allowOther: true },
-            { itemKey: 'fdp_section_notes', type: 'section_heading', title: '補充紀錄', helperText: '可先快速紀錄，細節展後再補。' },
-            { itemKey: 'fdp_info_later', type: 'information_text', title: '填寫提示', helperText: '訪談過程可先記錄關鍵字，詳細需求與內部備註可於展後整理時完成。' },
-            { itemKey: 'fdp_note_1', type: 'long_text', title: '補充紀錄 1', placeholder: '請輸入第一段補充紀錄' },
-            { itemKey: 'fdp_note_2', type: 'long_text', title: '補充紀錄 2', placeholder: '請輸入第二段補充紀錄' },
-            { itemKey: 'fdp_note_3', type: 'long_text', title: '補充紀錄 3', placeholder: '請輸入第三段補充紀錄' }
+            { type: 'card_link', title: '名片連結', helperText: '連結本次紀錄使用的 RAW 名片。' },
+            { type: 'section_heading', title: '展場客戶訪談資訊', helperText: '記錄本次展場接觸的基本背景。' },
+            { type: 'multiple_choice', title: '客戶參觀目的', options: ['了解產品方案', '尋找合作夥伴', '評估導入需求', '既有客戶交流', '其他'], allowOther: true },
+            { type: 'short_text', title: '客戶姓名', placeholder: '請輸入客戶姓名' },
+            { type: 'short_text', title: '公司名稱', placeholder: '請輸入公司或單位名稱' },
+            { type: 'short_text', title: '職稱', placeholder: '請輸入職稱' },
+            { type: 'number', title: '同行人數', placeholder: '請輸入人數' },
+            { type: 'short_text', title: '聯絡方式', placeholder: '例如電話、Email、LINE 或其他聯絡資訊' },
+            { type: 'section_heading', title: '需求與產業輪廓', helperText: '協助後續業務判斷優先順序與適合方案。' },
+            { type: 'multiple_choice', title: '客戶關注議題', options: ['AI', '自動化', '數位轉型', '資訊安全', '系統整合'], allowOther: true },
+            { type: 'dropdown', title: '客戶產業大類', options: ['製造業', '科技業', '醫療照護', '金融服務', '政府與教育', '其他'], allowOther: true },
+            { type: 'dropdown', title: '客戶產業細項', options: ['半導體', 'CNC 加工', '電子組裝', '機械設備', '通路代理', '其他'], allowOther: true },
+            { type: 'single_choice', title: '後續追蹤優先度', options: ['高', '中', '低', '暫不追蹤'], allowOther: true },
+            { type: 'section_heading', title: '補充紀錄', helperText: '可先快速紀錄，細節展後再補。' },
+            { type: 'information_text', title: '填寫提示', helperText: '訪談過程可先記錄關鍵字，詳細需求與內部備註可於展後整理時完成。' },
+            { type: 'long_text', title: '補充紀錄 1', placeholder: '請輸入第一段補充紀錄' },
+            { type: 'long_text', title: '補充紀錄 2', placeholder: '請輸入第二段補充紀錄' },
+            { type: 'long_text', title: '補充紀錄 3', placeholder: '請輸入第三段補充紀錄' }
         ];
     }
 }

@@ -271,9 +271,8 @@ class ActivityIntelligenceSqlReader {
             optionEntries: Array.isArray(row.options) ? row.options : [],
             allowOther: Boolean(settings.allowOther),
             settings,
-            visible: row.is_visible !== false,
-            retired: Boolean(row.is_retired),
-            removedInDraft: Boolean(row.removed_in_draft),
+            visible: row.is_hidden !== true,
+            removedInDraft: Boolean(row.is_removed),
             sortOrder: row.sort_order
         };
     }
@@ -300,10 +299,9 @@ class ActivityIntelligenceSqlReader {
         if (!row) return null;
 
         return {
-            answerId: row.answer_id,
+            answerId: row.submission_answer_id,
             submissionId: row.submission_id,
             formItemId: row.form_item_id,
-            itemKey: row.item_key,
             valueText: row.value_text,
             valueNumber: row.value_number,
             valueBoolean: row.value_boolean,
@@ -313,20 +311,20 @@ class ActivityIntelligenceSqlReader {
     }
 
     mapSubmissionDto(submission, answerRows, formVersion, items) {
-        const itemsByKey = new Map((items || []).map(item => [item.itemKey, item]));
+        const itemsByFormItemId = new Map((items || []).map(item => [item.formItemId, item]));
         const answers = {};
         const otherAnswers = {};
 
         (answerRows || []).forEach(answer => {
-            const item = itemsByKey.get(answer.itemKey);
+            const item = itemsByFormItemId.get(answer.formItemId);
             if (!item) return;
 
-            if (answer.otherText) otherAnswers[answer.itemKey] = answer.otherText;
+            if (answer.otherText) otherAnswers[item.itemKey] = answer.otherText;
 
-            if (answer.valueText !== null && answer.valueText !== undefined) answers[answer.itemKey] = answer.valueText;
-            else if (answer.valueNumber !== null && answer.valueNumber !== undefined) answers[answer.itemKey] = answer.valueNumber;
-            else if (answer.valueBoolean !== null && answer.valueBoolean !== undefined) answers[answer.itemKey] = answer.valueBoolean;
-            else if (answer.valueJsonb !== null && answer.valueJsonb !== undefined) answers[answer.itemKey] = answer.valueJsonb;
+            if (answer.valueText !== null && answer.valueText !== undefined) answers[item.itemKey] = answer.valueText;
+            else if (answer.valueNumber !== null && answer.valueNumber !== undefined) answers[item.itemKey] = answer.valueNumber;
+            else if (answer.valueBoolean !== null && answer.valueBoolean !== undefined) answers[item.itemKey] = answer.valueBoolean;
+            else if (answer.valueJsonb !== null && answer.valueJsonb !== undefined) answers[item.itemKey] = answer.valueJsonb;
         });
 
         return {

@@ -1,3 +1,5 @@
+BEGIN;
+
 -- ============================================================================
 -- Activity Intelligence Transaction RPCs v1
 -- ============================================================================
@@ -13,6 +15,39 @@
 
 create extension if not exists pgcrypto;
 
+create or replace function public.activity_intelligence_private_rekey_options(
+    p_options jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+    if jsonb_typeof(coalesce(p_options, '[]'::jsonb)) <> 'array' then
+        return '[]'::jsonb;
+    end if;
+
+    return coalesce((
+        select jsonb_agg(
+            case
+                when jsonb_typeof(value) = 'object' then
+                    value - 'optionKey' - 'option_key'
+                    || jsonb_build_object('optionKey', gen_random_uuid()::text)
+                else
+                    jsonb_build_object(
+                        'optionKey', gen_random_uuid()::text,
+                        'label', value #>> '{}',
+                        'value', value #>> '{}'
+                    )
+            end
+            order by ordinality
+        )
+        from jsonb_array_elements(p_options) with ordinality
+    ), '[]'::jsonb);
+end;
+$$;
+
 create or replace function public.activity_intelligence_private_insert_items(
     p_form_version_id uuid,
     p_items jsonb,
@@ -26,7 +61,8 @@ as $$
 declare
     v_item jsonb;
     v_sort_order integer;
-    v_item_key text;
+    v_item_key uuid;
+    v_options jsonb;
 begin
     if jsonb_typeof(coalesce(p_items, '[]'::jsonb)) <> 'array' then
         raise exception 'p_items must be a JSON array' using errcode = '22023';
@@ -37,8 +73,12 @@ begin
         from jsonb_array_elements(coalesce(p_items, '[]'::jsonb)) with ordinality
     loop
         v_item_key := case
-            when p_rekey then gen_random_uuid()::text
-            else coalesce(v_item->>'item_key', gen_random_uuid()::text)
+            when p_rekey then gen_random_uuid()
+            else coalesce((v_item->>'item_key')::uuid, gen_random_uuid())
+        end;
+        v_options := case
+            when p_rekey then public.activity_intelligence_private_rekey_options(coalesce(v_item->'options', '[]'::jsonb))
+            else coalesce(v_item->'options', '[]'::jsonb)
         end;
 
         insert into public.activity_intelligence_form_items (
@@ -51,9 +91,8 @@ begin
             placeholder,
             options,
             settings,
-            is_visible,
-            is_retired,
-            removed_in_draft,
+            is_hidden,
+            is_removed,
             sort_order,
             created_at,
             updated_at
@@ -66,11 +105,10 @@ begin
             v_item->>'title',
             coalesce(v_item->>'helper_text', ''),
             coalesce(v_item->>'placeholder', ''),
-            coalesce(v_item->'options', '[]'::jsonb),
+            v_options,
             coalesce(v_item->'settings', '{}'::jsonb),
-            coalesce((v_item->>'is_visible')::boolean, true),
-            coalesce((v_item->>'is_retired')::boolean, false),
-            coalesce((v_item->>'removed_in_draft')::boolean, false),
+            coalesce((v_item->>'is_hidden')::boolean, false),
+            coalesce((v_item->>'is_removed')::boolean, false),
             coalesce((v_item->>'sort_order')::integer, v_sort_order),
             now(),
             now()
@@ -91,7 +129,7 @@ set search_path = public, pg_temp
 as $$
 declare
     v_activity_id uuid := coalesce((p_activity->>'activity_id')::uuid, gen_random_uuid());
-    v_published_version_id uuid := gen_random_uuid();
+    v_version_1_id uuid := gen_random_uuid();
     v_draft_version_id uuid := gen_random_uuid();
 begin
     insert into public.activity_intelligence_activities (
@@ -137,18 +175,26 @@ begin
         updated_at
     )
     values (
-        v_published_version_id,
+        v_version_1_id,
         v_activity_id,
         1,
-        'published',
-        now(),
-        p_actor->>'userId',
-        p_actor->>'displayName',
+        'draft',
+        null,
+        null,
+        null,
         now(),
         now()
     );
 
-    perform public.activity_intelligence_private_insert_items(v_published_version_id, p_items, false);
+    perform public.activity_intelligence_private_insert_items(v_version_1_id, p_items, false);
+
+    update public.activity_intelligence_form_versions
+    set status = 'published',
+        published_at = now(),
+        published_by_user_id = p_actor->>'userId',
+        published_by_display_name = p_actor->>'displayName',
+        updated_at = now()
+    where form_version_id = v_version_1_id;
 
     insert into public.activity_intelligence_form_versions (
         form_version_id,
@@ -183,9 +229,8 @@ begin
         placeholder,
         options,
         settings,
-        is_visible,
-        is_retired,
-        removed_in_draft,
+        is_hidden,
+        is_removed,
         sort_order,
         created_at,
         updated_at
@@ -200,14 +245,13 @@ begin
         placeholder,
         options,
         settings,
-        is_visible,
-        is_retired,
-        removed_in_draft,
+        is_hidden,
+        is_removed,
         sort_order,
         now(),
         now()
     from public.activity_intelligence_form_items
-    where form_version_id = v_published_version_id
+    where form_version_id = v_version_1_id
     order by sort_order;
 
     return jsonb_build_object('activity_id', v_activity_id);
@@ -227,11 +271,8 @@ as $$
 declare
     v_source_published_id uuid;
     v_activity_id uuid := coalesce((p_activity->>'activity_id')::uuid, gen_random_uuid());
-    v_published_version_id uuid := gen_random_uuid();
+    v_version_1_id uuid := gen_random_uuid();
     v_draft_version_id uuid := gen_random_uuid();
-    v_item record;
-    v_key_map jsonb := '{}'::jsonb;
-    v_new_key text;
 begin
     select form_version_id
     into v_source_published_id
@@ -285,54 +326,17 @@ begin
         created_at,
         updated_at
     )
-    values
-        (v_published_version_id, v_activity_id, 1, 'published', now(), p_actor->>'userId', p_actor->>'displayName', now(), now()),
-        (v_draft_version_id, v_activity_id, 2, 'draft', null, null, null, now(), now());
-
-    for v_item in
-        select *
-        from public.activity_intelligence_form_items
-        where form_version_id = v_source_published_id
-        order by sort_order
-    loop
-        v_new_key := gen_random_uuid()::text;
-        v_key_map := v_key_map || jsonb_build_object(v_item.item_key, v_new_key);
-
-        insert into public.activity_intelligence_form_items (
-            form_item_id,
-            form_version_id,
-            item_key,
-            item_type,
-            title,
-            helper_text,
-            placeholder,
-            options,
-            settings,
-            is_visible,
-            is_retired,
-            removed_in_draft,
-            sort_order,
-            created_at,
-            updated_at
-        )
-        values (
-            gen_random_uuid(),
-            v_published_version_id,
-            v_new_key,
-            v_item.item_type,
-            v_item.title,
-            v_item.helper_text,
-            v_item.placeholder,
-            v_item.options,
-            v_item.settings,
-            v_item.is_visible,
-            v_item.is_retired,
-            false,
-            v_item.sort_order,
-            now(),
-            now()
-        );
-    end loop;
+    values (
+        v_version_1_id,
+        v_activity_id,
+        1,
+        'draft',
+        null,
+        null,
+        null,
+        now(),
+        now()
+    );
 
     insert into public.activity_intelligence_form_items (
         form_item_id,
@@ -344,9 +348,74 @@ begin
         placeholder,
         options,
         settings,
-        is_visible,
-        is_retired,
-        removed_in_draft,
+        is_hidden,
+        is_removed,
+        sort_order,
+        created_at,
+        updated_at
+    )
+    select
+        gen_random_uuid(),
+        v_version_1_id,
+        gen_random_uuid(),
+        item_type,
+        title,
+        helper_text,
+        placeholder,
+        public.activity_intelligence_private_rekey_options(options),
+        settings,
+        is_hidden,
+        false,
+        sort_order,
+        now(),
+        now()
+    from public.activity_intelligence_form_items
+    where form_version_id = v_source_published_id
+    order by sort_order;
+
+    update public.activity_intelligence_form_versions
+    set status = 'published',
+        published_at = now(),
+        published_by_user_id = p_actor->>'userId',
+        published_by_display_name = p_actor->>'displayName',
+        updated_at = now()
+    where form_version_id = v_version_1_id;
+
+    insert into public.activity_intelligence_form_versions (
+        form_version_id,
+        activity_id,
+        version_number,
+        status,
+        published_at,
+        published_by_user_id,
+        published_by_display_name,
+        created_at,
+        updated_at
+    )
+    values (
+        v_draft_version_id,
+        v_activity_id,
+        2,
+        'draft',
+        null,
+        null,
+        null,
+        now(),
+        now()
+    );
+
+    insert into public.activity_intelligence_form_items (
+        form_item_id,
+        form_version_id,
+        item_key,
+        item_type,
+        title,
+        helper_text,
+        placeholder,
+        options,
+        settings,
+        is_hidden,
+        is_removed,
         sort_order,
         created_at,
         updated_at
@@ -361,14 +430,13 @@ begin
         placeholder,
         options,
         settings,
-        is_visible,
-        is_retired,
-        removed_in_draft,
+        is_hidden,
+        is_removed,
         sort_order,
         now(),
         now()
     from public.activity_intelligence_form_items
-    where form_version_id = v_published_version_id
+    where form_version_id = v_version_1_id
     order by sort_order;
 
     return jsonb_build_object('activity_id', v_activity_id);
@@ -459,9 +527,8 @@ begin
         placeholder,
         options,
         settings,
-        is_visible,
-        is_retired,
-        removed_in_draft,
+        is_hidden,
+        is_removed,
         sort_order,
         created_at,
         updated_at
@@ -476,8 +543,7 @@ begin
         placeholder,
         options,
         settings,
-        is_visible,
-        is_retired,
+        is_hidden,
         false,
         sort_order,
         now(),
@@ -527,6 +593,10 @@ begin
         raise exception 'Published or draft form not found' using errcode = '23514';
     end if;
 
+    delete from public.activity_intelligence_form_items
+    where form_version_id = v_current_draft_id
+      and is_removed = true;
+
     update public.activity_intelligence_form_versions
     set status = 'archived',
         updated_at = now()
@@ -537,15 +607,6 @@ begin
         published_at = now(),
         published_by_user_id = p_actor->>'userId',
         published_by_display_name = p_actor->>'displayName',
-        updated_at = now()
-    where form_version_id = v_current_draft_id;
-
-    delete from public.activity_intelligence_form_items
-    where form_version_id = v_current_draft_id
-      and removed_in_draft = true;
-
-    update public.activity_intelligence_form_items
-    set removed_in_draft = false,
         updated_at = now()
     where form_version_id = v_current_draft_id;
 
@@ -582,9 +643,8 @@ begin
         placeholder,
         options,
         settings,
-        is_visible,
-        is_retired,
-        removed_in_draft,
+        is_hidden,
+        is_removed,
         sort_order,
         created_at,
         updated_at
@@ -599,8 +659,7 @@ begin
         placeholder,
         options,
         settings,
-        is_visible,
-        is_retired,
+        is_hidden,
         false,
         sort_order,
         now(),
@@ -645,11 +704,11 @@ begin
         select value
         from jsonb_array_elements(coalesce(p_answers, '[]'::jsonb))
     loop
-        select form_item_id, item_key, item_type
+        select form_item_id, item_type
         into v_item
         from public.activity_intelligence_form_items
         where form_version_id = p_form_version_id
-          and item_key = v_answer->>'item_key';
+          and form_item_id = (v_answer->>'form_item_id')::uuid;
 
         if v_item.form_item_id is null then
             raise exception 'Answer item does not belong to the submission form version' using errcode = '23514';
@@ -660,10 +719,9 @@ begin
         end if;
 
         insert into public.activity_intelligence_submission_answers (
-            answer_id,
+            submission_answer_id,
             submission_id,
             form_item_id,
-            item_key,
             value_text,
             value_number,
             value_boolean,
@@ -676,7 +734,6 @@ begin
             gen_random_uuid(),
             p_submission_id,
             v_item.form_item_id,
-            v_item.item_key,
             nullif(v_answer->>'value_text', ''),
             case when v_answer ? 'value_number' and v_answer->>'value_number' is not null then (v_answer->>'value_number')::numeric else null end,
             case when v_answer ? 'value_boolean' and v_answer->>'value_boolean' is not null then (v_answer->>'value_boolean')::boolean else null end,
@@ -732,7 +789,7 @@ begin
         v_activity_id,
         v_form_version_id,
         'active',
-        nullif(p_submission->>'card_id', ''),
+        nullif(p_submission->>'card_id', '')::uuid,
         p_actor->>'userId',
         p_actor->>'displayName',
         p_actor->>'userId',
@@ -749,7 +806,7 @@ $$;
 
 create or replace function public.activity_intelligence_update_submission(
     p_submission_id uuid,
-    p_card_id text,
+    p_card_id uuid,
     p_answers jsonb,
     p_actor jsonb
 )
@@ -771,7 +828,7 @@ begin
     end if;
 
     update public.activity_intelligence_submissions
-    set card_id = nullif(p_card_id, ''),
+    set card_id = p_card_id,
         updated_by_user_id = p_actor->>'userId',
         updated_by_display_name = p_actor->>'displayName',
         updated_at = now()
@@ -786,6 +843,7 @@ begin
 end;
 $$;
 
+revoke all on function public.activity_intelligence_private_rekey_options(jsonb) from public;
 revoke all on function public.activity_intelligence_private_insert_items(uuid, jsonb, boolean) from public;
 revoke all on function public.activity_intelligence_private_insert_answers(uuid, uuid, jsonb) from public;
 revoke all on function public.activity_intelligence_create_activity(jsonb, jsonb, jsonb) from public;
@@ -794,7 +852,7 @@ revoke all on function public.activity_intelligence_save_draft(uuid, jsonb, json
 revoke all on function public.activity_intelligence_discard_draft(uuid, jsonb) from public;
 revoke all on function public.activity_intelligence_publish_draft(uuid, jsonb) from public;
 revoke all on function public.activity_intelligence_create_submission(jsonb, jsonb, jsonb) from public;
-revoke all on function public.activity_intelligence_update_submission(uuid, text, jsonb, jsonb) from public;
+revoke all on function public.activity_intelligence_update_submission(uuid, uuid, jsonb, jsonb) from public;
 
 grant execute on function public.activity_intelligence_create_activity(jsonb, jsonb, jsonb) to service_role;
 grant execute on function public.activity_intelligence_duplicate_activity(uuid, jsonb, jsonb) to service_role;
@@ -802,4 +860,6 @@ grant execute on function public.activity_intelligence_save_draft(uuid, jsonb, j
 grant execute on function public.activity_intelligence_discard_draft(uuid, jsonb) to service_role;
 grant execute on function public.activity_intelligence_publish_draft(uuid, jsonb) to service_role;
 grant execute on function public.activity_intelligence_create_submission(jsonb, jsonb, jsonb) to service_role;
-grant execute on function public.activity_intelligence_update_submission(uuid, text, jsonb, jsonb) to service_role;
+grant execute on function public.activity_intelligence_update_submission(uuid, uuid, jsonb, jsonb) to service_role;
+
+COMMIT;

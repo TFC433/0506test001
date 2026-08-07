@@ -3,8 +3,34 @@ const assert = require('assert');
 const ActivityIntelligenceService = require('../services/activity-intelligence-service');
 const ActivityIntelligenceController = require('../controllers/activity-intelligence.controller');
 
+const IDS = {
+    activity: '11111111-1111-4111-8111-111111111111',
+    newActivity: '11111111-1111-4111-8111-111111111112',
+    copyActivity: '11111111-1111-4111-8111-111111111113',
+    publishedVersion: '22222222-2222-4222-8222-222222222221',
+    draftVersion: '22222222-2222-4222-8222-222222222222',
+    oldVersion: '22222222-2222-4222-8222-222222222223',
+    textKey: '33333333-3333-4333-8333-333333333331',
+    numberKey: '33333333-3333-4333-8333-333333333332',
+    boolKey: '33333333-3333-4333-8333-333333333333',
+    choiceKey: '33333333-3333-4333-8333-333333333334',
+    cardKey: '33333333-3333-4333-8333-333333333335',
+    oldTextKey: '33333333-3333-4333-8333-333333333336',
+    textItem: '44444444-4444-4444-8444-444444444441',
+    numberItem: '44444444-4444-4444-8444-444444444442',
+    boolItem: '44444444-4444-4444-8444-444444444443',
+    choiceItem: '44444444-4444-4444-8444-444444444444',
+    cardItem: '44444444-4444-4444-8444-444444444445',
+    oldTextItem: '44444444-4444-4444-8444-444444444446',
+    optionAlpha: '55555555-5555-4555-8555-555555555551',
+    card: '66666666-6666-4666-8666-666666666661',
+    missingCard: '66666666-6666-4666-8666-666666666662',
+    newSubmission: '77777777-7777-4777-8777-777777777771',
+    oldSubmission: '77777777-7777-4777-8777-777777777772'
+};
+
 const baseActivity = {
-    id: 'act-1',
+    id: IDS.activity,
     name: 'Expo',
     description: '',
     formOpenStart: '2026-08-01',
@@ -20,23 +46,25 @@ const baseActivity = {
 };
 
 const publishedItems = [
-    { formItemId: 'item-text-pub', itemKey: 'text', fieldId: 'text', type: 'short_text', title: 'Text', options: [], optionEntries: [] },
-    { formItemId: 'item-number-pub', itemKey: 'num', fieldId: 'num', type: 'number', title: 'Number', options: [], optionEntries: [] },
-    { formItemId: 'item-bool-pub', itemKey: 'bool', fieldId: 'bool', type: 'yes_no', title: 'Bool', options: [], optionEntries: [] },
+    { formItemId: IDS.textItem, itemKey: IDS.textKey, fieldId: IDS.textKey, type: 'short_text', title: 'Text', options: [], optionEntries: [], visible: true, removedInDraft: false },
+    { formItemId: IDS.numberItem, itemKey: IDS.numberKey, fieldId: IDS.numberKey, type: 'number', title: 'Number', options: [], optionEntries: [], visible: true, removedInDraft: false },
+    { formItemId: IDS.boolItem, itemKey: IDS.boolKey, fieldId: IDS.boolKey, type: 'yes_no', title: 'Bool', options: [], optionEntries: [], visible: true, removedInDraft: false },
     {
-        formItemId: 'item-choice-pub',
-        itemKey: 'choice',
-        fieldId: 'choice',
+        formItemId: IDS.choiceItem,
+        itemKey: IDS.choiceKey,
+        fieldId: IDS.choiceKey,
         type: 'multiple_choice',
         title: 'Choice',
-        options: ['Alpha'],
-        optionEntries: [{ optionKey: 'opt-alpha', label: 'Alpha', value: 'Alpha' }]
+        options: ['Display value should not be preferred'],
+        optionEntries: [{ optionKey: IDS.optionAlpha, label: 'Alpha', value: 'Alpha' }],
+        visible: true,
+        removedInDraft: false
     },
-    { formItemId: 'item-card-pub', itemKey: 'card', fieldId: 'card', type: 'card_link', title: 'Card', options: [], optionEntries: [] }
+    { formItemId: IDS.cardItem, itemKey: IDS.cardKey, fieldId: IDS.cardKey, type: 'card_link', title: 'Card', options: [], optionEntries: [], visible: true, removedInDraft: false }
 ];
 
 const oldItems = [
-    { formItemId: 'item-text-old', itemKey: 'text', fieldId: 'text', type: 'short_text', title: 'Old Text', options: [], optionEntries: [] }
+    { formItemId: IDS.oldTextItem, itemKey: IDS.oldTextKey, fieldId: IDS.oldTextKey, type: 'short_text', title: 'Old Text', options: [], optionEntries: [] }
 ];
 
 function makeHarness() {
@@ -53,19 +81,19 @@ function makeHarness() {
         },
         async getFormBundle() {
             return {
-                published: { versionId: 'pub-v1', versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems },
-                draft: { versionId: 'draft-v2', versionNumber: 2, items: publishedItems.map(item => ({ ...item })) }
+                published: { versionId: IDS.publishedVersion, versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems },
+                draft: { versionId: IDS.draftVersion, versionNumber: 2, items: publishedItems.map(item => ({ ...item })) }
             };
         },
         async getPublishedForm() {
-            return { versionId: 'pub-v1', versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems };
+            return { versionId: IDS.publishedVersion, versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems };
         },
         async getDraftForm() {
-            return { versionId: 'draft-v2', versionNumber: 2, items: publishedItems.map(item => ({ ...item })) };
+            return { versionId: IDS.draftVersion, versionNumber: 2, items: publishedItems.map(item => ({ ...item })) };
         },
         async getVersionWithItems(versionId) {
-            return versionId === 'old-v1'
-                ? { versionId: 'old-v1', versionNumber: 1, publishedAt: '2026-07-01T00:00:00.000Z', items: oldItems }
+            return versionId === IDS.oldVersion
+                ? { versionId: IDS.oldVersion, versionNumber: 1, publishedAt: '2026-07-01T00:00:00.000Z', items: oldItems }
                 : null;
         },
         async listSubmissions() {
@@ -79,11 +107,11 @@ function makeHarness() {
     const writer = {
         async createActivity(payload) {
             calls.createActivity = payload;
-            return { activity_id: 'new-act' };
+            return { activity_id: IDS.newActivity };
         },
         async duplicateActivity(payload) {
             calls.duplicateActivity = payload;
-            return { activity_id: 'copy-act' };
+            return { activity_id: IDS.copyActivity };
         },
         async saveDraft(payload) {
             calls.saveDraft = payload;
@@ -99,8 +127,8 @@ function makeHarness() {
         },
         async createSubmission(payload) {
             calls.createSubmission = payload;
-            submissions.set('sub-new', {
-                id: 'sub-new',
+            submissions.set(IDS.newSubmission, {
+                id: IDS.newSubmission,
                 activityId: payload.p_submission.activity_id,
                 formVersionId: payload.p_submission.form_version_id,
                 status: 'active',
@@ -108,7 +136,7 @@ function makeHarness() {
                 otherAnswers: {},
                 cardId: payload.p_submission.card_id,
                 card: null,
-                formSnapshot: { versionId: 'pub-v1', versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems },
+                formSnapshot: { versionId: IDS.publishedVersion, versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems },
                 createdByUserId: payload.p_actor.userId,
                 createdByDisplayName: payload.p_actor.displayName,
                 createdAt: '2026-08-02T00:00:00.000Z',
@@ -116,7 +144,7 @@ function makeHarness() {
                 updatedByDisplayName: payload.p_actor.displayName,
                 updatedAt: '2026-08-02T00:00:00.000Z'
             });
-            return { submission_id: 'sub-new' };
+            return { submission_id: IDS.newSubmission };
         },
         async updateSubmission(payload) {
             calls.updateSubmission = payload;
@@ -136,7 +164,7 @@ function makeHarness() {
 
     const rawContactSqlReader = {
         async getRawContactByCardId(cardId) {
-            if (cardId === 'missing-card') return null;
+            if (cardId === IDS.missingCard) return null;
             return {
                 cardId,
                 name: 'Card Name',
@@ -152,16 +180,16 @@ function makeHarness() {
         }
     };
 
-    submissions.set('old-sub', {
-        id: 'old-sub',
-        activityId: 'act-1',
-        formVersionId: 'old-v1',
+    submissions.set(IDS.oldSubmission, {
+        id: IDS.oldSubmission,
+        activityId: IDS.activity,
+        formVersionId: IDS.oldVersion,
         status: 'active',
         answers: {},
         otherAnswers: {},
-        cardId: 'card-1',
+        cardId: IDS.card,
         card: null,
-        formSnapshot: { versionId: 'old-v1', versionNumber: 1, publishedAt: '2026-07-01T00:00:00.000Z', items: oldItems },
+        formSnapshot: { versionId: IDS.oldVersion, versionNumber: 1, publishedAt: '2026-07-01T00:00:00.000Z', items: oldItems },
         createdByUserId: 'old-user',
         createdByDisplayName: 'Old User',
         createdAt: '2026-07-01T00:00:00.000Z',
@@ -176,7 +204,7 @@ function makeHarness() {
         rawContactSqlReader
     });
 
-    return { service, calls, publishedItems, submissions };
+    return { service, calls, publishedItems };
 }
 
 function actor() {
@@ -205,54 +233,66 @@ async function main() {
     }, actor());
     assert.strictEqual(calls.createActivity.p_activity.created_by_user_id, 'real-user');
     assert.strictEqual(calls.createActivity.p_activity.created_by_display_name, 'Real User');
+    assert(calls.createActivity.p_items.every(item => /^[0-9a-f-]{36}$/i.test(item.item_key)));
 
     await assertRejectsStatus(() => service.createActivity({ formOpenStart: '2026-08-01', formOpenEnd: '2026-08-31' }, actor()), 400);
     await assertRejectsStatus(() => service.createActivity({ name: 'Bad', formOpenStart: '2026-08-31', formOpenEnd: '2026-08-01' }, actor()), 400);
+    await assertRejectsStatus(() => service.saveDraft(IDS.activity, { items: [{ itemKey: 'fdp_section_visit', type: 'section_heading', title: 'Bad key' }] }, actor()), 400);
 
-    const activity = await service.getActivity('act-1');
-    assert.strictEqual(activity.id, 'act-1');
+    const activity = await service.getActivity(IDS.activity);
+    assert.strictEqual(activity.id, IDS.activity);
     assert(activity.status && ['upcoming', 'open', 'ended'].includes(activity.status.key));
 
     const originalPublishedTitle = publishedItems[0].title;
-    await service.saveDraft('act-1', { items: [{ itemKey: 'text', type: 'short_text', title: 'Draft Text' }] }, actor());
+    await service.saveDraft(IDS.activity, {
+        items: [
+            { itemKey: IDS.textKey, type: 'short_text', title: 'Draft Text', visible: false },
+            { itemKey: IDS.choiceKey, type: 'multiple_choice', title: 'Choice', options: ['Ignored'], optionEntries: [{ optionKey: IDS.optionAlpha, label: 'Alpha', value: 'Alpha' }] },
+            { itemKey: IDS.cardKey, type: 'card_link', title: 'Card', removedInDraft: true }
+        ]
+    }, actor());
     assert.strictEqual(calls.saveDraft.p_items[0].title, 'Draft Text');
+    assert.strictEqual(calls.saveDraft.p_items[0].is_hidden, true);
+    assert.strictEqual(calls.saveDraft.p_items[2].is_removed, true);
+    assert.strictEqual(calls.saveDraft.p_items[1].options[0].optionKey, IDS.optionAlpha);
+    assert.strictEqual(calls.saveDraft.p_items[1].options[0].label, 'Alpha');
     assert.strictEqual(publishedItems[0].title, originalPublishedTitle);
 
-    await service.publishDraft('act-1', actor());
-    assert.strictEqual(calls.publishDraft.p_activity_id, 'act-1');
+    await service.publishDraft(IDS.activity, actor());
+    assert.strictEqual(calls.publishDraft.p_activity_id, IDS.activity);
     assert.strictEqual(calls.publishDraft.p_actor.userId, 'real-user');
 
-    await service.createSubmission('act-1', {
-        cardId: 'card-1',
+    await service.createSubmission(IDS.activity, {
+        cardId: IDS.card,
         answers: {
-            text: 'hello',
-            num: '42',
-            bool: 'yes',
-            choice: ['Alpha']
+            [IDS.textKey]: 'hello',
+            [IDS.numberKey]: '42',
+            [IDS.boolKey]: 'yes',
+            [IDS.choiceKey]: ['Alpha']
         },
         otherAnswers: {
-            choice: 'custom'
+            [IDS.choiceKey]: 'custom'
         }
     }, actor());
-    const answerByKey = new Map(calls.createSubmission.p_answers.map(row => [row.item_key, row]));
-    assert.strictEqual(answerByKey.get('text').value_text, 'hello');
-    assert.strictEqual(answerByKey.get('num').value_number, 42);
-    assert.strictEqual(answerByKey.get('bool').value_boolean, true);
-    assert.deepStrictEqual(answerByKey.get('choice').value_jsonb[0].optionKey, 'opt-alpha');
-    assert.strictEqual(answerByKey.get('choice').other_text, 'custom');
-    assert(!answerByKey.has('card'));
+    const answerByFormItemId = new Map(calls.createSubmission.p_answers.map(row => [row.form_item_id, row]));
+    assert.strictEqual(answerByFormItemId.get(IDS.textItem).value_text, 'hello');
+    assert.strictEqual(answerByFormItemId.get(IDS.numberItem).value_number, 42);
+    assert.strictEqual(answerByFormItemId.get(IDS.boolItem).value_boolean, true);
+    assert.strictEqual(answerByFormItemId.get(IDS.choiceItem).value_jsonb[0].optionKey, IDS.optionAlpha);
+    assert.strictEqual(answerByFormItemId.get(IDS.choiceItem).other_text, 'custom');
+    assert(!answerByFormItemId.has(IDS.cardItem));
 
-    await service.updateSubmission('old-sub', { answers: { text: 'historical edit' } }, actor());
-    assert.strictEqual(calls.updateSubmission.p_answers[0].form_item_id, 'item-text-old');
+    await service.updateSubmission(IDS.oldSubmission, { answers: { [IDS.oldTextKey]: 'historical edit' } }, actor());
+    assert.strictEqual(calls.updateSubmission.p_answers[0].form_item_id, IDS.oldTextItem);
 
-    await assertRejectsStatus(() => service.createSubmission('act-1', { cardId: 'missing-card' }, actor()), 404);
-    const enriched = await service.getSubmission('old-sub');
-    assert.strictEqual(enriched.card.cardId, 'card-1');
-    assert.strictEqual(enriched.card.thumbnailUrl, '/api/drive/thumbnail?fileId=drive-1');
+    await assertRejectsStatus(() => service.createSubmission(IDS.activity, { cardId: IDS.missingCard }, actor()), 404);
+    const enriched = await service.getSubmission(IDS.oldSubmission);
+    assert.strictEqual(enriched.card.cardId, IDS.card);
+    assert.strictEqual(enriched.card.thumbnailUrl, '/api/external/thumbnail?fileId=drive-1');
 
-    await service.voidSubmission('old-sub', actor());
+    await service.voidSubmission(IDS.oldSubmission, actor());
     assert.strictEqual(calls.updateSubmissionStatus.status, 'void');
-    await service.restoreSubmission('old-sub', actor());
+    await service.restoreSubmission(IDS.oldSubmission, actor());
     assert.strictEqual(calls.updateSubmissionStatus.status, 'active');
 
     const controller = new ActivityIntelligenceController({
