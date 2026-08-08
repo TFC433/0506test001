@@ -928,10 +928,10 @@
             <div class="aim-record-card-identity-row">
               <div class="aim-record-card-primary">
                 <strong class="${preview.customer ? '' : 'aim-missing-name'}">${Store.escapeHtml(preview.customer || '未填姓名')}</strong>
-                ${preview.company ? `<span class="aim-record-card-company">${Store.escapeHtml(preview.company)}</span>` : ''}
                 ${preview.jobTitle ? `<span class="aim-record-card-job-title">${Store.escapeHtml(preview.jobTitle)}</span>` : ''}
-                ${preview.priority ? `<span class="aim-record-card-status-group"><span class="aim-record-preview-label">${Store.escapeHtml(preview.priorityLabel || '後續追蹤優先度')}</span>${priorityPill(preview.priority)}</span>` : ''}
+                ${preview.company ? `<span class="aim-record-card-company">${Store.escapeHtml(preview.company)}</span>` : ''}
                 ${preview.primaryGroup ? renderPreviewPrimaryGroup(preview.primaryGroup) : ''}
+                ${preview.priority ? `<span class="aim-record-card-status-group"><span class="aim-record-preview-label">${Store.escapeHtml(preview.priorityLabel || '後續追蹤優先度')}</span>${priorityPill(preview.priority)}</span>` : ''}
               </div>
             </div>
             ${renderRecordPreviewContent(preview, context)}
@@ -1078,7 +1078,7 @@
     const otherAnswers = otherAnswersForRecord(record);
     const customerField = fields.find(field => field.fieldId === 'fld_customer_name') || fields.find(field => /客戶|受訪者|姓名/.test(field.title));
     const companyField = fields.find(field => field.fieldId === 'fld_company') || fields.find(field => /公司|企業|組織/.test(field.title));
-    const jobTitleField = fields.find(field => field.fieldId === 'fld_job_title');
+    const jobTitleField = fields.find(field => field.fieldId === 'fld_job_title') || fields.find(field => /職稱|職位|頭銜|title/i.test(field.title));
     const priorityField = fields.find(field => field.fieldId === 'fld_priority') || fields.find(field => /優先/.test(field.title));
     const primaryField = fields.find(field => previewPlacementForItem(field) === 'primary' && compactPreviewChoiceFieldTypes.has(field.type) && field !== priorityField);
     const badgeGroups = [];
@@ -1088,11 +1088,11 @@
       const values = categoricalValues(displayAnswerValue(field, record.answers[field.fieldId], otherAnswers));
       if (values.length) badgeGroups.push({ field, values });
     });
-    const explicitTextFields = items.filter(field => previewPlacementForItem(field) === 'text');
+    const explicitTextFields = items.filter(field => field.type === 'long_text' && previewPlacementForItem(field) === 'text').slice(0, 2);
     const textFields = explicitTextFields.length
       ? explicitTextFields
       : fields.filter(field => field.type === 'long_text' && previewPlacementForItem(field) !== 'none').slice(0, 1);
-    const textPreviews = textFields.slice(0, 2).map(field => {
+    const textPreviews = textFields.map(field => {
       const value = displayAnswerValue(field, record.answers[field.fieldId], otherAnswers);
       return hasValue(value) ? { label: field.title, value: Store.answerText(value) } : null;
     }).filter(Boolean);
@@ -1102,7 +1102,7 @@
       company: companyField ? Store.answerText(displayAnswerValue(companyField, record.answers[companyField.fieldId], otherAnswers)) : '',
       jobTitle: jobTitleField ? Store.answerText(displayAnswerValue(jobTitleField, record.answers[jobTitleField.fieldId], otherAnswers)) : '',
       priority: priorityField ? Store.answerText(displayAnswerValue(priorityField, record.answers[priorityField.fieldId], otherAnswers)) : '',
-      priorityLabel: priorityField && priorityField.title,
+      priorityLabel: priorityField ? '後續追蹤優先度' : '',
       primaryGroup: primaryField && primaryValues.length ? { field: primaryField, values: primaryValues } : null,
       badgeGroups,
       text: textPreviews[0] || null,
@@ -1143,7 +1143,7 @@
       badgesHtml += `<span class="aim-preview-group" data-preview-group data-preview-count="${group.values.length}"><span class="aim-record-preview-label">${Store.escapeHtml(group.field.title)}</span>${renderCategoricalBadges(group.field, group.values)}</span>`;
     });
     const badgeLine = badgesHtml ? `<div class="aim-record-preview-badges" data-preview-badges>${badgesHtml}<span class="aim-answer-badge aim-preview-overflow-badge" data-preview-overflow hidden>+0</span></div>` : '';
-    const text = (preview.textPreviews || (preview.text ? [preview.text] : [])).map(item => `<p class="aim-record-preview-text"><span>${Store.escapeHtml(item.label)}：</span>${Store.escapeHtml(item.value)}</p>`).join('');
+    const text = (preview.textPreviews || (preview.text ? [preview.text] : [])).map(item => `<p class="aim-record-preview-text"><span class="aim-record-preview-label">${Store.escapeHtml(item.label)}：</span>${Store.escapeHtml(item.value)}</p>`).join('');
     if (!badgeLine && !text) return '';
     return `<div class="aim-record-preview-content aim-record-preview-content-${context}">${badgeLine}${text}</div>`;
   }
