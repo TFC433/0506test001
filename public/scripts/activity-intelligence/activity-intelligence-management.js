@@ -34,6 +34,7 @@
   const previewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'multiple_choice', 'dropdown']);
   const compactPreviewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'dropdown']);
   const expandedCompactFieldTypes = new Set(['short_text', 'number', 'yes_no', 'single_choice', 'dropdown', 'boolean', 'checkbox', 'toggle']);
+  const expandedCompactCategoricalFieldTypes = new Set(['yes_no', 'single_choice', 'dropdown']);
   const fixedPreviewFieldIds = new Set(['fld_customer_name', 'fld_company', 'fld_job_title', 'fld_priority']);
   const thumbnailDefaults = Object.freeze({
     driveFileId: '',
@@ -983,7 +984,7 @@
   function renderInlineRecordDetail(record, activity) {
     if (!canViewRecord(record, activity)) return '';
     const items = snapshotRecordItems(record, activity);
-    const detailRows = renderRecordDetailItems(items, record);
+    const detail = renderRecordDetailItems(items, record);
     return `
       <div class="aim-inline-record-detail">
         <section class="aim-inline-record-meta-card" aria-label="紀錄資訊">
@@ -995,13 +996,17 @@
             ${record.status === 'void' ? '<div><dt>狀態</dt><dd><span class="aim-pill aim-pill-void">已作廢</span></dd></div>' : ''}
           </dl>
         </section>
-        <div class="aim-record-detail-sheet">${detailRows || '<p class="aim-inline-record-empty">此紀錄沒有已填寫的內容。</p>'}</div>
+        <div class="aim-record-detail-body ${detail.cardRailHtml ? 'aim-record-detail-body-with-rail' : ''}">
+          <div class="aim-record-detail-sheet">${detail.rowsHtml || '<p class="aim-inline-record-empty">此紀錄沒有已填寫的內容。</p>'}</div>
+          ${detail.cardRailHtml ? `<aside class="aim-record-detail-card-rail" aria-label="名片">${detail.cardRailHtml}</aside>` : ''}
+        </div>
       </div>
     `;
   }
 
   function renderRecordDetailItems(items, record) {
     const rows = [];
+    const cardRail = [];
     let compactRun = [];
     const flushCompactRun = () => {
       if (!compactRun.length) return;
@@ -1011,6 +1016,10 @@
     (items || []).forEach(item => {
       const detail = renderRecordDetailItem(item, record);
       if (!detail) return;
+      if (detail.kind === 'card') {
+        cardRail.push(detail.html);
+        return;
+      }
       if (detail.kind === 'compact') {
         compactRun.push(detail.html);
         return;
@@ -1019,7 +1028,10 @@
       rows.push(detail.html);
     });
     flushCompactRun();
-    return rows.join('');
+    return {
+      rowsHtml: rows.join(''),
+      cardRailHtml: cardRail.join('')
+    };
   }
 
   function renderRecordDetailItem(item, record) {
@@ -1028,11 +1040,12 @@
     if (item.type === 'card_link') {
       const cardLink = cardLinkForRecord(record);
       if (!cardLink.linked) return null;
-      return { kind: 'full', html: `<section class="aim-record-detail-component">${renderRuntimeCardLink(item, false, cardLink, 'detail')}</section>` };
+      return { kind: 'card', html: renderRuntimeCardLink(item, false, cardLink, 'detail') };
     }
     const answers = record && record.answers ? record.answers : {};
     const value = displayAnswerValue(item, answers[item.fieldId], otherAnswersForRecord(record));
     if (!hasValue(value)) return null;
+    if (expandedCompactCategoricalFieldTypes.has(item.type)) return { kind: 'compact', html: renderRecordDetailCompactCategoricalField(item, value) };
     if (expandedCompactFieldTypes.has(item.type)) return { kind: 'compact', html: renderRecordDetailCompactField(item, value) };
     if (item.type === 'multiple_choice') return { kind: 'full', html: renderRecordDetailChoiceField(item, value) };
     if (item.type === 'long_text') return { kind: 'full', html: renderRecordDetailLongText(item, value) };
@@ -1175,6 +1188,12 @@
 
   function renderRecordDetailCompactField(field, value) {
     return `<div class="aim-record-detail-field"><span class="aim-record-detail-label">${Store.escapeHtml(field.title)}</span><span class="aim-record-detail-value">${Store.escapeHtml(Store.answerText(value))}</span></div>`;
+  }
+
+  function renderRecordDetailCompactCategoricalField(field, value) {
+    const badges = renderCategoricalBadges(field, value);
+    if (!badges) return '';
+    return `<div class="aim-record-detail-field aim-record-detail-field-categorical"><span class="aim-record-detail-label">${Store.escapeHtml(field.title)}</span><span class="aim-answer-badges">${badges}</span></div>`;
   }
 
   function renderRecordDetailChoiceField(field, value) {
