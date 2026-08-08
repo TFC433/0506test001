@@ -2696,7 +2696,7 @@ a:focus-visible {
   max-width: 100%;
   margin: 0;
   overflow-wrap: anywhere;
-  color: var(--aim-text);
+  color: var(--aim-sidebar-active);
   font-size: 14px;
   line-height: 1.4;
 }
@@ -2709,7 +2709,7 @@ a:focus-visible {
   min-width: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
-  color: #475569;
+  color: var(--aim-sidebar-active);
   font-size: 13px;
   line-height: 1.4;
 }
@@ -2724,7 +2724,7 @@ a:focus-visible {
   min-width: 0;
   max-width: 100%;
   overflow-wrap: anywhere;
-  color: #475569;
+  color: var(--aim-sidebar-active);
   font-size: 13px;
   line-height: 1.4;
 }

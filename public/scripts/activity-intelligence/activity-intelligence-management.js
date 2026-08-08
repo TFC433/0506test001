@@ -930,6 +930,7 @@
                 <strong class="${preview.customer ? '' : 'aim-missing-name'}">${Store.escapeHtml(preview.customer || '未填姓名')}</strong>
                 ${preview.jobTitle ? `<span class="aim-record-card-job-title">${Store.escapeHtml(preview.jobTitle)}</span>` : ''}
                 ${preview.company ? `<span class="aim-record-card-company">${Store.escapeHtml(preview.company)}</span>` : ''}
+                ${preview.primaryGroup || preview.priority ? '<span class="aim-preview-sep" aria-hidden="true">|</span>' : ''}
                 ${preview.primaryGroup ? renderPreviewPrimaryGroup(preview.primaryGroup) : ''}
                 ${preview.priority ? `<span class="aim-record-card-status-group"><span class="aim-record-preview-label">${Store.escapeHtml(preview.priorityLabel || '後續追蹤優先度')}</span>${priorityPill(preview.priority)}</span>` : ''}
               </div>
