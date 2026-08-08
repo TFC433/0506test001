@@ -2765,52 +2765,21 @@ a:focus-visible {
   max-width: 100%;
   min-width: 0;
   margin-top: 0;
-  padding: 16px;
+  padding: 12px;
   border-top: 1px solid var(--aim-border-strong);
   background: var(--aim-surface-muted);
   container-type: inline-size;
 }
 
-.aim-record-detail-tree {
-  position: relative;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  padding-left: 20px;
-}
-
-.aim-record-detail-tree::before {
-  position: absolute;
-  top: 17px;
-  bottom: 16px;
-  left: 7px;
-  width: 1px;
-  background: #c5cfdb;
-  content: "";
-}
-
 .aim-inline-record-meta-card {
-  position: relative;
-  padding: 10px 12px;
-  border: 1px solid var(--aim-border);
-  border-radius: 6px;
-  background: #f4f7fa;
-}
-
-.aim-inline-record-meta-card::before,
-.aim-record-question-list::before {
-  position: absolute;
-  top: 17px;
-  left: -13px;
-  width: 13px;
-  border-top: 1px solid #c5cfdb;
-  content: "";
+  padding: 0 0 9px;
+  border-bottom: 1px solid var(--aim-border);
 }
 
 .aim-inline-record-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 9px 20px;
+  gap: 6px 18px;
   margin: 0;
 }
 
@@ -2820,9 +2789,9 @@ a:focus-visible {
 }
 
 .aim-inline-record-meta dt {
-  color: var(--aim-muted);
-  font-size: 12px;
-  font-weight: 600;
+  color: var(--aim-muted-2);
+  font-size: 11px;
+  font-weight: 400;
 }
 
 .aim-inline-record-meta dd {
@@ -2833,71 +2802,66 @@ a:focus-visible {
   line-height: 1.4;
 }
 
-.aim-record-question-list {
-  position: relative;
+.aim-record-detail-sheet {
   width: 100%;
   max-width: 100%;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.aim-record-detail-grid {
   display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.aim-record-question-card {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 5px 16px;
   min-width: 0;
-  padding: 11px 12px;
-  border: 1px solid var(--aim-border);
-  border-radius: 6px;
-  background: var(--aim-surface);
 }
 
-.aim-record-question-compact {
-  grid-column: span 3;
+.aim-record-detail-field {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 1px 0;
 }
 
-.aim-record-question-standard {
-  grid-column: span 4;
+.aim-record-detail-label,
+.aim-record-detail-choice h3,
+.aim-record-detail-text h3 {
+  flex: 0 1 auto;
+  margin: 0;
+  color: var(--aim-muted-2);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
 }
 
-.aim-record-question-wide {
-  grid-column: span 6;
-}
-
-.aim-record-question-full {
-  grid-column: 1 / -1;
-}
-
-@container (max-width: 700px) {
-
-  .aim-record-question-compact,
-  .aim-record-question-standard {
-    grid-column: span 6;
-  }
-
-  .aim-record-question-wide,
-  .aim-record-question-full {
-    grid-column: 1 / -1;
-  }
-}
-
-.aim-record-question-card h3 {
-  margin: 0 0 5px;
-  color: var(--aim-muted);
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.4;
-}
-
-.aim-record-question-answer {
+.aim-record-detail-value {
+  min-width: 0;
+  flex: 1 1 auto;
   overflow-wrap: anywhere;
   color: var(--aim-text);
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
-.aim-record-question-long .aim-record-question-answer {
-  line-height: 1.65;
+.aim-record-detail-choice,
+.aim-record-detail-text {
+  min-width: 0;
+}
+
+.aim-record-detail-choice h3,
+.aim-record-detail-text h3 {
+  margin-bottom: 4px;
+}
+
+.aim-record-detail-text>div {
+  overflow-wrap: anywhere;
+  color: var(--aim-text);
+  font-size: 13px;
+  line-height: 1.55;
   white-space: pre-wrap;
 }
 
@@ -3314,8 +3278,7 @@ a:focus-visible {
   border-bottom: 1px solid var(--aim-border);
 }
 
-.aim-runtime-section h3,
-.aim-record-detail-section h3 {
+.aim-runtime-section h3 {
   margin: 0 0 4px;
   color: var(--aim-text);
   font-size: 15px;
@@ -3323,8 +3286,7 @@ a:focus-visible {
   line-height: 1.35;
 }
 
-.aim-runtime-section p,
-.aim-record-detail-section p {
+.aim-runtime-section p {
   margin: 0;
   color: var(--aim-muted);
   font-size: 12px;
@@ -3380,13 +3342,21 @@ a:focus-visible {
 }
 
 .aim-record-detail-section {
-  grid-column: 1 / -1;
-  padding: 10px 0 2px;
+  min-width: 0;
+  padding: 5px 0 3px;
+  border-bottom: 1px solid var(--aim-border);
 }
 
-.aim-record-detail-info,
 .aim-record-detail-component {
-  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.aim-record-detail-section h3 {
+  margin: 0;
+  color: var(--aim-sidebar-active);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
 }
 
 .aim-answer {

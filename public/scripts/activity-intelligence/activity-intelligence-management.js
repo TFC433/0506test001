@@ -33,6 +33,7 @@
   const previewPlacementValues = new Set(['none', 'primary', 'badges', 'text']);
   const previewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'multiple_choice', 'dropdown']);
   const compactPreviewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'dropdown']);
+  const expandedCompactFieldTypes = new Set(['short_text', 'number', 'yes_no', 'single_choice', 'dropdown', 'boolean', 'checkbox', 'toggle']);
   const fixedPreviewFieldIds = new Set(['fld_customer_name', 'fld_company', 'fld_job_title', 'fld_priority']);
   const thumbnailDefaults = Object.freeze({
     driveFileId: '',
@@ -982,37 +983,60 @@
   function renderInlineRecordDetail(record, activity) {
     if (!canViewRecord(record, activity)) return '';
     const items = snapshotRecordItems(record, activity);
-    const questionCards = items.map(item => renderRecordDetailItem(item, record)).join('');
+    const detailRows = renderRecordDetailItems(items, record);
     return `
       <div class="aim-inline-record-detail">
-        <div class="aim-record-detail-tree">
-          <section class="aim-inline-record-meta-card" aria-label="紀錄資訊">
-            <dl class="aim-inline-record-meta">
-              <div><dt>活動</dt><dd>${Store.escapeHtml(activity.name)}</dd></div>
-              <div><dt>紀錄者</dt><dd>${Store.escapeHtml(record.createdByDisplayName)}</dd></div>
-              <div><dt>建立時間</dt><dd>${Store.formatDateTime(record.createdAt)}</dd></div>
-              <div><dt>最近更新</dt><dd>${Store.formatDateTime(record.updatedAt)}，${Store.escapeHtml(record.updatedByDisplayName)}</dd></div>
-              ${record.status === 'void' ? '<div><dt>狀態</dt><dd><span class="aim-pill aim-pill-void">已作廢</span></dd></div>' : ''}
-            </dl>
-          </section>
-          <div class="aim-record-question-list">${questionCards || '<p class="aim-inline-record-empty">此紀錄沒有已填寫的內容。</p>'}</div>
-        </div>
+        <section class="aim-inline-record-meta-card" aria-label="紀錄資訊">
+          <dl class="aim-inline-record-meta">
+            <div><dt>活動</dt><dd>${Store.escapeHtml(activity.name)}</dd></div>
+            <div><dt>紀錄者</dt><dd>${Store.escapeHtml(record.createdByDisplayName)}</dd></div>
+            <div><dt>建立時間</dt><dd>${Store.formatDateTime(record.createdAt)}</dd></div>
+            <div><dt>最近更新</dt><dd>${Store.formatDateTime(record.updatedAt)}，${Store.escapeHtml(record.updatedByDisplayName)}</dd></div>
+            ${record.status === 'void' ? '<div><dt>狀態</dt><dd><span class="aim-pill aim-pill-void">已作廢</span></dd></div>' : ''}
+          </dl>
+        </section>
+        <div class="aim-record-detail-sheet">${detailRows || '<p class="aim-inline-record-empty">此紀錄沒有已填寫的內容。</p>'}</div>
       </div>
     `;
   }
 
+  function renderRecordDetailItems(items, record) {
+    const rows = [];
+    let compactRun = [];
+    const flushCompactRun = () => {
+      if (!compactRun.length) return;
+      rows.push(`<div class="aim-record-detail-grid">${compactRun.join('')}</div>`);
+      compactRun = [];
+    };
+    (items || []).forEach(item => {
+      const detail = renderRecordDetailItem(item, record);
+      if (!detail) return;
+      if (detail.kind === 'compact') {
+        compactRun.push(detail.html);
+        return;
+      }
+      flushCompactRun();
+      rows.push(detail.html);
+    });
+    flushCompactRun();
+    return rows.join('');
+  }
+
   function renderRecordDetailItem(item, record) {
-    if (item.type === 'section_heading') return `<section class="aim-record-detail-section"><h3>${Store.escapeHtml(item.title)}</h3>${item.helperText ? `<p>${Store.escapeHtml(item.helperText)}</p>` : ''}</section>`;
-    if (item.type === 'information_text') return `<section class="aim-record-detail-info"><h3>${Store.escapeHtml(item.title)}</h3>${item.helperText ? `<p>${Store.escapeHtml(item.helperText)}</p>` : ''}</section>`;
-    if (item.type === 'form_thumbnail') return '';
+    if (item.type === 'section_heading') return { kind: 'full', html: `<section class="aim-record-detail-section"><h3>${Store.escapeHtml(item.title)}</h3></section>` };
+    if (item.type === 'information_text' || item.type === 'form_thumbnail') return null;
     if (item.type === 'card_link') {
       const cardLink = cardLinkForRecord(record);
-      if (!cardLink.linked) return '';
-      return `<section class="aim-record-detail-component">${renderRuntimeCardLink(item, false, cardLink, 'detail')}</section>`;
+      if (!cardLink.linked) return null;
+      return { kind: 'full', html: `<section class="aim-record-detail-component">${renderRuntimeCardLink(item, false, cardLink, 'detail')}</section>` };
     }
-    const value = displayAnswerValue(item, record.answers[item.fieldId], otherAnswersForRecord(record));
-    if (!hasValue(value)) return '';
-    return renderRecordQuestionCard(item, value);
+    const answers = record && record.answers ? record.answers : {};
+    const value = displayAnswerValue(item, answers[item.fieldId], otherAnswersForRecord(record));
+    if (!hasValue(value)) return null;
+    if (expandedCompactFieldTypes.has(item.type)) return { kind: 'compact', html: renderRecordDetailCompactField(item, value) };
+    if (item.type === 'multiple_choice') return { kind: 'full', html: renderRecordDetailChoiceField(item, value) };
+    if (item.type === 'long_text') return { kind: 'full', html: renderRecordDetailLongText(item, value) };
+    return null;
   }
 
   function renderRecordReviewActions(record, activity, context, expanded) {
@@ -1149,20 +1173,18 @@
     return `<div class="aim-record-preview-content aim-record-preview-content-${context}">${badgeLine}${text}</div>`;
   }
 
-  function renderRecordQuestionCard(field, value) {
-    const choice = isChoiceField(field);
-    const longText = field.type === 'long_text';
-    const answer = choice ? `<div class="aim-answer-badges">${renderCategoricalBadges(field, value)}</div>` : `<div class="aim-record-question-answer">${Store.escapeHtml(Store.answerText(value))}</div>`;
-    return `<section class="aim-record-question-card aim-record-question-${recordQuestionCardSize(field, value)}${choice ? ' aim-record-question-choice' : ''}${longText ? ' aim-record-question-long' : ''}"><h3>${Store.escapeHtml(field.title)}</h3>${answer}</section>`;
+  function renderRecordDetailCompactField(field, value) {
+    return `<div class="aim-record-detail-field"><span class="aim-record-detail-label">${Store.escapeHtml(field.title)}</span><span class="aim-record-detail-value">${Store.escapeHtml(Store.answerText(value))}</span></div>`;
   }
 
-  function recordQuestionCardSize(field, value) {
-    const answer = Store.answerText(value);
-    if (field.type === 'long_text') return 'full';
-    if (field.type === 'multiple_choice' || categoricalValues(value).length > 2 || answer.length > 60) return 'wide';
-    if (field.type === 'number' || ['boolean', 'checkbox', 'toggle', 'single_choice', 'dropdown'].includes(field.type)) return 'compact';
-    if (answer.length > 32) return 'wide';
-    return 'standard';
+  function renderRecordDetailChoiceField(field, value) {
+    const badges = renderCategoricalBadges(field, value);
+    if (!badges) return '';
+    return `<section class="aim-record-detail-choice"><h3>${Store.escapeHtml(field.title)}</h3><div class="aim-answer-badges">${badges}</div></section>`;
+  }
+
+  function renderRecordDetailLongText(field, value) {
+    return `<section class="aim-record-detail-text"><h3>${Store.escapeHtml(field.title)}</h3><div>${Store.escapeHtml(Store.answerText(value))}</div></section>`;
   }
 
   function renderQuickField(field, enabled) {
