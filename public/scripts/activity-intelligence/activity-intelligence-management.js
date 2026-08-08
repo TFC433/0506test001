@@ -30,6 +30,10 @@
   const formalDeferredMessage = '此功能尚未啟用。';
   const otherAnswerValue = '其他';
   const rawCardPickerPageSize = 15;
+  const previewPlacementValues = new Set(['none', 'primary', 'badges', 'text']);
+  const previewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'multiple_choice', 'dropdown']);
+  const compactPreviewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'dropdown']);
+  const fixedPreviewFieldIds = new Set(['fld_customer_name', 'fld_company', 'fld_job_title', 'fld_priority']);
   const thumbnailDefaults = Object.freeze({
     driveFileId: '',
     fit: 'cover',
@@ -925,7 +929,9 @@
               <div class="aim-record-card-primary">
                 <strong class="${preview.customer ? '' : 'aim-missing-name'}">${Store.escapeHtml(preview.customer || '未填姓名')}</strong>
                 ${preview.company ? `<span class="aim-record-card-company">${Store.escapeHtml(preview.company)}</span>` : ''}
-                ${preview.priority ? priorityPill(preview.priority) : ''}
+                ${preview.jobTitle ? `<span class="aim-record-card-job-title">${Store.escapeHtml(preview.jobTitle)}</span>` : ''}
+                ${preview.priority ? `<span class="aim-record-card-status-group"><span class="aim-record-preview-label">${Store.escapeHtml(preview.priorityLabel || '後續追蹤優先度')}</span>${priorityPill(preview.priority)}</span>` : ''}
+                ${preview.primaryGroup ? renderPreviewPrimaryGroup(preview.primaryGroup) : ''}
               </div>
             </div>
             ${renderRecordPreviewContent(preview, context)}
@@ -1067,23 +1073,40 @@
   }
 
   function recordPreview(record, activity) {
-    const fields = answerProducingItems(snapshotRecordItems(record, activity)).filter(field => hasValue(record.answers[field.fieldId]));
+    const items = answerProducingItems(snapshotRecordItems(record, activity));
+    const fields = items.filter(field => hasValue(record.answers[field.fieldId]));
     const otherAnswers = otherAnswersForRecord(record);
     const customerField = fields.find(field => field.fieldId === 'fld_customer_name') || fields.find(field => /客戶|受訪者|姓名/.test(field.title));
     const companyField = fields.find(field => field.fieldId === 'fld_company') || fields.find(field => /公司|企業|組織/.test(field.title));
+    const jobTitleField = fields.find(field => field.fieldId === 'fld_job_title');
     const priorityField = fields.find(field => field.fieldId === 'fld_priority') || fields.find(field => /優先/.test(field.title));
+    const primaryField = fields.find(field => previewPlacementForItem(field) === 'primary' && compactPreviewChoiceFieldTypes.has(field.type) && field !== priorityField);
     const badgeGroups = [];
-    fields.filter(field => isChoiceField(field) && field !== priorityField).forEach(field => {
+    fields.filter(field => isChoiceField(field) && field !== priorityField && field !== primaryField && previewPlacementForItem(field) !== 'none' && previewPlacementForItem(field) !== 'primary' && previewPlacementForItem(field) !== 'text').forEach(field => {
+      const placement = previewPlacementForItem(field);
+      if (placement && placement !== 'badges') return;
       const values = categoricalValues(displayAnswerValue(field, record.answers[field.fieldId], otherAnswers));
       if (values.length) badgeGroups.push({ field, values });
     });
-    const textField = fields.find(field => field.type === 'long_text');
+    const explicitTextFields = items.filter(field => previewPlacementForItem(field) === 'text');
+    const textFields = explicitTextFields.length
+      ? explicitTextFields
+      : fields.filter(field => field.type === 'long_text' && previewPlacementForItem(field) !== 'none').slice(0, 1);
+    const textPreviews = textFields.slice(0, 2).map(field => {
+      const value = displayAnswerValue(field, record.answers[field.fieldId], otherAnswers);
+      return hasValue(value) ? { label: field.title, value: Store.answerText(value) } : null;
+    }).filter(Boolean);
+    const primaryValues = primaryField ? categoricalValues(displayAnswerValue(primaryField, record.answers[primaryField.fieldId], otherAnswers)) : [];
     return {
       customer: customerField ? Store.answerText(displayAnswerValue(customerField, record.answers[customerField.fieldId], otherAnswers)) : '',
       company: companyField ? Store.answerText(displayAnswerValue(companyField, record.answers[companyField.fieldId], otherAnswers)) : '',
+      jobTitle: jobTitleField ? Store.answerText(displayAnswerValue(jobTitleField, record.answers[jobTitleField.fieldId], otherAnswers)) : '',
       priority: priorityField ? Store.answerText(displayAnswerValue(priorityField, record.answers[priorityField.fieldId], otherAnswers)) : '',
+      priorityLabel: priorityField && priorityField.title,
+      primaryGroup: primaryField && primaryValues.length ? { field: primaryField, values: primaryValues } : null,
       badgeGroups,
-      text: textField ? { label: textField.title, value: Store.answerText(displayAnswerValue(textField, record.answers[textField.fieldId], otherAnswers)) } : null
+      text: textPreviews[0] || null,
+      textPreviews
     };
   }
 
@@ -1104,6 +1127,11 @@
     return categoricalValues(value).slice(0, limit || Number.MAX_SAFE_INTEGER).map(item => `<span class="aim-answer-badge${answerBadgeClass(field, item)}">${Store.escapeHtml(item)}</span>`).join('');
   }
 
+  function renderPreviewPrimaryGroup(group) {
+    if (!group || !group.field || !group.values || !group.values.length) return '';
+    return `<span class="aim-record-card-status-group"><span class="aim-record-preview-label">${Store.escapeHtml(group.field.title)}</span>${renderCategoricalBadges(group.field, group.values)}</span>`;
+  }
+
   function renderRecordPreviewContent(preview, context) {
     const groups = preview.badgeGroups || [];
     const nonEmptyGroups = groups.filter(g => g.values && g.values.length > 0);
@@ -1112,12 +1140,10 @@
       if (groupIndex > 0) {
         badgesHtml += '<span class="aim-preview-sep" data-preview-sep aria-hidden="true">|</span>';
       }
-      group.values.forEach(value => {
-        badgesHtml += `<span class="aim-answer-badge" data-preview-badge>${Store.escapeHtml(value)}</span>`;
-      });
+      badgesHtml += `<span class="aim-preview-group" data-preview-group data-preview-count="${group.values.length}"><span class="aim-record-preview-label">${Store.escapeHtml(group.field.title)}</span>${renderCategoricalBadges(group.field, group.values)}</span>`;
     });
     const badgeLine = badgesHtml ? `<div class="aim-record-preview-badges" data-preview-badges>${badgesHtml}<span class="aim-answer-badge aim-preview-overflow-badge" data-preview-overflow hidden>+0</span></div>` : '';
-    const text = preview.text ? `<p class="aim-record-preview-text"><span>${Store.escapeHtml(preview.text.label)}：</span>${Store.escapeHtml(preview.text.value)}</p>` : '';
+    const text = (preview.textPreviews || (preview.text ? [preview.text] : [])).map(item => `<p class="aim-record-preview-text"><span>${Store.escapeHtml(item.label)}：</span>${Store.escapeHtml(item.value)}</p>`).join('');
     if (!badgeLine && !text) return '';
     return `<div class="aim-record-preview-content aim-record-preview-content-${context}">${badgeLine}${text}</div>`;
   }
@@ -1219,6 +1245,14 @@
     const type = item.type || 'short_text';
     const itemKey = item.itemKey || item.item_key || item.fieldId || item.itemId || newUuid();
     const entries = normalizeOptionEntries(item);
+    const sourceSettings = item.settings && typeof item.settings === 'object' ? Store.clone(item.settings) : {};
+    const previewPlacement = normalizePreviewPlacement(
+      item.previewPlacement !== undefined ? item.previewPlacement : sourceSettings.previewPlacement,
+      type
+    );
+    const settings = { ...sourceSettings };
+    if (previewPlacement) settings.previewPlacement = previewPlacement;
+    else delete settings.previewPlacement;
     return {
       formItemId: item.formItemId || item.form_item_id || '',
       itemKey,
@@ -1232,11 +1266,30 @@
       options: entries.map(option => option.label),
       optionEntries: entries,
       allowOther: Boolean(item.allowOther || (item.settings && item.settings.allowOther)),
-      settings: item.settings && typeof item.settings === 'object' ? Store.clone(item.settings) : {},
+      settings,
+      previewPlacement,
       visible: item.visible !== false,
       retired: Boolean(item.retired),
       removedInDraft: Boolean(item.removedInDraft)
     };
+  }
+
+  function normalizePreviewPlacement(value, type) {
+    const placement = String(value || '').trim();
+    if (!previewPlacementValues.has(placement)) return '';
+    if (placement === 'primary' && !compactPreviewChoiceFieldTypes.has(type)) return '';
+    if (placement === 'badges' && !previewChoiceFieldTypes.has(type)) return '';
+    if (placement === 'text' && type !== 'long_text') return '';
+    return placement;
+  }
+
+  function previewPlacementForItem(item) {
+    const normalized = normalizeDesignerItem(item || {});
+    return normalized.previewPlacement || '';
+  }
+
+  function isFixedPreviewField(item) {
+    return fixedPreviewFieldIds.has(item && item.fieldId);
   }
 
   function makeCardLinkItem(extra) {
@@ -1369,6 +1422,7 @@
       visible: normalized.visible !== false,
       retired: Boolean(normalized.retired),
       removedInDraft: Boolean(normalized.removedInDraft),
+      previewPlacement: normalized.previewPlacement || '',
       thumbnailTitle: normalized.thumbnailTitle || '',
       altText: normalized.altText || '',
       thumbnailVariant: normalized.thumbnailVariant || '',
@@ -1582,6 +1636,7 @@
           ${canHavePlaceholder ? `<div class="aim-field"><label for="aim-field-placeholder">提示文字</label><input class="aim-input aim-field-design-input" id="aim-field-placeholder" data-design-field="placeholder" value="${Store.escapeHtml(field.placeholder || '')}" ${field.retired ? 'disabled' : ''}></div>` : ''}
           ${choiceFieldTypes.includes(field.type) ? renderOptionEditor(field) : ''}
           ${choiceFieldTypes.includes(field.type) ? `<label class="aim-checkbox aim-form-other-toggle"><input id="aim-field-allow-other" type="checkbox" ${field.allowOther ? 'checked' : ''} ${field.retired ? 'disabled' : ''}> 允許填寫「其他」補充答案</label>` : ''}
+          ${renderPreviewPlacementEditor(field)}
         </div>
         <div class="aim-field-editor-actions">
           <button class="aim-button" data-action="cancel-field-draft" type="button" ${!ui.formDesignDraftDirty ? 'disabled' : ''}>取消修改</button>
@@ -1687,6 +1742,52 @@
         ${renderFormThumbnailVisual(item)}
       </section>
     `;
+  }
+
+  function renderPreviewPlacementEditor(field) {
+    if (!isPreviewPlacementEligible(field)) return '';
+    const placement = effectiveDesignerPreviewPlacement(field);
+    const enabled = placement && placement !== 'none';
+    const disabled = field.retired ? 'disabled' : '';
+    const options = previewPlacementOptionsForField(field);
+    return `
+      <div class="aim-field aim-preview-placement-editor">
+        <label>預覽卡片</label>
+        <label class="aim-checkbox"><input id="aim-field-preview-enabled" type="checkbox" ${enabled ? 'checked' : ''} ${disabled}> 顯示在 collapsed 預覽</label>
+        ${enabled && options.length > 1 ? `
+          <label for="aim-field-preview-placement">預覽位置</label>
+          <select class="aim-select" id="aim-field-preview-placement" ${disabled}>
+            ${options.map(([value, label]) => option(value, label, placement)).join('')}
+          </select>
+        ` : ''}
+        ${enabled && options.length === 1 ? `<span class="aim-small">預覽位置：${Store.escapeHtml(options[0][1])}</span>` : ''}
+      </div>
+    `;
+  }
+
+  function isPreviewPlacementEligible(field) {
+    return field && !isFixedPreviewField(field) && (previewChoiceFieldTypes.has(field.type) || field.type === 'long_text');
+  }
+
+  function previewPlacementOptionsForField(field) {
+    if (!field || field.type === 'long_text') return [['text', '文字摘要']];
+    if (compactPreviewChoiceFieldTypes.has(field.type)) return [['primary', '主要摘要'], ['badges', '標籤列']];
+    if (field.type === 'multiple_choice') return [['badges', '標籤列']];
+    return [];
+  }
+
+  function effectiveDesignerPreviewPlacement(field) {
+    const placement = previewPlacementForItem(field);
+    if (placement) return placement;
+    if (!field || isFixedPreviewField(field)) return '';
+    if (previewChoiceFieldTypes.has(field.type)) return 'badges';
+    if (field.type === 'long_text') {
+      const activity = selectedActivity();
+      const design = activity && formDesign(activity);
+      const firstLongText = design && design.draft && design.draft.items.find(item => item.type === 'long_text');
+      return firstLongText && designerItemKey(firstLongText) === designerItemKey(field) ? 'text' : '';
+    }
+    return '';
   }
 
   function renderFormThumbnailVisual(item) {
@@ -2591,6 +2692,46 @@
     ui.formDesignMessage = '';
   }
 
+  function defaultPreviewPlacementForField(field) {
+    const options = previewPlacementOptionsForField(field || {});
+    return options[0] ? options[0][0] : 'none';
+  }
+
+  function setPreviewPlacementDraft(placement) {
+    const nextPlacement = placement === 'none' ? 'none' : normalizePreviewPlacement(placement, ui.formDesignDraft && ui.formDesignDraft.type);
+    if (!ui.formDesignDraft || !isPreviewPlacementEligible(ui.formDesignDraft) || !nextPlacement) return;
+    if (!canUsePreviewPlacement(ui.formDesignDraft, nextPlacement)) {
+      render();
+      return;
+    }
+    updateFormDesignDraft({
+      previewPlacement: nextPlacement,
+      settings: {
+        ...(ui.formDesignDraft.settings || {}),
+        previewPlacement: nextPlacement
+      }
+    });
+    scheduleFormPreviewRefresh();
+    render();
+  }
+
+  function canUsePreviewPlacement(field, placement) {
+    if (placement === 'none') return true;
+    const activity = selectedActivity();
+    const design = activity && formDesign(activity);
+    const currentKey = designerItemKey(field);
+    const items = (design && design.draft && design.draft.items ? design.draft.items : []).filter(item => designerItemKey(item) !== currentKey);
+    if (placement === 'primary' && items.some(item => previewPlacementForItem(item) === 'primary')) {
+      ui.formDesignMessage = '預覽卡片最多只能設定一個主要摘要欄位。';
+      return false;
+    }
+    if (placement === 'text' && items.filter(item => previewPlacementForItem(item) === 'text').length >= 2) {
+      ui.formDesignMessage = '預覽卡片最多只能設定兩個文字摘要欄位。';
+      return false;
+    }
+    return true;
+  }
+
   function mutateDraftOptions(mutator) {
     if (!ui.formDesignDraft || !choiceFieldTypes.includes(ui.formDesignDraft.type)) return;
     const entries = normalizeOptionEntries(ui.formDesignDraft);
@@ -2620,6 +2761,10 @@
     draft.title = title;
     draft.helperText = draft.helperText.trim();
     draft.placeholder = draft.placeholder.trim();
+    if (draft.previewPlacement && !canUsePreviewPlacement(draft, draft.previewPlacement)) {
+      render();
+      return;
+    }
     if (choiceFieldTypes.includes(draft.type)) {
       draft.options = draft.options.map(value => value.trim()).filter(Boolean);
       if (!draft.options.length) {
@@ -2861,6 +3006,15 @@
       updateFormDesignDraft({ allowOther: allowOther.checked });
       scheduleFormPreviewRefresh();
     });
+    const previewEnabled = document.getElementById('aim-field-preview-enabled');
+    if (previewEnabled) previewEnabled.addEventListener('change', () => {
+      const placement = previewEnabled.checked ? defaultPreviewPlacementForField(ui.formDesignDraft) : 'none';
+      setPreviewPlacementDraft(placement);
+    });
+    const previewPlacement = document.getElementById('aim-field-preview-placement');
+    if (previewPlacement) previewPlacement.addEventListener('change', () => {
+      setPreviewPlacementDraft(previewPlacement.value);
+    });
     document.querySelectorAll('.aim-option-input').forEach(input => {
       input.addEventListener('input', () => {
         const options = (ui.formDesignDraft && ui.formDesignDraft.options ? ui.formDesignDraft.options : []).slice();
@@ -3035,15 +3189,35 @@
 
   function fitRecordPreviewBadges() {
     document.querySelectorAll('[data-preview-badges]').forEach(container => {
+      const groups = Array.from(container.querySelectorAll('[data-preview-group]'));
       const badges = Array.from(container.querySelectorAll('[data-preview-badge]'));
       const seps = Array.from(container.querySelectorAll('[data-preview-sep]'));
       const overflow = container.querySelector('[data-preview-overflow]');
       if (!overflow) return;
       // Reset: show all badges and seps, hide overflow
+      groups.forEach(group => { group.hidden = false; });
       badges.forEach(badge => { badge.hidden = false; });
       seps.forEach(sep => { sep.hidden = false; });
       overflow.hidden = true;
       if (container.scrollWidth <= container.clientWidth) return;
+      if (groups.length) {
+        overflow.hidden = false;
+        let hiddenCount = 0;
+        for (let index = groups.length - 1; index >= 0; index -= 1) {
+          groups[index].hidden = true;
+          hiddenCount += Number(groups[index].dataset.previewCount || 1);
+          overflow.textContent = `+${hiddenCount}`;
+          seps.forEach(sep => {
+            const allItems = Array.from(container.children);
+            const sepIndex = allItems.indexOf(sep);
+            const hasGroupAfter = allItems.slice(sepIndex + 1).some(el => el.dataset.previewGroup !== undefined && !el.hidden);
+            const hasGroupBefore = allItems.slice(0, sepIndex).some(el => el.dataset.previewGroup !== undefined && !el.hidden);
+            sep.hidden = !hasGroupAfter || !hasGroupBefore;
+          });
+          if (container.scrollWidth <= container.clientWidth) break;
+        }
+        return;
+      }
       // Need to hide some badges
       overflow.hidden = false;
       let hiddenCount = 0;
@@ -3687,6 +3861,7 @@
         sortOrder: index + 1,
         settings: {
           ...(normalized.settings || {}),
+          ...(normalized.previewPlacement ? { previewPlacement: normalized.previewPlacement } : {}),
           ...(normalized.thumbnailTitle !== undefined ? { thumbnailTitle: normalized.thumbnailTitle } : {}),
           ...(normalized.altText !== undefined ? { altText: normalized.altText } : {}),
           ...(normalized.thumbnailVariant !== undefined ? { thumbnailVariant: normalized.thumbnailVariant } : {})
