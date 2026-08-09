@@ -487,13 +487,14 @@
     const isVerifying = state === 'verifying';
     const isForbidden = state === 'forbidden';
     const message = options.message || (isVerifying ? preAuthCopy.verifying : isForbidden ? preAuthCopy.forbidden : preAuthCopy.message);
+    const showMessage = isVerifying || isForbidden || !(currentUser && currentUser.canLineLogin);
     return `
       <div class="aim-preauth aim-preauth-${Store.escapeHtml(state)}">
         <main class="aim-preauth-panel" aria-live="${isVerifying ? 'polite' : 'off'}">
           <div class="aim-preauth-main">
             <img src="/images/portal/form.png" alt="FANUC forms" class="aim-preauth-logo">
             <h1>${Store.escapeHtml(preAuthCopy.product)}</h1>
-            <p>${Store.escapeHtml(message)}</p>
+            ${showMessage ? `<p>${Store.escapeHtml(message)}</p>` : ''}
             ${isVerifying ? '<div class="aim-preauth-status" role="status">驗證中</div>' : ''}
             ${!isVerifying && !isForbidden && currentUser && currentUser.canLineLogin ? '<button class="aim-button aim-button-primary aim-preauth-button" data-action="line-login" type="button">使用 LINE 登入</button>' : ''}
           </div>

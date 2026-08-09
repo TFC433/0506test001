@@ -211,7 +211,7 @@ function toggleContentVisibility(show, state = 'login') {
             }
         }
         
-        promptDiv.className = 'ocr-auth-gate';
+        promptDiv.className = `ocr-auth-gate ocr-auth-${state}`;
         promptDiv.style.display = 'flex';
         promptDiv.innerHTML = renderOcrAuthGate(state);
     }
@@ -240,13 +240,14 @@ function renderOcrAuthGate(state = 'login', userId = '') {
     const primaryAction = isVerifying || isForbidden
         ? ''
         : `<button class="login-btn ocr-auth-button" type="button" onclick="window.manualLiffLogin()">使用 LINE 登入</button>`;
+    const messageMarkup = state === 'login' ? '' : `<p>${message}</p>`;
 
     return `
         <main class="ocr-auth-panel" aria-live="${isVerifying ? 'polite' : 'off'}">
             <div class="ocr-auth-main">
                 <img src="/images/portal/ocr.png" alt="FANUC card OCR" class="ocr-auth-logo">
                 <h1>${ocrAuthCopy.product}</h1>
-                <p>${message}</p>
+                ${messageMarkup}
                 ${deniedUser}
                 ${isVerifying ? '<div class="ocr-auth-status" role="status">驗證中</div>' : primaryAction}
             </div>

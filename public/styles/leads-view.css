@@ -103,6 +103,10 @@ body.ocr-auth-state {
     letter-spacing: 0;
 }
 
+.ocr-auth-login h1 {
+    margin-bottom: 24px;
+}
+
 .ocr-auth-panel p {
     margin: 0 0 24px;
     color: var(--ocr-sidebar-muted);

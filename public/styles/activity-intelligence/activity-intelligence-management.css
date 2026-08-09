@@ -119,6 +119,10 @@ a:focus-visible {
   letter-spacing: 0;
 }
 
+.aim-preauth-login h1 {
+  margin-bottom: 24px;
+}
+
 .aim-preauth p {
   margin: 0 0 24px;
   color: var(--aim-form-sidebar-muted);
