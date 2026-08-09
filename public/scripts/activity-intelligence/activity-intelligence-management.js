@@ -515,7 +515,7 @@
     return `
       <aside class="aim-sidebar" aria-label="主要導覽">
         <button class="aim-product-brand" data-action="home" type="button" aria-label="回到活動情報管理首頁">
-          <img class="aim-brand-logo" src="../images/logo-full.svg" alt="FANUC force">
+          <img class="aim-brand-logo" src="/images/portal/form.png" alt="FANUC forms">
           <strong class="aim-product-title">活動情報管理</strong>
         </button>
         <nav class="aim-sidebar-nav">

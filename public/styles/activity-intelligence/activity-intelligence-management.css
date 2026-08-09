@@ -11,6 +11,17 @@
   --aim-blue: #315fba;
   --aim-blue-dark: #234b98;
   --aim-blue-soft: #eff6ff;
+  --aim-form-sidebar: #351714;
+  --aim-form-sidebar-hover: #4a211b;
+  --aim-form-sidebar-active: #5a261f;
+  --aim-form-sidebar-text: #f8e7df;
+  --aim-form-sidebar-muted: #d5aaa0;
+  --aim-form-primary: #e0522d;
+  --aim-form-primary-hover: #bd3c24;
+  --aim-form-primary-soft: #fff1ec;
+  --aim-form-primary-border: #f3b29f;
+  --aim-form-focus: rgba(224, 82, 45, 0.28);
+  --aim-form-focus-soft: rgba(224, 82, 45, 0.14);
   --aim-green: #15803d;
   --aim-green-soft: #ecfdf3;
   --aim-amber: #b45309;
@@ -19,11 +30,11 @@
   --aim-red-soft: #fef3f2;
   --aim-purple: #6d28d9;
   --aim-purple-soft: #f5f3ff;
-  --aim-sidebar: #172235;
-  --aim-sidebar-hover: #22314a;
-  --aim-sidebar-active: #2b3d59;
-  --aim-sidebar-text: #d8e0eb;
-  --aim-sidebar-muted: #8f9db0;
+  --aim-sidebar: var(--aim-form-sidebar);
+  --aim-sidebar-hover: var(--aim-form-sidebar-hover);
+  --aim-sidebar-active: var(--aim-form-sidebar-active);
+  --aim-sidebar-text: var(--aim-form-sidebar-text);
+  --aim-sidebar-muted: var(--aim-form-sidebar-muted);
   --aim-radius: 8px;
   --aim-font: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
   min-height: 100vh;
@@ -55,7 +66,7 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 a:focus-visible {
-  outline: 3px solid rgba(37, 99, 235, 0.28);
+  outline: 3px solid var(--aim-form-focus);
   outline-offset: 2px;
 }
 
@@ -81,7 +92,7 @@ a:focus-visible {
   overflow: hidden;
   background: var(--aim-sidebar);
   color: var(--aim-sidebar-text);
-  border-right: 1px solid #0e1726;
+  border-right: 1px solid #28110f;
   z-index: 30;
 }
 
@@ -107,8 +118,9 @@ a:focus-visible {
 
 .aim-brand-logo {
   display: block;
-  width: 120px;
+  width: 136px;
   max-width: 100%;
+  max-height: 96px;
   height: auto;
   margin: 0 auto;
   object-fit: contain;
@@ -183,7 +195,7 @@ a:focus-visible {
   bottom: 8px;
   width: 3px;
   border-radius: 0 3px 3px 0;
-  background: #7aa2f7;
+  background: var(--aim-form-primary);
   content: "";
 }
 
@@ -584,15 +596,15 @@ a:focus-visible {
 }
 
 .aim-button-primary {
-  border-color: var(--aim-blue);
-  background: var(--aim-blue);
+  border-color: var(--aim-form-primary);
+  background: var(--aim-form-primary);
   color: #fff;
   font-weight: 600;
-  box-shadow: 0 1px 2px rgba(35, 75, 152, 0.2);
+  box-shadow: 0 1px 2px rgba(126, 36, 24, 0.2);
 }
 
 .aim-button-primary:hover {
-  background: var(--aim-blue-dark);
+  background: var(--aim-form-primary-hover);
 }
 
 .aim-button-danger {
@@ -601,23 +613,23 @@ a:focus-visible {
 }
 
 .aim-button-soft {
-  border-color: #bfdbfe;
-  background: var(--aim-blue-soft);
-  color: var(--aim-blue-dark);
+  border-color: var(--aim-form-primary-border);
+  background: var(--aim-form-primary-soft);
+  color: var(--aim-form-primary-hover);
 }
 
 .aim-button-settings {
-  border-color: var(--aim-purple);
-  background: var(--aim-purple);
+  border-color: var(--aim-form-primary);
+  background: var(--aim-form-primary);
   color: #fff;
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(109, 40, 217, 0.22);
+  box-shadow: 0 1px 3px rgba(126, 36, 24, 0.22);
   white-space: nowrap;
 }
 
 .aim-button-settings:hover {
-  background: #5b21b6;
-  border-color: #5b21b6;
+  background: var(--aim-form-primary-hover);
+  border-color: var(--aim-form-primary-hover);
 }
 
 .aim-icon-button {
@@ -802,7 +814,7 @@ a:focus-visible {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--aim-blue-dark);
+  color: var(--aim-form-primary-hover);
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
@@ -815,7 +827,7 @@ a:focus-visible {
 
 .aim-activity-link:hover,
 .aim-activity-link:focus-visible {
-  color: var(--aim-blue);
+  color: var(--aim-form-primary);
   text-decoration-color: currentColor;
 }
 
@@ -957,7 +969,7 @@ a:focus-visible {
 }
 
 .aim-chooser-row:hover {
-  border-color: #93c5fd;
+  border-color: var(--aim-form-primary-border);
   background: #fbfdff;
 }
 
@@ -1111,10 +1123,10 @@ a:focus-visible {
 .aim-runtime-notice {
   margin-bottom: 12px;
   padding: 9px 11px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--aim-form-primary-border);
   border-radius: var(--aim-radius);
-  background: #eff6ff;
-  color: #1e3a8a;
+  background: var(--aim-form-primary-soft);
+  color: var(--aim-form-primary-hover);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -1279,9 +1291,9 @@ a:focus-visible {
 }
 
 .aim-designer-status-new {
-  border-color: #c7d2fe;
-  background: #eef2ff;
-  color: #3730a3;
+  border-color: var(--aim-form-primary-border);
+  background: var(--aim-form-primary-soft);
+  color: var(--aim-form-primary-hover);
 }
 
 .aim-designer-status-removed {
@@ -1297,9 +1309,9 @@ a:focus-visible {
 }
 
 .aim-designer-status-editing {
-  border-color: #93c5fd;
-  background: #eff6ff;
-  color: #1d4ed8;
+  border-color: var(--aim-form-primary-border);
+  background: var(--aim-form-primary-soft);
+  color: var(--aim-form-primary-hover);
 }
 
 .aim-designer-item-removed {
@@ -1311,8 +1323,8 @@ a:focus-visible {
 }
 
 .aim-designer-item-editing {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+  border-color: var(--aim-form-primary);
+  box-shadow: 0 0 0 2px var(--aim-form-focus-soft);
 }
 
 .aim-designer-toolbar {
@@ -1344,9 +1356,9 @@ a:focus-visible {
 .aim-card-link-placeholder {
   margin-bottom: 14px;
   padding: 12px 14px;
-  border: 1px dashed var(--aim-purple);
+  border: 1px dashed var(--aim-form-primary);
   border-radius: var(--aim-radius);
-  background: var(--aim-purple-soft);
+  background: var(--aim-form-primary-soft);
 }
 
 .aim-card-link-placeholder-content {
@@ -1362,7 +1374,7 @@ a:focus-visible {
 }
 
 .aim-card-link-placeholder-title {
-  color: var(--aim-purple);
+  color: var(--aim-form-primary-hover);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -1374,8 +1386,8 @@ a:focus-visible {
   min-height: 20px;
   padding: 2px 7px;
   border-radius: 4px;
-  background: rgba(109, 40, 217, 0.1);
-  color: var(--aim-purple);
+  background: var(--aim-form-focus-soft);
+  color: var(--aim-form-primary-hover);
   font-size: 11px;
   font-weight: 600;
 }
@@ -1396,7 +1408,7 @@ a:focus-visible {
 
 .aim-field-row[aria-selected="true"],
 .aim-field-row-selected {
-  border-color: #93c5fd;
+  border-color: var(--aim-form-primary-border);
   background: #fbfdff;
 }
 
@@ -1575,8 +1587,8 @@ a:focus-visible {
 
 .aim-field-type-option:hover:not(:disabled),
 .aim-field-type-option:focus-visible {
-  border-color: #93c5fd;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+  border-color: var(--aim-form-primary-border);
+  box-shadow: 0 0 0 3px var(--aim-form-focus-soft);
 }
 
 .aim-field-type-option:disabled {
@@ -1631,8 +1643,8 @@ a:focus-visible {
 }
 
 .aim-form-field-card-selected {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.12);
+  border-color: var(--aim-form-primary);
+  box-shadow: 0 0 0 2px var(--aim-form-focus-soft);
 }
 
 .aim-form-field-card .aim-field-row-select {
@@ -1644,7 +1656,7 @@ a:focus-visible {
 }
 
 .aim-form-field-card-type {
-  color: #2563eb;
+  color: var(--aim-form-primary);
   font-size: 11px;
   font-weight: 700;
 }
@@ -1731,9 +1743,9 @@ a:focus-visible {
 
 .aim-preview-info {
   padding: 10px 12px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--aim-form-primary-border);
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--aim-form-primary-soft);
 }
 
 .aim-preview-info p {
@@ -1759,9 +1771,9 @@ a:focus-visible {
 
 .aim-form-card-link {
   padding: 12px;
-  border: 1px solid #c7d2fe;
+  border: 1px solid var(--aim-form-primary-border);
   border-radius: 8px;
-  background: #eef2ff;
+  background: var(--aim-form-primary-soft);
 }
 
 .aim-form-card-link h4 {
@@ -1832,7 +1844,7 @@ a:focus-visible {
 }
 
 .aim-form-card-link-thumb:focus-visible {
-  outline: 3px solid rgba(37, 99, 235, 0.28);
+  outline: 3px solid var(--aim-form-focus);
   outline-offset: 3px;
 }
 
@@ -1914,8 +1926,8 @@ a:focus-visible {
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   background:
-    linear-gradient(135deg, rgba(37, 99, 235, 0.16), transparent 42%),
-    linear-gradient(160deg, #f8fafc 0%, #e0f2fe 52%, #dcfce7 100%);
+    linear-gradient(135deg, var(--aim-form-focus-soft), transparent 42%),
+    linear-gradient(160deg, #f8fafc 0%, #fff1ec 52%, #fff7ed 100%);
 }
 
 .aim-form-thumbnail-visual span {
@@ -1954,7 +1966,7 @@ a:focus-visible {
   bottom: 0;
   height: 20%;
   border-radius: 0;
-  background: rgba(37, 99, 235, 0.16);
+  background: var(--aim-form-focus-soft);
 }
 
 .aim-thumbnail-media-panel {
@@ -1987,7 +1999,7 @@ a:focus-visible {
 
 .aim-thumbnail-range {
   width: min(220px, 100%);
-  accent-color: var(--aim-blue);
+  accent-color: var(--aim-form-primary);
 }
 
 .aim-form-thumbnail-image {
@@ -2021,14 +2033,14 @@ a:focus-visible {
   background:
     linear-gradient(90deg, rgba(255, 255, 255, 0.6) 1px, transparent 1px),
     linear-gradient(0deg, rgba(255, 255, 255, 0.6) 1px, transparent 1px),
-    linear-gradient(135deg, #fef3c7, #dbeafe 54%, #f0fdf4);
+    linear-gradient(135deg, #fef3c7, #fff1ec 54%, #f0fdf4);
   background-size: 26px 26px, 26px 26px, auto;
 }
 
 .aim-form-thumbnail-stage {
   background:
     radial-gradient(circle at 70% 25%, rgba(250, 204, 21, 0.34), transparent 24%),
-    linear-gradient(145deg, #eff6ff 0%, #ede9fe 48%, #ecfdf5 100%);
+    linear-gradient(145deg, #fff1ec 0%, #fff7ed 48%, #ecfdf5 100%);
 }
 
 .aim-form-confirm-dialog {
@@ -2068,7 +2080,7 @@ a:focus-visible {
   width: 42px;
   height: 42px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #1d4ed8, #059669);
+  background: linear-gradient(135deg, var(--aim-form-primary), #8f2f1f);
 }
 
 .aim-mock-card-line,
@@ -2299,8 +2311,8 @@ a:focus-visible {
   --aim-border-strong: #b9c4d1;
   --aim-text: #1d2736;
   --aim-muted: #667386;
-  --aim-blue: #315fba;
-  --aim-blue-dark: #234b98;
+  --aim-blue: var(--aim-form-primary, #e0522d);
+  --aim-blue-dark: var(--aim-form-primary-hover, #bd3c24);
   width: min(800px, calc(100vw - 64px));
   max-height: min(86vh, 760px);
   padding: 0;
@@ -2377,7 +2389,7 @@ a:focus-visible {
 }
 
 .aim-raw-card-viewer-image-link:focus-visible {
-  outline: 3px solid rgba(49, 95, 186, 0.28);
+  outline: 3px solid var(--aim-form-focus, rgba(224, 82, 45, 0.28));
   outline-offset: -6px;
 }
 
@@ -3086,8 +3098,8 @@ a:focus-visible {
 }
 
 .aim-record-subviews button[aria-pressed="true"] {
-  background: var(--aim-blue-soft);
-  color: var(--aim-blue-dark);
+  background: var(--aim-form-primary-soft);
+  color: var(--aim-form-primary-hover);
   font-weight: 600;
 }
 
@@ -3177,8 +3189,8 @@ a:focus-visible {
 }
 
 .aim-period-group button[aria-pressed="true"] {
-  background: var(--aim-blue-soft);
-  color: var(--aim-blue-dark);
+  background: var(--aim-form-primary-soft);
+  color: var(--aim-form-primary-hover);
   font-weight: 600;
 }
 
@@ -3346,15 +3358,15 @@ a:focus-visible {
 .aim-runtime-info,
 .aim-record-detail-info {
   padding: 10px 12px;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--aim-form-primary-border);
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--aim-form-primary-soft);
 }
 
 .aim-runtime-info h3,
 .aim-record-detail-info h3 {
   margin: 0 0 4px;
-  color: #1e3a8a;
+  color: var(--aim-form-primary-hover);
   font-size: 13px;
   font-weight: 600;
 }
