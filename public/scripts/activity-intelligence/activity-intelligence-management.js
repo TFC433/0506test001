@@ -617,7 +617,7 @@
             ${picture ? `<img src="${Store.escapeHtml(picture)}" alt="">` : ''}
           </span>
           <span class="aim-user-copy">
-            <strong title="${Store.escapeHtml(name)}">歡迎，${Store.escapeHtml(name)}</strong>
+            <strong title="${Store.escapeHtml(name)}">你好，${Store.escapeHtml(name)}</strong>
             ${role ? `<small>${Store.escapeHtml(role)}</small>` : ''}
           </span>
         </div>

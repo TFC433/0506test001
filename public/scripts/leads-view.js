@@ -238,7 +238,7 @@ function updateUserUI(isLoggedIn) {
         if(userName) {
             userName.innerHTML = `
                 <div class="user-name-copy">
-                    <span>歡迎，${currentUser.displayName}</span>
+                    <span>你好，${currentUser.displayName}</span>
                     <span id="my-pending-reminder" style="display:none; color: var(--accent-red); font-size: 0.75rem; margin-top: 2px;"></span>
                 </div>
             `;
