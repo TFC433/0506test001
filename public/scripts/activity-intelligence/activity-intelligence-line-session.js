@@ -6,7 +6,6 @@
   const LOCAL_ROLE_HEADER = 'x-activity-intelligence-local-role';
   const ALLOWED_ROLES = new Set(['super_admin', 'admin', 'recorder']);
 
-  let liffInitialized = false;
   let currentSession = null;
 
   function isLocalDevelopment() {
@@ -62,13 +61,8 @@
     return { response, body };
   }
 
-  async function ensureLiffReady() {
-    if (typeof liff === 'undefined' || !window.LIFF_ID) return false;
-    if (!liffInitialized) {
-      await liff.init({ liffId: window.LIFF_ID });
-      liffInitialized = true;
-    }
-    return true;
+  function bridgeLoginUrl() {
+    return `${window.location.origin}/liff/?return=form`;
   }
 
   async function createSession(options = {}) {
@@ -86,20 +80,7 @@
       }
       headers.Authorization = 'Bearer TEST_LOCAL_TOKEN';
     } else {
-      if (!await ensureLiffReady()) {
-        return { authenticated: false, message: 'LINE LIFF 尚未準備完成。', canLineLogin: false };
-      }
-
-      if (!liff.isLoggedIn()) {
-        return { authenticated: false, message: '請先使用 LINE 登入。', canLineLogin: true };
-      }
-
-      const idToken = liff.getIDToken();
-      if (!idToken) {
-        return { authenticated: false, message: '無法取得 LINE 登入憑證。', canLineLogin: true };
-      }
-
-      headers.Authorization = `Bearer ${idToken}`;
+      return { authenticated: false, message: '請先使用 LINE 登入。', canLineLogin: true };
     }
 
     const response = await fetch('/api/line/session', {
@@ -171,12 +152,12 @@
   }
 
   async function loginWithLine() {
-    if (!await ensureLiffReady()) return;
-    if (!liff.isLoggedIn()) {
-      liff.login({
-        redirectUri: `${window.location.origin}/views/activity-intelligence.html`
-      });
+    if (isLocalDevelopment()) {
+      await localTestLogin();
+      window.location.reload();
+      return;
     }
+    window.location.assign(bridgeLoginUrl());
   }
 
   async function logout() {
@@ -190,7 +171,7 @@
     }
 
     try {
-      if (typeof liff !== 'undefined' && liffInitialized && liff.isLoggedIn()) {
+      if (typeof liff !== 'undefined' && liff.isLoggedIn()) {
         liff.logout();
       }
     } catch (error) {

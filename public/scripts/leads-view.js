@@ -24,7 +24,6 @@ let currentView = 'all';
 // [Phase 8.4 Exhibition UX] Independent filter state and globally stored config
 let showExhibitionOnly = false;
 let currentExhibitionConfig = null;
-let liffInitialized = false;
 let lineLeadRecoveryAttempted = false;
 let lastLineLeadDeniedUserId = null;
 const LOCAL_LINE_LEAD_MANUAL_LOGIN_KEY = 'line-lead-local-manual-login';
@@ -74,11 +73,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 window.manualLiffLogin = async function() {
     console.warn('[Auth] Manual login triggered.');
-    if (await ensureLiffReady()) {
-        liff.login({
-            redirectUri: `${window.location.origin}/leads-view.html`
-        });
+    if (isLocalDevelopment()) {
+        await window.localLineLeadTestLogin();
+        return;
     }
+    window.location.assign(`${window.location.origin}/liff/?return=ocr`);
 };
 
 window.localLineLeadTestLogin = async function() {
@@ -117,7 +116,7 @@ window.forceLiffRelogin = async function() {
     }
 
     try {
-        if (typeof liff !== 'undefined' && liffInitialized && liff.isLoggedIn()) {
+        if (typeof liff !== 'undefined' && liff.isLoggedIn()) {
             liff.logout();
         }
     } catch (error) {
@@ -283,6 +282,12 @@ async function initLIFF() {
             return;
         }
 
+        if (!isLocalDevelopment()) {
+            updateUserUI(false);
+            toggleContentVisibility(false, 'login');
+            return;
+        }
+
         const sessionCreated = await createLineLeadSessionFromLiff();
         if (sessionCreated === true) {
             loadLeadsData();
@@ -291,20 +296,6 @@ async function initLIFF() {
         console.error('Line Lead session init error:', error);
         toggleContentVisibility(false, 'login');
     }
-}
-
-async function ensureLiffReady() {
-    if (typeof liff === 'undefined' || !LIFF_ID) {
-        console.error('LIFF 未就緒');
-        return false;
-    }
-
-    if (!liffInitialized) {
-        await liff.init({ liffId: LIFF_ID });
-        liffInitialized = true;
-    }
-
-    return true;
 }
 
 function updateUserUI(isLoggedIn) {
@@ -390,7 +381,7 @@ function updateUserUI(isLoggedIn) {
 
 function bindEvents() {
     document.getElementById('login-btn').onclick = () => {
-        if (typeof liff !== 'undefined' && LIFF_ID) window.manualLiffLogin(); 
+        window.manualLiffLogin();
     };
 
     document.querySelectorAll('.toggle-btn').forEach(btn => {
@@ -454,24 +445,9 @@ async function createLineLeadSessionFromLiff(options = {}) {
         }
         headers.Authorization = 'Bearer TEST_LOCAL_TOKEN';
     } else {
-        if (!await ensureLiffReady()) {
-            toggleContentVisibility(false, 'login');
-            return false;
-        }
-
-        if (!liff.isLoggedIn()) {
-            updateUserUI(false);
-            toggleContentVisibility(false, 'login');
-            return false;
-        }
-
-        const idToken = liff.getIDToken();
-        if (!idToken) {
-            showAuthFailedFallback();
-            return false;
-        }
-
-        headers.Authorization = `Bearer ${idToken}`;
+        updateUserUI(false);
+        toggleContentVisibility(false, 'login');
+        return false;
     }
 
     const response = await fetch('/api/line/session', {
