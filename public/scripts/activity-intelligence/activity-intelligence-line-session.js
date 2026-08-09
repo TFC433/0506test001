@@ -78,7 +78,7 @@
       if (!options.forceLocal && !localManualLoginEnabled()) {
         return {
           authenticated: false,
-          message: '請先使用 LINE 登入後繼續。',
+          message: '請先使用 LINE 登入後繼續',
           canLineLogin: true,
           localPreviewEnabled: true,
           canLocalLogin: true

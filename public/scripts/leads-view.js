@@ -30,7 +30,7 @@ let lastLineLeadDeniedUserId = null;
 const LOCAL_LINE_LEAD_MANUAL_LOGIN_KEY = 'line-lead-local-manual-login';
 const ocrAuthCopy = Object.freeze({
     product: '名片管理',
-    message: '請先使用 LINE 登入後繼續。',
+    message: '請先使用 LINE 登入後繼續',
     verifying: '正在檢查登入狀態...',
     forbidden: '此 LINE 帳號尚未開通使用權限。'
 });
@@ -220,11 +220,13 @@ function renderOcrAuthGate(state = 'login', userId = '') {
 
     return `
         <main class="ocr-auth-panel" aria-live="${isVerifying ? 'polite' : 'off'}">
-            <img src="/images/portal/ocr.png" alt="FANUC card OCR" class="ocr-auth-logo">
-            <h1>${ocrAuthCopy.product}</h1>
-            <p>${message}</p>
-            ${deniedUser}
-            ${isVerifying ? '<div class="ocr-auth-status" role="status">驗證中</div>' : primaryAction}
+            <div class="ocr-auth-main">
+                <img src="/images/portal/ocr.png" alt="FANUC card OCR" class="ocr-auth-logo">
+                <h1>${ocrAuthCopy.product}</h1>
+                <p>${message}</p>
+                ${deniedUser}
+                ${isVerifying ? '<div class="ocr-auth-status" role="status">驗證中</div>' : primaryAction}
+            </div>
             ${localControl}
         </main>
     `;

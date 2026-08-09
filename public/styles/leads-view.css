@@ -59,19 +59,29 @@ body.ocr-auth-state {
 
 .ocr-auth-gate {
     min-height: 100vh;
+    min-height: 100svh;
     width: 100%;
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
-    padding: 24px;
+    padding: clamp(88px, 18vh, 148px) 20px 32px;
     box-sizing: border-box;
     background: var(--ocr-sidebar);
     color: var(--ocr-sidebar-text);
     text-align: center;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 .ocr-auth-panel {
-    width: min(100%, 340px);
+    width: min(100%, 324px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.ocr-auth-main {
+    width: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -133,6 +143,31 @@ body.ocr-auth-state {
     color: var(--ocr-sidebar-muted);
     font-size: 13px;
     font-weight: 700;
+}
+
+@media (max-width: 480px) {
+    .ocr-auth-gate {
+        padding: clamp(56px, 14vh, 96px) 20px 28px;
+    }
+
+    .ocr-auth-logo {
+        width: min(160px, 100%);
+        margin-bottom: 20px;
+    }
+}
+
+@media (max-width: 340px) {
+    .ocr-auth-gate {
+        padding-right: 16px;
+        padding-left: 16px;
+    }
+}
+
+@media (max-height: 620px) {
+    .ocr-auth-gate {
+        padding-top: 32px;
+        padding-bottom: 28px;
+    }
 }
 
 .local-test-logout-btn {

@@ -45,7 +45,7 @@
   });
   const preAuthCopy = Object.freeze({
     product: '活動情報管理',
-    message: '請先使用 LINE 登入後繼續。',
+    message: '請先使用 LINE 登入後繼續',
     verifying: '正在檢查登入狀態...',
     forbidden: '此 LINE 帳號尚未開通使用權限。'
   });
@@ -490,11 +490,13 @@
     return `
       <div class="aim-preauth aim-preauth-${Store.escapeHtml(state)}">
         <main class="aim-preauth-panel" aria-live="${isVerifying ? 'polite' : 'off'}">
-          <img src="/images/portal/form.png" alt="FANUC forms" class="aim-preauth-logo">
-          <h1>${Store.escapeHtml(preAuthCopy.product)}</h1>
-          <p>${Store.escapeHtml(message)}</p>
-          ${isVerifying ? '<div class="aim-preauth-status" role="status">驗證中</div>' : ''}
-          ${!isVerifying && !isForbidden && currentUser && currentUser.canLineLogin ? '<button class="aim-button aim-button-primary aim-preauth-button" data-action="line-login" type="button">使用 LINE 登入</button>' : ''}
+          <div class="aim-preauth-main">
+            <img src="/images/portal/form.png" alt="FANUC forms" class="aim-preauth-logo">
+            <h1>${Store.escapeHtml(preAuthCopy.product)}</h1>
+            <p>${Store.escapeHtml(message)}</p>
+            ${isVerifying ? '<div class="aim-preauth-status" role="status">驗證中</div>' : ''}
+            ${!isVerifying && !isForbidden && currentUser && currentUser.canLineLogin ? '<button class="aim-button aim-button-primary aim-preauth-button" data-action="line-login" type="button">使用 LINE 登入</button>' : ''}
+          </div>
           ${renderLocalPreAuthControl(isVerifying || isForbidden)}
         </main>
       </div>
