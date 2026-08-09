@@ -67,6 +67,19 @@ function storeLiffReturnTarget() {
     }
 }
 
+function liffBridgeLoginUrl() {
+    const liffId = typeof LIFF_ID !== 'undefined' ? LIFF_ID : window.LIFF_ID;
+    if (liffId) {
+        const liffUrl = new URL(`https://liff.line.me/${encodeURIComponent(liffId)}/`);
+        liffUrl.searchParams.set('product', 'ocr');
+        return liffUrl.toString();
+    }
+
+    const bridgeUrl = new URL('/liff/', window.location.origin);
+    bridgeUrl.searchParams.set('product', 'ocr');
+    return bridgeUrl.toString();
+}
+
 function clearLiffReturnTarget() {
     try {
         sessionStorage.removeItem(LIFF_RETURN_TARGET_KEY);
@@ -97,7 +110,7 @@ window.manualLiffLogin = async function() {
         return;
     }
     if (!storeLiffReturnTarget()) return;
-    window.location.assign(`${window.location.origin}/liff/`);
+    window.location.assign(liffBridgeLoginUrl());
 };
 
 window.localLineLeadTestLogin = async function() {

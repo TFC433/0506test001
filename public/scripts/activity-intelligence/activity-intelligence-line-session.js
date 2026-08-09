@@ -63,7 +63,15 @@
   }
 
   function bridgeLoginUrl() {
-    return `${window.location.origin}/liff/`;
+    if (window.LIFF_ID) {
+      const liffUrl = new URL(`https://liff.line.me/${encodeURIComponent(window.LIFF_ID)}/`);
+      liffUrl.searchParams.set('product', 'form');
+      return liffUrl.toString();
+    }
+
+    const bridgeUrl = new URL('/liff/', window.location.origin);
+    bridgeUrl.searchParams.set('product', 'form');
+    return bridgeUrl.toString();
   }
 
   function storeBridgeReturnTarget() {

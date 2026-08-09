@@ -40,8 +40,38 @@
     return RETURN_TARGETS[returnKey] || '';
   }
 
-  function canonicalBridgeUrl() {
-    return new URL('/liff/', window.location.origin).toString();
+  function validReturnKey(returnKey) {
+    return targetFor(returnKey) ? returnKey : '';
+  }
+
+  function productFromRestoredUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const product = params.get('product');
+    if (!product) return { key: '', invalid: false };
+    return validReturnKey(product) ? { key: product, invalid: false } : { key: '', invalid: true };
+  }
+
+  function resolveReturnKey(storedKey, restoredProduct) {
+    if (restoredProduct.invalid) return { key: '', invalid: true };
+    if (storedKey && restoredProduct.key && storedKey !== restoredProduct.key) {
+      return { key: '', invalid: true };
+    }
+    return { key: restoredProduct.key || storedKey, invalid: false };
+  }
+
+  function persistReturnTarget(returnKey) {
+    if (!validReturnKey(returnKey)) return;
+    try {
+      sessionStorage.setItem(RETURN_TARGET_KEY, returnKey);
+    } catch (_) {
+      // Routing state is non-auth, temporary browser state.
+    }
+  }
+
+  function canonicalBridgeUrl(returnKey) {
+    const url = new URL('/liff/', window.location.origin);
+    if (validReturnKey(returnKey)) url.searchParams.set('product', returnKey);
+    return url.toString();
   }
 
   function applyTheme(returnKey) {
@@ -202,38 +232,67 @@
   }
 
   async function runBridge() {
-    activeReturnKey = storedReturnKey();
-    const target = targetFor(activeReturnKey);
-    if (!target) {
-      invalidEntry();
-      return;
-    }
-
+    const storedKey = validReturnKey(storedReturnKey());
+    activeReturnKey = storedKey;
     renderState('processing');
 
+    let sessionChecked = false;
     try {
-      const existing = await readExistingSession();
-      if (existing.response.ok && existing.body.success) {
-        clearAttempt();
-        clearReturnTarget();
-        window.location.replace(target);
-        return;
-      }
-      if (existing.response.status === 403) {
-        forbidden(existing.body.yourUserId || existing.body.userId || '');
-        return;
+      if (storedKey) {
+        sessionChecked = true;
+        const existing = await readExistingSession();
+        if (existing.response.ok && existing.body.success) {
+          clearAttempt();
+          clearReturnTarget();
+          window.location.replace(targetFor(storedKey));
+          return;
+        }
+        if (existing.response.status === 403) {
+          forbidden(existing.body.yourUserId || existing.body.userId || '');
+          return;
+        }
       }
     } catch (_) {
       // Continue to LIFF auth; session read failures are handled by the exchange result.
     }
 
     if (typeof liff === 'undefined' || !window.LIFF_ID) {
-      failAuthentication();
+      if (!storedKey) invalidEntry();
+      else failAuthentication();
       return;
     }
 
     try {
       await liff.init({ liffId: window.LIFF_ID });
+
+      const resolved = resolveReturnKey(storedKey, productFromRestoredUrl());
+      if (resolved.invalid || !resolved.key) {
+        invalidEntry();
+        return;
+      }
+
+      activeReturnKey = resolved.key;
+      persistReturnTarget(activeReturnKey);
+      const target = targetFor(activeReturnKey);
+      renderState('processing');
+
+      if (!sessionChecked) {
+        try {
+          const existing = await readExistingSession();
+          if (existing.response.ok && existing.body.success) {
+            clearAttempt();
+            clearReturnTarget();
+            window.location.replace(target);
+            return;
+          }
+          if (existing.response.status === 403) {
+            forbidden(existing.body.yourUserId || existing.body.userId || '');
+            return;
+          }
+        } catch (_) {
+          // Continue to LIFF auth; session read failures are handled by the exchange result.
+        }
+      }
 
       if (!liff.isLoggedIn()) {
         const attempted = sessionStorage.getItem(LOGIN_ATTEMPT_KEY);
@@ -243,7 +302,7 @@
         }
 
         sessionStorage.setItem(LOGIN_ATTEMPT_KEY, activeReturnKey);
-        liff.login({ redirectUri: canonicalBridgeUrl() });
+        liff.login({ redirectUri: canonicalBridgeUrl(activeReturnKey) });
         return;
       }
 
