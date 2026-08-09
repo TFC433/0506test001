@@ -4,13 +4,25 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LINE Login</title>
+  <link rel="stylesheet" href="/styles/liff-auth-bridge.css">
   <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
   <script>
     window.LIFF_ID = '2008584585-8OQnm0Gk';
   </script>
 </head>
 <body>
-  <main id="liff-bridge-status" role="status">Signing in with LINE...</main>
+  <main class="liff-bridge" aria-live="polite">
+    <img id="liff-bridge-logo" class="liff-bridge-logo" alt="" hidden>
+    <h1 id="liff-bridge-title">正在確認身分</h1>
+    <p id="liff-bridge-message">正在透過 LINE 驗證您的帳號，請稍候…</p>
+    <div id="liff-bridge-spinner" class="liff-bridge-spinner" role="status" aria-label="處理中"></div>
+    <section id="liff-bridge-user-panel" class="liff-bridge-user-panel" hidden>
+      <span class="liff-bridge-user-label">LINE User ID</span>
+      <code id="liff-bridge-user-id" class="liff-bridge-user-id"></code>
+      <button id="liff-bridge-copy" class="liff-bridge-button" type="button">複製 User ID</button>
+      <p class="liff-bridge-footnote">完成授權後，重新進入系統即可。</p>
+    </section>
+  </main>
   <script src="/scripts/liff-auth-bridge.js"></script>
 </body>
 </html>
