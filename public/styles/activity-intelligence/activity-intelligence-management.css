@@ -114,6 +114,7 @@ a:focus-visible {
   margin: 0 0 12px;
   color: #fff;
   font-size: 24px;
+  font-weight: 700;
   line-height: 1.25;
   letter-spacing: 0;
 }
@@ -121,12 +122,25 @@ a:focus-visible {
 .aim-preauth p {
   margin: 0 0 24px;
   color: var(--aim-form-sidebar-muted);
+  font-size: 16px;
+  font-weight: 400;
   line-height: 1.55;
 }
 
 .aim-preauth-button {
   width: 100%;
   justify-content: center;
+  min-height: 34px;
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  transition: all 0.2s ease;
+}
+
+.aim-preauth-button:active {
+  transform: translateY(0);
 }
 
 .aim-preauth-status {

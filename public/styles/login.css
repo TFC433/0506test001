@@ -109,7 +109,7 @@ body {
 
 /* --- 【修改】LOGO 樣式 --- */
 .logo-container {
-    margin-bottom: var(--spacing-4);
+    margin-bottom: var(--spacing-6);
     display: flex;
     justify-content: center;
 }
@@ -123,11 +123,21 @@ body {
     display: block;
 }
 
+.login-title {
+    margin: 0 0 12px;
+    color: #fff;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: 0;
+}
+
 .login-box p {
     font-size: 1rem;
     color: var(--text-secondary);
-    margin-bottom: var(--spacing-10);
-    font-weight: 500;
+    margin: 0 0 var(--spacing-10);
+    font-weight: 400;
+    line-height: 1.55;
 }
 
 /* ==================== 表單樣式 ==================== */
@@ -162,20 +172,22 @@ body {
 .submit-btn {
     background: var(--accent-blue);
     color: white;
-    border: none;
-    padding: var(--spacing-4) var(--spacing-8);
-    border-radius: var(--rounded-lg);
-    font-size: 1rem;
-    font-weight: 700;
+    border: 1px solid var(--accent-blue);
+    min-height: 34px;
+    padding: 7px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.35;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
     width: 100%;
     box-shadow: var(--shadow-md);
     position: relative;
     overflow: hidden;
     letter-spacing: 0;
 }
-.submit-btn:hover { background: var(--accent-purple); box-shadow: var(--shadow-lg); }
+.submit-btn:hover { background: var(--accent-purple); border-color: var(--accent-purple); box-shadow: var(--shadow-lg); }
 .submit-btn:active { transform: translateY(0); }
 .submit-btn:disabled { background: var(--text-muted); cursor: not-allowed; transform: none; box-shadow: none; opacity: 0.6; }
 .submit-btn.loading::after {
