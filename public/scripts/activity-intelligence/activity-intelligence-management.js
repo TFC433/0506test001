@@ -608,16 +608,20 @@
   function renderUserIdentity() {
     const picture = safePictureUrl(currentUser.pictureUrl);
     const name = currentUser.displayName || currentUser.userId || '未登入使用者';
+    const role = currentUser.authenticated ? (currentUser.role || '') : '';
     return `
-      <div class="aim-user" aria-label="目前使用者">
-        <span class="aim-avatar" aria-hidden="true">
-          <span>${Store.escapeHtml(userInitials())}</span>
-          ${picture ? `<img src="${Store.escapeHtml(picture)}" alt="">` : ''}
-        </span>
-        <span class="aim-user-copy">
-          <strong title="${Store.escapeHtml(name)}">${Store.escapeHtml(name)}</strong>
-          <small>${Store.escapeHtml(currentUser.authenticated ? productRoleLabel(currentUser.role) : '尚未取得角色')}</small>
-        </span>
+      <div class="aim-account-area" aria-label="目前使用者">
+        <div class="aim-user">
+          <span class="aim-avatar" aria-hidden="true">
+            <span>${Store.escapeHtml(userInitials())}</span>
+            ${picture ? `<img src="${Store.escapeHtml(picture)}" alt="">` : ''}
+          </span>
+          <span class="aim-user-copy">
+            <strong title="${Store.escapeHtml(name)}">歡迎，${Store.escapeHtml(name)}</strong>
+            ${role ? `<small>${Store.escapeHtml(role)}</small>` : ''}
+          </span>
+        </div>
+        ${currentUser.authenticated ? '<button class="aim-account-logout" type="button" data-action="line-logout">登出</button>' : ''}
       </div>
     `;
   }
@@ -2434,6 +2438,10 @@
     if (action === 'save-settings' && canManageActivities()) await saveSettings();
     if (action === 'reset' && canManageActivities()) toast(formalDeferredMessage);
     if (action === 'line-login' && window.ActivityIntelligenceSession?.loginWithLine) await window.ActivityIntelligenceSession.loginWithLine();
+    if (action === 'line-logout' && window.ActivityIntelligenceSession?.logout) {
+      await window.ActivityIntelligenceSession.logout();
+      return;
+    }
     if (action === 'add-field' && canDesignForm()) addField();
     if (action === 'select-field' && canDesignForm()) ui.selectedFieldId = el.dataset.id;
     if (action === 'move-field' && canDesignForm()) moveField(el.dataset.id, Number(el.dataset.dir));

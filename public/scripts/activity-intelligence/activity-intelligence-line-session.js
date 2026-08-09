@@ -139,6 +139,28 @@
     if (!liff.isLoggedIn()) liff.login();
   }
 
+  async function logout() {
+    try {
+      await fetch('/api/line/session', {
+        method: 'DELETE',
+        credentials: 'same-origin'
+      });
+    } catch (error) {
+      console.warn('[ActivityIntelligenceSession] Session logout request failed:', error.message);
+    }
+
+    try {
+      if (typeof liff !== 'undefined' && liffInitialized && liff.isLoggedIn()) {
+        liff.logout();
+      }
+    } catch (error) {
+      console.warn('[ActivityIntelligenceSession] LIFF logout skipped:', error.message);
+    }
+
+    currentSession = null;
+    window.location.reload();
+  }
+
   window.ActivityIntelligenceSession = Object.freeze({
     ensureSession,
     recoverSession,
@@ -146,6 +168,7 @@
     isLocalDevelopment,
     localPreviewRole,
     setLocalPreviewRole,
-    loginWithLine
+    loginWithLine,
+    logout
   });
 })();

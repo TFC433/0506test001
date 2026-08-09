@@ -331,9 +331,17 @@ a:focus-visible {
   gap: 16px;
 }
 
+.aim-account-area {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+}
+
 .aim-user {
   min-width: 0;
-  max-width: 190px;
+  max-width: 260px;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -388,6 +396,24 @@ a:focus-visible {
   font-size: 12px;
   font-weight: 500;
   line-height: 1.3;
+}
+
+.aim-account-logout {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--aim-border-strong);
+  border-radius: 6px;
+  background: var(--aim-surface);
+  color: var(--aim-text);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.aim-account-logout:hover {
+  background: var(--aim-surface-muted);
 }
 
 .aim-preview-control {

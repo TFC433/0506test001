@@ -224,20 +224,21 @@ function updateUserUI(isLoggedIn) {
     const loginBtn = document.getElementById('login-btn');
     const userName = document.getElementById('user-name');
     const userAvatar = document.getElementById('user-avatar');
+    const userAvatarFallback = document.getElementById('user-avatar-fallback');
     
     if (isLoggedIn) {
         if(userArea) {
             userArea.style.display = 'flex';
             userArea.style.alignItems = 'center';
-            userArea.style.gap = '10px';
+            userArea.style.gap = '';
         }
         if(loginBtn) loginBtn.style.display = 'none';
         
         // [ITEM 6] Inject pending reminder DOM placeholder
         if(userName) {
             userName.innerHTML = `
-                <div style="display: flex; flex-direction: column; align-items: flex-end;">
-                    <span>你好，${currentUser.displayName}</span>
+                <div class="user-name-copy">
+                    <span>歡迎，${currentUser.displayName}</span>
                     <span id="my-pending-reminder" style="display:none; color: var(--accent-red); font-size: 0.75rem; margin-top: 2px;"></span>
                 </div>
             `;
@@ -246,6 +247,17 @@ function updateUserUI(isLoggedIn) {
         if (currentUser.pictureUrl && userAvatar) {
             userAvatar.src = currentUser.pictureUrl;
             userAvatar.style.display = 'block';
+            if (userAvatarFallback) userAvatarFallback.style.display = 'none';
+        } else {
+            if (userAvatar) {
+                userAvatar.style.display = 'none';
+                userAvatar.src = '';
+            }
+            if (userAvatarFallback) {
+                const fallbackName = String(currentUser.displayName || currentUser.userId || 'TFC').trim();
+                userAvatarFallback.textContent = Array.from(fallbackName).slice(0, 2).join('').toUpperCase();
+                userAvatarFallback.style.display = 'grid';
+            }
         }
 
         // [ITEM 4] Inject logout entry natively to user-area
@@ -254,7 +266,6 @@ function updateUserUI(isLoggedIn) {
             logoutBtn.id = 'header-logout-btn';
             logoutBtn.className = 'action-btn';
             logoutBtn.textContent = '登出';
-            logoutBtn.style.cssText = 'padding: 4px 8px; font-size: 0.8rem; width: auto; background: var(--surface-bg, #fff); color: var(--text-main, #333); border: 1px solid var(--border-color, #ccc); cursor: pointer; border-radius: 4px;';
             logoutBtn.onclick = window.forceLiffRelogin;
             userArea.appendChild(logoutBtn);
         }
@@ -265,6 +276,10 @@ function updateUserUI(isLoggedIn) {
         if(userAvatar) {
             userAvatar.style.display = 'none';
             userAvatar.src = '';
+        }
+        if(userAvatarFallback) {
+            userAvatarFallback.style.display = 'none';
+            userAvatarFallback.textContent = '';
         }
         if(userName) userName.innerHTML = '載入中...';
         

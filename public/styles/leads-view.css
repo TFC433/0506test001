@@ -156,14 +156,37 @@ body {
     white-space: nowrap;
 }
 
+.user-name-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    min-width: 0;
+}
+
 .user-avatar {
     width: 34px;
     height: 34px;
     flex: 0 0 34px;
+    box-sizing: border-box;
     border-radius: 50%;
     object-fit: cover;
     border: 1px solid var(--border-color);
     background-color: #eee;
+}
+
+.user-avatar-fallback {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;
+    box-sizing: border-box;
+    display: none;
+    place-items: center;
+    border-radius: 50%;
+    border: 1px solid var(--border-color);
+    background-color: #e6ebf2;
+    color: #40516a;
+    font-size: 11px;
+    font-weight: 700;
 }
 
 .login-btn {
@@ -175,6 +198,25 @@ body {
     border-radius: 20px;
     font-weight: 600;
     cursor: pointer;
+}
+
+#header-logout-btn {
+    width: auto;
+    min-height: 34px;
+    padding: 0 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--card-bg);
+    color: var(--text-main);
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.35;
+    white-space: nowrap;
+}
+
+#header-logout-btn:hover {
+    background: #f8fafc;
 }
 
 /* Controls Section (Sticky Header Group) */

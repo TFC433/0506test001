@@ -9,7 +9,7 @@ Change Log:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>名片總覽</title>
+    <title>名片管理 | FANUC card OCR</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg">
     
     <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
@@ -40,6 +40,7 @@ Change Log:
             <div class="user-area" id="user-area" style="display: none;">
                 <span class="user-name" id="user-name">載入中...</span>
                 <img id="user-avatar" class="user-avatar" src="" alt="User">
+                <span id="user-avatar-fallback" class="user-avatar-fallback" aria-hidden="true"></span>
             </div>
             <button id="login-btn" class="login-btn" style="display: none;">登入</button>
         </header>
