@@ -27,6 +27,35 @@ let currentExhibitionConfig = null;
 let liffInitialized = false;
 let lineLeadRecoveryAttempted = false;
 let lastLineLeadDeniedUserId = null;
+const LOCAL_LINE_LEAD_MANUAL_LOGIN_KEY = 'line-lead-local-manual-login';
+const ocrAuthCopy = Object.freeze({
+    product: '名片管理',
+    message: '請先使用 LINE 登入後繼續。',
+    verifying: '正在檢查登入狀態...',
+    forbidden: '此 LINE 帳號尚未開通使用權限。'
+});
+
+function isLocalDevelopment() {
+    return location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+}
+
+function localManualLoginEnabled() {
+    try {
+        return isLocalDevelopment() && sessionStorage.getItem(LOCAL_LINE_LEAD_MANUAL_LOGIN_KEY) === '1';
+    } catch (_) {
+        return false;
+    }
+}
+
+function setLocalManualLoginEnabled(enabled) {
+    if (!isLocalDevelopment()) return;
+    try {
+        if (enabled) sessionStorage.setItem(LOCAL_LINE_LEAD_MANUAL_LOGIN_KEY, '1');
+        else sessionStorage.removeItem(LOCAL_LINE_LEAD_MANUAL_LOGIN_KEY);
+    } catch (_) {
+        // Local test state is only an auto-login UI preference; session cookie remains authoritative.
+    }
+}
 
 function getRawContactIdentifier(record) {
     if (!record) return null;
@@ -48,6 +77,30 @@ window.manualLiffLogin = async function() {
     if (await ensureLiffReady()) {
         liff.login();
     }
+};
+
+window.localLineLeadTestLogin = async function() {
+    if (!isLocalDevelopment()) return;
+    setLocalManualLoginEnabled(true);
+    const created = await createLineLeadSessionFromLiff({ forceLocal: true });
+    if (created === true) {
+        await loadLeadsData();
+    }
+};
+
+window.localLineLeadTestLogout = async function() {
+    if (!isLocalDevelopment()) return;
+    setLocalManualLoginEnabled(false);
+    try {
+        await fetch('/api/line/session', {
+            method: 'DELETE',
+            credentials: 'same-origin'
+        });
+    } catch (error) {
+        console.warn('[Auth] Local test session logout request failed:', error.message);
+    }
+    resetCurrentUser();
+    toggleContentVisibility(false, 'login');
 };
 
 window.forceLiffRelogin = async function() {
@@ -99,13 +152,27 @@ function applyAuthenticatedUser(sessionUser) {
 function toggleContentVisibility(show, state = 'login') {
     const controls = document.querySelector('.controls-section');
     const main = document.querySelector('.leads-container');
+    const header = document.querySelector('.main-header');
+    const sidebar = document.querySelector('.ocr-sidebar');
+    const lineBotLink = document.querySelector('.line-bot-link');
+    const appContainer = document.querySelector('.app-container');
     let promptDiv = document.getElementById('login-prompt'); 
 
     if (show) {
+        document.body.classList.remove('ocr-auth-state');
+        if(appContainer) appContainer.classList.remove('ocr-auth-container');
+        if(header) header.style.display = '';
+        if(sidebar) sidebar.style.display = '';
+        if(lineBotLink) lineBotLink.style.display = '';
         if(controls) controls.style.display = 'flex';
         if(main) main.style.display = 'block';
         if(promptDiv) promptDiv.style.display = 'none';
     } else {
+        document.body.classList.add('ocr-auth-state');
+        if(appContainer) appContainer.classList.add('ocr-auth-container');
+        if(header) header.style.display = 'none';
+        if(sidebar) sidebar.style.display = 'none';
+        if(lineBotLink) lineBotLink.style.display = 'none';
         if(controls) controls.style.display = 'none';
         if(main) main.style.display = 'none';
         
@@ -113,8 +180,7 @@ function toggleContentVisibility(show, state = 'login') {
         if (!promptDiv) {
             promptDiv = document.createElement('div');
             promptDiv.id = 'login-prompt';
-            promptDiv.className = 'empty-state'; 
-            promptDiv.style.cssText = 'display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; padding: 20px; text-align: center;';
+            promptDiv.className = 'ocr-auth-gate'; 
             
             const header = document.querySelector('.main-header');
             if(header && header.parentNode) {
@@ -122,50 +188,62 @@ function toggleContentVisibility(show, state = 'login') {
             }
         }
         
+        promptDiv.className = 'ocr-auth-gate';
         promptDiv.style.display = 'flex';
-
-        // [ITEM 5] Smooth UX State Handling
-        if (state === 'verifying') {
-            promptDiv.innerHTML = `
-                <div class="spinner" style="margin-bottom: 20px; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid var(--primary-color, #00B900); border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                <h2 style="margin-bottom: 10px; color: var(--text-main);">身分驗證中...</h2>
-                <p style="color: var(--text-sub);">正在安全地檢查您的登入狀態</p>
-                <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
-            `;
-        } else if (state === 'expired') {
-            promptDiv.innerHTML = `
-                <div class="empty-icon" style="font-size: 5rem; margin-bottom: 20px;">⚠️</div>
-                <h2 style="margin-bottom: 10px; color: var(--text-main);">登入憑證失效</h2>
-                <p style="color: var(--text-sub); margin-bottom: 20px;">您的登入狀態已過期或無效，請重新登入。</p>
-                <button class="login-btn" onclick="window.forceLiffRelogin()" style="padding: 10px 30px; font-size: 1rem;">重新登入</button>
-            `;
-        } else {
-            // Default manual login state
-            promptDiv.innerHTML = `
-                <div class="empty-icon" style="font-size: 5rem; margin-bottom: 20px;">🔒</div>
-                <h2 style="margin-bottom: 10px; color: var(--text-main);">請先登入</h2>
-                <p style="color: var(--text-sub); margin-bottom: 20px;">此頁面僅限授權成員存取<br>請點擊下方按鈕登入 LINE</p>
-                <button class="login-btn" onclick="window.manualLiffLogin()" style="padding: 10px 30px; font-size: 1rem;">LINE 登入</button>
-            `;
-        }
+        promptDiv.innerHTML = renderOcrAuthGate(state);
     }
+}
+
+function renderOcrAuthGate(state = 'login', userId = '') {
+    const isVerifying = state === 'verifying';
+    const isForbidden = state === 'forbidden';
+    const isExpired = state === 'expired';
+    const message = isVerifying
+        ? ocrAuthCopy.verifying
+        : isForbidden
+            ? ocrAuthCopy.forbidden
+            : isExpired
+                ? '登入狀態已失效，請重新登入。'
+                : ocrAuthCopy.message;
+    const localControl = isLocalDevelopment() && !isVerifying && !isForbidden
+        ? `
+            <div class="ocr-local-auth-control" aria-label="本機測試">
+                <span>本機測試</span>
+                <button class="login-btn ocr-auth-button ocr-local-auth-button" type="button" onclick="window.localLineLeadTestLogin()">本機測試登入</button>
+            </div>
+        `
+        : '';
+    const deniedUser = isForbidden && userId ? `<small class="ocr-auth-denied-id">${escapeAuthHtml(userId)}</small>` : '';
+    const primaryAction = isVerifying || isForbidden
+        ? ''
+        : `<button class="login-btn ocr-auth-button" type="button" onclick="window.manualLiffLogin()">使用 LINE 登入</button>`;
+
+    return `
+        <main class="ocr-auth-panel" aria-live="${isVerifying ? 'polite' : 'off'}">
+            <img src="/images/portal/ocr.png" alt="FANUC card OCR" class="ocr-auth-logo">
+            <h1>${ocrAuthCopy.product}</h1>
+            <p>${message}</p>
+            ${deniedUser}
+            ${isVerifying ? '<div class="ocr-auth-status" role="status">驗證中</div>' : primaryAction}
+            ${localControl}
+        </main>
+    `;
+}
+
+function escapeAuthHtml(value) {
+    return String(value || '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[char]));
 }
 
 function showAccessDenied(userId) {
     const promptDiv = document.getElementById('login-prompt');
     if (promptDiv) {
-        promptDiv.innerHTML = `
-            <div class="empty-icon" style="font-size: 5rem; margin-bottom: 20px; color: var(--accent-red, #ef4444);">⛔</div>
-            <h2 style="margin-bottom: 10px; color: var(--text-main);">未授權的帳號</h2>
-            <p style="color: var(--text-sub); margin-bottom: 20px;">
-                您的 LINE ID 尚未被加入系統白名單。<br>
-                請複製下方 ID 並傳送給管理員申請開通：
-            </p>
-            <div style="background: #f1f5f9; padding: 10px; border-radius: 8px; font-family: monospace; user-select: all; margin-bottom: 20px;">
-                ${userId}
-            </div>
-            <button class="action-btn" onclick="window.forceLiffRelogin();" style="width: auto; padding: 10px 20px;">登出並切換帳號</button>
-        `;
+        promptDiv.innerHTML = renderOcrAuthGate('forbidden', userId);
         promptDiv.style.display = 'flex';
     }
 }
@@ -192,6 +270,12 @@ async function initLIFF() {
 
         if (existingSession.status !== 401) {
             showAuthFailedFallback();
+            return;
+        }
+
+        if (isLocalDevelopment() && !localManualLoginEnabled()) {
+            updateUserUI(false);
+            toggleContentVisibility(false, 'login');
             return;
         }
 
@@ -270,6 +354,15 @@ function updateUserUI(isLoggedIn) {
             userArea.appendChild(logoutBtn);
         }
 
+        if (isLocalDevelopment() && userArea && !document.getElementById('local-test-logout-btn')) {
+            const localLogoutBtn = document.createElement('button');
+            localLogoutBtn.id = 'local-test-logout-btn';
+            localLogoutBtn.className = 'action-btn local-test-logout-btn';
+            localLogoutBtn.textContent = '本機測試登出';
+            localLogoutBtn.onclick = window.localLineLeadTestLogout;
+            userArea.appendChild(localLogoutBtn);
+        }
+
     } else {
         if(userArea) userArea.style.display = 'none';
         if(loginBtn) loginBtn.style.display = 'block';
@@ -285,6 +378,9 @@ function updateUserUI(isLoggedIn) {
         
         const logoutBtn = document.getElementById('header-logout-btn');
         if(logoutBtn) logoutBtn.remove();
+
+        const localLogoutBtn = document.getElementById('local-test-logout-btn');
+        if(localLogoutBtn) localLogoutBtn.remove();
     }
 }
 
@@ -342,11 +438,16 @@ function bindEvents() {
     if (deleteBtn) deleteBtn.onclick = handleDeleteSubmit;
 }
 
-async function createLineLeadSessionFromLiff() {
-    const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+async function createLineLeadSessionFromLiff(options = {}) {
+    const isLocal = isLocalDevelopment();
     const headers = {};
 
     if (isLocal) {
+        if (!options.forceLocal && !localManualLoginEnabled()) {
+            updateUserUI(false);
+            toggleContentVisibility(false, 'login');
+            return false;
+        }
         headers.Authorization = 'Bearer TEST_LOCAL_TOKEN';
     } else {
         if (!await ensureLiffReady()) {

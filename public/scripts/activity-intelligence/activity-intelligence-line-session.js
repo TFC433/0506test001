@@ -2,6 +2,7 @@
   'use strict';
 
   const LOCAL_ROLE_KEY = 'activity-intelligence-local-role';
+  const LOCAL_MANUAL_LOGIN_KEY = 'activity-intelligence-local-manual-login';
   const LOCAL_ROLE_HEADER = 'x-activity-intelligence-local-role';
   const ALLOWED_ROLES = new Set(['super_admin', 'admin', 'recorder']);
 
@@ -24,6 +25,24 @@
     else sessionStorage.removeItem(LOCAL_ROLE_KEY);
   }
 
+  function localManualLoginEnabled() {
+    try {
+      return isLocalDevelopment() && sessionStorage.getItem(LOCAL_MANUAL_LOGIN_KEY) === '1';
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function setLocalManualLoginEnabled(enabled) {
+    if (!isLocalDevelopment()) return;
+    try {
+      if (enabled) sessionStorage.setItem(LOCAL_MANUAL_LOGIN_KEY, '1');
+      else sessionStorage.removeItem(LOCAL_MANUAL_LOGIN_KEY);
+    } catch (_) {
+      // Local test state is only an auto-login UI preference; session cookie remains authoritative.
+    }
+  }
+
   function effectiveSession(session) {
     if (!session || !session.authenticated) return session;
     const previewRole = localPreviewRole();
@@ -32,7 +51,8 @@
       realRole: session.role,
       role: previewRole || session.role,
       localPreviewRole: previewRole,
-      localPreviewEnabled: isLocalDevelopment()
+      localPreviewEnabled: isLocalDevelopment(),
+      canLocalLogin: isLocalDevelopment()
     };
   }
 
@@ -51,10 +71,19 @@
     return true;
   }
 
-  async function createSession() {
+  async function createSession(options = {}) {
     const headers = {};
 
     if (isLocalDevelopment()) {
+      if (!options.forceLocal && !localManualLoginEnabled()) {
+        return {
+          authenticated: false,
+          message: '請先使用 LINE 登入後繼續。',
+          canLineLogin: true,
+          localPreviewEnabled: true,
+          canLocalLogin: true
+        };
+      }
       headers.Authorization = 'Bearer TEST_LOCAL_TOKEN';
     } else {
       if (!await ensureLiffReady()) {
@@ -134,6 +163,13 @@
     return Boolean(session && session.authenticated);
   }
 
+  async function localTestLogin() {
+    if (!isLocalDevelopment()) return { authenticated: false };
+    setLocalManualLoginEnabled(true);
+    currentSession = await createSession({ forceLocal: true });
+    return effectiveSession(currentSession);
+  }
+
   async function loginWithLine() {
     if (!await ensureLiffReady()) return;
     if (!liff.isLoggedIn()) liff.login();
@@ -161,6 +197,22 @@
     window.location.reload();
   }
 
+  async function localTestLogout() {
+    if (!isLocalDevelopment()) return;
+    setLocalManualLoginEnabled(false);
+    try {
+      await fetch('/api/line/session', {
+        method: 'DELETE',
+        credentials: 'same-origin'
+      });
+    } catch (error) {
+      console.warn('[ActivityIntelligenceSession] Local test logout request failed:', error.message);
+    }
+
+    currentSession = null;
+    window.location.reload();
+  }
+
   window.ActivityIntelligenceSession = Object.freeze({
     ensureSession,
     recoverSession,
@@ -169,6 +221,8 @@
     localPreviewRole,
     setLocalPreviewRole,
     loginWithLine,
+    localTestLogin,
+    localTestLogout,
     logout
   });
 })();

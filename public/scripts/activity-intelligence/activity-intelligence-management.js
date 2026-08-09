@@ -43,6 +43,12 @@
     focalY: 50,
     zoom: 1
   });
+  const preAuthCopy = Object.freeze({
+    product: '活動情報管理',
+    message: '請先使用 LINE 登入後繼續。',
+    verifying: '正在檢查登入狀態...',
+    forbidden: '此 LINE 帳號尚未開通使用權限。'
+  });
   const thumbnailFitOptions = new Set(['cover', 'contain']);
 
   let state = { activities: [], records: [], selectedActivityId: null };
@@ -146,6 +152,8 @@
       message: session && session.message,
       forbidden: Boolean(session && session.forbidden),
       canLineLogin: Boolean(session && session.canLineLogin),
+      localPreviewEnabled: Boolean(session && session.localPreviewEnabled),
+      canLocalLogin: Boolean(session && session.canLocalLogin),
       source: 'line-session'
     };
   }
@@ -419,12 +427,12 @@
   function render() {
     cancelScheduledFormPreviewRefresh();
     if (!currentUser) {
-      root.innerHTML = '<div class="aim-loading">正在載入活動情報管理...</div>';
+      root.innerHTML = renderPreAuthGate({ state: 'verifying' });
       return;
     }
 
     if (!currentUser.authenticated) {
-      root.innerHTML = shell(renderAuthState());
+      root.innerHTML = renderAuthState();
       bindInputs();
       return;
     }
@@ -471,6 +479,35 @@
       ${renderHardDeleteConfirmDialog()}
       ${renderCardPickerDialog()}
       ${ui.toast ? `<div class="aim-toast" role="status">${Store.escapeHtml(ui.toast)}</div>` : ''}
+    `;
+  }
+
+  function renderPreAuthGate(options = {}) {
+    const state = options.state || 'login';
+    const isVerifying = state === 'verifying';
+    const isForbidden = state === 'forbidden';
+    const message = options.message || (isVerifying ? preAuthCopy.verifying : isForbidden ? preAuthCopy.forbidden : preAuthCopy.message);
+    return `
+      <div class="aim-preauth aim-preauth-${Store.escapeHtml(state)}">
+        <main class="aim-preauth-panel" aria-live="${isVerifying ? 'polite' : 'off'}">
+          <img src="/images/portal/form.png" alt="FANUC forms" class="aim-preauth-logo">
+          <h1>${Store.escapeHtml(preAuthCopy.product)}</h1>
+          <p>${Store.escapeHtml(message)}</p>
+          ${isVerifying ? '<div class="aim-preauth-status" role="status">驗證中</div>' : ''}
+          ${!isVerifying && !isForbidden && currentUser && currentUser.canLineLogin ? '<button class="aim-button aim-button-primary aim-preauth-button" data-action="line-login" type="button">使用 LINE 登入</button>' : ''}
+          ${renderLocalPreAuthControl(isVerifying || isForbidden)}
+        </main>
+      </div>
+    `;
+  }
+
+  function renderLocalPreAuthControl(hidden) {
+    if (hidden || !currentUser || !currentUser.localPreviewEnabled || !window.ActivityIntelligenceSession?.isLocalDevelopment()) return '';
+    return `
+      <div class="aim-local-auth-control" aria-label="本機測試">
+        <span>本機測試</span>
+        <button class="aim-button aim-button-secondary aim-preauth-button" data-action="local-test-login" type="button">本機測試登入</button>
+      </div>
     `;
   }
 
@@ -679,25 +716,27 @@
     if (!currentUser || !currentUser.localPreviewEnabled || !window.ActivityIntelligenceSession?.isLocalDevelopment()) return '';
     const selected = currentUser.localPreviewRole || currentUser.role || 'recorder';
     return `
-      <label class="aim-preview-control">本機測試角色
-        <select class="aim-select" id="aim-role-preview" aria-label="本機測試角色">
-          ${option('super_admin', 'super_admin', selected)}
-          ${option('admin', 'admin', selected)}
-          ${option('recorder', 'recorder', selected)}
-        </select>
-      </label>
+      <div class="aim-preview-controls">
+        <label class="aim-preview-control">本機測試角色
+          <select class="aim-select" id="aim-role-preview" aria-label="本機測試角色">
+            ${option('super_admin', 'super_admin', selected)}
+            ${option('admin', 'admin', selected)}
+            ${option('recorder', 'recorder', selected)}
+          </select>
+        </label>
+        <button class="aim-button aim-button-secondary aim-local-logout" data-action="local-test-logout" type="button">本機測試登出</button>
+      </div>
     `;
   }
 
 
   function renderAuthState() {
-    return `
-      <section class="aim-empty">
-        <h2>尚未取得實際白名單角色</h2>
-        <p>${Store.escapeHtml(currentUser.message || '請先建立有效的 LINE 工作階段。')}</p>
-        ${currentUser.canLineLogin ? '<button class="aim-button aim-button-primary" data-action="line-login" type="button">使用 LINE 登入</button>' : ''}
-      </section>
-    `;
+    return renderPreAuthGate({
+      state: currentUser.forbidden ? 'forbidden' : 'login',
+      message: currentUser.forbidden
+        ? (currentUser.message || preAuthCopy.forbidden)
+        : (currentUser.message || preAuthCopy.message)
+    });
   }
 
   function renderRecorderShellContent() {
@@ -2438,6 +2477,15 @@
     if (action === 'save-settings' && canManageActivities()) await saveSettings();
     if (action === 'reset' && canManageActivities()) toast(formalDeferredMessage);
     if (action === 'line-login' && window.ActivityIntelligenceSession?.loginWithLine) await window.ActivityIntelligenceSession.loginWithLine();
+    if (action === 'local-test-login' && window.ActivityIntelligenceSession?.localTestLogin) {
+      await window.ActivityIntelligenceSession.localTestLogin();
+      window.location.reload();
+      return;
+    }
+    if (action === 'local-test-logout' && window.ActivityIntelligenceSession?.localTestLogout) {
+      await window.ActivityIntelligenceSession.localTestLogout();
+      return;
+    }
     if (action === 'line-logout' && window.ActivityIntelligenceSession?.logout) {
       await window.ActivityIntelligenceSession.logout();
       return;
