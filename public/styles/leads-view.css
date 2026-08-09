@@ -13,11 +13,21 @@ Description: V6.3e Business Card Organizer styling with anchored sticky header g
 :root {
     --bg-color: #f8fafc;
     --card-bg: #ffffff;
-    --primary-color: #3b82f6; 
+    --primary-color: #059669;
+    --primary-hover: #047857;
+    --primary-soft: #ecfdf5;
+    --primary-border: #a7f3d0;
+    --primary-focus: rgba(5, 150, 105, 0.16);
+    --ocr-sidebar: #0f3028;
+    --ocr-sidebar-hover: #17463a;
+    --ocr-sidebar-active: #1d5a49;
+    --ocr-sidebar-text: #e8fff6;
+    --ocr-sidebar-muted: #9edbc8;
     --text-main: #1e293b;
     --text-sub: #64748b;
     --border-color: #e2e8f0;
     --warning-color: #ef4444; 
+    --accent-red: #ef4444;
     --divider-light: rgba(0,0,0,0.06);
 }
 
@@ -37,6 +47,56 @@ body {
     flex-direction: column;
 }
 
+.ocr-sidebar {
+    display: none;
+}
+
+.ocr-sidebar-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ocr-sidebar-logo {
+    display: block;
+    width: 136px;
+    max-width: 100%;
+    max-height: 96px;
+    object-fit: contain;
+}
+
+.ocr-sidebar-label {
+    color: var(--ocr-sidebar-muted);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+.ocr-sidebar-current {
+    margin: 14px 16px 0;
+    padding: 11px 12px;
+    border-radius: 6px;
+    background: var(--ocr-sidebar-active);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    position: relative;
+}
+
+.ocr-sidebar-current::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 8px;
+    bottom: 8px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: #34d399;
+}
+
 /* Header */
 .main-header {
     background: var(--card-bg);
@@ -53,7 +113,9 @@ body {
 
 .logo-img {
     height: 36px;
+    max-width: 136px;
     width: auto;
+    object-fit: contain;
 }
 
 .user-area {
@@ -98,7 +160,7 @@ body {
 
 @keyframes btn-pulse-glow {
     0% { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); border-color: #cbd5e1; }
-    50% { box-shadow: 0 0 15px rgba(139, 92, 246, 0.6); border-color: rgba(139, 92, 246, 0.8); }
+    50% { box-shadow: 0 0 15px rgba(5, 150, 105, 0.38); border-color: rgba(5, 150, 105, 0.45); }
     100% { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); border-color: #cbd5e1; }
 }
 
@@ -139,7 +201,7 @@ body {
     background: linear-gradient(
         to right,
         transparent 0%,
-        rgba(139, 92, 246, 0.2) 50%, 
+        rgba(5, 150, 105, 0.16) 50%, 
         transparent 100%
     );
     transform: skewX(-25deg);
@@ -179,7 +241,7 @@ body {
 .search-bar input:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    box-shadow: 0 0 0 3px var(--primary-focus);
 }
 
 .clear-btn {
@@ -247,7 +309,7 @@ body {
 }
 
 .toggle-btn.active .count-badge {
-    background: rgba(59, 130, 246, 0.1);
+    background: var(--primary-soft);
     color: var(--primary-color);
 }
 
@@ -282,7 +344,7 @@ body {
 }
 
 .v6-list-item.is-mine {
-    border-color: rgba(59, 130, 246, 0.3);
+    border-color: rgba(5, 150, 105, 0.28);
 }
 
 @media (min-width: 1024px) {
@@ -408,7 +470,7 @@ body {
 
 .v6-list-item.is-mine .owner-tag {
     color: var(--primary-color);
-    border-color: rgba(59, 130, 246, 0.3);
+    border-color: rgba(5, 150, 105, 0.28);
 }
 
 /* Item Info Container */
@@ -615,7 +677,7 @@ label { display: block; font-size: 0.85rem; color: var(--text-sub); margin-botto
 .form-input:focus {
     outline: none;
     border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    box-shadow: 0 0 0 3px var(--primary-focus);
 }
 textarea.form-input {
     resize: vertical;
@@ -632,9 +694,9 @@ textarea.form-input {
     font-weight: 700;
     cursor: pointer;
     margin-top: 12px;
-    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+    box-shadow: 0 2px 4px rgba(5, 150, 105, 0.24);
 }
-.save-btn:hover { background-color: #2563eb; }
+.save-btn:hover { background-color: var(--primary-hover); }
 .save-btn:disabled { background-color: #94a3b8; cursor: not-allowed; box-shadow: none; }
 
 /* Loading & Empty State */
@@ -653,6 +715,52 @@ textarea.form-input {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 .empty-icon { font-size: 4rem; margin-bottom: 16px; opacity: 0.3; }
+
+/* Desktop OCR Shell */
+@media (min-width: 1024px) {
+    .app-container {
+        max-width: none;
+        margin: 0;
+        display: grid;
+        grid-template-columns: 200px minmax(0, 1fr);
+        grid-template-rows: auto auto 1fr;
+        min-height: 100vh;
+    }
+
+    .ocr-sidebar {
+        position: sticky;
+        top: 0;
+        grid-row: 1 / -1;
+        grid-column: 1;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        background: var(--ocr-sidebar);
+        color: var(--ocr-sidebar-text);
+        border-right: 1px solid #08251f;
+        z-index: 120;
+    }
+
+    .main-header,
+    #login-prompt,
+    .controls-section,
+    .leads-container {
+        grid-column: 2;
+    }
+
+    .main-header {
+        top: 0;
+    }
+
+    .main-header .logo-area {
+        display: none;
+    }
+
+    .controls-section {
+        top: 61px;
+    }
+}
 
 /* Mobile Adaptations */
 @media (max-width: 640px) {
