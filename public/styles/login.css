@@ -31,6 +31,7 @@
     --spacing-6: 24px;
     --spacing-10: 40px;
     --spacing-12: 48px;
+    --login-content-max-width: 324px;
 
     /* 圓角 */
     --rounded-lg: 12px;
@@ -95,7 +96,7 @@ body {
     border-radius: 0;
     box-shadow: none;
     width: 100%;
-    max-width: 420px;
+    max-width: var(--login-content-max-width);
     text-align: center;
     position: relative;
     overflow: hidden;
@@ -129,7 +130,7 @@ body {
 }
 
 /* ==================== 表單樣式 ==================== */
-#login-form { text-align: left; }
+#login-form { width: 100%; text-align: left; }
 .form-group { margin-bottom: var(--spacing-6); position: relative; }
 .form-group label {
     display: block;
