@@ -541,10 +541,6 @@
             </div>
           ` : ''}
         </nav>
-        <div class="aim-sidebar-foot">
-          <span>${currentUser.authenticated ? productRoleLabel(currentUser.role) : '未登入'}</span>
-          <small>Activity Intelligence</small>
-        </div>
       </aside>
     `;
   }
