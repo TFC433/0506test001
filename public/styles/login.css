@@ -8,18 +8,20 @@
 /* ==================== 主題變數定義（與 main.css 保持一致） ==================== */
 :root {
     /* 色彩 */
-    --primary-bg: #1a1d29;
-    --secondary-bg: #252836;
-    --card-bg: rgba(255, 255, 255, 0.05);
-    --glass-bg: rgba(255, 255, 255, 0.1);
-    --text-primary: #ffffff;
-    --text-secondary: #e2e8f0;
-    --text-muted: #94a3b8;
-    --accent-blue: #4f8df7;
-    --accent-purple: #8b5cf6;
-    --accent-red: #ef4444;
-    --border-color: rgba(255, 255, 255, 0.1);
-    --gradient-bg: linear-gradient(135deg, #1a1d29 0%, #2a2d3a 100%);
+    --primary-bg: #17142f;
+    --secondary-bg: #24204a;
+    --card-bg: transparent;
+    --glass-bg: #f8fafc;
+    --input-text: #111827;
+    --input-border: #d8d3ef;
+    --text-primary: #f4f2ff;
+    --text-secondary: #aaa3cf;
+    --text-muted: #8f87b7;
+    --accent-blue: #8b7cf6;
+    --accent-purple: #a78bfa;
+    --accent-red: #f87171;
+    --border-color: transparent;
+    --gradient-bg: #17142f;
 
     /* 間距與尺寸 */
     --spacing-2: 8px;
@@ -43,15 +45,20 @@
 }
 
 [data-theme="light"] {
-    --primary-bg: #f1f5f9;
-    --secondary-bg: #ffffff;
-    --card-bg: #ffffff;
-    --glass-bg: rgba(255, 255, 255, 0.8);
-    --text-primary: #1e293b;
-    --text-secondary: #475569;
-    --text-muted: #64748b;
-    --border-color: #e2e8f0;
-    --gradient-bg: linear-gradient(135deg, #f8fafc 0%, #eef2f7 100%);
+    --primary-bg: #17142f;
+    --secondary-bg: #24204a;
+    --card-bg: transparent;
+    --glass-bg: #f8fafc;
+    --input-text: #111827;
+    --input-border: #d8d3ef;
+    --text-primary: #f4f2ff;
+    --text-secondary: #aaa3cf;
+    --text-muted: #8f87b7;
+    --accent-blue: #8b7cf6;
+    --accent-purple: #a78bfa;
+    --accent-red: #f87171;
+    --border-color: transparent;
+    --gradient-bg: #17142f;
     
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.05), 0 2px 4px -2px rgb(0 0 0 / 0.05);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.05), 0 4px 6px -4px rgb(0 0 0 / 0.05);
@@ -66,7 +73,8 @@ body {
     justify-content: center;
     align-items: center;
     color: var(--text-primary);
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
     position: relative;
     transition: all 0.3s ease;
 }
@@ -76,14 +84,16 @@ body {
     padding: var(--spacing-5);
     z-index: 1;
     position: relative;
+    width: 100%;
+    display: flex;
+    justify-content: center;
 }
 .login-box {
     background: var(--card-bg);
-    backdrop-filter: blur(20px);
-    border: 1px solid var(--border-color);
-    padding: var(--spacing-12);
-    border-radius: var(--rounded-2xl);
-    box-shadow: var(--shadow-xl);
+    border: 0;
+    padding: var(--spacing-12) 0;
+    border-radius: 0;
+    box-shadow: none;
     width: 100%;
     max-width: 420px;
     text-align: center;
@@ -92,14 +102,7 @@ body {
     transition: all 0.3s ease;
 }
 .login-box::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
-    border-radius: var(--rounded-2xl) var(--rounded-2xl) 0 0;
+    content: none;
 }
 
 /* --- 【修改】LOGO 樣式 --- */
@@ -112,8 +115,9 @@ body {
 .login-logo {
     width: 100%;
     height: auto;
-    /* 【修改】尺寸縮小 50% (原 300px -> 150px) */
-    max-width: 180px; 
+    max-width: 180px;
+    max-height: 120px;
+    object-fit: contain;
     display: block;
 }
 
@@ -138,24 +142,23 @@ body {
     width: 100%;
     padding: var(--spacing-4) var(--spacing-5);
     background: var(--glass-bg);
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--input-border);
     border-radius: var(--rounded-lg);
     font-size: 1rem;
-    color: var(--text-primary);
+    color: var(--input-text);
     transition: all 0.3s ease;
-    backdrop-filter: blur(10px);
 }
-.form-group input::placeholder { color: var(--text-muted); font-weight: 500; }
+.form-group input::placeholder { color: #6b7280; font-weight: 500; }
 .form-group input:focus {
     outline: none;
     border-color: var(--accent-blue);
-    box-shadow: 0 0 0 3px rgba(79, 141, 247, 0.1);
-    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 0 3px rgba(139, 124, 246, 0.24);
+    background: #ffffff;
 }
 
 /* ==================== 提交按鈕 ==================== */
 .submit-btn {
-    background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+    background: var(--accent-blue);
     color: white;
     border: none;
     padding: var(--spacing-4) var(--spacing-8);
@@ -168,10 +171,9 @@ body {
     box-shadow: var(--shadow-md);
     position: relative;
     overflow: hidden;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0;
 }
-.submit-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+.submit-btn:hover { background: var(--accent-purple); box-shadow: var(--shadow-lg); }
 .submit-btn:active { transform: translateY(0); }
 .submit-btn:disabled { background: var(--text-muted); cursor: not-allowed; transform: none; box-shadow: none; opacity: 0.6; }
 .submit-btn.loading::after {
@@ -198,35 +200,8 @@ body {
 .error-message:not(:empty) { opacity: 1; }
 .error-message::before { content: "⚠"; margin-right: var(--spacing-2); font-size: 1rem; }
 
-/* ==================== 記住我 & 忘記密碼 ==================== */
-.remember-me {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-2);
-    margin: var(--spacing-4) 0;
-    font-size: 0.9rem;
-}
-.remember-me input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--accent-blue); cursor: pointer; }
-.remember-me label { color: var(--text-secondary); cursor: pointer; font-weight: 500; }
-.forgot-password { text-align: center; margin-top: var(--spacing-4); }
-.forgot-password a { color: var(--accent-blue); text-decoration: none; font-size: 0.9rem; font-weight: 500; transition: all 0.3s ease; }
-.forgot-password a:hover { color: var(--accent-purple); text-decoration: underline; }
-
-/* ==================== 社交登入 ==================== */
-.social-login { margin-top: var(--spacing-6); padding-top: var(--spacing-6); border-top: 1px solid var(--border-color); }
-.social-login-title { text-align: center; color: var(--text-muted); font-size: 0.85rem; margin-bottom: var(--spacing-4); }
-.social-buttons { display: flex; gap: var(--spacing-3); justify-content: center; }
-.social-btn {
-    width: var(--spacing-12); height: var(--spacing-12); border-radius: var(--rounded-lg);
-    border: 1px solid var(--border-color); background: var(--glass-bg);
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer; transition: all 0.3s ease;
-    backdrop-filter: blur(10px);
-}
-.social-btn:hover { background: var(--secondary-bg); transform: translateY(-2px); box-shadow: var(--shadow-md); }
-.social-btn svg { width: 20px; height: 20px; color: var(--text-primary); }
-
 /* ==================== 響應式設計 ==================== */
 @media (max-width: 480px) {
-    .login-box { padding: var(--spacing-6) var(--spacing-5); }
+    .login-container { padding: var(--spacing-5); }
+    .login-box { padding: var(--spacing-6) 0; }
 }
