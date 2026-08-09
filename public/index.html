@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>TFC Portal</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      background: #000;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      min-width: 0;
+      min-height: 100%;
+      margin: 0;
+      background: #000;
+    }
+
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+      overflow-x: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .portal {
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: max(24px, env(safe-area-inset-top)) max(18px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+      background: #000;
+    }
+
+    .portal-entries {
+      width: min(100%, 430px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: clamp(24px, 6dvh, 46px);
+    }
+
+    .portal-entry {
+      width: min(78vw, 360px);
+      min-height: clamp(96px, 23dvh, 178px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      border-radius: 12px;
+      -webkit-tap-highlight-color: transparent;
+      transition: opacity 140ms ease, transform 140ms ease;
+    }
+
+    .portal-entry:focus-visible {
+      outline: 2px solid rgba(255, 255, 255, 0.72);
+      outline-offset: 8px;
+    }
+
+    .portal-entry:hover {
+      opacity: 0.88;
+      transform: scale(1.015);
+    }
+
+    .portal-entry:active {
+      opacity: 0.78;
+      transform: scale(0.985);
+    }
+
+    .portal-entry img {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      max-height: clamp(86px, 21dvh, 164px);
+      object-fit: contain;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .portal-entry {
+        transition: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="portal" aria-label="Product launcher">
+    <nav class="portal-entries" aria-label="Products">
+      <a class="portal-entry" href="/login.html" aria-label="CRM">
+        <img src="/images/portal/crm.png" alt="CRM">
+      </a>
+      <a class="portal-entry" href="/views/activity-intelligence.html" aria-label="Activity Intelligence">
+        <img src="/images/portal/form.png" alt="Activity Intelligence">
+      </a>
+      <a class="portal-entry" href="/leads-view.html" aria-label="OCR">
+        <img src="/images/portal/ocr.png" alt="OCR">
+      </a>
+    </nav>
+  </main>
+</body>
+</html>
