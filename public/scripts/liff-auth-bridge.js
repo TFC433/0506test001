@@ -5,6 +5,7 @@
     form: '/views/activity-intelligence.html',
     ocr: '/leads-view.html'
   });
+  const RETURN_TARGET_KEY = 'tfc_liff_return_target';
   const LOGIN_ATTEMPT_KEY = 'tfc-liff-bridge-login-attempt';
 
   function status(message) {
@@ -12,18 +13,20 @@
     if (el) el.textContent = message;
   }
 
-  function safeReturnKey() {
-    return new URLSearchParams(window.location.search).get('return') || '';
+  function storedReturnKey() {
+    try {
+      return sessionStorage.getItem(RETURN_TARGET_KEY) || '';
+    } catch (_) {
+      return '';
+    }
   }
 
   function targetFor(returnKey) {
     return RETURN_TARGETS[returnKey] || '';
   }
 
-  function canonicalBridgeUrl(returnKey) {
-    const url = new URL('/liff/', window.location.origin);
-    url.searchParams.set('return', returnKey);
-    return url.toString();
+  function canonicalBridgeUrl() {
+    return new URL('/liff/', window.location.origin).toString();
   }
 
   async function readExistingSession() {
@@ -52,13 +55,22 @@
     }
   }
 
+  function clearReturnTarget() {
+    try {
+      sessionStorage.removeItem(RETURN_TARGET_KEY);
+    } catch (_) {
+      // Routing state is non-auth, temporary browser state.
+    }
+  }
+
   function fail(message) {
     clearAttempt();
+    clearReturnTarget();
     status(message);
   }
 
   async function runBridge() {
-    const returnKey = safeReturnKey();
+    const returnKey = storedReturnKey();
     const target = targetFor(returnKey);
     if (!target) {
       fail('Invalid LINE login destination.');
@@ -69,6 +81,8 @@
     try {
       const existing = await readExistingSession();
       if (existing.response.ok && existing.body.success) {
+        clearAttempt();
+        clearReturnTarget();
         window.location.replace(target);
         return;
       }
@@ -97,7 +111,7 @@
         }
 
         sessionStorage.setItem(LOGIN_ATTEMPT_KEY, returnKey);
-        liff.login({ redirectUri: canonicalBridgeUrl(returnKey) });
+        liff.login({ redirectUri: canonicalBridgeUrl() });
         return;
       }
 
@@ -111,6 +125,7 @@
       status('Creating session...');
       const created = await postLineSession(idToken);
       if (created.response.ok && created.body.success) {
+        clearReturnTarget();
         window.location.replace(target);
         return;
       }

@@ -4,6 +4,7 @@
   const LOCAL_ROLE_KEY = 'activity-intelligence-local-role';
   const LOCAL_MANUAL_LOGIN_KEY = 'activity-intelligence-local-manual-login';
   const LOCAL_ROLE_HEADER = 'x-activity-intelligence-local-role';
+  const LIFF_RETURN_TARGET_KEY = 'tfc_liff_return_target';
   const ALLOWED_ROLES = new Set(['super_admin', 'admin', 'recorder']);
 
   let currentSession = null;
@@ -62,7 +63,25 @@
   }
 
   function bridgeLoginUrl() {
-    return `${window.location.origin}/liff/?return=form`;
+    return `${window.location.origin}/liff/`;
+  }
+
+  function storeBridgeReturnTarget() {
+    try {
+      sessionStorage.setItem(LIFF_RETURN_TARGET_KEY, 'form');
+      return true;
+    } catch (error) {
+      console.warn('[ActivityIntelligenceSession] Unable to store LINE return target:', error.message);
+      return false;
+    }
+  }
+
+  function clearBridgeReturnTarget() {
+    try {
+      sessionStorage.removeItem(LIFF_RETURN_TARGET_KEY);
+    } catch (_) {
+      // Routing state is non-auth, temporary browser state.
+    }
   }
 
   async function createSession(options = {}) {
@@ -157,6 +176,7 @@
       window.location.reload();
       return;
     }
+    if (!storeBridgeReturnTarget()) return;
     window.location.assign(bridgeLoginUrl());
   }
 
@@ -179,6 +199,7 @@
     }
 
     currentSession = null;
+    clearBridgeReturnTarget();
     window.location.reload();
   }
 
@@ -195,6 +216,7 @@
     }
 
     currentSession = null;
+    clearBridgeReturnTarget();
     window.location.reload();
   }
 

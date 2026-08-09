@@ -27,6 +27,7 @@ let currentExhibitionConfig = null;
 let lineLeadRecoveryAttempted = false;
 let lastLineLeadDeniedUserId = null;
 const LOCAL_LINE_LEAD_MANUAL_LOGIN_KEY = 'line-lead-local-manual-login';
+const LIFF_RETURN_TARGET_KEY = 'tfc_liff_return_target';
 const ocrAuthCopy = Object.freeze({
     product: '名片管理',
     message: '請先使用 LINE 登入後繼續',
@@ -56,6 +57,24 @@ function setLocalManualLoginEnabled(enabled) {
     }
 }
 
+function storeLiffReturnTarget() {
+    try {
+        sessionStorage.setItem(LIFF_RETURN_TARGET_KEY, 'ocr');
+        return true;
+    } catch (error) {
+        console.warn('[Auth] Unable to store LINE return target:', error.message);
+        return false;
+    }
+}
+
+function clearLiffReturnTarget() {
+    try {
+        sessionStorage.removeItem(LIFF_RETURN_TARGET_KEY);
+    } catch (_) {
+        // Routing state is non-auth, temporary browser state.
+    }
+}
+
 function getRawContactIdentifier(record) {
     if (!record) return null;
     if (record.cardId) return String(record.cardId);
@@ -77,7 +96,8 @@ window.manualLiffLogin = async function() {
         await window.localLineLeadTestLogin();
         return;
     }
-    window.location.assign(`${window.location.origin}/liff/?return=ocr`);
+    if (!storeLiffReturnTarget()) return;
+    window.location.assign(`${window.location.origin}/liff/`);
 };
 
 window.localLineLeadTestLogin = async function() {
@@ -100,6 +120,7 @@ window.localLineLeadTestLogout = async function() {
     } catch (error) {
         console.warn('[Auth] Local test session logout request failed:', error.message);
     }
+    clearLiffReturnTarget();
     resetCurrentUser();
     toggleContentVisibility(false, 'login');
 };
@@ -123,6 +144,7 @@ window.forceLiffRelogin = async function() {
         console.warn('[Auth] LIFF logout skipped:', error.message);
     }
 
+    clearLiffReturnTarget();
     resetCurrentUser();
     location.reload();
 };
