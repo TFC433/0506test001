@@ -933,6 +933,11 @@ textarea.form-input {
         min-height: 100vh;
     }
 
+    .app-container.ocr-auth-container {
+        display: block;
+        width: 100%;
+    }
+
     .ocr-sidebar {
         position: sticky;
         top: 0;
