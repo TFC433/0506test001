@@ -22,9 +22,17 @@
 
 /* 側邊欄 */
 .sidebar {
+    --crm-sidebar-base: #17142f;
+    --crm-sidebar-hover: #24204a;
+    --crm-sidebar-active: #312a63;
+    --crm-sidebar-accent: #8b7cf6;
+    --crm-sidebar-marker: #a78bfa;
+    --crm-sidebar-text: #f4f2ff;
+    --crm-sidebar-muted: #aaa3cf;
+    --crm-sidebar-border: rgba(255, 255, 255, 0.1);
     width: var(--sidebar-width);
-    background: var(--secondary-bg);
-    border-right: none;
+    background: var(--crm-sidebar-base);
+    border-right: 1px solid #0e0b22;
     transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: fixed;
     height: 100vh;
@@ -35,8 +43,9 @@
 
 /* LOGO 區域維持置中 */
 .sidebar-header {
-    padding: var(--spacing-6);
-    border-bottom: none;
+    min-height: 158px;
+    padding: 24px;
+    border-bottom: 1px solid var(--crm-sidebar-border);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -45,20 +54,38 @@
 
 .logo {
     display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
     justify-content: center;
     width: 100%;
+    color: inherit;
+    text-decoration: none;
 }
 
 .sidebar-logo {
     width: 100%;
-    max-width: 120px; 
+    max-width: 136px; 
+    max-height: 96px;
     height: auto;
+    object-fit: contain;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     display: block;
 }
 
 .sidebar-logo-icon {
     display: none;
+}
+
+.sidebar-product-label {
+    width: 120px;
+    max-width: 100%;
+    color: var(--crm-sidebar-muted);
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: 0;
+    text-align: center;
 }
 
 .sidebar-nav { 
@@ -84,8 +111,8 @@
 /* 區域標籤樣式 (覆蓋 HTML inline 樣式) */
 .nav-header {
     font-size: 11px !important;
-    letter-spacing: 0.05em !important;
-    color: rgba(148, 163, 184, 0.7) !important;
+    letter-spacing: 0 !important;
+    color: var(--crm-sidebar-muted) !important;
     margin-top: 16px !important;
     margin-bottom: 6px !important;
     padding: 0 12px 0 24px !important;
@@ -104,7 +131,7 @@
 .nav-collapsible svg {
     width: 14px;
     height: 14px;
-    opacity: 0.6;
+    opacity: 0.75;
     transition: transform 0.15s ease;
 }
 
@@ -128,7 +155,7 @@
     padding: 0 12px 0 24px; 
     border-radius: 8px;
     text-decoration: none; 
-    color: var(--text-secondary);
+    color: var(--crm-sidebar-text);
     transition: all 0.2s ease; 
     position: relative; 
     font-weight: 500;
@@ -138,8 +165,8 @@
 }
 
 .nav-link:hover { 
-    background: var(--glass-bg); 
-    color: var(--text-primary); 
+    background: var(--crm-sidebar-hover); 
+    color: #fff; 
     transform: none; 
 }
 
@@ -149,11 +176,11 @@
 }
 
 .nav-item.active .nav-link { 
-    background: linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(99, 102, 241, 0.18)); 
-    color: var(--text-primary); 
+    background: var(--crm-sidebar-active); 
+    color: #fff; 
     box-shadow: none; 
     font-weight: 600; 
-    border-left: 2px solid rgba(124, 58, 237, 0.6);
+    border-left: 2px solid var(--crm-sidebar-marker);
 }
 
 svg.nav-icon { 
@@ -161,12 +188,12 @@ svg.nav-icon {
     width: 18px; 
     height: 18px; 
     transition: all 0.2s ease;
-    color: var(--text-secondary); 
-    opacity: 0.7;
+    color: var(--crm-sidebar-muted); 
+    opacity: 0.9;
 }
 
 .nav-item.active .nav-link svg.nav-icon {
-    color: var(--text-primary); 
+    color: var(--crm-sidebar-accent); 
     opacity: 1;
 }
 
@@ -174,7 +201,7 @@ svg.nav-icon {
 .sidebar-footer {
     padding: var(--spacing-4);
     margin-top: auto;
-    border-top: 1px solid var(--border-color);
+    border-top: 1px solid var(--crm-sidebar-border);
 }
 
 #sidebar-pin-toggle {
@@ -187,17 +214,17 @@ svg.nav-icon {
 #sidebar-pin-toggle .nav-icon svg {
     width: 24px;
     height: 24px;
-    color: var(--text-secondary);
+    color: var(--crm-sidebar-muted);
     transition: color 0.2s ease;
     opacity: 1;
 }
 
 #sidebar-pin-toggle:hover {
-    background: var(--glass-bg);
-    color: var(--text-primary);
+    background: var(--crm-sidebar-hover);
+    color: #fff;
 }
 #sidebar-pin-toggle:hover .nav-icon svg {
-    color: var(--text-primary);
+    color: var(--crm-sidebar-accent);
 }
 
 /* ==================== 收合狀態下的核心樣式 ==================== */
@@ -208,11 +235,13 @@ svg.nav-icon {
 .app-layout.sidebar-collapsed .sidebar-header {
     padding-left: 0;
     padding-right: 0;
+    min-height: 96px;
     justify-content: center;
 }
 
 .app-layout.sidebar-collapsed .sidebar-logo {
-    max-width: 40px; 
+    max-width: 44px; 
+    max-height: 44px;
 }
 
 .app-layout.sidebar-collapsed .sidebar-logo-full {
@@ -221,6 +250,10 @@ svg.nav-icon {
 
 .app-layout.sidebar-collapsed .sidebar-logo-icon {
     display: block;
+}
+
+.app-layout.sidebar-collapsed .sidebar-product-label {
+    display: none;
 }
 
 .app-layout.sidebar-collapsed #sidebar-pin-toggle {
@@ -273,14 +306,14 @@ svg.nav-icon {
 }
 
 .app-layout.sidebar-collapsed .nav-item.active svg.nav-icon {
-    background: linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(99, 102, 241, 0.18));
-    color: var(--text-primary);
+    background: var(--crm-sidebar-active);
+    color: var(--crm-sidebar-accent);
     padding: 10px; 
     opacity: 1;
 }
 
 .app-layout.sidebar-collapsed .nav-link:hover svg.nav-icon {
-    background: var(--glass-bg);
+    background: var(--crm-sidebar-hover);
 }
 
 /* --- Icon Rail Tooltips --- */
@@ -296,12 +329,12 @@ svg.nav-icon {
     top: 50%;
     transform: translateY(-50%);
     margin-left: 12px;
-    background: var(--card-bg);
-    color: var(--text-primary);
+    background: #201b46;
+    color: #fff;
     padding: 6px 12px;
     border-radius: var(--rounded-md);
     box-shadow: var(--shadow-md);
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--crm-sidebar-border);
     font-size: 13px;
     white-space: nowrap;
     z-index: 2000;
