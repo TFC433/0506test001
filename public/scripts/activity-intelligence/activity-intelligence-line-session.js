@@ -172,7 +172,11 @@
 
   async function loginWithLine() {
     if (!await ensureLiffReady()) return;
-    if (!liff.isLoggedIn()) liff.login();
+    if (!liff.isLoggedIn()) {
+      liff.login({
+        redirectUri: `${window.location.origin}/views/activity-intelligence.html`
+      });
+    }
   }
 
   async function logout() {

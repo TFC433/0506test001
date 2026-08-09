@@ -75,7 +75,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 window.manualLiffLogin = async function() {
     console.warn('[Auth] Manual login triggered.');
     if (await ensureLiffReady()) {
-        liff.login();
+        liff.login({
+            redirectUri: `${window.location.origin}/leads-view.html`
+        });
     }
 };
 
