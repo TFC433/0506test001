@@ -3999,7 +3999,10 @@ a:focus-visible {
     text-decoration: none;
     font-size: 0.95rem;
     font-weight: 700;
-    box-shadow: 0 1px 3px rgba(53, 23, 20, 0.06);
+    box-shadow:
+      0 1px 3px rgba(53, 23, 20, 0.06),
+      0 0 0 4px rgba(224, 82, 45, 0.08),
+      0 8px 22px rgba(224, 82, 45, 0.12);
   }
 
   .aim-mobile-scan-gateway span {
@@ -4053,6 +4056,10 @@ a:focus-visible {
     margin-bottom: 14px;
   }
 
+  .aim-activity-page-header .aim-module-heading {
+    display: none;
+  }
+
   .aim-page-header h1 {
     font-size: 21px;
   }
@@ -4077,31 +4084,21 @@ a:focus-visible {
     display: none;
   }
 
-  .aim-record-filter-bar,
+  .aim-entry-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .aim-entry-context,
   .aim-records-head,
-  .aim-records-head-actions,
-  .aim-data-functions,
-  .aim-period-group,
+  .aim-record-filter-bar,
+  .aim-filter-panel,
   .aim-more-filters-panel,
   .aim-custom-period-panel {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 10px;
+    display: none;
   }
 
-  .aim-data-functions {
-    padding-left: 0;
-    border-left: 0;
-  }
-
-  .aim-period-group {
-    overflow: visible;
-    border: 0;
-  }
-
-  .aim-period-group button {
-    border: 1px solid var(--aim-border-strong);
-    border-radius: 6px;
+  .aim-record-card-list-all {
+    margin-top: 0;
   }
 
   .aim-record-card-summary {

@@ -29,6 +29,7 @@
   const cardLinkHelperCopy = '連結本表單紀錄訪客的名片';
   const formalDeferredMessage = '此功能尚未啟用。';
   const otherAnswerValue = '其他';
+  const ocrScanUrl = 'https://line.me/R/ti/p/@302winpe';
   const rawCardPickerPageSize = 15;
   const previewPlacementValues = new Set(['none', 'primary', 'badges', 'text']);
   const previewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'multiple_choice', 'dropdown']);
@@ -504,6 +505,7 @@
   function renderMobileFramework() {
     if (!currentUser || !currentUser.authenticated) return '';
     const scope = ui.tab === 'records' ? ui.records.scope : '';
+    const showSearch = ui.tab === 'records' && ['mine', 'all'].includes(ui.records.scope);
     const tabButton = (value, label) => `
       <button class="aim-mobile-tab" type="button" data-action="mobile-record-scope" data-scope="${value}" aria-pressed="${scope === value}">
         ${Store.escapeHtml(label)}
@@ -511,13 +513,13 @@
     `;
     return `
       <section class="aim-mobile-framework" aria-label="表單行動工作區">
-        <a class="aim-mobile-scan-gateway" href="/leads-view.html">
+        <a class="aim-mobile-scan-gateway" href="${ocrScanUrl}" target="_blank" rel="noopener noreferrer">
           <span aria-hidden="true">▣</span>
           <strong>掃描名片</strong>
         </a>
-        <div class="aim-mobile-search">
+        ${showSearch ? `<div class="aim-mobile-search">
           <input class="aim-input" id="aim-mobile-record-q" value="${Store.escapeHtml(ui.records.q)}" placeholder="搜尋紀錄" aria-label="搜尋紀錄">
-        </div>
+        </div>` : ''}
         <nav class="aim-mobile-tabs" aria-label="表單行動分頁">
           ${tabButton('entry', '新增紀錄')}
           ${tabButton('mine', '我的紀錄')}
