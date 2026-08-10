@@ -4246,6 +4246,92 @@ a:focus-visible {
     height: 42px;
   }
 
+  .aim-record-edit-drawer {
+    right: 0;
+    width: 94vw;
+    max-width: 94vw;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .aim-record-edit-drawer .aim-drawer-head {
+    padding: 14px 12px;
+  }
+
+  .aim-record-edit-drawer .aim-drawer-head h2 {
+    font-size: 18px;
+  }
+
+  .aim-record-edit-drawer .aim-drawer-body {
+    min-width: 0;
+    padding: 12px;
+    overflow-x: hidden;
+  }
+
+  .aim-record-edit-meta {
+    grid-template-columns: 82px minmax(0, 1fr);
+    gap: 7px 10px;
+    font-size: 12px;
+  }
+
+  .aim-record-edit-meta dt,
+  .aim-record-edit-meta dd {
+    min-width: 0;
+  }
+
+  .aim-record-edit-meta dt {
+    white-space: nowrap;
+  }
+
+  .aim-record-edit-meta dd {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .aim-record-edit-drawer .aim-answer-list,
+  .aim-record-edit-drawer .aim-field,
+  .aim-record-edit-drawer .aim-runtime-card-link,
+  .aim-record-edit-drawer .aim-form-card-link,
+  .aim-record-edit-drawer .aim-form-thumbnail-preview,
+  .aim-record-edit-drawer .aim-form-thumbnail-visual {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .aim-record-edit-drawer .aim-input,
+  .aim-record-edit-drawer .aim-select,
+  .aim-record-edit-drawer .aim-textarea {
+    max-width: 100%;
+  }
+
+  .aim-record-edit-drawer .aim-runtime-choice-list .aim-checkbox {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .aim-record-edit-drawer .aim-drawer-foot {
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .aim-record-drawer-foot {
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .aim-record-edit-drawer .aim-drawer-actions {
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 0;
+  }
+
+  .aim-record-edit-drawer .aim-drawer-foot .aim-button {
+    min-height: 32px;
+    padding: 5px 10px;
+  }
+
   .aim-form-thumbnail-visual {
     aspect-ratio: 5 / 1;
   }

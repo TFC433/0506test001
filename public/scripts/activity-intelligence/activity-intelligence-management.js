@@ -2436,10 +2436,10 @@
     const items = snapshotRecordItems(record, activity);
     return `
       <div class="aim-drawer-backdrop" data-action="close-drawer"></div>
-      <aside class="aim-drawer" role="dialog" aria-modal="true">
+      <aside class="aim-drawer aim-record-edit-drawer" role="dialog" aria-modal="true">
         <div class="aim-drawer-head"><div><h2>編輯紀錄</h2>${editing ? '' : '<span class="aim-pill aim-pill-void">已作廢</span>'}</div><button class="aim-button aim-icon-button" data-action="close-drawer" type="button" aria-label="關閉紀錄">x</button></div>
         <div class="aim-drawer-body">
-          <dl class="aim-definition-list" style="margin-bottom:14px"><dt>建立者</dt><dd>${Store.escapeHtml(record.createdByDisplayName)}</dd><dt>建立時間</dt><dd>${Store.formatDateTime(record.createdAt)}</dd><dt>最近更新者</dt><dd>${Store.escapeHtml(record.updatedByDisplayName)}</dd><dt>最近更新</dt><dd>${Store.formatDateTime(record.updatedAt)}</dd>${editing ? '' : '<dt>狀態</dt><dd><span class="aim-pill aim-pill-void">已作廢</span></dd>'}</dl>
+          <dl class="aim-definition-list aim-record-edit-meta" style="margin-bottom:14px"><dt>建立者</dt><dd>${Store.escapeHtml(record.createdByDisplayName)}</dd><dt>建立時間</dt><dd>${Store.formatDateTime(record.createdAt)}</dd><dt>最近更新者</dt><dd>${Store.escapeHtml(record.updatedByDisplayName)}</dd><dt>最近更新</dt><dd>${Store.formatDateTime(record.updatedAt)}</dd>${editing ? '' : '<dt>狀態</dt><dd><span class="aim-pill aim-pill-void">已作廢</span></dd>'}</dl>
           <div class="aim-answer-list">${items.map(field => renderAnswer(field, working, editing, workingOther, workingCardLink)).join('')}</div>
         </div>
         <div class="aim-drawer-foot aim-record-drawer-foot">
