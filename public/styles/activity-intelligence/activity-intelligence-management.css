@@ -3772,11 +3772,11 @@ a:focus-visible {
 }
 
 .aim-ai-result-surface {
-  height: 100%;
-  min-height: 176px;
+  height: auto;
+  min-height: 118px;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   background: linear-gradient(180deg, #ffffff 0%, #fff7f4 100%);
 }
 
@@ -3787,9 +3787,9 @@ a:focus-visible {
 }
 
 .aim-ai-result-surface h3 {
-  margin: 6px 0 8px;
+  margin: 4px 0 7px;
   color: var(--aim-text);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 700;
   line-height: 1.35;
 }
@@ -3816,8 +3816,8 @@ a:focus-visible {
 }
 
 .aim-ai-answer-placeholder {
-  margin-top: 9px;
-  padding: 10px;
+  margin-top: 8px;
+  padding: 9px 10px;
   border: 1px dashed rgba(224, 82, 45, 0.36);
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.72);
@@ -3832,12 +3832,12 @@ a:focus-visible {
 .aim-ai-answer-text {
   color: var(--aim-text);
   font-size: 13px;
-  line-height: 1.65;
+  line-height: 1.58;
 }
 
 .aim-ai-report {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .aim-ai-report h4,
@@ -3850,23 +3850,23 @@ a:focus-visible {
 }
 
 .aim-ai-report h4 {
-  font-size: 15px;
-  line-height: 1.35;
+  font-size: 14px;
+  line-height: 1.32;
 }
 
 .aim-ai-report h5,
 .aim-ai-report h6 {
-  font-size: 14px;
-  line-height: 1.35;
+  font-size: 13px;
+  line-height: 1.32;
 }
 
 .aim-ai-report ul,
 .aim-ai-report ol {
-  padding-left: 20px;
+  padding-left: 18px;
 }
 
 .aim-ai-report li+li {
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .aim-ai-settings-panel {
@@ -3908,7 +3908,7 @@ a:focus-visible {
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 8px;
+  margin-bottom: 7px;
 }
 
 .aim-analytics-chart-title {
@@ -3926,11 +3926,23 @@ a:focus-visible {
   font-weight: 600;
 }
 
+.aim-analytics-chart-control-row {
+  margin-bottom: 8px;
+}
+
 .aim-chart-controls {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 6px;
+}
+
+.aim-chart-expand-button {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  color: var(--aim-muted);
+  font-size: 15px;
 }
 
 .aim-chart-segment {
@@ -3973,6 +3985,44 @@ a:focus-visible {
   display: grid;
   min-height: var(--aim-chart-height, 210px);
   place-items: center;
+}
+
+.aim-chart-modal-dialog {
+  top: 7vh;
+  width: min(880px, calc(100vw - 112px));
+  max-height: 86vh;
+}
+
+.aim-chart-modal-dialog .aim-dialog-head {
+  align-items: flex-start;
+  padding: 15px 16px 12px;
+}
+
+.aim-chart-modal-dialog .aim-dialog-body {
+  padding: 14px 16px 16px;
+}
+
+.aim-chart-modal-scope {
+  margin: 4px 0 0;
+  color: var(--aim-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.aim-chart-modal-controls {
+  margin-bottom: 10px;
+}
+
+.aim-chart-modal-controls .aim-chart-controls {
+  justify-content: flex-start;
+}
+
+.aim-chart-modal-footnote {
+  margin: 8px 0 0;
+  color: var(--aim-muted);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .aim-bars {
