@@ -4146,21 +4146,21 @@ a:focus-visible {
 
   .aim-raw-card-picker-row {
     position: relative;
-    display: block;
-    height: auto;
-    min-height: 0;
+    display: flex;
+    height: 132px;
+    min-height: 132px;
     overflow: hidden;
     border-radius: 8px;
   }
 
   .aim-raw-card-picker-thumb {
-    display: block;
-    width: 100%;
-    height: auto;
-    min-height: 0;
-    aspect-ratio: 220 / 139;
-    border-right: 0;
-    border-bottom: 1px solid var(--aim-border);
+    flex: 0 0 58%;
+    width: 58%;
+    height: 100%;
+    min-height: 132px;
+    aspect-ratio: auto;
+    border-right: 1px solid var(--aim-border);
+    border-bottom: 0;
   }
 
   .aim-raw-card-picker-thumb .aim-raw-card-thumb-thumb {
@@ -4170,9 +4170,13 @@ a:focus-visible {
   }
 
   .aim-raw-card-picker-info {
-    display: grid;
-    gap: 5px;
-    padding: 10px 12px 12px;
+    position: relative;
+    display: flex;
+    flex: 1 1 42%;
+    min-width: 0;
+    justify-content: flex-start;
+    gap: 4px;
+    padding: 10px 9px 38px;
   }
 
   .aim-raw-card-picker-title-row {
@@ -4181,29 +4185,37 @@ a:focus-visible {
 
   .aim-raw-card-picker-title-row .aim-button {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    z-index: 2;
-    min-height: 32px;
+    right: 9px;
+    bottom: 8px;
+    z-index: 1;
+    min-height: 30px;
     padding: 0 10px;
-    box-shadow: 0 4px 12px rgba(53, 23, 20, 0.18);
+    box-shadow: none;
   }
 
   .aim-raw-card-name {
-    white-space: normal;
+    font-size: 14px;
+    white-space: nowrap;
   }
 
   .aim-raw-card-company-row {
-    align-items: flex-start;
-    flex-wrap: wrap;
-    gap: 5px 7px;
+    display: grid;
+    width: 100%;
+    gap: 2px;
+    min-width: 0;
   }
 
   .aim-raw-card-company {
+    display: block;
+    width: 100%;
     padding: 0;
+    overflow: hidden;
     border: 0;
     background: transparent;
-    white-space: normal;
+    color: var(--aim-muted);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .aim-raw-card-role,
@@ -4212,14 +4224,14 @@ a:focus-visible {
   }
 
   .aim-raw-card-position-mobile {
-    display: inline;
+    display: block;
+    width: 100%;
+    overflow: hidden;
     color: var(--aim-muted);
     font-size: 12px;
     line-height: 1.4;
-  }
-
-  .aim-raw-card-position-mobile::before {
-    content: " / ";
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .aim-card-picker-foot {
