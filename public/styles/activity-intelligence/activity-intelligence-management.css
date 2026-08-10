@@ -2269,6 +2269,10 @@ a:focus-visible {
   overflow: hidden;
 }
 
+.aim-card-picker-title-mobile {
+  display: none;
+}
+
 .aim-card-picker-search {
   flex: 0 0 auto;
 }
@@ -2416,6 +2420,10 @@ a:focus-visible {
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.aim-raw-card-position-mobile {
+  display: none;
 }
 
 .aim-raw-card-contact-list {
@@ -4101,6 +4109,10 @@ a:focus-visible {
     margin-top: 0;
   }
 
+  .aim-form-thumbnail-visual {
+    aspect-ratio: 5 / 1;
+  }
+
   .aim-record-card-summary {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -4108,5 +4120,115 @@ a:focus-visible {
   .aim-record-card-right-rail {
     align-items: flex-start;
     margin-top: 8px;
+  }
+
+  .aim-card-picker-dialog {
+    top: 12px;
+    width: calc(100vw - 24px);
+    max-height: calc(100vh - 24px);
+  }
+
+  .aim-card-picker-dialog .aim-dialog-body {
+    gap: 10px;
+  }
+
+  .aim-card-picker-title-desktop {
+    display: none;
+  }
+
+  .aim-card-picker-title-mobile {
+    display: inline;
+  }
+
+  .aim-card-picker-results {
+    gap: 10px;
+  }
+
+  .aim-raw-card-picker-row {
+    position: relative;
+    display: block;
+    height: auto;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: 8px;
+  }
+
+  .aim-raw-card-picker-thumb {
+    display: block;
+    width: 100%;
+    height: auto;
+    min-height: 0;
+    aspect-ratio: 220 / 139;
+    border-right: 0;
+    border-bottom: 1px solid var(--aim-border);
+  }
+
+  .aim-raw-card-picker-thumb .aim-raw-card-thumb-thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .aim-raw-card-picker-info {
+    display: grid;
+    gap: 5px;
+    padding: 10px 12px 12px;
+  }
+
+  .aim-raw-card-picker-title-row {
+    display: block;
+  }
+
+  .aim-raw-card-picker-title-row .aim-button {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    min-height: 32px;
+    padding: 0 10px;
+    box-shadow: 0 4px 12px rgba(53, 23, 20, 0.18);
+  }
+
+  .aim-raw-card-name {
+    white-space: normal;
+  }
+
+  .aim-raw-card-company-row {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 5px 7px;
+  }
+
+  .aim-raw-card-company {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    white-space: normal;
+  }
+
+  .aim-raw-card-role,
+  .aim-raw-card-contact-list {
+    display: none;
+  }
+
+  .aim-raw-card-position-mobile {
+    display: inline;
+    color: var(--aim-muted);
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .aim-raw-card-position-mobile::before {
+    content: " / ";
+  }
+
+  .aim-card-picker-foot {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .aim-card-picker-pagination {
+    justify-content: space-between;
   }
 }

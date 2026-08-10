@@ -517,14 +517,14 @@
           <span aria-hidden="true">▣</span>
           <strong>掃描名片</strong>
         </a>
-        ${showSearch ? `<div class="aim-mobile-search">
-          <input class="aim-input" id="aim-mobile-record-q" value="${Store.escapeHtml(ui.records.q)}" placeholder="搜尋紀錄" aria-label="搜尋紀錄">
-        </div>` : ''}
         <nav class="aim-mobile-tabs" aria-label="表單行動分頁">
           ${tabButton('entry', '新增紀錄')}
           ${tabButton('mine', '我的紀錄')}
           ${tabButton('all', '全部紀錄')}
         </nav>
+        ${showSearch ? `<div class="aim-mobile-search">
+          <input class="aim-input" id="aim-mobile-record-q" value="${Store.escapeHtml(ui.records.q)}" placeholder="搜尋紀錄" aria-label="搜尋紀錄">
+        </div>` : ''}
       </section>
     `;
   }
@@ -2018,7 +2018,7 @@
     return `
       <div class="aim-dialog-backdrop" data-action="close-card-picker"></div>
       <section class="aim-dialog aim-card-picker-dialog" role="dialog" aria-modal="true" aria-label="選擇 RAW 名片">
-        <div class="aim-dialog-head"><h2>選擇 RAW 名片</h2><button class="aim-button aim-icon-button" data-action="close-card-picker" type="button" aria-label="關閉">x</button></div>
+        <div class="aim-dialog-head"><h2><span class="aim-card-picker-title-desktop">選擇 RAW 名片</span><span class="aim-card-picker-title-mobile">選擇名片</span></h2><button class="aim-button aim-icon-button" data-action="close-card-picker" type="button" aria-label="關閉">x</button></div>
         <div class="aim-dialog-body">
           <div class="aim-card-picker-search aim-field"><label for="aim-card-picker-q">搜尋名片</label><input class="aim-input" id="aim-card-picker-q" value="${Store.escapeHtml(ui.cardPicker.q || '')}" placeholder="姓名、公司、部門、職稱、電話、Email 或檔名"></div>
           <div class="aim-card-picker-results" id="aim-card-picker-results">${renderCardPickerResults()}</div>
@@ -2085,6 +2085,7 @@
             <div class="aim-raw-card-company-row">
               ${card.company ? `<span class="aim-raw-card-company">${Store.escapeHtml(card.company)}</span>` : ''}
               ${roleText ? `<span class="aim-raw-card-role">${Store.escapeHtml(roleText)}</span>` : ''}
+              ${card.position ? `<span class="aim-raw-card-position-mobile">${Store.escapeHtml(card.position)}</span>` : ''}
             </div>
           </div>
           <div class="aim-raw-card-contact-list">
@@ -2998,7 +2999,7 @@
     bindThumbnailMediaControls();
     bindFormPreviewControls();
     bind('aim-record-q', value => { ui.records.q = value; });
-    bind('aim-mobile-record-q', value => { ui.records.q = value; });
+    bindMobileRecordSearch();
     bind('aim-record-recorder', value => { ui.records.recorder = value; }, 'change');
     bind('aim-record-state', value => {
       ui.records.state = value;
@@ -3457,6 +3458,35 @@
     node.addEventListener('input', () => {
       if (!composing) update();
     });
+  }
+
+  function bindMobileRecordSearch() {
+    const node = document.getElementById('aim-mobile-record-q');
+    if (!node) return;
+    let composing = false;
+    const update = () => {
+      ui.records.q = node.value;
+      save();
+      refreshMobileRecordResults();
+    };
+    node.addEventListener('compositionstart', () => { composing = true; });
+    node.addEventListener('compositionend', () => {
+      composing = false;
+      update();
+    });
+    node.addEventListener('input', () => {
+      if (!composing) update();
+    });
+  }
+
+  function refreshMobileRecordResults() {
+    const activity = selectedActivity();
+    if (!activity || ui.tab !== 'records' || !['mine', 'all'].includes(ui.records.scope)) return;
+    const list = document.querySelector('.aim-record-card-list-all');
+    if (!list) return;
+    const rows = filteredRecords(activity, ui.records.scope);
+    list.innerHTML = rows.map(record => renderRecordCard(record, activity, 'all')).join('') || '<div class="aim-empty">沒有符合篩選條件的紀錄。</div>';
+    fitRecordPreviewBadges();
   }
 
   async function switchPreviewRole(value) {
