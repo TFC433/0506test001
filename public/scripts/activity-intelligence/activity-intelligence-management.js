@@ -49,6 +49,7 @@
     verifying: '正在檢查登入狀態...',
     forbidden: '此 LINE 帳號尚未開通使用權限。'
   });
+  const FORM_AUTH_STATE_CLASS = 'aim-auth-state';
   const thumbnailFitOptions = new Set(['cover', 'contain']);
 
   let state = { activities: [], records: [], selectedActivityId: null };
@@ -108,6 +109,7 @@
   init();
 
   async function init() {
+    setFormAuthRootState(true);
     currentUser = await resolveFormalCurrentUser();
     if (currentUser.authenticated) {
       try {
@@ -424,19 +426,26 @@
     return (activity && activity.status) || { key: 'upcoming', label: '尚未開放' };
   }
 
+  function setFormAuthRootState(enabled) {
+    document.body.classList.toggle(FORM_AUTH_STATE_CLASS, Boolean(enabled));
+  }
+
   function render() {
     cancelScheduledFormPreviewRefresh();
     if (!currentUser) {
+      setFormAuthRootState(true);
       root.innerHTML = renderPreAuthGate({ state: 'verifying' });
       return;
     }
 
     if (!currentUser.authenticated) {
+      setFormAuthRootState(true);
       root.innerHTML = renderAuthState();
       bindInputs();
       return;
     }
 
+    setFormAuthRootState(false);
     let content;
     if (isRecorder()) {
       content = renderRecorderShellContent();

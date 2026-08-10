@@ -54,6 +54,10 @@ body {
   background: #f5f7fa;
 }
 
+body.aim-auth-state {
+  background: #351714;
+}
+
 button,
 input,
 select,
