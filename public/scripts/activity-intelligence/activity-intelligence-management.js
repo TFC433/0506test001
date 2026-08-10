@@ -51,11 +51,9 @@
     forbidden: '此 LINE 帳號尚未開通使用權限。'
   });
   const analyticsAiDefaultPresets = Object.freeze([
-    '分析目前表單紀錄的主要趨勢',
-    '找出值得管理者優先關注的訊號',
-    '摘要填答內容中的常見需求',
-    '整理欄位資料中異常或缺漏的地方',
-    '提出下一步追蹤與行動建議'
+    '???桀?銵典蝝??銝餉?頞典',
+    '?曉?澆?蝞∠????瘜函?閮?',
+    '?銝?甇亥蕭頩方?銵?撱箄降'
   ]);
   const FORM_AUTH_STATE_CLASS = 'aim-auth-state';
   const mobileFormMediaQuery = '(max-width: 640px)';
@@ -69,6 +67,9 @@
   let rawCardsLoaded = false;
   let writeInFlight = false;
   let previewRefreshFrame = 0;
+  let pendingAnalyticsChartConfigs = [];
+  let analyticsChartRenderToken = 0;
+  const activityAnalyticsChartIds = new Set();
   let ui = {
     view: 'overview',
     tab: 'overview',
@@ -151,7 +152,8 @@
         state: 'idle',
         crmContextEnabled: false,
         inputError: ''
-      }
+      },
+      chartViews: {}
     };
   }
 
@@ -489,6 +491,9 @@
 
   function render() {
     cancelScheduledFormPreviewRefresh();
+    disposeActivityAnalyticsCharts();
+    pendingAnalyticsChartConfigs = [];
+    analyticsChartRenderToken += 1;
     if (!currentUser) {
       setFormAuthRootState(true);
       root.innerHTML = renderPreAuthGate({ state: 'verifying' });
@@ -512,6 +517,7 @@
 
     root.innerHTML = shell(content);
     bindInputs();
+    renderActivityAnalyticsCharts();
     if (ui.focusQuickFirst) {
       ui.focusQuickFirst = false;
       window.setTimeout(() => {
@@ -1732,7 +1738,6 @@
             <h2>AI 分析設定</h2>
             <p class="aim-subtitle">設定管理者在分析頁可快速選用的問題。此階段僅供介面規劃，重新整理後會回到預設。</p>
           </div>
-          <span class="aim-pill">Framework</span>
         </div>
         <div class="aim-ai-settings-grid">
           ${analyticsAiPresetSlots().map((value, index) => `
@@ -2404,22 +2409,19 @@
       ${!isMobileFormViewport() ? renderAnalyticsAiPanel(activity, records) : ''}
       <div class="aim-panel" style="margin-bottom:14px"><div class="aim-record-toolbar aim-analytics-toolbar"><input class="aim-input" id="aim-analytics-start" type="date" value="${ui.analytics.start}"><input class="aim-input" id="aim-analytics-end" type="date" value="${ui.analytics.end}"><select class="aim-select" id="aim-analytics-recorder">${option('all', '全部紀錄者', ui.analytics.recorder)}${recorders.map(r => option(r, r, ui.analytics.recorder)).join('')}</select><input class="aim-input" id="aim-analytics-q" value="${Store.escapeHtml(ui.analytics.q)}" placeholder="搜尋長文字內容"><button class="aim-button" data-action="clear-analytics" type="button">清除</button></div></div>
       <div class="aim-kpi-grid"><div class="aim-kpi"><span>有效紀錄</span><strong>${metrics.total}</strong></div><div class="aim-kpi"><span>今日新增</span><strong>${metrics.today}</strong></div><div class="aim-kpi"><span>紀錄者數</span><strong>${metrics.recorders}</strong></div><div class="aim-kpi"><span>低完整度</span><strong>${metrics.low}</strong></div><div class="aim-kpi"><span>平均填答欄位</span><strong>${metrics.avg}</strong></div></div>
-      <div class="aim-chart-grid"><div class="aim-panel"><h2>每日新增趨勢</h2>${renderTrend(records)}</div><div class="aim-panel"><h2>紀錄者分布</h2>${bars(count(records, r => r.createdByDisplayName))}</div>${choiceCharts(activity, records)}${numberCharts(activity, records)}${textBrowser(activity, records)}</div>
+      <div class="aim-chart-grid"><div class="aim-panel"><h2>每日新增趨勢</h2>${renderTrend(records)}</div>${recorderDistributionChart(records)}${choiceCharts(activity, records)}${numberCharts(activity, records)}${textBrowser(activity, records)}</div>
     `;
   }
 
   function renderAnalyticsAiPanel(activity, records) {
     const presets = resolvedAnalyticsAiPresets();
     const ai = ui.analytics.ai || defaultAnalyticsState().ai;
-    const scope = analyticsAiScopeSummary(activity, records);
     return `
-      <section class="aim-panel aim-desktop-only aim-analytics-ai-panel" aria-label="AI 分析助手">
+      <section class="aim-panel aim-desktop-only aim-analytics-ai-panel" aria-label="FANUC forms ???拇?">
         <div class="aim-analytics-ai-head">
           <div>
-            <h2>AI 分析助手</h2>
-            <p>先以目前篩選範圍選擇一個管理問題，後續階段會接上正式 AI 分析服務。</p>
+            <h2>FANUC forms ???拇?</h2>
           </div>
-          <span class="aim-pill">Framework</span>
         </div>
         <div class="aim-analytics-ai-layout">
           <div class="aim-analytics-ai-left">
@@ -2432,16 +2434,12 @@
             <div class="aim-ai-block">
               <label class="aim-field" for="aim-analytics-ai-question">
                 <span>自訂問題</span>
-                <textarea class="aim-textarea aim-auto-grow" id="aim-analytics-ai-question" rows="3" placeholder="輸入想從目前篩選資料中理解的問題">${Store.escapeHtml(ai.question || '')}</textarea>
+                <textarea class="aim-textarea aim-auto-grow" id="aim-analytics-ai-question" rows="2" placeholder="輸入想從目前篩選資料中理解的問題">${Store.escapeHtml(ai.question || '')}</textarea>
               </label>
               ${ai.inputError ? `<p class="aim-field-error">${Store.escapeHtml(ai.inputError)}</p>` : ''}
-              <button class="aim-button aim-button-primary" data-action="analytics-ai-ask" type="button">詢問 AI</button>
+              <button class="aim-button aim-button-primary aim-ai-ask-button" data-action="analytics-ai-ask" type="button">閰Ｗ? AI</button>
             </div>
             ${isSuperAdmin() ? renderAnalyticsAiCrmToggle(ai) : ''}
-            <div class="aim-ai-scope-card">
-              <h3>目前分析範圍</h3>
-              ${scope}
-            </div>
           </div>
           <div class="aim-analytics-ai-right">
             ${renderAnalyticsAiResult(activity, records)}
@@ -2455,9 +2453,9 @@
     return `
       <label class="aim-checkbox aim-ai-crm-toggle">
         <input id="aim-analytics-ai-crm" type="checkbox" ${ai.crmContextEnabled ? 'checked' : ''}>
-        <span>納入 CRM 關聯分析框架</span>
+        <span>撱嗡撓 CRM ???</span>
+        <strong>${ai.crmContextEnabled ? 'ON' : 'OFF'}</strong>
       </label>
-      <p class="aim-ai-muted">${ai.crmContextEnabled ? '已標示未來可納入 CRM 關聯脈絡；此階段不載入 CRM 資料。' : '目前僅以 FORM 分析資料作為範圍。'}</p>
     `;
   }
 
@@ -2467,11 +2465,14 @@
       return `
         <div class="aim-ai-result-surface aim-ai-result-idle">
           <span>尚未選擇問題</span>
-          <h3>選擇快速問題或輸入自訂問題後，這裡會顯示未來 AI 回覆框架。</h3>
-          <p>此版本只建立一問一答的分析工作區，不產生分析內容。</p>
+          <h3>選擇快速問題或輸入自訂問題。</h3>
+          <p>此區保留一問一答結果，不建立對話紀錄。</p>
         </div>
       `;
     }
+    const crmState = isSuperAdmin() && ai.crmContextEnabled
+      ? '<p class="aim-ai-compact-note">CRM 關聯：ON</p>'
+      : '';
     return `
       <div class="aim-ai-result-surface aim-ai-result-ready">
         <span>已準備分析</span>
@@ -2479,29 +2480,13 @@
         <dl class="aim-definition-list">
           <dt>活動</dt><dd>${Store.escapeHtml(activity.name)}</dd>
           <dt>目前筆數</dt><dd>${records.length}</dd>
-          <dt>CRM 脈絡</dt><dd>${isSuperAdmin() && ai.crmContextEnabled ? '框架狀態：已開啟，尚未整合資料' : '未納入'}</dd>
         </dl>
+        ${crmState}
         <div class="aim-ai-answer-placeholder">
           <strong>AI 回覆區</strong>
-          <p>正式服務尚未啟用。未來回覆會以純文字結構化內容顯示在此區塊，每次新問題會取代目前結果。</p>
+          <p>正式服務尚未啟用。新問題會取代目前結果。</p>
         </div>
       </div>
-    `;
-  }
-
-  function analyticsAiScopeSummary(activity, records) {
-    const recorder = ui.analytics.recorder === 'all' ? '全部紀錄者' : ui.analytics.recorder;
-    const dateStart = ui.analytics.start || '不限開始';
-    const dateEnd = ui.analytics.end || '不限結束';
-    const keyword = String(ui.analytics.q || '').trim();
-    return `
-      <dl class="aim-definition-list aim-ai-scope-list">
-        <dt>活動</dt><dd>${Store.escapeHtml(activity.name)}</dd>
-        <dt>日期</dt><dd>${Store.escapeHtml(dateStart)} - ${Store.escapeHtml(dateEnd)}</dd>
-        <dt>紀錄者</dt><dd>${Store.escapeHtml(recorder)}</dd>
-        <dt>符合紀錄</dt><dd>${records.length} 筆</dd>
-        <dt>長文字搜尋</dt><dd>${keyword ? Store.escapeHtml(keyword) : '未套用'}</dd>
-      </dl>
     `;
   }
 
@@ -2547,16 +2532,320 @@
   }
 
   function choiceCharts(activity, records) {
-    return analyticFields(activity, records).filter(f => ['single_choice', 'multiple_choice', 'dropdown'].includes(f.type)).map(field => {
-      const counts = {};
-      (field.options || []).forEach(o => { counts[o] = 0; });
-      records.forEach(record => {
-        const value = record.answers[field.fieldId];
-        if (Array.isArray(value)) value.forEach(v => { counts[v] = (counts[v] || 0) + 1; });
-        else if (value) counts[value] = (counts[value] || 0) + 1;
+    return analyticFields(activity, records)
+      .filter(f => ['yes_no', 'single_choice', 'multiple_choice', 'dropdown'].includes(f.type))
+      .map(field => {
+        const chart = categoricalFieldChartData(field, records);
+        return renderCategoricalAnalyticsChart(chart);
+      }).join('');
+  }
+
+  function recorderDistributionChart(records) {
+    const counts = new Map();
+    records.forEach(record => {
+      const recorder = String(record.createdByDisplayName || '').trim();
+      if (!recorder) return;
+      counts.set(recorder, (counts.get(recorder) || 0) + 1);
+    });
+    const denominator = Array.from(counts.values()).reduce((sum, value) => sum + value, 0);
+    const rows = Array.from(counts.entries())
+      .map(([label, value]) => categoricalChartRow(label, value, denominator))
+      .sort((a, b) => b.count - a.count);
+    return renderCategoricalAnalyticsChart({
+      chartKey: 'recorder-distribution',
+      title: '紀錄者分布',
+      coverage: denominator ? `已答 ${denominator} / ${records.length}` : '',
+      allowPie: true,
+      rows,
+      denominator,
+      emptyText: records.length ? '目前沒有有效紀錄者資料。' : '目前沒有可分析的紀錄。'
+    });
+  }
+
+  function categoricalFieldChartData(field, records) {
+    const options = analyticsFieldOptionLabels(field);
+    const counts = new Map(options.map(label => [label, 0]));
+    let answered = 0;
+    records.forEach(record => {
+      const value = record.answers[field.fieldId];
+      const labels = analyticsAnswerLabels(value, field);
+      if (!labels.length) return;
+      answered += 1;
+      const selected = field.type === 'multiple_choice' ? Array.from(new Set(labels)) : labels.slice(0, 1);
+      selected.forEach(label => {
+        counts.set(label, (counts.get(label) || 0) + 1);
       });
-      return `<div class="aim-panel"><h2>${Store.escapeHtml(field.title)}</h2>${bars(counts)}</div>`;
-    }).join('');
+    });
+    const rows = Array.from(counts.entries())
+      .filter(([label, value]) => options.includes(label) || value > 0)
+      .map(([label, value]) => categoricalChartRow(label, value, answered));
+    return {
+      chartKey: `field-${field.fieldId || designerItemKey(field) || field.title}`,
+      title: field.title,
+      coverage: `已答 ${answered} / ${records.length}`,
+      allowPie: field.type !== 'multiple_choice',
+      rows,
+      denominator: answered,
+      emptyText: records.length ? '此欄位目前沒有已填答資料。' : '目前沒有可分析的紀錄。'
+    };
+  }
+
+  function analyticsFieldOptionLabels(field) {
+    if (field.type === 'yes_no') return yesNoOptions.slice();
+    const source = Array.isArray(field.optionEntries) && field.optionEntries.length
+      ? field.optionEntries.map(entry => entry.label || entry.value)
+      : (field.options || []);
+    return source.map(value => String(value || '').trim()).filter(Boolean);
+  }
+
+  function analyticsAnswerLabels(value, field) {
+    const values = Array.isArray(value) ? value : [value];
+    return values.map(entry => analyticsAnswerLabel(entry, field)).filter(Boolean);
+  }
+
+  function analyticsAnswerLabel(value, field) {
+    if (value === undefined || value === null || value === '') return '';
+    if (field.type === 'yes_no') {
+      if (value === true) return yesNoOptions[0];
+      if (value === false) return yesNoOptions[1];
+    }
+    const label = String(optionLabel(value, field) || '').trim();
+    if (!label || label === '__other') return label === '__other' ? otherAnswerValue : '';
+    return label;
+  }
+
+  function categoricalChartRow(label, countValue, denominator) {
+    return {
+      label: String(label || '未提供'),
+      count: Number(countValue || 0),
+      percent: denominator > 0 ? (Number(countValue || 0) / denominator) * 100 : 0
+    };
+  }
+
+  function renderCategoricalAnalyticsChart(chart) {
+    const view = analyticsChartView(chart.chartKey, chart.allowPie);
+    const hasAnswered = chart.denominator > 0 && chart.rows.some(row => row.count > 0);
+    const controls = renderAnalyticsChartControls(chart.chartKey, view, chart.allowPie);
+    const body = hasAnswered
+      ? renderActivityAnalyticsChartContainer(chart.chartKey, analyticsChartOption(chart, view))
+      : `<div class="aim-empty aim-echart-empty">${Store.escapeHtml(chart.emptyText || '目前沒有資料。')}</div>`;
+    return `
+      <div class="aim-panel aim-analytics-chart-card">
+        <div class="aim-analytics-chart-head">
+          <div class="aim-analytics-chart-title">
+            <h2>${Store.escapeHtml(chart.title)}</h2>
+            ${chart.coverage ? `<span>${Store.escapeHtml(chart.coverage)}</span>` : ''}
+          </div>
+          ${controls}
+        </div>
+        ${body}
+      </div>
+    `;
+  }
+
+  function analyticsChartView(chartKey, allowPie) {
+    const saved = (ui.analytics.chartViews && ui.analytics.chartViews[chartKey]) || {};
+    return {
+      type: allowPie && saved.type === 'pie' ? 'pie' : 'bar',
+      valueMode: saved.valueMode === 'percentage' ? 'percentage' : 'count'
+    };
+  }
+
+  function renderAnalyticsChartControls(chartKey, view, allowPie) {
+    const typeButtons = [
+      ['bar', '璇?'],
+      ['pie', '??']
+    ].filter(([value]) => value !== 'pie' || allowPie);
+    const modeButtons = [
+      ['count', '?賊?'],
+      ['percentage', '%']
+    ];
+    return `
+      <div class="aim-chart-controls" aria-label="圖表顯示模式">
+        <div class="aim-chart-segment">
+          ${typeButtons.map(([value, label]) => `<button data-action="analytics-chart-view" data-chart-key="${Store.escapeHtml(chartKey)}" data-control="type" data-value="${value}" aria-pressed="${view.type === value}" type="button">${label}</button>`).join('')}
+        </div>
+        <div class="aim-chart-segment">
+          ${modeButtons.map(([value, label]) => `<button data-action="analytics-chart-view" data-chart-key="${Store.escapeHtml(chartKey)}" data-control="valueMode" data-value="${value}" aria-pressed="${view.valueMode === value}" type="button">${label}</button>`).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  function analyticsChartOption(chart, view) {
+    return view.type === 'pie' && chart.allowPie
+      ? analyticsPieOption(chart, view)
+      : analyticsBarOption(chart, view);
+  }
+
+  function analyticsBarOption(chart, view) {
+    const styles = analyticsChartStyles();
+    const percentage = view.valueMode === 'percentage';
+    const rows = chart.rows;
+    return {
+      legend: { show: false },
+      grid: { top: 12, right: 28, bottom: 26, left: 8, containLabel: true },
+      xAxis: {
+        type: 'value',
+        min: 0,
+        max: percentage ? 100 : undefined,
+        axisLabel: {
+          formatter: value => percentage ? `${Number(value).toFixed(0)}%` : Number(value).toFixed(0),
+          color: styles.muted
+        },
+        axisLine: { lineStyle: { color: styles.border } },
+        axisTick: { lineStyle: { color: styles.border } },
+        splitLine: { lineStyle: { color: styles.border, type: 'dashed', opacity: styles.isDark ? 0.28 : 0.38 } }
+      },
+      yAxis: {
+        type: 'category',
+        inverse: true,
+        data: rows.map(row => row.label),
+        axisTick: { show: false },
+        axisLine: { lineStyle: { color: styles.border } },
+        axisLabel: { width: 104, overflow: 'truncate', color: styles.secondary }
+      },
+      tooltip: { trigger: 'item', formatter: analyticsTooltipFormatter },
+      series: [{
+        name: chart.title,
+        type: 'bar',
+        data: rows.map(row => analyticsChartPoint(row, percentage)),
+        barMaxWidth: 18,
+        showBackground: true,
+        backgroundStyle: {
+          color: styles.isDark ? 'rgba(148, 163, 184, 0.12)' : 'rgba(148, 163, 184, 0.14)',
+          borderRadius: [0, 4, 4, 0]
+        },
+        itemStyle: {
+          borderRadius: [0, 4, 4, 0],
+          color: styles.isDark ? '#7dd3fc' : '#3b82f6'
+        },
+        label: {
+          show: true,
+          position: 'right',
+          color: styles.secondary,
+          formatter: params => percentage ? formatAnalyticsPercent(params.data.realPercent) : `${params.data.realCount}`
+        }
+      }]
+    };
+  }
+
+  function analyticsPieOption(chart, view) {
+    const percentage = view.valueMode === 'percentage';
+    return {
+      legend: { show: false },
+      tooltip: { formatter: analyticsTooltipFormatter },
+      series: [{
+        name: chart.title,
+        type: 'pie',
+        radius: ['26%', '76%'],
+        center: ['50%', '52%'],
+        minShowLabelAngle: 8,
+        padAngle: 1,
+        label: {
+          show: true,
+          formatter: params => `${params.name}\n${percentage ? formatAnalyticsPercent(params.data.realPercent) : params.data.realCount}`,
+          overflow: 'break',
+          width: 86
+        },
+        labelLine: { show: true, length: 14, length2: 10, minTurnAngle: 45 },
+        emphasis: {
+          itemStyle: {
+            shadowBlur: 10,
+            shadowColor: 'rgba(15, 23, 42, 0.18)'
+          }
+        },
+        data: chart.rows.filter(row => row.count > 0).map(row => analyticsChartPoint(row, percentage))
+      }]
+    };
+  }
+
+  function analyticsChartPoint(row, percentage) {
+    return {
+      name: row.label,
+      value: percentage ? Number(row.percent.toFixed(1)) : row.count,
+      realCount: row.count,
+      realPercent: row.percent
+    };
+  }
+
+  function analyticsTooltipFormatter(params) {
+    const data = params.data || {};
+    return `${params.marker || ''}${escapeChartHtml(params.name)}<br/><b>${Number(data.realCount || 0)} 筆</b><br/>${formatAnalyticsPercent(data.realPercent || 0)}`;
+  }
+
+  function renderActivityAnalyticsChartContainer(chartKey, optionConfig) {
+    const id = analyticsChartElementId(chartKey);
+    pendingAnalyticsChartConfigs.push({ id, option: optionConfig });
+    return `<div id="${id}" class="aim-echart" role="img" aria-label="${Store.escapeHtml(chartKey)}"></div>`;
+  }
+
+  function analyticsChartElementId(chartKey) {
+    return `aim-analytics-chart-${String(chartKey || 'chart').replace(/[^a-zA-Z0-9_-]/g, '-')}`;
+  }
+
+  function renderActivityAnalyticsCharts() {
+    const configs = pendingAnalyticsChartConfigs.slice();
+    const renderToken = analyticsChartRenderToken;
+    if (!configs.length) return;
+    if (typeof createEChartsThemedChart !== 'function') {
+      configs.forEach(config => {
+        const container = document.getElementById(config.id);
+        if (container) container.innerHTML = '<div class="aim-empty aim-echart-empty">圖表服務尚未載入。</div>';
+      });
+      return;
+    }
+    window.requestAnimationFrame(() => {
+      if (renderToken !== analyticsChartRenderToken) return;
+      configs.forEach(config => {
+        if (!document.getElementById(config.id)) return;
+        createEChartsThemedChart(config.id, config.option);
+        activityAnalyticsChartIds.add(config.id);
+      });
+    });
+  }
+
+  function disposeActivityAnalyticsCharts() {
+    if (!activityAnalyticsChartIds.size) return;
+    activityAnalyticsChartIds.forEach(id => {
+      const container = document.getElementById(id);
+      if (container && container._echartsResizeHandler) {
+        window.removeEventListener('resize', container._echartsResizeHandler);
+        container._echartsResizeHandler = null;
+      }
+      const existingChart = container && window.echarts && window.echarts.getInstanceByDom(container);
+      if (existingChart) existingChart.dispose();
+      if (typeof createEChartsThemedChart === 'function' && createEChartsThemedChart._registry) {
+        const previous = createEChartsThemedChart._registry.get(id);
+        if (previous) {
+          window.removeEventListener('resize', previous.resizeHandler);
+          previous.chart.dispose();
+          createEChartsThemedChart._registry.delete(id);
+        }
+      }
+    });
+    activityAnalyticsChartIds.clear();
+  }
+
+  function analyticsChartStyles() {
+    const rootStyle = getComputedStyle(document.documentElement);
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    return {
+      isDark,
+      primary: rootStyle.getPropertyValue('--text-primary').trim() || rootStyle.getPropertyValue('--aim-text').trim() || (isDark ? '#f8fafc' : '#0f172a'),
+      secondary: rootStyle.getPropertyValue('--text-secondary').trim() || rootStyle.getPropertyValue('--aim-muted').trim() || (isDark ? '#cbd5e1' : '#475569'),
+      muted: rootStyle.getPropertyValue('--text-muted').trim() || rootStyle.getPropertyValue('--aim-muted').trim() || (isDark ? '#94a3b8' : '#64748b'),
+      border: rootStyle.getPropertyValue('--border-color').trim() || rootStyle.getPropertyValue('--aim-border').trim() || (isDark ? '#334155' : '#cbd5e1')
+    };
+  }
+
+  function formatAnalyticsPercent(value) {
+    const number = Number(value || 0);
+    return `${Number.isInteger(Math.round(number * 10) / 10) ? Math.round(number) : (Math.round(number * 10) / 10).toFixed(1)}%`;
+  }
+
+  function escapeChartHtml(value) {
+    return Store.escapeHtml(value);
   }
 
   function numberCharts(activity, records) {
@@ -2822,13 +3111,28 @@
     if (action === 'analytics-ai-ask' && canUseAnalytics()) {
       submitAnalyticsAiQuestion();
     }
+    if (action === 'analytics-chart-view' && canUseAnalytics()) {
+      const chartKey = el.dataset.chartKey || '';
+      const control = el.dataset.control || '';
+      const value = el.dataset.value || '';
+      if (chartKey && ['type', 'valueMode'].includes(control)) {
+        ui.analytics.chartViews = ui.analytics.chartViews || {};
+        const current = ui.analytics.chartViews[chartKey] || { type: 'bar', valueMode: 'count' };
+        ui.analytics.chartViews[chartKey] = {
+          type: control === 'type' && ['bar', 'pie'].includes(value) ? value : current.type,
+          valueMode: control === 'valueMode' && ['count', 'percentage'].includes(value) ? value : current.valueMode
+        };
+      }
+    }
     if (action === 'reset-ai-presets' && canDesignForm()) {
       ui.analyticsAiPresetDrafts = [...analyticsAiDefaultPresets];
     }
     if (action === 'clear-analytics' && canUseAnalytics()) {
       const ai = ui.analytics.ai || defaultAnalyticsState().ai;
+      const chartViews = ui.analytics.chartViews || {};
       ui.analytics = defaultAnalyticsState();
       ui.analytics.ai = ai;
+      ui.analytics.chartViews = chartViews;
     }
     save();
     render();
