@@ -521,7 +521,7 @@
   function renderMobileBrand() {
     return `
       <button class="aim-mobile-brand" data-action="home" type="button" aria-label="回到活動情報管理首頁">
-        <img src="/images/portal/form.png" alt="FANUC forms">
+        <img src="/images/portal/form.webp" alt="FANUC forms">
       </button>
     `;
   }
@@ -574,7 +574,7 @@
       <div class="aim-preauth aim-preauth-${Store.escapeHtml(state)}">
         <main class="aim-preauth-panel" aria-live="${isVerifying ? 'polite' : 'off'}">
           <div class="aim-preauth-main">
-            <img src="/images/portal/form.png" alt="FANUC forms" class="aim-preauth-logo">
+            <img src="/images/portal/form.webp" alt="FANUC forms" class="aim-preauth-logo">
             <h1>${Store.escapeHtml(preAuthCopy.product)}</h1>
             ${showMessage ? `<p>${Store.escapeHtml(message)}</p>` : ''}
             ${isVerifying ? '<div class="aim-preauth-status" role="status">驗證中</div>' : ''}
@@ -637,7 +637,7 @@
     return `
       <aside class="aim-sidebar" aria-label="主要導覽">
         <button class="aim-product-brand" data-action="home" type="button" aria-label="回到活動情報管理首頁">
-          <img class="aim-brand-logo" src="/images/portal/form.png" alt="FANUC forms">
+          <img class="aim-brand-logo" src="/images/portal/form.webp" alt="FANUC forms">
           <strong class="aim-product-title">活動情報管理</strong>
         </button>
         <nav class="aim-sidebar-nav">

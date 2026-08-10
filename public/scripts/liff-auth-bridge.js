@@ -8,12 +8,12 @@
   const PRODUCT_THEMES = Object.freeze({
     form: {
       bodyClass: 'liff-bridge-form',
-      logo: '/images/portal/form.png',
+      logo: '/images/portal/form.webp',
       logoAlt: 'FANUC forms'
     },
     ocr: {
       bodyClass: 'liff-bridge-ocr',
-      logo: '/images/portal/ocr.png',
+      logo: '/images/portal/ocr.webp',
       logoAlt: 'FANUC card OCR'
     }
   });
