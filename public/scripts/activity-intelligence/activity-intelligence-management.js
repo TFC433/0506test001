@@ -51,9 +51,9 @@
     forbidden: '此 LINE 帳號尚未開通使用權限。'
   });
   const analyticsAiDefaultPresets = Object.freeze([
-    '???桀?銵典蝝??銝餉?頞典',
-    '?曉?澆?蝞∠????瘜函?閮?',
-    '?銝?甇亥蕭頩方?銵?撱箄降'
+    '分析目前表單紀錄的主要趨勢',
+    '找出值得管理者優先關注的訊號',
+    '摘要填答內容中的常見需求'
   ]);
   const FORM_AUTH_STATE_CLASS = 'aim-auth-state';
   const mobileFormMediaQuery = '(max-width: 640px)';
@@ -2417,10 +2417,10 @@
     const presets = resolvedAnalyticsAiPresets();
     const ai = ui.analytics.ai || defaultAnalyticsState().ai;
     return `
-      <section class="aim-panel aim-desktop-only aim-analytics-ai-panel" aria-label="FANUC forms ???拇?">
+      <section class="aim-panel aim-desktop-only aim-analytics-ai-panel" aria-label="FANUC forms AI 分析助手">
         <div class="aim-analytics-ai-head">
           <div>
-            <h2>FANUC forms ???拇?</h2>
+            <h2>FANUC forms AI 分析助手</h2>
           </div>
         </div>
         <div class="aim-analytics-ai-layout">
@@ -2437,7 +2437,7 @@
                 <textarea class="aim-textarea aim-auto-grow" id="aim-analytics-ai-question" rows="2" placeholder="輸入想從目前篩選資料中理解的問題">${Store.escapeHtml(ai.question || '')}</textarea>
               </label>
               ${ai.inputError ? `<p class="aim-field-error">${Store.escapeHtml(ai.inputError)}</p>` : ''}
-              <button class="aim-button aim-button-primary aim-ai-ask-button" data-action="analytics-ai-ask" type="button">閰Ｗ? AI</button>
+              <button class="aim-button aim-button-primary aim-ai-ask-button" data-action="analytics-ai-ask" type="button">詢問 AI</button>
             </div>
             ${isSuperAdmin() ? renderAnalyticsAiCrmToggle(ai) : ''}
           </div>
@@ -2453,7 +2453,7 @@
     return `
       <label class="aim-checkbox aim-ai-crm-toggle">
         <input id="aim-analytics-ai-crm" type="checkbox" ${ai.crmContextEnabled ? 'checked' : ''}>
-        <span>撱嗡撓 CRM ???</span>
+        <span>納入 CRM 關聯分析</span>
         <strong>${ai.crmContextEnabled ? 'ON' : 'OFF'}</strong>
       </label>
     `;
@@ -2653,11 +2653,11 @@
 
   function renderAnalyticsChartControls(chartKey, view, allowPie) {
     const typeButtons = [
-      ['bar', '璇?'],
-      ['pie', '??']
+      ['bar', '長條'],
+      ['pie', '圓餅']
     ].filter(([value]) => value !== 'pie' || allowPie);
     const modeButtons = [
-      ['count', '?賊?'],
+      ['count', '筆數'],
       ['percentage', '%']
     ];
     return `
