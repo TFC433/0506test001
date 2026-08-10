@@ -965,6 +965,40 @@ textarea.form-input {
 @keyframes spin { to { transform: rotate(360deg); } }
 .empty-icon { font-size: 4rem; margin-bottom: 16px; opacity: 0.3; }
 
+.lead-pagination {
+    width: 100%;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 18px 0 4px;
+    color: var(--text-sub);
+    font-size: 0.9rem;
+}
+
+.lead-page-btn {
+    min-height: 34px;
+    padding: 0 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--card-bg);
+    color: var(--text-main);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.lead-page-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+.lead-page-indicator {
+    min-width: 132px;
+    text-align: center;
+    white-space: nowrap;
+}
+
 /* Desktop OCR Shell */
 @media (min-width: 1024px) {
     .app-container {
@@ -1144,6 +1178,26 @@ textarea.form-input {
         background: #ffffff;
         border-color: rgba(5, 150, 105, 0.14);
         box-shadow: 0 1px 4px rgba(15, 48, 40, 0.05);
+    }
+
+    .lead-pagination {
+        gap: 8px;
+        padding-top: 14px;
+        font-size: 0.82rem;
+    }
+
+    .lead-page-btn {
+        flex: 0 0 auto;
+        min-height: 34px;
+        padding: 0 10px;
+        font-size: 0.82rem;
+    }
+
+    .lead-page-indicator {
+        min-width: 0;
+        flex: 1 1 auto;
+        white-space: normal;
+        line-height: 1.35;
     }
 
     .toggle-btn { font-size: 0.9rem; padding: 6px; }

@@ -11,6 +11,10 @@
 
 const { handleApiError } = require('../middleware/error.middleware');
 
+const LINE_LEADS_DEFAULT_PAGE = 1;
+const LINE_LEADS_PAGE_SIZE = 50;
+const LINE_LEADS_MAX_PAGE_SIZE = 50;
+
 class LineLeadsController {
     /**
      * @param {ContactService} contactService
@@ -58,6 +62,33 @@ class LineLeadsController {
 
             if (!this.contactService) {
                 throw new Error('ContactService not initialized in Controller');
+            }
+
+            const usePagination = this._isPaginatedLeadRequest(req.query);
+            if (usePagination) {
+                const page = this._positiveInteger(req.query.page, LINE_LEADS_DEFAULT_PAGE);
+                const requestedPageSize = this._positiveInteger(req.query.pageSize, LINE_LEADS_PAGE_SIZE);
+                const pageSize = Math.min(requestedPageSize, LINE_LEADS_MAX_PAGE_SIZE);
+                const view = this._normalizeLeadView(req.query.view);
+                const search = String(req.query.search || '').trim();
+                const exhibitionOnly = this._booleanQuery(req.query.exhibitionOnly);
+
+                const result = await this.contactService.getPotentialContactsPage({
+                    page,
+                    pageSize,
+                    view,
+                    search,
+                    exhibitionOnly,
+                    userId: user.userId
+                });
+
+                return res.json({
+                    success: true,
+                    data: result.data,
+                    pagination: result.pagination,
+                    counts: result.counts,
+                    exhibitionConfig
+                });
             }
 
             const leads = await this.contactService.getPotentialContacts(3000);
@@ -135,6 +166,24 @@ class LineLeadsController {
             handleApiError(res, error, 'Delete Lead');
         }
     };
+
+    _isPaginatedLeadRequest(query = {}) {
+        return ['page', 'pageSize', 'view', 'search', 'exhibitionOnly']
+            .some(key => Object.prototype.hasOwnProperty.call(query, key));
+    }
+
+    _positiveInteger(value, fallback) {
+        const parsed = Number.parseInt(value, 10);
+        return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+    }
+
+    _normalizeLeadView(value) {
+        return ['all', 'mine', 'pending'].includes(value) ? value : 'all';
+    }
+
+    _booleanQuery(value) {
+        return value === true || String(value || '').toLowerCase() === 'true' || String(value || '') === '1';
+    }
 }
 
 module.exports = LineLeadsController;

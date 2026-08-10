@@ -14,12 +14,21 @@
 // Description: Logic controller for Lead View V6.3 (Reading Structure + Desktop Pill Position) and simplified strict LIFF Auth.
 
 let allLeads = [];
+const LEAD_LIST_PAGE_SIZE = 50;
 let currentUser = {
     userId: null,
     displayName: '訪客',
     pictureUrl: null
 };
 let currentView = 'all'; 
+let leadPagination = {
+    currentPage: 1,
+    pageSize: LEAD_LIST_PAGE_SIZE,
+    totalCount: 0,
+    totalPages: 1,
+    counts: { all: 0, mine: 0, pending: 0, myPending: 0 }
+};
+let leadListRequestId = 0;
 
 // [Phase 8.4 Exhibition UX] Independent filter state and globally stored config
 let showExhibitionOnly = false;
@@ -437,7 +446,8 @@ function bindEvents() {
             document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             currentView = btn.dataset.view; 
-            renderLeads();
+            leadPagination.currentPage = 1;
+            loadLeadsData({ page: 1 });
         };
     });
 
@@ -446,14 +456,16 @@ function bindEvents() {
     if (searchInput) {
         searchInput.addEventListener('input', (e) => {
             clearBtn.style.display = e.target.value ? 'flex' : 'none';
-            renderLeads();
+            leadPagination.currentPage = 1;
+            loadLeadsData({ page: 1 });
         });
     }
     if (clearBtn) {
         clearBtn.onclick = () => {
             searchInput.value = '';
             clearBtn.style.display = 'none';
-            renderLeads();
+            leadPagination.currentPage = 1;
+            loadLeadsData({ page: 1 });
         };
     }
 
@@ -661,7 +673,8 @@ function renderExhibitionBanner() {
     if (toggleBtn) {
         toggleBtn.onclick = function() {
             showExhibitionOnly = !showExhibitionOnly;
-            renderLeads();
+            leadPagination.currentPage = 1;
+            loadLeadsData({ page: 1 });
         };
     }
 }
@@ -682,22 +695,66 @@ function updateExhibitionInlineToggle(count) {
 // ============================================================================
 
 
-async function loadLeadsData() {
+function currentLeadSearchTerm() {
+    const searchInput = document.getElementById('search-input');
+    return searchInput ? searchInput.value.toLowerCase().trim() : '';
+}
+
+function leadListQueryUrl(page) {
+    const params = new URLSearchParams();
+    params.set('page', String(page || leadPagination.currentPage || 1));
+    params.set('pageSize', String(LEAD_LIST_PAGE_SIZE));
+    params.set('view', currentView || 'all');
+
+    const searchTerm = currentLeadSearchTerm();
+    if (searchTerm) params.set('search', searchTerm);
+    if (showExhibitionOnly) params.set('exhibitionOnly', '1');
+
+    return `/api/line/leads?${params.toString()}`;
+}
+
+function normalizeLeadPagination(pagination, counts, requestedPage) {
+    const pageSize = Number(pagination && pagination.pageSize) || LEAD_LIST_PAGE_SIZE;
+    const totalCount = Number(pagination && pagination.totalCount) || 0;
+    const totalPages = Math.max(1, Number(pagination && pagination.totalPages) || Math.ceil(totalCount / pageSize) || 1);
+    const currentPage = Math.min(Math.max(1, Number(pagination && pagination.currentPage) || requestedPage || 1), totalPages);
+
+    return {
+        currentPage,
+        pageSize,
+        totalCount,
+        totalPages,
+        counts: {
+            all: Number(counts && counts.all) || 0,
+            mine: Number(counts && counts.mine) || 0,
+            pending: Number(counts && counts.pending) || 0,
+            myPending: Number(counts && counts.myPending) || 0
+        }
+    };
+}
+
+async function loadLeadsData(options = {}) {
     const loadingEl = document.getElementById('loading-indicator');
     const gridEl = document.getElementById('leads-grid');
+    const emptyState = document.getElementById('empty-state');
+    const page = Number(options.page) > 0 ? Number(options.page) : leadPagination.currentPage;
+    const requestId = ++leadListRequestId;
     
     if (!currentUser.userId) return;
 
     toggleContentVisibility(true); 
     if(loadingEl) loadingEl.style.display = 'block';
     if(gridEl) gridEl.style.display = 'none';
+    if(emptyState) emptyState.style.display = 'none';
+    renderPaginationControls();
     
     try {
         const headers = { 
             'Content-Type': 'application/json'
         };
 
-        const response = await lineLeadFetch('/api/line/leads', { headers });
+        const response = await lineLeadFetch(leadListQueryUrl(page), { headers });
+        if (requestId !== leadListRequestId) return;
         
         if (response.status === 401) {
             showAuthFailedFallback();
@@ -705,6 +762,7 @@ async function loadLeadsData() {
         }
         
         const result = await response.json();
+        if (requestId !== leadListRequestId) return;
         
         if (response.status === 403) {
             toggleContentVisibility(false);
@@ -713,7 +771,12 @@ async function loadLeadsData() {
         }
 
         if (result.success) {
-            allLeads = result.data;
+            allLeads = Array.isArray(result.data) ? result.data : [];
+            leadPagination = normalizeLeadPagination(result.pagination, result.counts, page);
+
+            if (allLeads.length === 0 && leadPagination.totalCount > 0 && page > leadPagination.totalPages) {
+                return loadLeadsData({ page: leadPagination.totalPages });
+            }
             
             // Extract config from payload and initialize UI enhancements safely
             if (result.exhibitionConfig) {
@@ -723,8 +786,9 @@ async function loadLeadsData() {
 
             if(loadingEl) loadingEl.style.display = 'none';
             if(gridEl) gridEl.style.display = 'flex'; 
-            updateCounts();
+            updateCounts(leadPagination.counts);
             renderLeads();
+            renderPaginationControls();
         } else {
             throw new Error(result.message || '資料載入失敗');
         }
@@ -734,26 +798,12 @@ async function loadLeadsData() {
     }
 }
 
-function updateCounts() {
-    document.getElementById('count-all').textContent = allLeads.length;
-    
-    const myCount = allLeads.filter(l => l.lineUserId === currentUser.userId).length;
-    document.getElementById('count-mine').textContent = myCount;
-    
-    const pendingCount = allLeads.filter(l => {
-        const hasName = l.name && l.name.trim() !== '';
-        const hasCompany = l.company && l.company.trim() !== '';
-        return !hasName || !hasCompany;
-    }).length;
-    document.getElementById('count-pending').textContent = pendingCount;
+function updateCounts(counts = leadPagination.counts) {
+    document.getElementById('count-all').textContent = counts.all || 0;
+    document.getElementById('count-mine').textContent = counts.mine || 0;
+    document.getElementById('count-pending').textContent = counts.pending || 0;
 
-    // [ITEM 6] Compute strictly owned pending leads for visual reminder
-    const myPendingCount = allLeads.filter(l => {
-        const isMine = l.lineUserId === currentUser.userId;
-        const hasName = l.name && l.name.trim() !== '';
-        const hasCompany = l.company && l.company.trim() !== '';
-        return isMine && (!hasName || !hasCompany);
-    }).length;
+    const myPendingCount = counts.myPending || 0;
 
     const reminderEl = document.getElementById('my-pending-reminder');
     if (reminderEl) {
@@ -808,7 +858,7 @@ function renderLeads() {
     });
 
     // Update the inline toggle state
-    updateExhibitionInlineToggle(filtered.length);
+    updateExhibitionInlineToggle(leadPagination.totalCount);
 
     if (filtered.length === 0) {
         grid.style.display = 'none';
@@ -819,6 +869,51 @@ function renderLeads() {
     grid.style.display = 'flex'; 
     if(emptyState) emptyState.style.display = 'none';
     grid.innerHTML = filtered.map(lead => createCardHTML(lead)).join('');
+}
+
+function ensurePaginationElement() {
+    let pager = document.getElementById('lead-pagination');
+    if (pager) return pager;
+
+    const container = document.querySelector('.leads-container');
+    if (!container) return null;
+
+    pager = document.createElement('nav');
+    pager.id = 'lead-pagination';
+    pager.className = 'lead-pagination';
+    pager.setAttribute('aria-label', 'Lead pagination');
+    container.appendChild(pager);
+    return pager;
+}
+
+function renderPaginationControls() {
+    const pager = ensurePaginationElement();
+    if (!pager) return;
+
+    const totalPages = leadPagination.totalPages || 1;
+    const currentPage = leadPagination.currentPage || 1;
+    const totalCount = leadPagination.totalCount || 0;
+
+    if (totalPages <= 1) {
+        pager.style.display = 'none';
+        pager.innerHTML = '';
+        return;
+    }
+
+    pager.style.display = 'flex';
+    pager.innerHTML = `
+        <button type="button" class="lead-page-btn" data-page-action="prev" ${currentPage <= 1 ? 'disabled' : ''}>上一頁</button>
+        <span class="lead-page-indicator">第 ${currentPage} / ${totalPages} 頁 · 共 ${totalCount} 筆</span>
+        <button type="button" class="lead-page-btn" data-page-action="next" ${currentPage >= totalPages ? 'disabled' : ''}>下一頁</button>
+    `;
+
+    pager.querySelectorAll('.lead-page-btn').forEach(button => {
+        button.onclick = () => {
+            if (button.disabled) return;
+            const nextPage = button.dataset.pageAction === 'prev' ? currentPage - 1 : currentPage + 1;
+            loadLeadsData({ page: nextPage });
+        };
+    });
 }
 
 function getContactRoleText(contact) {

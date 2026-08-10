@@ -344,6 +344,50 @@ class ContactService {
         return contacts;
     }
 
+    async getPotentialContactsPage(options = {}) {
+        if (!this.rawContactSqlReader) throw new Error('[ContactService] rawContactSqlReader not configured');
+        if (typeof this.rawContactSqlReader.getRawContactsPage !== 'function') {
+            throw new Error('[ContactService] rawContactSqlReader does not support paginated RAW reads');
+        }
+
+        const pageResult = await this.rawContactSqlReader.getRawContactsPage(options);
+        const contacts = (pageResult.data || []).filter(c => c.name || c.company);
+
+        try {
+            const sysConfig = await this.systemService.getSystemConfig();
+            for (let c of contacts) {
+                if (this._applyExhibitionAutoTag(c, sysConfig)) {
+                    if (!this.rawContactSqlWriter) {
+                        throw new Error('[ContactService] rawContactSqlWriter not configured');
+                    }
+                    if (!c.cardId) {
+                        throw new Error('[ContactService] RAW SQL cardId missing during auto-tag write');
+                    }
+                    await this.rawContactSqlWriter.updateRawContactByCardId(c.cardId, c);
+                }
+            }
+        } catch (error) {
+            console.warn('[ContactService] Lazy auto-tag failed safely:', error.message);
+        }
+
+        const counts = typeof this.rawContactSqlReader.getRawContactCounts === 'function'
+            ? await this.rawContactSqlReader.getRawContactCounts(options)
+            : { all: pageResult.total || 0, mine: 0, pending: 0 };
+
+        return {
+            data: contacts,
+            pagination: {
+                currentPage: pageResult.page,
+                pageSize: pageResult.pageSize,
+                totalCount: pageResult.total,
+                totalPages: pageResult.totalPages,
+                hasNext: pageResult.page < pageResult.totalPages,
+                hasPrev: pageResult.page > 1
+            },
+            counts
+        };
+    }
+
     async searchContacts(query) {
         try {
             let contacts = await this.getPotentialContacts(9999);
