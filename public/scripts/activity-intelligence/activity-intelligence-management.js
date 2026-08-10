@@ -84,6 +84,7 @@
     formDesignDraftDirty: false,
     formDesignMessage: '',
     formDesignConfirm: null,
+    analyticsAiConfirm: null,
     formPreviewAnswers: {},
     formPreviewCardLinked: false,
     formPreviewCardVariant: 'default',
@@ -552,6 +553,7 @@
       ${renderDialog()}
       ${renderDrawer()}
       ${renderFormDesignConfirmDialog()}
+      ${renderAnalyticsAiConfirmDialog()}
       ${renderHardDeleteConfirmDialog()}
       ${renderCardPickerDialog()}
       ${ui.toast ? `<div class="aim-toast" role="status">${Store.escapeHtml(ui.toast)}</div>` : ''}
@@ -2342,6 +2344,20 @@
     `;
   }
 
+  function renderAnalyticsAiConfirmDialog() {
+    if (!ui.analyticsAiConfirm) return '';
+    return `
+      <div class="aim-dialog-backdrop aim-form-confirm-backdrop" data-action="cancel-analytics-ai-confirm"></div>
+      <section class="aim-dialog aim-form-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="aim-analytics-ai-replace-title">
+        <div class="aim-dialog-head"><h2 id="aim-analytics-ai-replace-title">更換分析問題</h2><button class="aim-button aim-icon-button" data-action="cancel-analytics-ai-confirm" type="button" aria-label="關閉">×</button></div>
+        <div class="aim-dialog-body">
+          <p>目前畫面已有一筆分析結果。繼續後會先清除舊結果，再重新分析。</p>
+        </div>
+        <div class="aim-dialog-foot"><button class="aim-button" data-action="cancel-analytics-ai-confirm" type="button">取消</button><button class="aim-button aim-button-primary" data-action="confirm-analytics-ai-replace" type="button">繼續分析</button></div>
+      </section>
+    `;
+  }
+
   function renderRecords(activity, forcedScope) {
     const scope = forcedScope || ui.records.scope;
     const rows = filteredRecords(activity, scope);
@@ -2410,7 +2426,7 @@
     return `
       ${!isMobileFormViewport() ? renderAnalyticsAiPanel(activity, records) : ''}
       <div class="aim-panel" style="margin-bottom:14px"><div class="aim-record-toolbar aim-analytics-toolbar"><input class="aim-input" id="aim-analytics-start" type="date" value="${ui.analytics.start}"><input class="aim-input" id="aim-analytics-end" type="date" value="${ui.analytics.end}"><select class="aim-select" id="aim-analytics-recorder">${option('all', '全部紀錄者', ui.analytics.recorder)}${recorders.map(r => option(r, r, ui.analytics.recorder)).join('')}</select><input class="aim-input" id="aim-analytics-q" value="${Store.escapeHtml(ui.analytics.q)}" placeholder="搜尋長文字內容"><button class="aim-button" data-action="clear-analytics" type="button">清除</button></div></div>
-      <div class="aim-kpi-grid"><div class="aim-kpi"><span>有效紀錄</span><strong>${metrics.total}</strong></div><div class="aim-kpi"><span>今日新增</span><strong>${metrics.today}</strong></div><div class="aim-kpi"><span>紀錄者數</span><strong>${metrics.recorders}</strong></div><div class="aim-kpi"><span>低完整度</span><strong>${metrics.low}</strong></div><div class="aim-kpi"><span>平均填答欄位</span><strong>${metrics.avg}</strong></div></div>
+      <div class="aim-kpi-grid aim-analytics-kpi-row"><div class="aim-kpi"><span>有效紀錄</span><strong>${metrics.total}</strong></div><div class="aim-kpi"><span>今日新增</span><strong>${metrics.today}</strong></div><div class="aim-kpi"><span>紀錄者數</span><strong>${metrics.recorders}</strong></div><div class="aim-kpi"><span>完整率</span><strong>${metrics.completeRate}</strong><small>完整 ${metrics.complete} 筆 · 低完整度 ${metrics.low} 筆 · 平均 ${metrics.avg} 欄</small></div></div>
       <div class="aim-chart-grid"><div class="aim-panel"><h2>每日新增趨勢</h2>${renderTrend(records)}</div>${recorderDistributionChart(records)}${choiceCharts(activity, records)}${numberCharts(activity, records)}${textBrowser(activity, records)}</div>
     `;
   }
@@ -2420,10 +2436,10 @@
     const ai = ui.analytics.ai || defaultAnalyticsState().ai;
     const loading = ai.state === 'loading';
     return `
-      <section class="aim-panel aim-desktop-only aim-analytics-ai-panel" aria-label="FANUC forms AI 分析助手">
+      <section class="aim-panel aim-desktop-only aim-analytics-ai-panel" aria-label="FANUC forms 分析助手">
         <div class="aim-analytics-ai-head">
           <div>
-            <h2>FANUC forms AI 分析助手</h2>
+            <h2>FANUC forms 分析助手</h2>
           </div>
         </div>
         <div class="aim-analytics-ai-layout">
@@ -2437,10 +2453,10 @@
             <div class="aim-ai-block">
               <label class="aim-field" for="aim-analytics-ai-question">
                 <span>自訂問題</span>
-                <textarea class="aim-textarea aim-auto-grow" id="aim-analytics-ai-question" rows="2" placeholder="輸入想從目前篩選資料中理解的問題" ${loading ? 'disabled' : ''}>${Store.escapeHtml(ai.question || '')}</textarea>
+                <textarea class="aim-textarea aim-auto-grow" id="aim-analytics-ai-question" rows="2" placeholder="輸入想分析目前表單資料的問題" ${loading ? 'disabled' : ''}>${Store.escapeHtml(ai.question || '')}</textarea>
               </label>
               ${ai.inputError ? `<p class="aim-field-error">${Store.escapeHtml(ai.inputError)}</p>` : ''}
-              <button class="aim-button aim-button-primary aim-ai-ask-button" data-action="analytics-ai-ask" type="button" ${loading ? 'disabled' : ''}>${loading ? '分析中' : '詢問 AI'}</button>
+              <button class="aim-button aim-button-primary aim-ai-ask-button" data-action="analytics-ai-ask" type="button" ${loading ? 'disabled' : ''}>${loading ? '分析中' : '開始分析'}</button>
             </div>
             ${isSuperAdmin() ? renderAnalyticsAiCrmToggle(ai) : ''}
           </div>
@@ -2470,7 +2486,6 @@
           <span>正在分析</span>
           <h3>${Store.escapeHtml(ai.submittedQuestion || ai.question || '目前表單資料')}</h3>
           <p>正在分析目前表單資料，請稍候。</p>
-          ${ai.answer ? `<div class="aim-ai-answer-placeholder"><strong>上一個結果</strong>${renderSafeAiAnswer(ai.answer)}</div>` : ''}
         </div>
       `;
     }
@@ -2480,7 +2495,6 @@
           <span>分析未完成</span>
           <h3>${Store.escapeHtml(ai.submittedQuestion || ai.question || '分析問題')}</h3>
           <p class="aim-field-error">${Store.escapeHtml(ai.error || '分析暫時無法完成，請稍後再試。')}</p>
-          ${ai.answer ? `<div class="aim-ai-answer-placeholder"><strong>上一個成功結果</strong>${renderSafeAiAnswer(ai.answer)}</div>` : ''}
         </div>
       `;
     }
@@ -2514,7 +2528,7 @@
         <span>已準備分析</span>
         <h3>${Store.escapeHtml(ai.submittedQuestion)}</h3>
         <div class="aim-ai-answer-placeholder">
-          <strong>AI 回覆區</strong>
+          <strong>分析結果</strong>
           <p>送出問題後會顯示分析結果。</p>
         </div>
       </div>
@@ -2522,7 +2536,61 @@
   }
 
   function renderSafeAiAnswer(answer) {
-    return `<div class="aim-ai-answer-text">${Store.escapeHtml(answer || '')}</div>`;
+    const lines = String(answer || '').replace(/\r\n/g, '\n').split('\n');
+    const html = [];
+    let paragraph = [];
+    let listType = '';
+    const flushParagraph = () => {
+      if (!paragraph.length) return;
+      html.push(`<p>${paragraph.map(renderSafeAiInline).join('<br>')}</p>`);
+      paragraph = [];
+    };
+    const flushList = () => {
+      if (!listType) return;
+      html.push(`</${listType}>`);
+      listType = '';
+    };
+    const openList = type => {
+      if (listType === type) return;
+      flushList();
+      listType = type;
+      html.push(`<${type}>`);
+    };
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      const heading = /^(#{1,3})\s+(.+)$/.exec(trimmed);
+      const bullet = /^[-*]\s+(.+)$/.exec(trimmed);
+      const numbered = /^\d+[.)]\s+(.+)$/.exec(trimmed);
+      if (!trimmed) {
+        flushParagraph();
+        flushList();
+      } else if (heading) {
+        flushParagraph();
+        flushList();
+        const level = Math.min(heading[1].length + 3, 6);
+        html.push(`<h${level}>${renderSafeAiInline(heading[2])}</h${level}>`);
+      } else if (bullet) {
+        flushParagraph();
+        openList('ul');
+        html.push(`<li>${renderSafeAiInline(bullet[1])}</li>`);
+      } else if (numbered) {
+        flushParagraph();
+        openList('ol');
+        html.push(`<li>${renderSafeAiInline(numbered[1])}</li>`);
+      } else {
+        flushList();
+        paragraph.push(trimmed);
+      }
+    });
+    flushParagraph();
+    flushList();
+    return `<div class="aim-ai-answer-text aim-ai-report">${html.join('') || '<p></p>'}</div>`;
+  }
+
+  function renderSafeAiInline(text) {
+    return Store.escapeHtml(text || '')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/(^|[^*])\*([^*]+)\*/g, '$1<em>$2</em>');
   }
 
   function setAnalyticsAiQuestion(question) {
@@ -2533,9 +2601,9 @@
     ui.analytics.ai.error = '';
   }
 
-  async function submitAnalyticsAiQuestion() {
+  async function submitAnalyticsAiQuestion(options = {}) {
     const activity = selectedActivity();
-    const value = String(ui.analytics.ai.question || '').trim();
+    const value = String(options.question !== undefined ? options.question : ui.analytics.ai.question || '').trim();
     if (ui.analytics.ai.state === 'loading') return;
     if (!value) {
       ui.analytics.ai.inputError = '請先輸入要分析的問題。';
@@ -2545,10 +2613,19 @@
       ui.analytics.ai.inputError = '請先選擇活動。';
       return;
     }
+    if (!options.confirmed && ui.analytics.ai.state === 'complete' && String(ui.analytics.ai.answer || '').trim()) {
+      ui.analyticsAiConfirm = { question: value };
+      ui.analytics.ai.inputError = '';
+      ui.analytics.ai.error = '';
+      return;
+    }
+    ui.analyticsAiConfirm = null;
+    ui.analytics.ai.question = value;
     ui.analytics.ai.submittedQuestion = value;
     ui.analytics.ai.state = 'loading';
     ui.analytics.ai.inputError = '';
     ui.analytics.ai.error = '';
+    ui.analytics.ai.answer = '';
     render();
     try {
       const result = await window.ActivityIntelligenceApi.analyzeActivity(activity.id, {
@@ -2627,26 +2704,31 @@
     const options = analyticsFieldOptionLabels(field);
     const counts = new Map(options.map(label => [label, 0]));
     let answered = 0;
+    let totalSelections = 0;
     records.forEach(record => {
       const value = record.answers[field.fieldId];
       const labels = analyticsAnswerLabels(value, field);
       if (!labels.length) return;
       answered += 1;
       const selected = field.type === 'multiple_choice' ? Array.from(new Set(labels)) : labels.slice(0, 1);
+      totalSelections += selected.length;
       selected.forEach(label => {
         counts.set(label, (counts.get(label) || 0) + 1);
       });
     });
+    const selectionDenominator = field.type === 'multiple_choice' ? totalSelections : answered;
     const rows = Array.from(counts.entries())
       .filter(([label, value]) => options.includes(label) || value > 0)
-      .map(([label, value]) => categoricalChartRow(label, value, answered));
+      .map(([label, value]) => categoricalChartRow(label, value, answered, selectionDenominator));
     return {
       chartKey: `field-${field.fieldId || designerItemKey(field) || field.title}`,
       title: field.title,
       coverage: `已答 ${answered} / ${records.length}`,
-      allowPie: field.type !== 'multiple_choice',
+      allowPie: true,
+      multiChoice: field.type === 'multiple_choice',
       rows,
       denominator: answered,
+      selectionDenominator,
       emptyText: records.length ? '此欄位目前沒有已填答資料。' : '目前沒有可分析的紀錄。'
     };
   }
@@ -2675,11 +2757,12 @@
     return label;
   }
 
-  function categoricalChartRow(label, countValue, denominator) {
+  function categoricalChartRow(label, countValue, denominator, selectionDenominator) {
     return {
       label: String(label || '未提供'),
       count: Number(countValue || 0),
-      percent: denominator > 0 ? (Number(countValue || 0) / denominator) * 100 : 0
+      percent: denominator > 0 ? (Number(countValue || 0) / denominator) * 100 : 0,
+      selectionPercent: selectionDenominator > 0 ? (Number(countValue || 0) / selectionDenominator) * 100 : 0
     };
   }
 
@@ -2687,15 +2770,20 @@
     const view = analyticsChartView(chart.chartKey, chart.allowPie);
     const hasAnswered = chart.denominator > 0 && chart.rows.some(row => row.count > 0);
     const controls = renderAnalyticsChartControls(chart.chartKey, view, chart.allowPie);
+    const chartHeight = analyticsChartHeight(chart, view);
+    const pieHint = chart.multiChoice && view.type === 'pie'
+      ? '<span>圓餅以選項勾選次數占比計算</span>'
+      : '';
     const body = hasAnswered
-      ? renderActivityAnalyticsChartContainer(chart.chartKey, analyticsChartOption(chart, view))
-      : `<div class="aim-empty aim-echart-empty">${Store.escapeHtml(chart.emptyText || '目前沒有資料。')}</div>`;
+      ? renderActivityAnalyticsChartContainer(chart.chartKey, analyticsChartOption(chart, view), chartHeight)
+      : `<div class="aim-empty aim-echart-empty" style="--aim-chart-height:${chartHeight}px">${Store.escapeHtml(chart.emptyText || '目前沒有資料。')}</div>`;
     return `
       <div class="aim-panel aim-analytics-chart-card">
         <div class="aim-analytics-chart-head">
           <div class="aim-analytics-chart-title">
             <h2>${Store.escapeHtml(chart.title)}</h2>
             ${chart.coverage ? `<span>${Store.escapeHtml(chart.coverage)}</span>` : ''}
+            ${pieHint}
           </div>
           ${controls}
         </div>
@@ -2793,6 +2881,7 @@
 
   function analyticsPieOption(chart, view) {
     const percentage = view.valueMode === 'percentage';
+    const percentKey = chart.multiChoice ? 'selectionPercent' : 'percent';
     return {
       legend: { show: false },
       tooltip: { formatter: analyticsTooltipFormatter },
@@ -2816,17 +2905,18 @@
             shadowColor: 'rgba(15, 23, 42, 0.18)'
           }
         },
-        data: chart.rows.filter(row => row.count > 0).map(row => analyticsChartPoint(row, percentage))
+        data: chart.rows.filter(row => row.count > 0).map(row => analyticsChartPoint(row, percentage, percentKey))
       }]
     };
   }
 
-  function analyticsChartPoint(row, percentage) {
+  function analyticsChartPoint(row, percentage, percentKey = 'percent') {
+    const realPercent = Number(row[percentKey] || 0);
     return {
       name: row.label,
-      value: percentage ? Number(row.percent.toFixed(1)) : row.count,
+      value: percentage ? Number(realPercent.toFixed(1)) : row.count,
       realCount: row.count,
-      realPercent: row.percent
+      realPercent
     };
   }
 
@@ -2835,10 +2925,17 @@
     return `${params.marker || ''}${escapeChartHtml(params.name)}<br/><b>${Number(data.realCount || 0)} 筆</b><br/>${formatAnalyticsPercent(data.realPercent || 0)}`;
   }
 
-  function renderActivityAnalyticsChartContainer(chartKey, optionConfig) {
+  function analyticsChartHeight(chart, view) {
+    if (view.type === 'pie') return 200;
+    const rows = Array.isArray(chart.rows) ? chart.rows.length : 0;
+    return Math.max(170, Math.min(260, 132 + rows * 24));
+  }
+
+  function renderActivityAnalyticsChartContainer(chartKey, optionConfig, height) {
     const id = analyticsChartElementId(chartKey);
     pendingAnalyticsChartConfigs.push({ id, option: optionConfig });
-    return `<div id="${id}" class="aim-echart" role="img" aria-label="${Store.escapeHtml(chartKey)}"></div>`;
+    const style = Number.isFinite(height) ? ` style="--aim-chart-height:${height}px"` : '';
+    return `<div id="${id}" class="aim-echart" role="img" aria-label="${Store.escapeHtml(chartKey)}"${style}></div>`;
   }
 
   function analyticsChartElementId(chartKey) {
@@ -3034,8 +3131,9 @@
   }
 
   root.addEventListener('keydown', event => {
-    if (event.key === 'Escape' && ui.formDesignConfirm) {
+    if (event.key === 'Escape' && (ui.formDesignConfirm || ui.analyticsAiConfirm)) {
       ui.formDesignConfirm = null;
+      ui.analyticsAiConfirm = null;
       render();
       return;
     }
@@ -3048,6 +3146,7 @@
   window.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
     if (ui.formDesignConfirm) ui.formDesignConfirm = null;
+    else if (ui.analyticsAiConfirm) ui.analyticsAiConfirm = null;
     else if (ui.hardDeleteConfirm) ui.hardDeleteConfirm = null;
     else if (ui.cardPicker) ui.cardPicker = null;
     else return;
@@ -3167,11 +3266,18 @@
     if (action === 'quick-save-next') await saveQuickRecord();
     if (action === 'export-filtered' && canExport()) exportCsv(filteredRecords(selectedActivity(), ui.records.scope), selectedActivity(), 'filtered');
     if (action === 'analytics-ai-preset' && canUseAnalytics()) {
-      setAnalyticsAiQuestion(el.dataset.question || '');
-      await submitAnalyticsAiQuestion();
+      await submitAnalyticsAiQuestion({ question: el.dataset.question || '' });
     }
     if (action === 'analytics-ai-ask' && canUseAnalytics()) {
       await submitAnalyticsAiQuestion();
+    }
+    if (action === 'cancel-analytics-ai-confirm' && canUseAnalytics()) {
+      ui.analyticsAiConfirm = null;
+    }
+    if (action === 'confirm-analytics-ai-replace' && canUseAnalytics()) {
+      const question = ui.analyticsAiConfirm && ui.analyticsAiConfirm.question;
+      ui.analyticsAiConfirm = null;
+      await submitAnalyticsAiQuestion({ question, confirmed: true });
     }
     if (action === 'analytics-chart-view' && canUseAnalytics()) {
       const chartKey = el.dataset.chartKey || '';
@@ -4368,11 +4474,14 @@
 
   function analyticsMetrics(activity, records) {
     const coverages = records.map(r => recordCoverage(r, activity).answered);
+    const low = records.filter(r => recordCoverage(r, activity).answered <= 1).length;
     return {
       total: records.length,
       today: records.filter(r => r.createdAt.slice(0, 10) === Store.CURRENT_DATE).length,
       recorders: unique(records.map(r => r.createdByUserId)).length,
-      low: records.filter(r => recordCoverage(r, activity).answered <= 1).length,
+      complete: records.length ? records.length - low : 0,
+      completeRate: records.length ? formatAnalyticsPercent(((records.length - low) / records.length) * 100) : '0%',
+      low,
       avg: coverages.length ? (coverages.reduce((a, b) => a + b, 0) / coverages.length).toFixed(1) : '0.0'
     };
   }
