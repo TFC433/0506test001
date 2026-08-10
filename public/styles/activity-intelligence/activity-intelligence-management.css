@@ -4109,17 +4109,145 @@ a:focus-visible {
     margin-top: 0;
   }
 
-  .aim-form-thumbnail-visual {
-    aspect-ratio: 5 / 1;
+  .aim-record-card {
+    border-radius: 8px;
   }
 
   .aim-record-card-summary {
-    grid-template-columns: minmax(0, 1fr);
+    position: relative;
+    grid-template-columns: minmax(0, 1fr) 72px;
+    gap: 8px;
+    min-height: 132px;
+    padding: 10px;
+  }
+
+  .aim-record-card-copy {
+    display: grid;
+    min-width: 0;
+    gap: 7px;
+    padding-right: 0;
+  }
+
+  .aim-record-card-meta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr);
+    gap: 2px 8px;
+    padding-right: 58px;
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  .aim-record-card-meta span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+
+  .aim-record-card-time {
+    grid-column: 1 / -1;
+  }
+
+  .aim-record-card-completeness {
+    grid-column: 1 / -1;
+    margin-top: 1px;
+  }
+
+  .aim-record-card-completeness-label {
+    font-size: 11px;
+  }
+
+  .aim-record-card-completeness-bar {
+    width: 42px;
+  }
+
+  .aim-record-card-identity-row {
+    margin-top: 0;
+  }
+
+  .aim-record-card-primary {
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+    gap: 2px 5px;
+    align-items: baseline;
+  }
+
+  .aim-record-card-primary strong,
+  .aim-record-card-job-title,
+  .aim-record-card-company {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+
+  .aim-record-card-primary strong {
+    font-size: 15px;
+    line-height: 1.35;
+  }
+
+  .aim-record-card-job-title {
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .aim-record-card-company {
+    grid-column: 1 / -1;
+    max-width: calc(100vw - 132px);
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .aim-record-card-company::before {
+    content: none;
+  }
+
+  .aim-record-card-status-group,
+  .aim-preview-sep,
+  .aim-record-preview-content {
+    display: none;
   }
 
   .aim-record-card-right-rail {
-    align-items: flex-start;
-    margin-top: 8px;
+    grid-column: 2;
+    grid-row: 1;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    align-items: stretch;
+    justify-items: end;
+    gap: 8px;
+    margin-top: 0;
+  }
+
+  .aim-record-actions {
+    justify-content: flex-end;
+    gap: 4px;
+  }
+
+  .aim-record-actions .aim-button {
+    min-height: 28px;
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+
+  .aim-record-card-biz-slot {
+    align-self: end;
+    width: 72px;
+    height: 46px;
+    min-width: 72px;
+    max-width: 72px;
+    padding: 2px;
+    font-size: 10px;
+  }
+
+  .aim-record-card-biz-slot .aim-raw-card-thumb-thumb {
+    width: 66px;
+    height: 42px;
+  }
+
+  .aim-form-thumbnail-visual {
+    aspect-ratio: 5 / 1;
   }
 
   .aim-card-picker-dialog {

@@ -506,6 +506,7 @@
     if (!currentUser || !currentUser.authenticated) return '';
     const scope = ui.tab === 'records' ? ui.records.scope : '';
     const showSearch = ui.tab === 'records' && ['mine', 'all'].includes(ui.records.scope);
+    const counts = mobileRecordScopeCounts();
     const tabButton = (value, label) => `
       <button class="aim-mobile-tab" type="button" data-action="mobile-record-scope" data-scope="${value}" aria-pressed="${scope === value}">
         ${Store.escapeHtml(label)}
@@ -519,14 +520,24 @@
         </a>
         <nav class="aim-mobile-tabs" aria-label="表單行動分頁">
           ${tabButton('entry', '新增紀錄')}
-          ${tabButton('mine', '我的紀錄')}
-          ${tabButton('all', '全部紀錄')}
+          ${tabButton('mine', `我的紀錄(${counts.mine})`)}
+          ${tabButton('all', `全部紀錄(${counts.all})`)}
         </nav>
         ${showSearch ? `<div class="aim-mobile-search">
           <input class="aim-input" id="aim-mobile-record-q" value="${Store.escapeHtml(ui.records.q)}" placeholder="搜尋紀錄" aria-label="搜尋紀錄">
         </div>` : ''}
       </section>
     `;
+  }
+
+  function mobileRecordScopeCounts() {
+    const activity = selectedActivity();
+    if (!activity || !currentUser || !currentUser.authenticated) return { mine: 0, all: 0 };
+    const rows = recordsFor(activity.id).filter(record => record.status !== 'void');
+    return {
+      mine: rows.filter(record => record.createdByUserId === currentUser.userId).length,
+      all: rows.length
+    };
   }
 
   function renderPreAuthGate(options = {}) {
@@ -1052,9 +1063,9 @@
     const barColor = pct >= 70 ? '#15803d' : pct >= 40 ? '#b45309' : '#b42318';
     const completenessHtml = `<span class="aim-record-card-completeness" title="欄位完整度 ${answered}/${total}"><span class="aim-record-card-completeness-label">完整度</span><span class="aim-record-card-completeness-count">${answered}/${total}</span><span class="aim-record-card-completeness-bar" style="--bar-w:${barWidth}px;--bar-color:${barColor}" aria-hidden="true"></span></span>`;
     return `<div class="aim-record-card-meta">
-      <span>${Store.escapeHtml(activity.name)}</span>
-      <span>${Store.escapeHtml(record.createdByDisplayName)}</span>
-      <span>${Store.formatDateTime(record.createdAt)}</span>
+      <span class="aim-record-card-activity">${Store.escapeHtml(activity.name)}</span>
+      <span class="aim-record-card-recorder">${Store.escapeHtml(record.createdByDisplayName)}</span>
+      <span class="aim-record-card-time">${Store.formatDateTime(record.createdAt)}</span>
       ${record.status === 'void' ? '<span class="aim-pill aim-pill-void">已作廢</span>' : ''}
       ${completenessHtml}
     </div>`;
