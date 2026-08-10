@@ -50,6 +50,10 @@ function isLocalDevelopment() {
     return location.hostname === 'localhost' || location.hostname === '127.0.0.1';
 }
 
+function isMobileBrowser() {
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
+}
+
 function localManualLoginEnabled() {
     try {
         return isLocalDevelopment() && sessionStorage.getItem(LOCAL_LINE_LEAD_MANUAL_LOGIN_KEY) === '1';
@@ -88,6 +92,12 @@ function clearStaleLiffLoginAttempt() {
 }
 
 function liffBridgeLoginUrl() {
+    if (isMobileBrowser()) {
+        const bridgeUrl = new URL('/liff/', window.location.origin);
+        bridgeUrl.searchParams.set('product', 'ocr');
+        return bridgeUrl.toString();
+    }
+
     const liffId = typeof LIFF_ID !== 'undefined' ? LIFF_ID : window.LIFF_ID;
     if (liffId) {
         const liffUrl = new URL(`https://liff.line.me/${encodeURIComponent(liffId)}/`);
