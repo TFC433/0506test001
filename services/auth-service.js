@@ -12,6 +12,22 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const config = require('../config');
 
+const LINE_ID_TOKEN_EXPIRED_CODE = 'LINE_ID_TOKEN_EXPIRED';
+
+function isExpiredLineIdTokenError(rawError) {
+    if (!rawError || typeof rawError !== 'string') return false;
+
+    try {
+        const parsed = JSON.parse(rawError);
+        return parsed
+            && parsed.error === 'invalid_request'
+            && typeof parsed.error_description === 'string'
+            && parsed.error_description.trim().toLowerCase() === 'idtoken expired.';
+    } catch (_) {
+        return false;
+    }
+}
+
 class AuthService {
     /**
      * @param {SystemReader} systemReader - 負責讀取使用者資料
@@ -55,6 +71,9 @@ class AuthService {
             if (!response.ok) {
                 const errText = await response.text();
                 console.error('[AuthService] LINE Verify Failed:', errText);
+                if (isExpiredLineIdTokenError(errText)) {
+                    return { errorCode: LINE_ID_TOKEN_EXPIRED_CODE };
+                }
                 return null;
             }
 
@@ -256,5 +275,8 @@ class AuthService {
         }
     }
 }
+
+AuthService.LINE_ID_TOKEN_EXPIRED_CODE = LINE_ID_TOKEN_EXPIRED_CODE;
+AuthService.isExpiredLineIdTokenError = isExpiredLineIdTokenError;
 
 module.exports = AuthService;

@@ -6,6 +6,7 @@
   const LOCAL_ROLE_HEADER = 'x-activity-intelligence-local-role';
   const LIFF_RETURN_TARGET_KEY = 'tfc_liff_return_target';
   const LIFF_LOGIN_ATTEMPT_KEY = 'tfc-liff-bridge-login-attempt';
+  const LIFF_EXPIRED_TOKEN_RECOVERY_KEY = 'tfc-liff-expired-token-recovery';
   const ALLOWED_ROLES = new Set(['super_admin', 'admin', 'recorder']);
 
   let currentSession = null;
@@ -96,8 +97,9 @@
   function clearStaleLiffLoginAttempt() {
     try {
       sessionStorage.removeItem(LIFF_LOGIN_ATTEMPT_KEY);
+      sessionStorage.removeItem(LIFF_EXPIRED_TOKEN_RECOVERY_KEY);
     } catch (_) {
-      // The LIFF login attempt marker is non-auth loop-prevention state.
+      // LIFF auth markers are non-auth loop-prevention state.
     }
   }
 

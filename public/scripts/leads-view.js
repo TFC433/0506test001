@@ -29,6 +29,7 @@ let lastLineLeadDeniedUserId = null;
 const LOCAL_LINE_LEAD_MANUAL_LOGIN_KEY = 'line-lead-local-manual-login';
 const LIFF_RETURN_TARGET_KEY = 'tfc_liff_return_target';
 const LIFF_LOGIN_ATTEMPT_KEY = 'tfc-liff-bridge-login-attempt';
+const LIFF_EXPIRED_TOKEN_RECOVERY_KEY = 'tfc-liff-expired-token-recovery';
 const ocrAuthCopy = Object.freeze({
     product: '名片管理',
     message: '請先使用 LINE 登入後繼續',
@@ -71,8 +72,9 @@ function storeLiffReturnTarget() {
 function clearStaleLiffLoginAttempt() {
     try {
         sessionStorage.removeItem(LIFF_LOGIN_ATTEMPT_KEY);
+        sessionStorage.removeItem(LIFF_EXPIRED_TOKEN_RECOVERY_KEY);
     } catch (_) {
-        // The LIFF login attempt marker is non-auth loop-prevention state.
+        // LIFF auth markers are non-auth loop-prevention state.
     }
 }
 

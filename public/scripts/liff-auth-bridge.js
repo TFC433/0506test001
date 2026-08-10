@@ -19,6 +19,8 @@
   });
   const RETURN_TARGET_KEY = 'tfc_liff_return_target';
   const LOGIN_ATTEMPT_KEY = 'tfc-liff-bridge-login-attempt';
+  const EXPIRED_TOKEN_RECOVERY_KEY = 'tfc-liff-expired-token-recovery';
+  const LINE_ID_TOKEN_EXPIRED_CODE = 'LINE_ID_TOKEN_EXPIRED';
   const COPY_DEFAULT_TEXT = '複製 User ID';
 
   let activeReturnKey = '';
@@ -175,6 +177,31 @@
     }
   }
 
+  function clearExpiredTokenRecovery() {
+    try {
+      sessionStorage.removeItem(EXPIRED_TOKEN_RECOVERY_KEY);
+    } catch (_) {
+      // Session storage is only used to prevent repeated expired-token recovery.
+    }
+  }
+
+  function expiredTokenRecoveryAttempted(returnKey) {
+    try {
+      return sessionStorage.getItem(EXPIRED_TOKEN_RECOVERY_KEY) === returnKey;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function markExpiredTokenRecovery(returnKey) {
+    try {
+      sessionStorage.setItem(EXPIRED_TOKEN_RECOVERY_KEY, returnKey);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   function clearReturnTarget() {
     try {
       sessionStorage.removeItem(RETURN_TARGET_KEY);
@@ -185,20 +212,48 @@
 
   function invalidEntry() {
     clearAttempt();
+    clearExpiredTokenRecovery();
     clearReturnTarget();
     renderState('invalid');
   }
 
   function failAuthentication() {
     clearAttempt();
+    clearExpiredTokenRecovery();
     clearReturnTarget();
     renderState('failed');
   }
 
   function forbidden(userId) {
     clearAttempt();
+    clearExpiredTokenRecovery();
     clearReturnTarget();
     renderState('forbidden', { userId });
+  }
+
+  function recoverExpiredLineIdToken() {
+    if (expiredTokenRecoveryAttempted(activeReturnKey) || !markExpiredTokenRecovery(activeReturnKey)) {
+      failAuthentication();
+      return;
+    }
+
+    clearAttempt();
+    persistReturnTarget(activeReturnKey);
+    try {
+      sessionStorage.setItem(LOGIN_ATTEMPT_KEY, activeReturnKey);
+    } catch (_) {
+      // The expired-token recovery marker remains the primary one-shot guard.
+    }
+
+    try {
+      if (typeof liff.logout === 'function' && liff.isLoggedIn()) {
+        liff.logout();
+      }
+    } catch (_) {
+      // Continue to LINE login; any login failure is handled by the normal terminal path.
+    }
+
+    liff.login({ redirectUri: canonicalBridgeUrl(activeReturnKey) });
   }
 
   async function copyUserId() {
@@ -315,8 +370,14 @@
 
       const created = await postLineSession(idToken);
       if (created.response.ok && created.body.success) {
+        clearExpiredTokenRecovery();
         clearReturnTarget();
         window.location.replace(target);
+        return;
+      }
+
+      if (created.response.status === 401 && created.body && created.body.code === LINE_ID_TOKEN_EXPIRED_CODE) {
+        recoverExpiredLineIdToken();
         return;
       }
 

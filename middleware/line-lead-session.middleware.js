@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const config = require('../config');
 
 const lineLeadConfig = config.LINE_LEAD;
+const LINE_ID_TOKEN_EXPIRED_CODE = 'LINE_ID_TOKEN_EXPIRED';
 
 function parseCookies(cookieHeader) {
     const cookies = {};
@@ -245,6 +246,15 @@ function sendUnauthorized(res) {
     });
 }
 
+function sendLineIdTokenExpired(res) {
+    return res.status(401).json({
+        success: false,
+        authenticated: false,
+        message: 'Unauthorized',
+        code: LINE_ID_TOKEN_EXPIRED_CODE
+    });
+}
+
 function sendForbidden(req, res, userId) {
     clearLineLeadSessionCookie(req, res);
     return res.status(403).json({
@@ -366,6 +376,9 @@ async function createLineLeadSession(req, res) {
     }
 
     const verifiedLineUser = await authService.verifyLineIdToken(bearerToken);
+    if (verifiedLineUser && verifiedLineUser.errorCode === LINE_ID_TOKEN_EXPIRED_CODE) {
+        return sendLineIdTokenExpired(res);
+    }
     const lineUser = normalizeVerifiedLineUser(verifiedLineUser);
     if (!lineUser) {
         return sendUnauthorized(res);
