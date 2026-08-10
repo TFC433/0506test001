@@ -289,7 +289,7 @@ function renderOcrAuthGate(state = 'login', userId = '') {
     return `
         <main class="ocr-auth-panel" aria-live="${isVerifying ? 'polite' : 'off'}">
             <div class="ocr-auth-main">
-                <img src="/images/portal/ocr.webp" alt="FANUC card OCR" class="ocr-auth-logo">
+                <img src="/images/portal/ocr.png" alt="FANUC card OCR" class="ocr-auth-logo">
                 <h1>${ocrAuthCopy.product}</h1>
                 ${messageMarkup}
                 ${deniedUser}
