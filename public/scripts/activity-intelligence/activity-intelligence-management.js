@@ -51,6 +51,7 @@
     forbidden: '此 LINE 帳號尚未開通使用權限。'
   });
   const FORM_AUTH_STATE_CLASS = 'aim-auth-state';
+  const mobileFormMediaQuery = '(max-width: 640px)';
   const thumbnailFitOptions = new Set(['cover', 'contain']);
 
   let state = { activities: [], records: [], selectedActivityId: null };
@@ -369,6 +370,23 @@
 
   function applyRoleLanding() {
     if (!currentUser || !currentUser.authenticated) return;
+    if (isMobileFormViewport()) {
+      const open = openActivities();
+      ui.tab = 'records';
+      ui.records.scope = 'entry';
+      ui.quickAnswers = {};
+      if (open.length === 1) {
+        ui.selectedActivityId = open[0].id;
+        ui.view = 'workspace';
+      } else if (open.length > 1) {
+        if (!open.some(activity => activity.id === ui.selectedActivityId)) ui.selectedActivityId = open[0].id;
+        ui.view = 'workspace';
+      } else {
+        ui.view = 'noOpenActivity';
+      }
+      state.selectedActivityId = ui.selectedActivityId || null;
+      return;
+    }
     if (isRecorder()) {
       const open = openActivities();
       ui.tab = 'records';
@@ -384,6 +402,12 @@
     }
     ui.view = 'overview';
     ui.tab = 'overview';
+  }
+
+  function isMobileFormViewport() {
+    return typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia(mobileFormMediaQuery).matches;
   }
 
   function isRecorder() {
@@ -837,7 +861,7 @@
     ui.drawer = null;
     ui.dialog = null;
     ui.cardPicker = null;
-    if (isRecorder()) {
+    if (isMobileFormViewport() || isRecorder()) {
       applyRoleLanding();
       return;
     }

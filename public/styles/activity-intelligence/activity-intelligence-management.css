@@ -3896,6 +3896,7 @@ a:focus-visible {
     height: 66px;
     padding: 0 14px;
     gap: 10px;
+    justify-content: space-between;
     background: var(--aim-form-sidebar);
     border-bottom-color: rgba(255, 255, 255, 0.1);
     box-shadow: 0 6px 18px rgba(53, 23, 20, 0.18);
@@ -3903,7 +3904,7 @@ a:focus-visible {
 
   .aim-mobile-brand {
     min-width: 0;
-    flex: 0 0 auto;
+    flex: 0 1 112px;
     display: inline-flex;
     align-items: center;
     padding: 0;
@@ -3925,21 +3926,22 @@ a:focus-visible {
   }
 
   .aim-topbar-actions {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     justify-content: flex-end;
     gap: 8px;
     min-width: 0;
   }
 
   .aim-account-area {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     gap: 7px;
     min-width: 0;
+    margin-left: auto;
   }
 
   .aim-user {
-    flex: 1 1 auto;
-    max-width: none;
+    flex: 0 1 auto;
+    max-width: min(54vw, 240px);
     gap: 7px;
     min-width: 0;
   }
