@@ -52,8 +52,8 @@
   });
   const analyticsAiDefaultPresets = Object.freeze([
     '分析目前表單紀錄的主要趨勢',
-    '找出值得管理者優先關注的訊號',
-    '摘要填答內容中的常見需求'
+    '找出表單中值得優先關注的訊號',
+    '提出下一步追蹤與行動建議'
   ]);
   const FORM_AUTH_STATE_CLASS = 'aim-auth-state';
   const mobileFormMediaQuery = '(max-width: 640px)';
@@ -2467,10 +2467,10 @@
     const ai = ui.analytics.ai || defaultAnalyticsState().ai;
     const loading = ai.state === 'loading';
     return `
-      <section class="aim-panel aim-desktop-only aim-analytics-ai-panel" aria-label="FANUC forms AI 分析助手">
+      <section class="aim-panel aim-desktop-only aim-analytics-ai-panel" aria-label="FANUC forms 分析助手">
         <div class="aim-analytics-ai-head">
           <div>
-            <h2>FANUC forms AI 分析助手</h2>
+            <h2>FANUC forms 分析助手</h2>
           </div>
         </div>
         <div class="aim-analytics-ai-layout">
@@ -2484,10 +2484,10 @@
             <div class="aim-ai-block">
               <label class="aim-field" for="aim-analytics-ai-question">
                 <span>自訂問題</span>
-                <textarea class="aim-textarea aim-auto-grow" id="aim-analytics-ai-question" rows="2" placeholder="輸入想分析目前表單資料的問題" ${loading ? 'disabled' : ''}>${Store.escapeHtml(ai.question || '')}</textarea>
+                <textarea class="aim-textarea aim-auto-grow" id="aim-analytics-ai-question" rows="2" placeholder="輸入想從目前表單資料中了解的問題" ${loading ? 'disabled' : ''}>${Store.escapeHtml(ai.question || '')}</textarea>
               </label>
               ${ai.inputError ? `<p class="aim-field-error">${Store.escapeHtml(ai.inputError)}</p>` : ''}
-              <button class="aim-button aim-button-primary aim-ai-ask-button" data-action="analytics-ai-ask" type="button" ${loading ? 'disabled' : ''}>${loading ? '分析中' : '送出分析'}</button>
+              <button class="aim-button aim-button-primary aim-ai-ask-button" data-action="analytics-ai-ask" type="button" ${loading ? 'disabled' : ''}>${loading ? '分析中' : '送出詢問'}</button>
             </div>
             ${isSuperAdmin() ? renderAnalyticsAiCrmToggle(ai) : ''}
           </div>
