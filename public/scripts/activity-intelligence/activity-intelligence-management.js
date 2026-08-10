@@ -58,6 +58,7 @@
   const FORM_AUTH_STATE_CLASS = 'aim-auth-state';
   const mobileFormMediaQuery = '(max-width: 640px)';
   const thumbnailFitOptions = new Set(['cover', 'contain']);
+  const visitorCountFieldTitle = '同行人數';
 
   let state = { activities: [], records: [], selectedActivityId: null };
   let currentUser = null;
@@ -2455,9 +2456,12 @@
   function renderAnalytics(activity) {
     const records = analyticsRecords(activity);
     const metrics = analyticsMetrics(activity, records);
+    const visitorKpi = metrics.visitorCount !== null
+      ? `<div class="aim-kpi"><span>參觀人數</span><strong>${metrics.visitorCount}</strong></div>`
+      : '';
     return `
       ${!isMobileFormViewport() ? renderAnalyticsAiPanel(activity, records) : ''}
-      <div class="aim-kpi-grid aim-analytics-kpi-row"><div class="aim-kpi"><span>有效紀錄</span><strong>${metrics.total}</strong></div><div class="aim-kpi"><span>今日新增</span><strong>${metrics.today}</strong></div><div class="aim-kpi"><span>紀錄者數</span><strong>${metrics.recorders}</strong></div><div class="aim-kpi"><span>完整率</span><strong>${metrics.completeRate}</strong><small>完整 ${metrics.complete} 筆 · 低完整度 ${metrics.low} 筆 · 平均 ${metrics.avg} 欄</small></div></div>
+      <div class="aim-kpi-grid aim-analytics-kpi-row"><div class="aim-kpi"><span>有效紀錄</span><strong>${metrics.total}</strong></div>${visitorKpi}<div class="aim-kpi"><span>今日新增</span><strong>${metrics.today}</strong></div><div class="aim-kpi"><span>紀錄者數</span><strong>${metrics.recorders}</strong></div><div class="aim-kpi"><span>完整率</span><strong>${metrics.completeRate}</strong><small>完整 ${metrics.complete} 筆 · 低完整度 ${metrics.low} 筆 · 平均 ${metrics.avg} 欄</small></div></div>
       <div class="aim-chart-grid">${renderActivityTrendChart(records)}${recorderDistributionChart(records)}${choiceCharts(activity, records)}${numberCharts(activity, records)}</div>
     `;
   }
@@ -2984,6 +2988,7 @@
         type: 'value',
         min: 0,
         max: percentage ? 100 : undefined,
+        minInterval: percentage ? undefined : 1,
         axisLabel: {
           formatter: value => percentage ? `${Number(value).toFixed(0)}%` : Number(value).toFixed(0),
           color: styles.muted
@@ -3157,6 +3162,7 @@
       type: 'value',
       min: 0,
       max: percentage ? 100 : undefined,
+      minInterval: percentage ? undefined : 1,
       axisLabel: {
         color: styles.muted,
         formatter: value => percentage ? `${Number(value).toFixed(0)}%` : Number(value).toFixed(0)
@@ -3256,11 +3262,10 @@
     const end = (activity && activity.formOpenEnd) || recordDates[recordDates.length - 1] || '';
     if (!start || !end || end < start) return [];
     const dates = [];
-    const current = new Date(`${start}T00:00:00`);
-    const limit = new Date(`${end}T00:00:00`);
-    while (current <= limit && dates.length < 370) {
-      dates.push(current.toISOString().slice(0, 10));
-      current.setDate(current.getDate() + 1);
+    let current = start;
+    while (current <= end && dates.length < 370) {
+      dates.push(current);
+      current = shiftLocalDate(current, 1);
     }
     return dates;
   }
@@ -4743,8 +4748,10 @@
   function analyticsMetrics(activity, records) {
     const coverages = records.map(r => recordCoverage(r, activity).answered);
     const low = records.filter(r => recordCoverage(r, activity).answered <= 1).length;
+    const visitorField = currentVisitorCountField(activity);
     return {
       total: records.length,
+      visitorCount: visitorField ? visitorCountTotal(records, visitorField) : null,
       today: records.filter(r => r.createdAt.slice(0, 10) === Store.CURRENT_DATE).length,
       recorders: unique(records.map(r => r.createdByUserId)).length,
       complete: records.length ? records.length - low : 0,
@@ -4752,6 +4759,28 @@
       low,
       avg: coverages.length ? (coverages.reduce((a, b) => a + b, 0) / coverages.length).toFixed(1) : '0.0'
     };
+  }
+
+  function currentVisitorCountField(activity) {
+    return publishedRecordItems(activity).find(field => field.type === 'number' && field.title === visitorCountFieldTitle) || null;
+  }
+
+  function visitorCountTotal(records, field) {
+    return records.reduce((sum, record) => {
+      const value = visitorNumberValue(record && record.answers && record.answers[field.fieldId]);
+      return value === null ? sum : sum + value;
+    }, 0);
+  }
+
+  function visitorNumberValue(value) {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      const number = Number(trimmed);
+      return Number.isFinite(number) ? number : null;
+    }
+    return null;
   }
 
   function openDuplicate(activityId) {
