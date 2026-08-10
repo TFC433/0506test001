@@ -1040,10 +1040,11 @@ textarea.form-input {
         flex: 0 1 auto;
         display: inline-flex;
         align-items: center;
-        padding: 4px 8px;
-        border-radius: 8px;
-        background: rgba(255, 255, 255, 0.94);
-        border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 0;
+        border-radius: 0;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
     }
 
     .logo-img {
@@ -1061,11 +1062,13 @@ textarea.form-input {
         flex: 1 1 auto;
         gap: 7px;
         max-width: calc(100% - 126px);
-        min-height: 42px;
-        padding: 4px 5px 4px 7px;
-        border-radius: 12px;
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        min-height: 34px;
+        padding: 0;
+        border-radius: 0;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        backdrop-filter: none;
         color: var(--ocr-sidebar-text);
     }
 
@@ -1097,8 +1100,8 @@ textarea.form-input {
     #header-logout-btn {
         min-height: 30px;
         padding: 0 9px;
-        border-color: rgba(255, 255, 255, 0.38);
-        background: rgba(255, 255, 255, 0.92);
+        border-color: rgba(255, 255, 255, 0.22);
+        background: rgba(255, 255, 255, 0.9);
         color: var(--ocr-sidebar);
         font-size: 12px;
     }
