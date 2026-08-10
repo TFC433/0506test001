@@ -151,7 +151,9 @@
         submittedQuestion: '',
         state: 'idle',
         crmContextEnabled: false,
-        inputError: ''
+        inputError: '',
+        answer: '',
+        error: ''
       },
       chartViews: {}
     };
@@ -2416,6 +2418,7 @@
   function renderAnalyticsAiPanel(activity, records) {
     const presets = resolvedAnalyticsAiPresets();
     const ai = ui.analytics.ai || defaultAnalyticsState().ai;
+    const loading = ai.state === 'loading';
     return `
       <section class="aim-panel aim-desktop-only aim-analytics-ai-panel" aria-label="FANUC forms AI 分析助手">
         <div class="aim-analytics-ai-head">
@@ -2428,16 +2431,16 @@
             <div class="aim-ai-block">
               <h3>快速問題</h3>
               <div class="aim-ai-preset-list">
-                ${presets.map(question => `<button class="aim-ai-preset-button" data-action="analytics-ai-preset" data-question="${Store.escapeHtml(question)}" type="button" aria-pressed="${ai.submittedQuestion === question}">${Store.escapeHtml(question)}</button>`).join('') || '<div class="aim-empty">尚未設定快速問題。</div>'}
+                ${presets.map(question => `<button class="aim-ai-preset-button" data-action="analytics-ai-preset" data-question="${Store.escapeHtml(question)}" type="button" aria-pressed="${ai.submittedQuestion === question}" ${loading ? 'disabled' : ''}>${Store.escapeHtml(question)}</button>`).join('') || '<div class="aim-empty">尚未設定快速問題。</div>'}
               </div>
             </div>
             <div class="aim-ai-block">
               <label class="aim-field" for="aim-analytics-ai-question">
                 <span>自訂問題</span>
-                <textarea class="aim-textarea aim-auto-grow" id="aim-analytics-ai-question" rows="2" placeholder="輸入想從目前篩選資料中理解的問題">${Store.escapeHtml(ai.question || '')}</textarea>
+                <textarea class="aim-textarea aim-auto-grow" id="aim-analytics-ai-question" rows="2" placeholder="輸入想從目前篩選資料中理解的問題" ${loading ? 'disabled' : ''}>${Store.escapeHtml(ai.question || '')}</textarea>
               </label>
               ${ai.inputError ? `<p class="aim-field-error">${Store.escapeHtml(ai.inputError)}</p>` : ''}
-              <button class="aim-button aim-button-primary aim-ai-ask-button" data-action="analytics-ai-ask" type="button">詢問 AI</button>
+              <button class="aim-button aim-button-primary aim-ai-ask-button" data-action="analytics-ai-ask" type="button" ${loading ? 'disabled' : ''}>${loading ? '分析中' : '詢問 AI'}</button>
             </div>
             ${isSuperAdmin() ? renderAnalyticsAiCrmToggle(ai) : ''}
           </div>
@@ -2461,6 +2464,42 @@
 
   function renderAnalyticsAiResult(activity, records) {
     const ai = ui.analytics.ai || defaultAnalyticsState().ai;
+    if (ai.state === 'loading') {
+      return `
+        <div class="aim-ai-result-surface aim-ai-result-ready" aria-busy="true">
+          <span>正在分析</span>
+          <h3>${Store.escapeHtml(ai.submittedQuestion || ai.question || '目前表單資料')}</h3>
+          <p>正在分析目前表單資料，請稍候。</p>
+          ${ai.answer ? `<div class="aim-ai-answer-placeholder"><strong>上一個結果</strong>${renderSafeAiAnswer(ai.answer)}</div>` : ''}
+        </div>
+      `;
+    }
+    if (ai.state === 'error') {
+      return `
+        <div class="aim-ai-result-surface aim-ai-result-ready">
+          <span>分析未完成</span>
+          <h3>${Store.escapeHtml(ai.submittedQuestion || ai.question || '分析問題')}</h3>
+          <p class="aim-field-error">${Store.escapeHtml(ai.error || '分析暫時無法完成，請稍後再試。')}</p>
+          ${ai.answer ? `<div class="aim-ai-answer-placeholder"><strong>上一個成功結果</strong>${renderSafeAiAnswer(ai.answer)}</div>` : ''}
+        </div>
+      `;
+    }
+    if (ai.state === 'complete' && ai.answer) {
+      const crmState = isSuperAdmin() && ai.crmContextEnabled
+        ? '<p class="aim-ai-compact-note">CRM 關聯：尚未納入本次分析</p>'
+        : '';
+      return `
+        <div class="aim-ai-result-surface aim-ai-result-ready">
+          <span>分析完成</span>
+          <h3>${Store.escapeHtml(ai.submittedQuestion)}</h3>
+          ${crmState}
+          <div class="aim-ai-answer-placeholder">
+            <strong>分析結果</strong>
+            ${renderSafeAiAnswer(ai.answer)}
+          </div>
+        </div>
+      `;
+    }
     if (!ai.submittedQuestion) {
       return `
         <div class="aim-ai-result-surface aim-ai-result-idle">
@@ -2470,44 +2509,66 @@
         </div>
       `;
     }
-    const crmState = isSuperAdmin() && ai.crmContextEnabled
-      ? '<p class="aim-ai-compact-note">CRM 關聯：ON</p>'
-      : '';
     return `
       <div class="aim-ai-result-surface aim-ai-result-ready">
         <span>已準備分析</span>
         <h3>${Store.escapeHtml(ai.submittedQuestion)}</h3>
-        <dl class="aim-definition-list">
-          <dt>活動</dt><dd>${Store.escapeHtml(activity.name)}</dd>
-          <dt>目前筆數</dt><dd>${records.length}</dd>
-        </dl>
-        ${crmState}
         <div class="aim-ai-answer-placeholder">
           <strong>AI 回覆區</strong>
-          <p>正式服務尚未啟用。新問題會取代目前結果。</p>
+          <p>送出問題後會顯示分析結果。</p>
         </div>
       </div>
     `;
+  }
+
+  function renderSafeAiAnswer(answer) {
+    return `<div class="aim-ai-answer-text">${Store.escapeHtml(answer || '')}</div>`;
   }
 
   function setAnalyticsAiQuestion(question) {
     const value = String(question || '').trim();
     if (!value) return;
     ui.analytics.ai.question = value;
-    ui.analytics.ai.submittedQuestion = value;
-    ui.analytics.ai.state = 'ready';
     ui.analytics.ai.inputError = '';
+    ui.analytics.ai.error = '';
   }
 
-  function submitAnalyticsAiQuestion() {
+  async function submitAnalyticsAiQuestion() {
+    const activity = selectedActivity();
     const value = String(ui.analytics.ai.question || '').trim();
+    if (ui.analytics.ai.state === 'loading') return;
     if (!value) {
       ui.analytics.ai.inputError = '請先輸入要分析的問題。';
       return;
     }
+    if (!activity) {
+      ui.analytics.ai.inputError = '請先選擇活動。';
+      return;
+    }
     ui.analytics.ai.submittedQuestion = value;
-    ui.analytics.ai.state = 'ready';
+    ui.analytics.ai.state = 'loading';
     ui.analytics.ai.inputError = '';
+    ui.analytics.ai.error = '';
+    render();
+    try {
+      const result = await window.ActivityIntelligenceApi.analyzeActivity(activity.id, {
+        question: value,
+        filters: {
+          start: ui.analytics.start || '',
+          end: ui.analytics.end || '',
+          recorder: ui.analytics.recorder || 'all'
+        }
+      });
+      if (!result || result.completed !== true || !String(result.answer || '').trim()) {
+        throw new Error('分析服務沒有回傳有效內容。');
+      }
+      ui.analytics.ai.answer = String(result.answer).trim();
+      ui.analytics.ai.state = 'complete';
+      ui.analytics.ai.error = '';
+    } catch (error) {
+      ui.analytics.ai.state = 'error';
+      ui.analytics.ai.error = error.message || '分析暫時無法完成，請稍後再試。';
+    }
   }
 
   function renderTrend(records) {
@@ -3107,9 +3168,10 @@
     if (action === 'export-filtered' && canExport()) exportCsv(filteredRecords(selectedActivity(), ui.records.scope), selectedActivity(), 'filtered');
     if (action === 'analytics-ai-preset' && canUseAnalytics()) {
       setAnalyticsAiQuestion(el.dataset.question || '');
+      await submitAnalyticsAiQuestion();
     }
     if (action === 'analytics-ai-ask' && canUseAnalytics()) {
-      submitAnalyticsAiQuestion();
+      await submitAnalyticsAiQuestion();
     }
     if (action === 'analytics-chart-view' && canUseAnalytics()) {
       const chartKey = el.dataset.chartKey || '';

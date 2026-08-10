@@ -102,6 +102,7 @@ router.post(
     }),
     (req, res, next) => getController(req).uploadMedia(req, res, next)
 );
+router.post('/activities/:activityId/ai-analysis', requireRole(ADMIN_ROLES), (req, res, next) => getController(req).analyzeActivity(req, res, next));
 
 router.get('/activities/:activityId/submissions', requireRole(SUBMISSION_ROLES), scopeSubmissionList, (req, res, next) => getController(req).listSubmissions(req, res, next));
 router.post('/activities/:activityId/submissions', requireRole(SUBMISSION_ROLES), (req, res, next) => getController(req).createSubmission(req, res, next));

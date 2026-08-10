@@ -1,4 +1,6 @@
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 
 const ActivityIntelligenceService = require('../services/activity-intelligence-service');
 const ActivityIntelligenceController = require('../controllers/activity-intelligence.controller');
@@ -16,18 +18,23 @@ const IDS = {
     choiceKey: '33333333-3333-4333-8333-333333333334',
     cardKey: '33333333-3333-4333-8333-333333333335',
     oldTextKey: '33333333-3333-4333-8333-333333333336',
+    longKey: '33333333-3333-4333-8333-333333333337',
     textItem: '44444444-4444-4444-8444-444444444441',
     numberItem: '44444444-4444-4444-8444-444444444442',
     boolItem: '44444444-4444-4444-8444-444444444443',
     choiceItem: '44444444-4444-4444-8444-444444444444',
     cardItem: '44444444-4444-4444-8444-444444444445',
     oldTextItem: '44444444-4444-4444-8444-444444444446',
+    longItem: '44444444-4444-4444-8444-444444444447',
     optionAlpha: '55555555-5555-4555-8555-555555555551',
     card: '66666666-6666-4666-8666-666666666661',
     secondCard: '66666666-6666-4666-8666-666666666663',
     missingCard: '66666666-6666-4666-8666-666666666662',
     newSubmission: '77777777-7777-4777-8777-777777777771',
-    oldSubmission: '77777777-7777-4777-8777-777777777772'
+    oldSubmission: '77777777-7777-4777-8777-777777777772',
+    aiSubmission: '77777777-7777-4777-8777-777777777773',
+    voidSubmission: '77777777-7777-4777-8777-777777777774',
+    otherActivity: '11111111-1111-4111-8111-111111111114'
 };
 
 const baseActivity = {
@@ -61,6 +68,7 @@ const publishedItems = [
         visible: true,
         removedInDraft: false
     },
+    { formItemId: IDS.longItem, itemKey: IDS.longKey, fieldId: IDS.longKey, type: 'long_text', title: 'Long Need', options: [], optionEntries: [], visible: true, removedInDraft: false },
     { formItemId: IDS.cardItem, itemKey: IDS.cardKey, fieldId: IDS.cardKey, type: 'card_link', title: 'Card', options: [], optionEntries: [], visible: true, removedInDraft: false }
 ];
 
@@ -68,7 +76,7 @@ const oldItems = [
     { formItemId: IDS.oldTextItem, itemKey: IDS.oldTextKey, fieldId: IDS.oldTextKey, type: 'short_text', title: 'Old Text', options: [], optionEntries: [] }
 ];
 
-function makeHarness() {
+function makeHarness(options = {}) {
     const calls = {};
     const submissions = new Map();
 
@@ -97,8 +105,17 @@ function makeHarness() {
                 ? { versionId: IDS.oldVersion, versionNumber: 1, publishedAt: '2026-07-01T00:00:00.000Z', items: oldItems }
                 : null;
         },
-        async listSubmissions() {
-            return [...submissions.values()];
+        async listSubmissions(activityId, filters = {}) {
+            calls.listSubmissions = { activityId, filters };
+            return [...submissions.values()].filter(submission => {
+                if (submission.activityId !== activityId) return false;
+                if (filters.state && filters.state !== 'all' && submission.status !== filters.state) return false;
+                if (!filters.includeVoid && submission.status === 'void') return false;
+                if (filters.dateStart && submission.createdAt.slice(0, 10) < filters.dateStart) return false;
+                if (filters.dateEnd && submission.createdAt.slice(0, 10) > filters.dateEnd) return false;
+                if (filters.recorderDisplayName && submission.createdByDisplayName !== filters.recorderDisplayName) return false;
+                return true;
+            });
         },
         async getSubmissionById(id) {
             return submissions.get(id) || null;
@@ -174,9 +191,14 @@ function makeHarness() {
                 email: 'card@example.test',
                 phone: '',
                 mobile: '0912',
+                fax: '02-0000',
+                website: 'https://card.example.test',
+                address: 'Taipei',
                 driveFileId: 'drive-1',
                 driveLink: 'https://drive.example/file',
-                driveFilename: 'card.jpg'
+                driveFilename: 'card.jpg',
+                sourceFilename: 'scan-source.jpg',
+                notes: 'RAW note'
             };
         }
     };
@@ -199,10 +221,53 @@ function makeHarness() {
         updatedAt: '2026-07-01T00:00:00.000Z'
     });
 
+    submissions.set(IDS.aiSubmission, {
+        id: IDS.aiSubmission,
+        activityId: IDS.activity,
+        formVersionId: IDS.publishedVersion,
+        status: 'active',
+        answers: {
+            [IDS.textKey]: 'Structured short text',
+            [IDS.longKey]: '完整長文字需求：客戶正在評估自動化產線，要求九月前安排後續拜訪。',
+            [IDS.numberKey]: 88,
+            [IDS.boolKey]: true,
+            [IDS.choiceKey]: [{ optionKey: IDS.optionAlpha, label: 'Alpha', value: 'Alpha' }]
+        },
+        otherAnswers: { [IDS.choiceKey]: 'Other detail' },
+        cardId: IDS.card,
+        card: null,
+        formSnapshot: { versionId: IDS.publishedVersion, versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems },
+        createdByUserId: 'analyst',
+        createdByDisplayName: 'Analyst',
+        createdAt: '2026-08-15T10:00:00.000Z',
+        updatedByUserId: 'analyst',
+        updatedByDisplayName: 'Analyst',
+        updatedAt: '2026-09-05T10:00:00.000Z'
+    });
+
+    submissions.set(IDS.voidSubmission, {
+        id: IDS.voidSubmission,
+        activityId: IDS.activity,
+        formVersionId: IDS.publishedVersion,
+        status: 'void',
+        answers: { [IDS.longKey]: 'This void answer must not reach Gemini context.' },
+        otherAnswers: {},
+        cardId: null,
+        card: null,
+        formSnapshot: { versionId: IDS.publishedVersion, versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems },
+        createdByUserId: 'analyst',
+        createdByDisplayName: 'Analyst',
+        createdAt: '2026-08-16T10:00:00.000Z',
+        updatedByUserId: 'analyst',
+        updatedByDisplayName: 'Analyst',
+        updatedAt: '2026-08-16T10:00:00.000Z'
+    });
+
     const service = new ActivityIntelligenceService({
         activityIntelligenceSqlReader: reader,
         activityIntelligenceSqlWriter: writer,
-        rawContactSqlReader
+        rawContactSqlReader,
+        formAiTextGenerator: options.formAiTextGenerator
     });
 
     return { service, calls, publishedItems };
@@ -221,6 +286,18 @@ async function assertRejectsStatus(fn, statusCode) {
     }
     assert(caught, 'Expected rejection');
     assert.strictEqual(caught.statusCode, statusCode);
+}
+
+async function assertRejectsCode(fn, code) {
+    let caught = null;
+    try {
+        await fn();
+    } catch (error) {
+        caught = error;
+    }
+    assert(caught, `Expected rejection ${code}`);
+    assert.strictEqual(caught.code, code);
+    return caught;
 }
 
 async function main() {
@@ -304,6 +381,72 @@ async function main() {
     assert.strictEqual(calls.updateSubmissionStatus.status, 'void');
     await service.restoreSubmission(IDS.oldSubmission, actor());
     assert.strictEqual(calls.updateSubmissionStatus.status, 'active');
+
+    const aiCalls = [];
+    const aiHarness = makeHarness({
+        formAiTextGenerator: async payload => {
+            aiCalls.push(payload);
+            return aiCalls.length === 1 ? '第一個完整分析結果' : '第二個完整分析結果';
+        }
+    });
+    const aiResult = await aiHarness.service.analyzeActivity(IDS.activity, { question: '請分析主要需求' }, actor());
+    assert.deepStrictEqual(aiResult, { completed: true, answer: '第一個完整分析結果' });
+    assert.strictEqual(aiHarness.calls.listSubmissions.activityId, IDS.activity);
+    assert.strictEqual(aiHarness.calls.listSubmissions.filters.dateStart, '2026-08-01');
+    assert.strictEqual(aiHarness.calls.listSubmissions.filters.dateEnd, '2026-08-31');
+    assert.strictEqual(aiHarness.calls.listSubmissions.filters.includeVoid, false);
+    assert(aiCalls[0].systemInstruction.includes('未受信任的商業資料'));
+    assert(aiCalls[0].systemInstruction.includes('不得聲稱可查詢 CRM'));
+    assert(aiCalls[0].systemInstruction.includes('繁體中文'));
+    assert(aiCalls[0].userPrompt.includes('完整長文字需求：客戶正在評估自動化產線'));
+    assert(aiCalls[0].userPrompt.includes('Card Co'));
+    assert(aiCalls[0].userPrompt.includes('RAW note'));
+    assert(!aiCalls[0].userPrompt.includes('This void answer must not reach Gemini context.'));
+    assert(!Object.prototype.hasOwnProperty.call(aiResult, 'model'));
+
+    await aiHarness.service.analyzeActivity(IDS.activity, {
+        question: '只看 Analyst',
+        filters: { start: '2026-07-01', end: '2026-09-10', recorder: 'Analyst' }
+    }, actor());
+    assert.strictEqual(aiHarness.calls.listSubmissions.filters.dateStart, '2026-08-01');
+    assert.strictEqual(aiHarness.calls.listSubmissions.filters.dateEnd, '2026-08-31');
+    assert.strictEqual(aiHarness.calls.listSubmissions.filters.recorderDisplayName, 'Analyst');
+    assert(!aiCalls[1].userPrompt.includes('第一個完整分析結果'));
+
+    await assertRejectsCode(() => aiHarness.service.analyzeActivity(IDS.activity, { question: '' }, actor()), 'FORM_AI_EMPTY_QUESTION');
+    await assertRejectsCode(() => aiHarness.service.analyzeActivity(IDS.activity, { question: 'no data', filters: { recorder: 'Nobody' } }, actor()), 'FORM_AI_NO_DATA');
+    await assertRejectsCode(() => aiHarness.service.analyzeActivity(IDS.activity, { question: 'role' }, { ...actor(), role: 'recorder' }), 'FORM_AI_FORBIDDEN');
+
+    const failingAiHarness = makeHarness({
+        formAiTextGenerator: async () => {
+            throw new Error('provider down');
+        }
+    });
+    await assertRejectsCode(() => failingAiHarness.service.analyzeActivity(IDS.activity, { question: 'fail' }, actor()), 'FORM_AI_PROVIDER_ERROR');
+
+    const originalKey = process.env.FORM_GEMINI_API_KEY;
+    const originalModel = process.env.FORM_GEMINI_API_MODEL;
+    delete process.env.FORM_GEMINI_API_KEY;
+    process.env.FORM_GEMINI_API_MODEL = 'deployment-owned-model';
+    const missingKeyHarness = makeHarness();
+    await assertRejectsCode(() => missingKeyHarness.service.analyzeActivity(IDS.activity, { question: 'missing key' }, actor()), 'FORM_AI_NOT_CONFIGURED');
+    process.env.FORM_GEMINI_API_KEY = 'deployment-owned-key';
+    delete process.env.FORM_GEMINI_API_MODEL;
+    const missingModelHarness = makeHarness();
+    await assertRejectsCode(() => missingModelHarness.service.analyzeActivity(IDS.activity, { question: 'missing model' }, actor()), 'FORM_AI_NOT_CONFIGURED');
+    if (originalKey === undefined) delete process.env.FORM_GEMINI_API_KEY;
+    else process.env.FORM_GEMINI_API_KEY = originalKey;
+    if (originalModel === undefined) delete process.env.FORM_GEMINI_API_MODEL;
+    else process.env.FORM_GEMINI_API_MODEL = originalModel;
+
+    const managementSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'scripts', 'activity-intelligence', 'activity-intelligence-management.js'), 'utf8');
+    const apiSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'scripts', 'activity-intelligence', 'activity-intelligence-api.js'), 'utf8');
+    assert(managementSource.includes("if (ui.analytics.ai.state === 'loading') return;"));
+    assert(managementSource.includes("state === 'loading'"));
+    assert(!managementSource.includes('FORM_GEMINI_API_KEY'));
+    assert(!managementSource.includes('FORM_GEMINI_API_MODEL'));
+    assert(!apiSource.includes('FORM_GEMINI_API_KEY'));
+    assert(!apiSource.includes('FORM_GEMINI_API_MODEL'));
 
     const controller = new ActivityIntelligenceController({
         async getActivity() {

@@ -99,6 +99,13 @@ class ActivityIntelligenceController {
         });
     };
 
+    analyzeActivity = async (req, res) => {
+        await this._handle(res, async () => {
+            const data = await this.activityIntelligenceService.analyzeActivity(req.params.activityId, req.body, req.user);
+            res.json({ success: true, data });
+        });
+    };
+
     listSubmissions = async (req, res) => {
         await this._handle(res, async () => {
             const data = await this.activityIntelligenceService.listSubmissions(req.params.activityId, req.query);
@@ -158,7 +165,8 @@ class ActivityIntelligenceController {
 
     _sendError(res, error) {
         const statusCode = error.statusCode || this._statusFromError(error);
-        const message = statusCode >= 500 ? 'Activity Intelligence request failed.' : error.message;
+        const publicFormAiError = error.code && String(error.code).startsWith('FORM_AI_');
+        const message = statusCode >= 500 && !publicFormAiError ? 'Activity Intelligence request failed.' : error.message;
         if (statusCode >= 500) {
             console.error('[ActivityIntelligenceController] Internal Error:', error.message);
         }

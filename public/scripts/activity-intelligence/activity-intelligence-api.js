@@ -114,6 +114,10 @@
       });
     },
 
+    analyzeActivity(activityId, payload) {
+      return jsonRequest('POST', `/activities/${encodeURIComponent(activityId)}/ai-analysis`, payload);
+    },
+
     listSubmissions(activityId, query) {
       const params = new URLSearchParams();
       Object.entries(query || {}).forEach(([key, value]) => {

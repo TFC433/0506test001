@@ -3803,6 +3803,13 @@ a:focus-visible {
   font-size: 13px;
 }
 
+.aim-ai-answer-text {
+  color: var(--aim-text);
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
 .aim-ai-settings-panel {
   margin-top: 14px;
 }
