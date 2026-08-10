@@ -28,6 +28,7 @@ let lineLeadRecoveryAttempted = false;
 let lastLineLeadDeniedUserId = null;
 const LOCAL_LINE_LEAD_MANUAL_LOGIN_KEY = 'line-lead-local-manual-login';
 const LIFF_RETURN_TARGET_KEY = 'tfc_liff_return_target';
+const LIFF_LOGIN_ATTEMPT_KEY = 'tfc-liff-bridge-login-attempt';
 const ocrAuthCopy = Object.freeze({
     product: '名片管理',
     message: '請先使用 LINE 登入後繼續',
@@ -64,6 +65,14 @@ function storeLiffReturnTarget() {
     } catch (error) {
         console.warn('[Auth] Unable to store LINE return target:', error.message);
         return false;
+    }
+}
+
+function clearStaleLiffLoginAttempt() {
+    try {
+        sessionStorage.removeItem(LIFF_LOGIN_ATTEMPT_KEY);
+    } catch (_) {
+        // The LIFF login attempt marker is non-auth loop-prevention state.
     }
 }
 
@@ -109,6 +118,7 @@ window.manualLiffLogin = async function() {
         await window.localLineLeadTestLogin();
         return;
     }
+    clearStaleLiffLoginAttempt();
     if (!storeLiffReturnTarget()) return;
     window.location.assign(liffBridgeLoginUrl());
 };

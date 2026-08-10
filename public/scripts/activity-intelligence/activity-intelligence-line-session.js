@@ -5,6 +5,7 @@
   const LOCAL_MANUAL_LOGIN_KEY = 'activity-intelligence-local-manual-login';
   const LOCAL_ROLE_HEADER = 'x-activity-intelligence-local-role';
   const LIFF_RETURN_TARGET_KEY = 'tfc_liff_return_target';
+  const LIFF_LOGIN_ATTEMPT_KEY = 'tfc-liff-bridge-login-attempt';
   const ALLOWED_ROLES = new Set(['super_admin', 'admin', 'recorder']);
 
   let currentSession = null;
@@ -89,6 +90,14 @@
       sessionStorage.removeItem(LIFF_RETURN_TARGET_KEY);
     } catch (_) {
       // Routing state is non-auth, temporary browser state.
+    }
+  }
+
+  function clearStaleLiffLoginAttempt() {
+    try {
+      sessionStorage.removeItem(LIFF_LOGIN_ATTEMPT_KEY);
+    } catch (_) {
+      // The LIFF login attempt marker is non-auth loop-prevention state.
     }
   }
 
@@ -184,6 +193,7 @@
       window.location.reload();
       return;
     }
+    clearStaleLiffLoginAttempt();
     if (!storeBridgeReturnTarget()) return;
     window.location.assign(bridgeLoginUrl());
   }
