@@ -462,6 +462,11 @@ a:focus-visible {
   gap: 16px;
 }
 
+.aim-mobile-brand,
+.aim-mobile-framework {
+  display: none;
+}
+
 .aim-account-area {
   min-width: 0;
   display: flex;
@@ -3857,5 +3862,254 @@ a:focus-visible {
     border-left: 0;
     padding-top: 12px;
     border-top: 1px solid var(--aim-border);
+  }
+}
+
+@media (max-width: 640px) {
+  body:not(.aim-auth-state) {
+    background: #fff7f4;
+  }
+
+  .aim-shell {
+    display: block;
+    min-height: 100vh;
+    background: #fff7f4;
+  }
+
+  .aim-sidebar {
+    display: none;
+  }
+
+  .aim-app-column {
+    min-height: 100vh;
+  }
+
+  .aim-topbar {
+    height: 66px;
+    padding: 0 14px;
+    gap: 10px;
+    background: var(--aim-form-sidebar);
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 0 6px 18px rgba(53, 23, 20, 0.18);
+  }
+
+  .aim-mobile-brand {
+    min-width: 0;
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+
+  .aim-mobile-brand img {
+    display: block;
+    height: 32px;
+    max-width: 112px;
+    object-fit: contain;
+  }
+
+  .aim-breadcrumb {
+    display: none;
+  }
+
+  .aim-topbar-actions {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .aim-account-area {
+    flex: 1 1 auto;
+    gap: 7px;
+    min-width: 0;
+  }
+
+  .aim-user {
+    flex: 1 1 auto;
+    max-width: none;
+    gap: 7px;
+    min-width: 0;
+  }
+
+  .aim-avatar {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--aim-form-sidebar);
+  }
+
+  .aim-user-copy {
+    min-width: 0;
+  }
+
+  .aim-user-copy strong {
+    color: var(--aim-form-sidebar-text);
+    font-size: 13px;
+  }
+
+  .aim-user-copy small {
+    color: var(--aim-form-sidebar-muted);
+    font-size: 11px;
+  }
+
+  .aim-account-logout,
+  .aim-local-logout {
+    min-height: 30px;
+    padding: 0 9px;
+    border-color: rgba(255, 255, 255, 0.24);
+    background: rgba(255, 255, 255, 0.9);
+    color: var(--aim-form-sidebar);
+    font-size: 12px;
+  }
+
+  .aim-preview-controls {
+    gap: 6px;
+  }
+
+  .aim-preview-control {
+    width: 118px;
+  }
+
+  .aim-mobile-framework {
+    display: grid;
+    gap: 10px;
+    padding: 12px 16px;
+    background: #fff7f4;
+    border-bottom: 1px solid rgba(224, 82, 45, 0.16);
+    box-shadow: 0 6px 18px -8px rgba(53, 23, 20, 0.2);
+  }
+
+  .aim-mobile-scan-gateway {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid var(--aim-form-primary-border);
+    border-radius: 8px;
+    background: var(--aim-surface);
+    color: var(--aim-form-primary-hover);
+    text-decoration: none;
+    font-size: 0.95rem;
+    font-weight: 700;
+    box-shadow: 0 1px 3px rgba(53, 23, 20, 0.06);
+  }
+
+  .aim-mobile-scan-gateway span {
+    color: var(--aim-form-primary);
+    font-size: 1rem;
+  }
+
+  .aim-mobile-search .aim-input {
+    border-color: rgba(224, 82, 45, 0.22);
+    background: var(--aim-surface);
+    box-shadow: 0 1px 3px rgba(53, 23, 20, 0.05);
+  }
+
+  .aim-mobile-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    border-radius: 8px;
+    background: rgba(53, 23, 20, 0.1);
+  }
+
+  .aim-mobile-tab {
+    min-width: 0;
+    min-height: 34px;
+    padding: 6px 4px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #68443d;
+    font-size: 0.86rem;
+    font-weight: 700;
+    line-height: 1.25;
+    cursor: pointer;
+  }
+
+  .aim-mobile-tab[aria-pressed="true"] {
+    background: var(--aim-surface);
+    color: var(--aim-form-primary-hover);
+    box-shadow: 0 1px 3px rgba(53, 23, 20, 0.08);
+  }
+
+  .aim-main {
+    width: 100%;
+    margin: 0;
+    padding: 14px 16px 36px;
+  }
+
+  .aim-page-header {
+    min-height: 0;
+    margin-bottom: 14px;
+  }
+
+  .aim-page-header h1 {
+    font-size: 21px;
+  }
+
+  .aim-page-header>div>p,
+  .aim-module-heading p {
+    font-size: 13px;
+  }
+
+  .aim-page-content,
+  .aim-panel,
+  .aim-entry-layout,
+  .aim-record-card,
+  .aim-record-card-summary,
+  .aim-record-filter-bar,
+  .aim-filter-panel {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .aim-record-subviews {
+    display: none;
+  }
+
+  .aim-record-filter-bar,
+  .aim-records-head,
+  .aim-records-head-actions,
+  .aim-data-functions,
+  .aim-period-group,
+  .aim-more-filters-panel,
+  .aim-custom-period-panel {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .aim-data-functions {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .aim-period-group {
+    overflow: visible;
+    border: 0;
+  }
+
+  .aim-period-group button {
+    border: 1px solid var(--aim-border-strong);
+    border-radius: 6px;
+  }
+
+  .aim-record-card-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .aim-record-card-right-rail {
+    align-items: flex-start;
+    margin-top: 8px;
   }
 }

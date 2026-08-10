@@ -470,12 +470,14 @@
         ${renderSidebar()}
         <div class="aim-app-column">
           <header class="aim-topbar">
+            ${renderMobileBrand()}
             ${renderBreadcrumb()}
             <div class="aim-topbar-actions">
               ${renderPreviewControl()}
               ${renderUserIdentity()}
             </div>
           </header>
+          ${renderMobileFramework()}
           <main class="aim-main">
             ${renderPageHeader()}
             <div class="aim-page-content">${content}</div>
@@ -488,6 +490,40 @@
       ${renderHardDeleteConfirmDialog()}
       ${renderCardPickerDialog()}
       ${ui.toast ? `<div class="aim-toast" role="status">${Store.escapeHtml(ui.toast)}</div>` : ''}
+    `;
+  }
+
+  function renderMobileBrand() {
+    return `
+      <button class="aim-mobile-brand" data-action="home" type="button" aria-label="回到活動情報管理首頁">
+        <img src="/images/portal/form.png" alt="FANUC forms">
+      </button>
+    `;
+  }
+
+  function renderMobileFramework() {
+    if (!currentUser || !currentUser.authenticated) return '';
+    const scope = ui.tab === 'records' ? ui.records.scope : '';
+    const tabButton = (value, label) => `
+      <button class="aim-mobile-tab" type="button" data-action="mobile-record-scope" data-scope="${value}" aria-pressed="${scope === value}">
+        ${Store.escapeHtml(label)}
+      </button>
+    `;
+    return `
+      <section class="aim-mobile-framework" aria-label="表單行動工作區">
+        <a class="aim-mobile-scan-gateway" href="/leads-view.html">
+          <span aria-hidden="true">▣</span>
+          <strong>掃描名片</strong>
+        </a>
+        <div class="aim-mobile-search">
+          <input class="aim-input" id="aim-mobile-record-q" value="${Store.escapeHtml(ui.records.q)}" placeholder="搜尋紀錄" aria-label="搜尋紀錄">
+        </div>
+        <nav class="aim-mobile-tabs" aria-label="表單行動分頁">
+          ${tabButton('entry', '新增紀錄')}
+          ${tabButton('mine', '我的紀錄')}
+          ${tabButton('all', '全部紀錄')}
+        </nav>
+      </section>
     `;
   }
 
@@ -930,7 +966,7 @@
   }
 
   function renderRecordsWorkspace(activity) {
-    if (!['entry', 'all'].includes(ui.records.scope)) ui.records.scope = 'entry';
+    if (!['entry', 'mine', 'all'].includes(ui.records.scope)) ui.records.scope = 'entry';
     return `
       ${renderRecordScopeSwitch()}
       ${ui.records.scope === 'entry' ? renderQuickEntry(activity) : renderRecords(activity, ui.records.scope)}
@@ -2198,11 +2234,12 @@
     const rows = filteredRecords(activity, scope);
     const recorders = unique(recordsFor(activity.id).map(r => r.createdByDisplayName));
     const advancedCount = activeAdvancedFilterCount();
+    const title = scope === 'mine' ? '我的紀錄' : '全部紀錄';
     return `
       <div class="aim-panel">
         <div class="aim-records-head">
           <div>
-            <h2>全部紀錄</h2>
+            <h2>${title}</h2>
             <p class="aim-small">目前結果共 ${rows.length} 筆</p>
           </div>
           <div class="aim-records-head-actions">
@@ -2509,8 +2546,17 @@
     if (action === 'copy-field' && canDesignForm()) copyField(el.dataset.id);
     if (action === 'delete-field' && canDesignForm()) deleteField(el.dataset.id);
     if (action === 'retire-field' && canDesignForm()) retireField(el.dataset.id);
+    if (action === 'mobile-record-scope' && (canManageRecords() || isRecorder())) {
+      const allowed = ['entry', 'mine', 'all'];
+      if (allowed.includes(el.dataset.scope)) {
+        ui.view = 'workspace';
+        ui.tab = 'records';
+        ui.records.scope = el.dataset.scope;
+        await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
+      }
+    }
     if (action === 'scope' && (canManageRecords() || isRecorder())) {
-      const allowed = ['entry', 'all'];
+      const allowed = ['entry', 'mine', 'all'];
       if (allowed.includes(el.dataset.scope)) ui.records.scope = el.dataset.scope;
     }
     if (action === 'record-period') setRecordPeriod(el.dataset.period);
@@ -2950,6 +2996,7 @@
     bindThumbnailMediaControls();
     bindFormPreviewControls();
     bind('aim-record-q', value => { ui.records.q = value; });
+    bind('aim-mobile-record-q', value => { ui.records.q = value; });
     bind('aim-record-recorder', value => { ui.records.recorder = value; }, 'change');
     bind('aim-record-state', value => {
       ui.records.state = value;
