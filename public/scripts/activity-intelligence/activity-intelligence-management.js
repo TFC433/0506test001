@@ -4762,7 +4762,7 @@
   }
 
   function currentVisitorCountField(activity) {
-    return publishedRecordItems(activity).find(field => field.type === 'number' && field.title === visitorCountFieldTitle) || null;
+    return publishedRecordItems(activity).find(field => field.type === 'single_choice' && field.title === visitorCountFieldTitle) || null;
   }
 
   function visitorCountTotal(records, field) {
@@ -4777,7 +4777,8 @@
     if (typeof value === 'string') {
       const trimmed = value.trim();
       if (!trimmed) return null;
-      const number = Number(trimmed);
+      const normalized = trimmed.replace(/[０-９]/g, digit => String.fromCharCode(digit.charCodeAt(0) - 0xFEE0));
+      const number = Number(normalized);
       return Number.isFinite(number) ? number : null;
     }
     return null;
