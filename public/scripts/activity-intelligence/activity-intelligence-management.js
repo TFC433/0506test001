@@ -51,9 +51,9 @@
     forbidden: '此 LINE 帳號尚未開通使用權限。'
   });
   const analyticsAiDefaultPresets = Object.freeze([
-    '???桀?銵典蝝??銝餉?頞典',
-    '?曉銵典銝剖澆??芸??釣????',
-    '?銝?甇亥蕭頩方?銵?撱箄降'
+    '分析目前表單紀錄的主要趨勢',
+    '找出值得管理者優先關注的訊號',
+    '摘要填答內容中的常見需求'
   ]);
   const FORM_AUTH_STATE_CLASS = 'aim-auth-state';
   const mobileFormMediaQuery = '(max-width: 640px)';
@@ -2347,11 +2347,11 @@
     return `
       <div class="aim-dialog-backdrop aim-form-confirm-backdrop" data-action="cancel-analytics-ai-confirm"></div>
       <section class="aim-dialog aim-form-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="aim-analytics-ai-replace-title">
-        <div class="aim-dialog-head"><h2 id="aim-analytics-ai-replace-title">???啁???嚗?</h2><button class="aim-button aim-icon-button" data-action="cancel-analytics-ai-confirm" type="button" aria-label="關閉">×</button></div>
+        <div class="aim-dialog-head"><h2 id="aim-analytics-ai-replace-title">更換分析問題？</h2><button class="aim-button aim-icon-button" data-action="cancel-analytics-ai-confirm" type="button" aria-label="關閉">×</button></div>
         <div class="aim-dialog-body">
-          <p>?啁???撠??斤?＊蝷箇???蝯???</p>
+          <p>目前畫面已有一筆分析結果。繼續後會先清除舊結果，再重新分析。</p>
         </div>
-        <div class="aim-dialog-foot"><button class="aim-button" data-action="cancel-analytics-ai-confirm" type="button">??</button><button class="aim-button aim-button-primary" data-action="confirm-analytics-ai-replace" type="button">蝣箏?</button></div>
+        <div class="aim-dialog-foot"><button class="aim-button" data-action="cancel-analytics-ai-confirm" type="button">取消</button><button class="aim-button aim-button-primary" data-action="confirm-analytics-ai-replace" type="button">繼續分析</button></div>
       </section>
     `;
   }
@@ -2467,27 +2467,27 @@
     const ai = ui.analytics.ai || defaultAnalyticsState().ai;
     const loading = ai.state === 'loading';
     return `
-      <section class="aim-panel aim-desktop-only aim-analytics-ai-panel" aria-label="FANUC forms ???拇?">
+      <section class="aim-panel aim-desktop-only aim-analytics-ai-panel" aria-label="FANUC forms AI 分析助手">
         <div class="aim-analytics-ai-head">
           <div>
-            <h2>FANUC forms ???拇?</h2>
+            <h2>FANUC forms AI 分析助手</h2>
           </div>
         </div>
         <div class="aim-analytics-ai-layout">
           <div class="aim-analytics-ai-left">
             <div class="aim-ai-block">
-              <h3>敹恍?憿?</h3>
+              <h3>快速問題</h3>
               <div class="aim-ai-preset-list">
                 ${presets.map(question => `<button class="aim-ai-preset-button" data-action="analytics-ai-preset" data-question="${Store.escapeHtml(question)}" type="button" aria-pressed="${ai.submittedQuestion === question}" ${loading ? 'disabled' : ''}>${Store.escapeHtml(question)}</button>`).join('') || '<div class="aim-empty">尚未設定快速問題。</div>'}
               </div>
             </div>
             <div class="aim-ai-block">
               <label class="aim-field" for="aim-analytics-ai-question">
-                <span>?芾???</span>
-                <textarea class="aim-textarea aim-auto-grow" id="aim-analytics-ai-question" rows="2" placeholder="頛詨?喳??桀?銵典鞈?銝凋?閫????" ${loading ? 'disabled' : ''}>${Store.escapeHtml(ai.question || '')}</textarea>
+                <span>自訂問題</span>
+                <textarea class="aim-textarea aim-auto-grow" id="aim-analytics-ai-question" rows="2" placeholder="輸入想分析目前表單資料的問題" ${loading ? 'disabled' : ''}>${Store.escapeHtml(ai.question || '')}</textarea>
               </label>
               ${ai.inputError ? `<p class="aim-field-error">${Store.escapeHtml(ai.inputError)}</p>` : ''}
-              <button class="aim-button aim-button-primary aim-ai-ask-button" data-action="analytics-ai-ask" type="button" ${loading ? 'disabled' : ''}>${loading ? '分析中' : '?閰Ｗ?'}</button>
+              <button class="aim-button aim-button-primary aim-ai-ask-button" data-action="analytics-ai-ask" type="button" ${loading ? 'disabled' : ''}>${loading ? '分析中' : '送出分析'}</button>
             </div>
             ${isSuperAdmin() ? renderAnalyticsAiCrmToggle(ai) : ''}
           </div>
@@ -2516,7 +2516,7 @@
         <div class="aim-ai-result-surface aim-ai-result-ready" aria-busy="true">
           <span>正在分析</span>
           <h3>${Store.escapeHtml(ai.submittedQuestion || ai.question || '目前表單資料')}</h3>
-          <p>甇???銵典蝝??</p>
+          <p>正在分析目前表單資料，請稍候。</p>
         </div>
       `;
     }
@@ -2525,7 +2525,7 @@
         <div class="aim-ai-result-surface aim-ai-result-ready">
           <span>分析未完成</span>
           <h3>${Store.escapeHtml(ai.submittedQuestion || ai.question || '分析問題')}</h3>
-          <p class="aim-field-error">?祆活???芸???隢?敺?閰艾?</p>
+          <p class="aim-field-error">分析暫時無法完成，請稍後再試。</p>
         </div>
       `;
     }
