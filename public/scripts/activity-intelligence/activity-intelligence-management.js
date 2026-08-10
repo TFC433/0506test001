@@ -51,9 +51,9 @@
     forbidden: '此 LINE 帳號尚未開通使用權限。'
   });
   const analyticsAiDefaultPresets = Object.freeze([
-    '分析目前表單紀錄的主要趨勢',
-    '找出值得管理者優先關注的訊號',
-    '摘要填答內容中的常見需求'
+    '???桀?銵典蝝??銝餉?頞典',
+    '?曉銵典銝剖澆??芸??釣????',
+    '?銝?甇亥蕭頩方?銵?撱箄降'
   ]);
   const FORM_AUTH_STATE_CLASS = 'aim-auth-state';
   const mobileFormMediaQuery = '(max-width: 640px)';
@@ -144,10 +144,6 @@
 
   function defaultAnalyticsState() {
     return {
-      recorder: 'all',
-      start: '',
-      end: '',
-      q: '',
       ai: {
         question: '',
         submittedQuestion: '',
@@ -2351,11 +2347,11 @@
     return `
       <div class="aim-dialog-backdrop aim-form-confirm-backdrop" data-action="cancel-analytics-ai-confirm"></div>
       <section class="aim-dialog aim-form-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="aim-analytics-ai-replace-title">
-        <div class="aim-dialog-head"><h2 id="aim-analytics-ai-replace-title">更換分析問題</h2><button class="aim-button aim-icon-button" data-action="cancel-analytics-ai-confirm" type="button" aria-label="關閉">×</button></div>
+        <div class="aim-dialog-head"><h2 id="aim-analytics-ai-replace-title">???啁???嚗?</h2><button class="aim-button aim-icon-button" data-action="cancel-analytics-ai-confirm" type="button" aria-label="關閉">×</button></div>
         <div class="aim-dialog-body">
-          <p>目前畫面已有一筆分析結果。繼續後會先清除舊結果，再重新分析。</p>
+          <p>?啁???撠??斤?＊蝷箇???蝯???</p>
         </div>
-        <div class="aim-dialog-foot"><button class="aim-button" data-action="cancel-analytics-ai-confirm" type="button">取消</button><button class="aim-button aim-button-primary" data-action="confirm-analytics-ai-replace" type="button">繼續分析</button></div>
+        <div class="aim-dialog-foot"><button class="aim-button" data-action="cancel-analytics-ai-confirm" type="button">??</button><button class="aim-button aim-button-primary" data-action="confirm-analytics-ai-replace" type="button">蝣箏?</button></div>
       </section>
     `;
   }
@@ -2459,12 +2455,10 @@
   function renderAnalytics(activity) {
     const records = analyticsRecords(activity);
     const metrics = analyticsMetrics(activity, records);
-    const recorders = unique(recordsFor(activity.id).map(r => r.createdByDisplayName));
     return `
       ${!isMobileFormViewport() ? renderAnalyticsAiPanel(activity, records) : ''}
-      <div class="aim-panel" style="margin-bottom:14px"><div class="aim-record-toolbar aim-analytics-toolbar"><input class="aim-input" id="aim-analytics-start" type="date" value="${ui.analytics.start}"><input class="aim-input" id="aim-analytics-end" type="date" value="${ui.analytics.end}"><select class="aim-select" id="aim-analytics-recorder">${option('all', '全部紀錄者', ui.analytics.recorder)}${recorders.map(r => option(r, r, ui.analytics.recorder)).join('')}</select><input class="aim-input" id="aim-analytics-q" value="${Store.escapeHtml(ui.analytics.q)}" placeholder="搜尋長文字內容"><button class="aim-button" data-action="clear-analytics" type="button">清除</button></div></div>
       <div class="aim-kpi-grid aim-analytics-kpi-row"><div class="aim-kpi"><span>有效紀錄</span><strong>${metrics.total}</strong></div><div class="aim-kpi"><span>今日新增</span><strong>${metrics.today}</strong></div><div class="aim-kpi"><span>紀錄者數</span><strong>${metrics.recorders}</strong></div><div class="aim-kpi"><span>完整率</span><strong>${metrics.completeRate}</strong><small>完整 ${metrics.complete} 筆 · 低完整度 ${metrics.low} 筆 · 平均 ${metrics.avg} 欄</small></div></div>
-      <div class="aim-chart-grid">${renderActivityTrendChart(records)}${recorderDistributionChart(records)}${choiceCharts(activity, records)}${numberCharts(activity, records)}${textBrowser(activity, records)}</div>
+      <div class="aim-chart-grid">${renderActivityTrendChart(records)}${recorderDistributionChart(records)}${choiceCharts(activity, records)}${numberCharts(activity, records)}</div>
     `;
   }
 
@@ -2473,27 +2467,27 @@
     const ai = ui.analytics.ai || defaultAnalyticsState().ai;
     const loading = ai.state === 'loading';
     return `
-      <section class="aim-panel aim-desktop-only aim-analytics-ai-panel" aria-label="FANUC forms 分析助手">
+      <section class="aim-panel aim-desktop-only aim-analytics-ai-panel" aria-label="FANUC forms ???拇?">
         <div class="aim-analytics-ai-head">
           <div>
-            <h2>FANUC forms 分析助手</h2>
+            <h2>FANUC forms ???拇?</h2>
           </div>
         </div>
         <div class="aim-analytics-ai-layout">
           <div class="aim-analytics-ai-left">
             <div class="aim-ai-block">
-              <h3>快速問題</h3>
+              <h3>敹恍?憿?</h3>
               <div class="aim-ai-preset-list">
                 ${presets.map(question => `<button class="aim-ai-preset-button" data-action="analytics-ai-preset" data-question="${Store.escapeHtml(question)}" type="button" aria-pressed="${ai.submittedQuestion === question}" ${loading ? 'disabled' : ''}>${Store.escapeHtml(question)}</button>`).join('') || '<div class="aim-empty">尚未設定快速問題。</div>'}
               </div>
             </div>
             <div class="aim-ai-block">
               <label class="aim-field" for="aim-analytics-ai-question">
-                <span>自訂問題</span>
-                <textarea class="aim-textarea aim-auto-grow" id="aim-analytics-ai-question" rows="2" placeholder="輸入想分析目前表單資料的問題" ${loading ? 'disabled' : ''}>${Store.escapeHtml(ai.question || '')}</textarea>
+                <span>?芾???</span>
+                <textarea class="aim-textarea aim-auto-grow" id="aim-analytics-ai-question" rows="2" placeholder="頛詨?喳??桀?銵典鞈?銝凋?閫????" ${loading ? 'disabled' : ''}>${Store.escapeHtml(ai.question || '')}</textarea>
               </label>
               ${ai.inputError ? `<p class="aim-field-error">${Store.escapeHtml(ai.inputError)}</p>` : ''}
-              <button class="aim-button aim-button-primary aim-ai-ask-button" data-action="analytics-ai-ask" type="button" ${loading ? 'disabled' : ''}>${loading ? '分析中' : '送出分析'}</button>
+              <button class="aim-button aim-button-primary aim-ai-ask-button" data-action="analytics-ai-ask" type="button" ${loading ? 'disabled' : ''}>${loading ? '分析中' : '?閰Ｗ?'}</button>
             </div>
             ${isSuperAdmin() ? renderAnalyticsAiCrmToggle(ai) : ''}
           </div>
@@ -2522,7 +2516,7 @@
         <div class="aim-ai-result-surface aim-ai-result-ready" aria-busy="true">
           <span>正在分析</span>
           <h3>${Store.escapeHtml(ai.submittedQuestion || ai.question || '目前表單資料')}</h3>
-          <p>正在分析目前表單資料，請稍候。</p>
+          <p>甇???銵典蝝??</p>
         </div>
       `;
     }
@@ -2531,7 +2525,7 @@
         <div class="aim-ai-result-surface aim-ai-result-ready">
           <span>分析未完成</span>
           <h3>${Store.escapeHtml(ai.submittedQuestion || ai.question || '分析問題')}</h3>
-          <p class="aim-field-error">${Store.escapeHtml(ai.error || '分析暫時無法完成，請稍後再試。')}</p>
+          <p class="aim-field-error">?祆活???芸???隢?敺?閰艾?</p>
         </div>
       `;
     }
@@ -2540,14 +2534,10 @@
         ? '<p class="aim-ai-compact-note">CRM 關聯：尚未納入本次分析</p>'
         : '';
       return `
-        <div class="aim-ai-result-surface aim-ai-result-ready">
-          <span>分析完成</span>
+        <div class="aim-ai-result-surface aim-ai-result-ready aim-ai-result-complete">
           <h3>${Store.escapeHtml(ai.submittedQuestion)}</h3>
           ${crmState}
-          <div class="aim-ai-answer-placeholder">
-            <strong>分析結果</strong>
-            ${renderSafeAiAnswer(ai.answer)}
-          </div>
+          ${renderSafeAiAnswer(ai.answer)}
         </div>
       `;
     }
@@ -2579,7 +2569,7 @@
     let listType = '';
     const flushParagraph = () => {
       if (!paragraph.length) return;
-      html.push(`<p>${paragraph.map(renderSafeAiInline).join('<br>')}</p>`);
+      html.push(`<p>${renderSafeAiInline(paragraph.join(' '))}</p>`);
       paragraph = [];
     };
     const flushList = () => {
@@ -2666,12 +2656,7 @@
     render();
     try {
       const result = await window.ActivityIntelligenceApi.analyzeActivity(activity.id, {
-        question: value,
-        filters: {
-          start: ui.analytics.start || '',
-          end: ui.analytics.end || '',
-          recorder: ui.analytics.recorder || 'all'
-        }
+        question: value
       });
       if (!result || result.completed !== true || !String(result.answer || '').trim()) {
         throw new Error('分析服務沒有回傳有效內容。');
@@ -3265,9 +3250,10 @@
   }
 
   function analyticsDateBuckets(records) {
+    const activity = selectedActivity();
     const recordDates = records.map(record => String(record.createdAt || '').slice(0, 10)).filter(Boolean).sort();
-    const start = ui.analytics.start || recordDates[0] || '';
-    const end = ui.analytics.end || recordDates[recordDates.length - 1] || '';
+    const start = (activity && activity.formOpenStart) || recordDates[0] || '';
+    const end = (activity && activity.formOpenEnd) || recordDates[recordDates.length - 1] || '';
     if (!start || !end || end < start) return [];
     const dates = [];
     const current = new Date(`${start}T00:00:00`);
@@ -3285,12 +3271,11 @@
   }
 
   function analyticsScopeCaption(records) {
-    const dates = records.map(record => String(record.createdAt || '').slice(0, 10)).filter(Boolean).sort();
-    const start = ui.analytics.start || dates[0] || '未設定起日';
-    const end = ui.analytics.end || dates[dates.length - 1] || '未設定迄日';
+    const activity = selectedActivity();
+    const start = (activity && activity.formOpenStart) || '未設定起日';
+    const end = (activity && activity.formOpenEnd) || '未設定迄日';
     const dateText = start && end ? `${formatAnalyticsDateLabel(start)} - ${formatAnalyticsDateLabel(end)}` : '目前範圍';
-    const recorderText = ui.analytics.recorder && ui.analytics.recorder !== 'all' ? ui.analytics.recorder : '全部紀錄者';
-    return `${dateText} · ${recorderText} · ${records.length} 筆有效紀錄`;
+    return `${dateText} · 全部紀錄者 · ${records.length} 筆有效紀錄`;
   }
 
   function analyticsChartForKey(activity, records, chartKey) {
@@ -3308,17 +3293,6 @@
       const sum = values.reduce((a, b) => a + b, 0);
       return `<div class="aim-panel"><h2>${Store.escapeHtml(field.title)}</h2><dl class="aim-definition-list"><dt>筆數</dt><dd>${values.length}</dd><dt>平均</dt><dd>${values.length ? (sum / values.length).toFixed(1) : '-'}</dd><dt>最小</dt><dd>${values.length ? Math.min(...values) : '-'}</dd><dt>最大</dt><dd>${values.length ? Math.max(...values) : '-'}</dd></dl></div>`;
     }).join('');
-  }
-
-  function textBrowser(activity, records) {
-    const fields = analyticFields(activity, records).filter(f => f.type === 'long_text');
-    const q = ui.analytics.q.trim().toLowerCase();
-    const rows = [];
-    fields.forEach(field => records.forEach(record => {
-      const value = String(record.answers[field.fieldId] || '');
-      if (value && (!q || value.toLowerCase().includes(q))) rows.push({ field, record, value });
-    }));
-    return `<div class="aim-panel" style="grid-column:1/-1"><h2>長文字內容瀏覽</h2><div class="aim-small" style="margin-bottom:8px">共 ${rows.length} 則內容</div><div class="aim-text-browser">${rows.map(row => `<div class="aim-answer"><h4>${Store.escapeHtml(row.field.title)} - ${Store.escapeHtml(row.record.createdByDisplayName)} - ${Store.formatDateTime(row.record.createdAt)}</h4><div>${Store.escapeHtml(row.value)}</div></div>`).join('') || '<div class="aim-empty">沒有符合搜尋條件的文字內容。</div>'}</div></div>`;
   }
 
   function renderDialog() {
@@ -3599,13 +3573,6 @@
     }
     if (action === 'reset-ai-presets' && canDesignForm()) {
       ui.analyticsAiPresetDrafts = [...analyticsAiDefaultPresets];
-    }
-    if (action === 'clear-analytics' && canUseAnalytics()) {
-      const ai = ui.analytics.ai || defaultAnalyticsState().ai;
-      const chartViews = ui.analytics.chartViews || {};
-      ui.analytics = defaultAnalyticsState();
-      ui.analytics.ai = ai;
-      ui.analytics.chartViews = chartViews;
     }
     save();
     render();
@@ -4024,10 +3991,6 @@
       setVoidRecordsVisibility(node.checked);
       render();
     }));
-    bind('aim-analytics-start', value => { ui.analytics.start = value; }, 'change');
-    bind('aim-analytics-end', value => { ui.analytics.end = value; }, 'change');
-    bind('aim-analytics-recorder', value => { ui.analytics.recorder = value; }, 'change');
-    bind('aim-analytics-q', value => { ui.analytics.q = value; });
     bind('aim-analytics-ai-question', value => {
       ui.analytics.ai.question = value;
       ui.analytics.ai.inputError = '';
@@ -4770,9 +4733,9 @@
   function analyticsRecords(activity) {
     return recordsFor(activity.id).filter(r => {
       if (r.status === 'void') return false;
-      if (ui.analytics.recorder !== 'all' && r.createdByDisplayName !== ui.analytics.recorder) return false;
-      if (ui.analytics.start && r.createdAt.slice(0, 10) < ui.analytics.start) return false;
-      if (ui.analytics.end && r.createdAt.slice(0, 10) > ui.analytics.end) return false;
+      const createdDate = String(r.createdAt || '').slice(0, 10);
+      if (activity.formOpenStart && createdDate < activity.formOpenStart) return false;
+      if (activity.formOpenEnd && createdDate > activity.formOpenEnd) return false;
       return true;
     });
   }

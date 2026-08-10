@@ -3823,10 +3823,14 @@ a:focus-visible {
   background: rgba(255, 255, 255, 0.72);
 }
 
-.aim-ai-answer-placeholder strong {
+.aim-ai-answer-placeholder>strong {
   display: block;
   margin-bottom: 6px;
   font-size: 13px;
+}
+
+.aim-ai-result-complete .aim-ai-answer-text {
+  margin-top: 8px;
 }
 
 .aim-ai-answer-text {
@@ -4054,14 +4058,6 @@ a:focus-visible {
 .aim-trend {
   width: 100%;
   height: 190px;
-}
-
-.aim-text-browser {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 290px;
-  overflow: auto;
 }
 
 .aim-toast {
