@@ -50,6 +50,13 @@
     verifying: '正在檢查登入狀態...',
     forbidden: '此 LINE 帳號尚未開通使用權限。'
   });
+  const analyticsAiDefaultPresets = Object.freeze([
+    '分析目前表單紀錄的主要趨勢',
+    '找出值得管理者優先關注的訊號',
+    '摘要填答內容中的常見需求',
+    '整理欄位資料中異常或缺漏的地方',
+    '提出下一步追蹤與行動建議'
+  ]);
   const FORM_AUTH_STATE_CLASS = 'aim-auth-state';
   const mobileFormMediaQuery = '(max-width: 640px)';
   const thumbnailFitOptions = new Set(['cover', 'contain']);
@@ -105,7 +112,8 @@
       moreOpen: false,
       filterError: ''
     },
-    analytics: { recorder: 'all', start: '', end: '', q: '' }
+    analytics: defaultAnalyticsState(),
+    analyticsAiPresetDrafts: [...analyticsAiDefaultPresets]
   };
 
   init();
@@ -129,6 +137,26 @@
 
   function save() {
     state.selectedActivityId = ui.selectedActivityId;
+  }
+
+  function defaultAnalyticsState() {
+    return {
+      recorder: 'all',
+      start: '',
+      end: '',
+      q: '',
+      ai: {
+        question: '',
+        submittedQuestion: '',
+        state: 'idle',
+        crmContextEnabled: false,
+        inputError: ''
+      }
+    };
+  }
+
+  function resetAnalyticsAiFramework() {
+    ui.analytics.ai = defaultAnalyticsState().ai;
   }
 
   async function resolveFormalCurrentUser() {
@@ -414,16 +442,20 @@
     return currentUser && currentUser.role === 'recorder';
   }
 
+  function isSuperAdmin() {
+    return currentUser && currentUser.role === 'super_admin';
+  }
+
   function canManageActivities() {
     return currentUser && ['super_admin', 'admin'].includes(currentUser.role);
   }
 
   function canDesignForm() {
-    return currentUser && currentUser.role === 'super_admin';
+    return isSuperAdmin();
   }
 
   function canHardDelete() {
-    return currentUser && currentUser.role === 'super_admin';
+    return isSuperAdmin();
   }
 
   function canManageRecords() {
@@ -1659,6 +1691,7 @@
           <div class="aim-preview">${renderFormPreview(activity)}</div>
         </aside>
       </div>
+      ${!isMobileFormViewport() && canDesignForm() ? renderFormAiAnalyticsSettings() : ''}
     `;
   }
 
@@ -1689,6 +1722,41 @@
         ${design.draft.items.map((item, index) => renderDesignerItemCard(item, index, design.draft.items, { mode: 'draft', activity, selected })).join('') || '<div class="aim-empty">尚未建立項目。</div>'}
       </div>
     `;
+  }
+
+  function renderFormAiAnalyticsSettings() {
+    return `
+      <section class="aim-panel aim-desktop-only aim-ai-settings-panel" aria-label="AI 分析設定">
+        <div class="aim-panel-title-row">
+          <div>
+            <h2>AI 分析設定</h2>
+            <p class="aim-subtitle">設定管理者在分析頁可快速選用的問題。此階段僅供介面規劃，重新整理後會回到預設。</p>
+          </div>
+          <span class="aim-pill">Framework</span>
+        </div>
+        <div class="aim-ai-settings-grid">
+          ${analyticsAiPresetSlots().map((value, index) => `
+            <label class="aim-field aim-ai-preset-field" for="aim-ai-preset-${index}">
+              <span>快速問題 ${index + 1}</span>
+              <input class="aim-input aim-ai-preset-input" id="aim-ai-preset-${index}" data-preset-index="${index}" maxlength="120" value="${Store.escapeHtml(value)}">
+            </label>
+          `).join('')}
+        </div>
+        <div class="aim-ai-settings-foot">
+          <p>這不是表單欄位，不會出現在填寫、預覽、匯出、完整度或提交答案中。</p>
+          <button class="aim-button aim-button-soft" data-action="reset-ai-presets" type="button">還原預設</button>
+        </div>
+      </section>
+    `;
+  }
+
+  function analyticsAiPresetSlots() {
+    const source = Array.isArray(ui.analyticsAiPresetDrafts) ? ui.analyticsAiPresetDrafts : [];
+    return analyticsAiDefaultPresets.map((fallback, index) => source[index] !== undefined ? source[index] : fallback);
+  }
+
+  function resolvedAnalyticsAiPresets() {
+    return analyticsAiPresetSlots().map(value => String(value || '').trim()).filter(Boolean).slice(0, analyticsAiDefaultPresets.length);
   }
 
   function renderFieldTypePicker(design) {
@@ -2333,10 +2401,128 @@
     const metrics = analyticsMetrics(activity, records);
     const recorders = unique(recordsFor(activity.id).map(r => r.createdByDisplayName));
     return `
+      ${!isMobileFormViewport() ? renderAnalyticsAiPanel(activity, records) : ''}
       <div class="aim-panel" style="margin-bottom:14px"><div class="aim-record-toolbar aim-analytics-toolbar"><input class="aim-input" id="aim-analytics-start" type="date" value="${ui.analytics.start}"><input class="aim-input" id="aim-analytics-end" type="date" value="${ui.analytics.end}"><select class="aim-select" id="aim-analytics-recorder">${option('all', '全部紀錄者', ui.analytics.recorder)}${recorders.map(r => option(r, r, ui.analytics.recorder)).join('')}</select><input class="aim-input" id="aim-analytics-q" value="${Store.escapeHtml(ui.analytics.q)}" placeholder="搜尋長文字內容"><button class="aim-button" data-action="clear-analytics" type="button">清除</button></div></div>
       <div class="aim-kpi-grid"><div class="aim-kpi"><span>有效紀錄</span><strong>${metrics.total}</strong></div><div class="aim-kpi"><span>今日新增</span><strong>${metrics.today}</strong></div><div class="aim-kpi"><span>紀錄者數</span><strong>${metrics.recorders}</strong></div><div class="aim-kpi"><span>低完整度</span><strong>${metrics.low}</strong></div><div class="aim-kpi"><span>平均填答欄位</span><strong>${metrics.avg}</strong></div></div>
       <div class="aim-chart-grid"><div class="aim-panel"><h2>每日新增趨勢</h2>${renderTrend(records)}</div><div class="aim-panel"><h2>紀錄者分布</h2>${bars(count(records, r => r.createdByDisplayName))}</div>${choiceCharts(activity, records)}${numberCharts(activity, records)}${textBrowser(activity, records)}</div>
     `;
+  }
+
+  function renderAnalyticsAiPanel(activity, records) {
+    const presets = resolvedAnalyticsAiPresets();
+    const ai = ui.analytics.ai || defaultAnalyticsState().ai;
+    const scope = analyticsAiScopeSummary(activity, records);
+    return `
+      <section class="aim-panel aim-desktop-only aim-analytics-ai-panel" aria-label="AI 分析助手">
+        <div class="aim-analytics-ai-head">
+          <div>
+            <h2>AI 分析助手</h2>
+            <p>先以目前篩選範圍選擇一個管理問題，後續階段會接上正式 AI 分析服務。</p>
+          </div>
+          <span class="aim-pill">Framework</span>
+        </div>
+        <div class="aim-analytics-ai-layout">
+          <div class="aim-analytics-ai-left">
+            <div class="aim-ai-block">
+              <h3>快速問題</h3>
+              <div class="aim-ai-preset-list">
+                ${presets.map(question => `<button class="aim-ai-preset-button" data-action="analytics-ai-preset" data-question="${Store.escapeHtml(question)}" type="button" aria-pressed="${ai.submittedQuestion === question}">${Store.escapeHtml(question)}</button>`).join('') || '<div class="aim-empty">尚未設定快速問題。</div>'}
+              </div>
+            </div>
+            <div class="aim-ai-block">
+              <label class="aim-field" for="aim-analytics-ai-question">
+                <span>自訂問題</span>
+                <textarea class="aim-textarea aim-auto-grow" id="aim-analytics-ai-question" rows="3" placeholder="輸入想從目前篩選資料中理解的問題">${Store.escapeHtml(ai.question || '')}</textarea>
+              </label>
+              ${ai.inputError ? `<p class="aim-field-error">${Store.escapeHtml(ai.inputError)}</p>` : ''}
+              <button class="aim-button aim-button-primary" data-action="analytics-ai-ask" type="button">詢問 AI</button>
+            </div>
+            ${isSuperAdmin() ? renderAnalyticsAiCrmToggle(ai) : ''}
+            <div class="aim-ai-scope-card">
+              <h3>目前分析範圍</h3>
+              ${scope}
+            </div>
+          </div>
+          <div class="aim-analytics-ai-right">
+            ${renderAnalyticsAiResult(activity, records)}
+          </div>
+        </div>
+      </section>
+    `;
+  }
+
+  function renderAnalyticsAiCrmToggle(ai) {
+    return `
+      <label class="aim-checkbox aim-ai-crm-toggle">
+        <input id="aim-analytics-ai-crm" type="checkbox" ${ai.crmContextEnabled ? 'checked' : ''}>
+        <span>納入 CRM 關聯分析框架</span>
+      </label>
+      <p class="aim-ai-muted">${ai.crmContextEnabled ? '已標示未來可納入 CRM 關聯脈絡；此階段不載入 CRM 資料。' : '目前僅以 FORM 分析資料作為範圍。'}</p>
+    `;
+  }
+
+  function renderAnalyticsAiResult(activity, records) {
+    const ai = ui.analytics.ai || defaultAnalyticsState().ai;
+    if (!ai.submittedQuestion) {
+      return `
+        <div class="aim-ai-result-surface aim-ai-result-idle">
+          <span>尚未選擇問題</span>
+          <h3>選擇快速問題或輸入自訂問題後，這裡會顯示未來 AI 回覆框架。</h3>
+          <p>此版本只建立一問一答的分析工作區，不產生分析內容。</p>
+        </div>
+      `;
+    }
+    return `
+      <div class="aim-ai-result-surface aim-ai-result-ready">
+        <span>已準備分析</span>
+        <h3>${Store.escapeHtml(ai.submittedQuestion)}</h3>
+        <dl class="aim-definition-list">
+          <dt>活動</dt><dd>${Store.escapeHtml(activity.name)}</dd>
+          <dt>目前筆數</dt><dd>${records.length}</dd>
+          <dt>CRM 脈絡</dt><dd>${isSuperAdmin() && ai.crmContextEnabled ? '框架狀態：已開啟，尚未整合資料' : '未納入'}</dd>
+        </dl>
+        <div class="aim-ai-answer-placeholder">
+          <strong>AI 回覆區</strong>
+          <p>正式服務尚未啟用。未來回覆會以純文字結構化內容顯示在此區塊，每次新問題會取代目前結果。</p>
+        </div>
+      </div>
+    `;
+  }
+
+  function analyticsAiScopeSummary(activity, records) {
+    const recorder = ui.analytics.recorder === 'all' ? '全部紀錄者' : ui.analytics.recorder;
+    const dateStart = ui.analytics.start || '不限開始';
+    const dateEnd = ui.analytics.end || '不限結束';
+    const keyword = String(ui.analytics.q || '').trim();
+    return `
+      <dl class="aim-definition-list aim-ai-scope-list">
+        <dt>活動</dt><dd>${Store.escapeHtml(activity.name)}</dd>
+        <dt>日期</dt><dd>${Store.escapeHtml(dateStart)} - ${Store.escapeHtml(dateEnd)}</dd>
+        <dt>紀錄者</dt><dd>${Store.escapeHtml(recorder)}</dd>
+        <dt>符合紀錄</dt><dd>${records.length} 筆</dd>
+        <dt>長文字搜尋</dt><dd>${keyword ? Store.escapeHtml(keyword) : '未套用'}</dd>
+      </dl>
+    `;
+  }
+
+  function setAnalyticsAiQuestion(question) {
+    const value = String(question || '').trim();
+    if (!value) return;
+    ui.analytics.ai.question = value;
+    ui.analytics.ai.submittedQuestion = value;
+    ui.analytics.ai.state = 'ready';
+    ui.analytics.ai.inputError = '';
+  }
+
+  function submitAnalyticsAiQuestion() {
+    const value = String(ui.analytics.ai.question || '').trim();
+    if (!value) {
+      ui.analytics.ai.inputError = '請先輸入要分析的問題。';
+      return;
+    }
+    ui.analytics.ai.submittedQuestion = value;
+    ui.analytics.ai.state = 'ready';
+    ui.analytics.ai.inputError = '';
   }
 
   function renderTrend(records) {
@@ -2630,7 +2816,20 @@
     if (action === 'cancel-void-record') await cancelVoidRecord(el.dataset.id);
     if (action === 'quick-save-next') await saveQuickRecord();
     if (action === 'export-filtered' && canExport()) exportCsv(filteredRecords(selectedActivity(), ui.records.scope), selectedActivity(), 'filtered');
-    if (action === 'clear-analytics' && canUseAnalytics()) ui.analytics = { recorder: 'all', start: '', end: '', q: '' };
+    if (action === 'analytics-ai-preset' && canUseAnalytics()) {
+      setAnalyticsAiQuestion(el.dataset.question || '');
+    }
+    if (action === 'analytics-ai-ask' && canUseAnalytics()) {
+      submitAnalyticsAiQuestion();
+    }
+    if (action === 'reset-ai-presets' && canDesignForm()) {
+      ui.analyticsAiPresetDrafts = [...analyticsAiDefaultPresets];
+    }
+    if (action === 'clear-analytics' && canUseAnalytics()) {
+      const ai = ui.analytics.ai || defaultAnalyticsState().ai;
+      ui.analytics = defaultAnalyticsState();
+      ui.analytics.ai = ai;
+    }
     save();
     render();
   });
@@ -3052,11 +3251,28 @@
     bind('aim-analytics-end', value => { ui.analytics.end = value; }, 'change');
     bind('aim-analytics-recorder', value => { ui.analytics.recorder = value; }, 'change');
     bind('aim-analytics-q', value => { ui.analytics.q = value; });
+    bind('aim-analytics-ai-question', value => {
+      ui.analytics.ai.question = value;
+      ui.analytics.ai.inputError = '';
+    }, 'input', false);
+    bindCheck('aim-analytics-ai-crm', value => { ui.analytics.ai.crmContextEnabled = isSuperAdmin() && value; });
+    bindAnalyticsAiPresetInputs();
     bindRecordAnswerControls(document);
     bindQuickAnswerControls(document);
     bindAutoGrowingTextareas();
     initFormDesignAutoGrow();
     fitRecordPreviewBadges();
+  }
+
+  function bindAnalyticsAiPresetInputs() {
+    document.querySelectorAll('.aim-ai-preset-input').forEach(node => {
+      node.addEventListener('input', () => {
+        const index = Number(node.dataset.presetIndex);
+        if (!Number.isInteger(index) || index < 0 || index >= analyticsAiDefaultPresets.length) return;
+        ui.analyticsAiPresetDrafts[index] = node.value;
+        save();
+      });
+    });
   }
 
   function bindQuickAnswerControls(scope) {
@@ -3533,6 +3749,7 @@
     ui.dialog = null;
     ui.expandedRecords.personal.clear();
     ui.expandedRecords.all.clear();
+    resetAnalyticsAiFramework();
     applyRoleLanding();
     render();
   }
