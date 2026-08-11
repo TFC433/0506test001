@@ -5,6 +5,7 @@ const VERSION_SELECT = '*';
 const ITEM_SELECT = '*';
 const SUBMISSION_SELECT = '*';
 const ANSWER_SELECT = '*';
+const ANSWER_HYDRATION_PAGE_SIZE = 500;
 
 class ActivityIntelligenceSqlReader {
     constructor() {
@@ -182,14 +183,28 @@ class ActivityIntelligenceSqlReader {
     async getAnswersBySubmissionIds(submissionIds) {
         if (!Array.isArray(submissionIds) || submissionIds.length === 0) return new Map();
 
-        const { data, error } = await supabase
-            .from(this.answersTable)
-            .select(ANSWER_SELECT)
-            .in('submission_id', submissionIds);
+        const rows = [];
+        let from = 0;
 
-        if (error) throw this._dbError('getAnswersBySubmissionIds', error);
+        while (true) {
+            const to = from + ANSWER_HYDRATION_PAGE_SIZE - 1;
+            const { data, error } = await supabase
+                .from(this.answersTable)
+                .select(ANSWER_SELECT)
+                .in('submission_id', submissionIds)
+                .order('submission_answer_id', { ascending: true })
+                .range(from, to);
 
-        return (data || []).reduce((acc, row) => {
+            if (error) throw this._dbError('getAnswersBySubmissionIds', error);
+
+            const pageRows = data || [];
+            rows.push(...pageRows);
+
+            if (pageRows.length < ANSWER_HYDRATION_PAGE_SIZE) break;
+            from += ANSWER_HYDRATION_PAGE_SIZE;
+        }
+
+        return rows.reduce((acc, row) => {
             const answer = this.mapAnswerRow(row);
             const list = acc.get(answer.submissionId) || [];
             list.push(answer);
