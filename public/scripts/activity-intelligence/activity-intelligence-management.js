@@ -2370,6 +2370,9 @@
     const controls = chart.kind === 'activityTrend'
       ? renderActivityTrendControls(chart.chartKey, view, true)
       : renderAnalyticsChartControls(chart.chartKey, view, chart.allowPie, chart.allowTrend);
+    const modalHeight = chart.kind === 'activityTrend'
+      ? 420
+      : analyticsModalChartHeight(chart, view);
     const option = chart.kind === 'activityTrend'
       ? activityTrendOption(chart, view, { modal: true })
       : analyticsChartOption(chart, view, { modal: true });
@@ -2385,7 +2388,7 @@
         </div>
         <div class="aim-dialog-body">
           <div class="aim-chart-modal-controls">${controls}</div>
-          ${renderActivityAnalyticsChartContainer(`modal-${chart.chartKey}`, option, 420)}
+          ${renderActivityAnalyticsChartContainer(`modal-${chart.chartKey}`, option, modalHeight)}
           ${chart.coverage ? `<p class="aim-chart-modal-footnote">${Store.escapeHtml(chart.coverage)}</p>` : ''}
         </div>
       </section>
@@ -2461,7 +2464,7 @@
       : '';
     return `
       ${!isMobileFormViewport() ? renderAnalyticsAiPanel(activity, records) : ''}
-      <div class="aim-kpi-grid aim-analytics-kpi-row"><div class="aim-kpi"><span>有效紀錄</span><strong>${metrics.total}</strong></div>${visitorKpi}<div class="aim-kpi"><span>今日新增</span><strong>${metrics.today}</strong></div><div class="aim-kpi"><span>紀錄者數</span><strong>${metrics.recorders}</strong></div><div class="aim-kpi"><span>完整率</span><strong>${metrics.completeRate}</strong><small>完整 ${metrics.complete} 筆 · 低完整度 ${metrics.low} 筆 · 平均 ${metrics.avg} 欄</small></div></div>
+      <div class="aim-kpi-grid aim-analytics-kpi-row"><div class="aim-kpi"><span>有效紀錄</span><strong>${metrics.total}</strong></div>${visitorKpi}<div class="aim-kpi"><span>今日新增</span><strong>${metrics.today}</strong></div><div class="aim-kpi"><span>紀錄者數</span><strong>${metrics.recorders}</strong></div><div class="aim-kpi"><span>完整度</span><strong>${metrics.completeRate}</strong><small>平均填答 ${metrics.avgAnswered} / ${metrics.avgExpected} 欄</small></div></div>
       <div class="aim-chart-grid">${renderActivityTrendChart(records)}${recorderDistributionChart(records)}${choiceCharts(activity, records)}${numberCharts(activity, records)}</div>
     `;
   }
@@ -2993,7 +2996,7 @@
   function analyticsBarOption(chart, view, options = {}) {
     const styles = analyticsChartStyles();
     const percentage = view.valueMode === 'percentage';
-    const rows = chart.rows;
+    const rows = sortedAnalyticsBarRows(chart.rows, percentage);
     return {
       legend: { show: false },
       grid: { top: 12, right: options.modal ? 40 : 28, bottom: 26, left: 8, containLabel: true },
@@ -3046,23 +3049,30 @@
   function analyticsPieOption(chart, view, options = {}) {
     const percentage = view.valueMode === 'percentage';
     const percentKey = chart.multiChoice ? 'selectionPercent' : 'percent';
+    const modal = Boolean(options.modal);
     return {
       legend: { show: false },
       tooltip: { formatter: analyticsTooltipFormatter },
       series: [{
         name: chart.title,
         type: 'pie',
-        radius: options.modal ? ['30%', '72%'] : ['26%', '76%'],
-        center: ['50%', '52%'],
-        minShowLabelAngle: 8,
+        radius: modal ? ['24%', '55%'] : ['26%', '76%'],
+        center: modal ? ['50%', '54%'] : ['50%', '52%'],
+        minShowLabelAngle: modal ? 0 : 8,
+        avoidLabelOverlap: true,
         padAngle: 1,
         label: {
           show: true,
+          position: 'outer',
+          alignTo: modal ? 'edge' : 'none',
+          edgeDistance: modal ? 16 : '25%',
+          bleedMargin: modal ? 8 : 5,
           formatter: params => `${params.name}\n${percentage ? formatAnalyticsPercent(params.data.realPercent) : params.data.realCount}`,
           overflow: 'break',
-          width: options.modal ? 150 : 86
+          width: modal ? 190 : 86
         },
-        labelLine: { show: true, length: 14, length2: 10, minTurnAngle: 45 },
+        labelLine: { show: true, showAbove: modal, length: modal ? 20 : 14, length2: modal ? 20 : 10, minTurnAngle: 45 },
+        labelLayout: modal ? { hideOverlap: false, moveOverlap: 'shiftY' } : { hideOverlap: true },
         emphasis: {
           itemStyle: {
             shadowBlur: 10,
@@ -3084,6 +3094,17 @@
     };
   }
 
+  function sortedAnalyticsBarRows(rows, percentage) {
+    return (Array.isArray(rows) ? rows : [])
+      .map((row, index) => ({ row, index }))
+      .sort((a, b) => {
+        const aValue = percentage ? Number(a.row.percent || 0) : Number(a.row.count || 0);
+        const bValue = percentage ? Number(b.row.percent || 0) : Number(b.row.count || 0);
+        return bValue - aValue || a.index - b.index;
+      })
+      .map(entry => entry.row);
+  }
+
   function analyticsTooltipFormatter(params) {
     const data = params.data || {};
     return `${params.marker || ''}${escapeChartHtml(params.name)}<br/><b>${Number(data.realCount || 0)} 筆</b><br/>${formatAnalyticsPercent(data.realPercent || 0)}`;
@@ -3096,6 +3117,7 @@
     return {
       legend: {
         type: options.modal ? 'scroll' : 'plain',
+        selectedMode: true,
         top: 0,
         left: 0,
         right: 0,
@@ -3191,6 +3213,18 @@
     if (view.type === 'trend') return 210;
     const rows = Array.isArray(chart.rows) ? chart.rows.length : 0;
     return Math.max(170, Math.min(260, 132 + rows * 24));
+  }
+
+  function analyticsModalChartHeight(chart, view) {
+    if (view.type === 'pie') {
+      const rows = Array.isArray(chart.rows) ? chart.rows.filter(row => row.count > 0).length : 0;
+      return Math.max(460, Math.min(720, 300 + rows * 24));
+    }
+    if (view.type === 'bar') {
+      const rows = Array.isArray(chart.rows) ? chart.rows.length : 0;
+      return Math.max(420, Math.min(700, 150 + rows * 28));
+    }
+    return 460;
   }
 
   function renderActivityAnalyticsChartContainer(chartKey, optionConfig, height) {
@@ -4768,19 +4802,27 @@
   }
 
   function analyticsMetrics(activity, records) {
-    const coverages = records.map(r => recordCoverage(r, activity).answered);
-    const low = records.filter(r => recordCoverage(r, activity).answered <= 1).length;
+    const completeness = analyticsCompletenessStats(activity, records);
     const visitorField = currentVisitorCountField(activity);
     return {
       total: records.length,
       visitorCount: visitorField ? visitorCountTotal(records, visitorField) : null,
       today: records.filter(r => r.createdAt.slice(0, 10) === Store.CURRENT_DATE).length,
       recorders: unique(records.map(r => r.createdByUserId)).length,
-      complete: records.length ? records.length - low : 0,
-      completeRate: records.length ? formatAnalyticsPercent(((records.length - low) / records.length) * 100) : '0%',
-      low,
-      avg: coverages.length ? (coverages.reduce((a, b) => a + b, 0) / coverages.length).toFixed(1) : '0.0'
+      completeRate: completeness.totalExpected ? formatAnalyticsPercent((completeness.totalAnswered / completeness.totalExpected) * 100) : '0%',
+      avgAnswered: records.length ? (completeness.totalAnswered / records.length).toFixed(1) : '0.0',
+      avgExpected: records.length ? (completeness.totalExpected / records.length).toFixed(1) : '0.0',
+      completeness
     };
+  }
+
+  function analyticsCompletenessStats(activity, records) {
+    return (records || []).reduce((acc, record) => {
+      const coverage = recordCoverage(record, activity);
+      acc.totalAnswered += coverage.answered;
+      acc.totalExpected += coverage.total;
+      return acc;
+    }, { totalAnswered: 0, totalExpected: 0 });
   }
 
   function currentVisitorCountField(activity) {
