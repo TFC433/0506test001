@@ -90,6 +90,7 @@
     formDesignConfirm: null,
     analyticsAiConfirm: null,
     analyticsChartModal: null,
+    mobileAnalysisMode: false,
     formPreviewAnswers: {},
     formPreviewCardLinked: false,
     formPreviewCardVariant: 'default',
@@ -158,7 +159,8 @@
         answer: '',
         error: ''
       },
-      chartViews: {}
+      chartViews: {},
+      mobileChartViews: {}
     };
   }
 
@@ -573,6 +575,19 @@
 
   function renderMobileFramework() {
     if (!currentUser || !currentUser.authenticated) return '';
+    if (ui.mobileAnalysisMode && isMobileFormViewport() && canUseAnalytics()) {
+      return `
+        <section class="aim-mobile-framework aim-mobile-analysis-framework" aria-label="行動數據分析模式">
+          <div class="aim-mobile-analysis-mode-bar">
+            <div>
+              <span>目前模式</span>
+              <strong>數據分析</strong>
+            </div>
+            <button class="aim-button aim-mobile-analysis-exit" data-action="mobile-analysis-exit" type="button">返回填寫</button>
+          </div>
+        </section>
+      `;
+    }
     const scope = ui.tab === 'records' ? ui.records.scope : '';
     const showSearch = ui.tab === 'records' && ['mine', 'all'].includes(ui.records.scope);
     const counts = mobileRecordScopeCounts();
@@ -821,11 +836,17 @@
         <div class="aim-activity-identity">
           <div class="aim-activity-title-row"><h1>${Store.escapeHtml(activity.name)}</h1>${statusPill(status)}<span class="aim-form-period">表單開放：${Store.escapeHtml(formatHeaderDateRange(activity.formOpenStart, activity.formOpenEnd, true))}</span></div>
           ${headerExhibitionSubtitle(activity) ? `<p class="aim-exhibition-subtitle">${Store.escapeHtml(headerExhibitionSubtitle(activity))}</p>` : ''}
+          ${renderMobileAnalysisHeaderAction()}
         </div>
         ${showSettingsButton ? '<button class="aim-button aim-button-settings aim-header-settings-button" type="button" data-action="settings">活動設定</button>' : ''}
         <div class="aim-module-heading"><span>目前模組</span><h2>${moduleLabel(module)}</h2><p>${moduleDescription(module)}</p></div>
       </header>
     `;
+  }
+
+  function renderMobileAnalysisHeaderAction() {
+    if (!isMobileFormViewport() || !canUseAnalytics() || ui.mobileAnalysisMode) return '';
+    return '<div class="aim-mobile-analysis-header-action"><button class="aim-button aim-mobile-analysis-entry" data-action="mobile-analysis-enter" type="button">數據分析</button></div>';
   }
 
   function formatHeaderDateRange(start, end, compactSameMonth) {
@@ -906,6 +927,12 @@
     ui.drawer = null;
     ui.dialog = null;
     ui.cardPicker = null;
+    if (ui.mobileAnalysisMode && isMobileFormViewport()) {
+      disposeActivityAnalyticsCharts();
+      ui.mobileAnalysisMode = false;
+      ui.analyticsChartModal = null;
+      return;
+    }
     if (isMobileFormViewport() || isRecorder()) {
       applyRoleLanding();
       return;
@@ -997,6 +1024,7 @@
   function renderWorkspace() {
     const activity = selectedActivity();
     if (!activity) return canManageActivities() ? renderOverview() : renderNoOpenActivity();
+    if (ui.mobileAnalysisMode && isMobileFormViewport() && canUseAnalytics()) return renderMobileAnalysis(activity);
     return `
       <section>
         ${renderTab(activity)}
@@ -2521,6 +2549,166 @@
     `;
   }
 
+  function renderMobileAnalysis(activity) {
+    const records = analyticsRecords(activity);
+    const metrics = analyticsMetrics(activity, records);
+    const categorical = analyticFields(activity, records)
+      .filter(field => ['yes_no', 'single_choice', 'multiple_choice', 'dropdown'].includes(field.type))
+      .map(field => renderMobileCategoricalAnalyticsChart(categoricalFieldChartData(field, records)))
+      .join('');
+    return `
+      <section class="aim-mobile-analysis" aria-label="行動數據分析">
+        ${renderMobileAnalyticsAiPanel(activity, records)}
+        ${renderMobileAnalyticsKpis(metrics)}
+        <div class="aim-mobile-analysis-chart-feed">
+          ${renderMobileActivityTrendChart(records)}
+          ${renderMobileCategoricalAnalyticsChart(recorderDistributionChartData(records))}
+          ${categorical}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderMobileAnalyticsAiPanel(activity, records) {
+    const presets = resolvedAnalyticsAiPresets();
+    const ai = ui.analytics.ai || defaultAnalyticsState().ai;
+    const loading = ai.state === 'loading';
+    return `
+      <section class="aim-panel aim-mobile-ai-panel" aria-label="FANUC forms 分析助手">
+        <div class="aim-mobile-analysis-section-head">
+          <h2>FANUC forms 分析助手</h2>
+        </div>
+        <div class="aim-ai-block">
+          <h3>快速問題</h3>
+          <div class="aim-ai-preset-list aim-mobile-ai-preset-list">
+            ${presets.map(question => `<button class="aim-ai-preset-button" data-action="analytics-ai-preset" data-question="${Store.escapeHtml(question)}" type="button" aria-pressed="${ai.submittedQuestion === question}" ${loading ? 'disabled' : ''}>${Store.escapeHtml(question)}</button>`).join('') || '<div class="aim-empty">尚未設定快速問題。</div>'}
+          </div>
+        </div>
+        <div class="aim-ai-block">
+          <label class="aim-field" for="aim-analytics-ai-question">
+            <span>自訂問題</span>
+            <textarea class="aim-textarea aim-auto-grow" id="aim-analytics-ai-question" rows="2" placeholder="輸入想從目前表單資料中了解的問題" ${loading ? 'disabled' : ''}>${Store.escapeHtml(ai.question || '')}</textarea>
+          </label>
+          ${ai.inputError ? `<p class="aim-field-error">${Store.escapeHtml(ai.inputError)}</p>` : ''}
+          <button class="aim-button aim-button-primary aim-ai-ask-button" data-action="analytics-ai-ask" type="button" ${loading ? 'disabled' : ''}>${loading ? '分析中' : '送出詢問'}</button>
+        </div>
+        ${renderAnalyticsAiResult(activity, records)}
+      </section>
+    `;
+  }
+
+  function renderMobileAnalyticsKpis(metrics) {
+    const visitorValue = metrics.visitorCount !== null ? metrics.visitorCount : '-';
+    return `
+      <section class="aim-mobile-analysis-kpi-grid" aria-label="行動分析指標">
+        <div class="aim-kpi"><span>有效紀錄</span><strong>${metrics.total}</strong></div>
+        <div class="aim-kpi"><span>參觀人數</span><strong>${visitorValue}</strong></div>
+        <div class="aim-kpi"><span>今日新增</span><strong>${metrics.today}</strong></div>
+        <div class="aim-kpi"><span>紀錄者數</span><strong>${metrics.recorders}</strong></div>
+        <div class="aim-kpi aim-mobile-kpi-completeness"><span>完整度</span><strong>${metrics.completeRate}</strong><small>平均填答 ${metrics.avgAnswered} / ${metrics.avgExpected} 欄</small></div>
+      </section>
+    `;
+  }
+
+  function renderMobileActivityTrendChart(records) {
+    const chart = activityTrendChartData(records);
+    const view = mobileAnalyticsActivityTrendView(chart.chartKey);
+    const hasData = chart.dates.length > 0;
+    const controls = renderMobileActivityTrendControls(chart.chartKey, view);
+    const body = hasData
+      ? renderActivityAnalyticsChartContainer(chart.chartKey, activityTrendOption(chart, view), 210)
+      : '<div class="aim-empty aim-echart-empty" style="--aim-chart-height:210px">目前沒有可分析的紀錄。</div>';
+    return `
+      <div class="aim-panel aim-mobile-analysis-chart-card">
+        <div class="aim-analytics-chart-head">
+          <div class="aim-analytics-chart-title">
+            <h2>${Store.escapeHtml(chart.title)}</h2>
+            <span>${Store.escapeHtml(analyticsScopeCaption(records))}</span>
+          </div>
+        </div>
+        <div class="aim-analytics-chart-control-row">${controls}</div>
+        ${body}
+      </div>
+    `;
+  }
+
+  function renderMobileCategoricalAnalyticsChart(chart) {
+    const view = mobileAnalyticsChartView(chart.chartKey, chart.allowPie, chart.allowTrend);
+    const hasAnswered = chart.denominator > 0 && chart.rows.some(row => row.count > 0);
+    const controls = renderMobileAnalyticsChartControls(chart.chartKey, view, chart.allowPie, chart.allowTrend);
+    const chartHeight = analyticsChartHeight(chart, view);
+    const pieHint = chart.multiChoice && view.type === 'pie'
+      ? '<span>圓餅以選項勾選次數占比計算</span>'
+      : '';
+    const body = hasAnswered
+      ? renderActivityAnalyticsChartContainer(chart.chartKey, analyticsChartOption(chart, view), chartHeight)
+      : `<div class="aim-empty aim-echart-empty" style="--aim-chart-height:${chartHeight}px">${Store.escapeHtml(chart.emptyText || '目前沒有資料。')}</div>`;
+    return `
+      <div class="aim-panel aim-mobile-analysis-chart-card">
+        <div class="aim-analytics-chart-head">
+          <div class="aim-analytics-chart-title">
+            <h2>${Store.escapeHtml(chart.title)}</h2>
+            ${chart.coverage ? `<span>${Store.escapeHtml(chart.coverage)}</span>` : ''}
+            ${pieHint}
+          </div>
+        </div>
+        <div class="aim-analytics-chart-control-row">${controls}</div>
+        ${body}
+      </div>
+    `;
+  }
+
+  function mobileAnalyticsActivityTrendView(chartKey) {
+    const saved = (ui.analytics.mobileChartViews && ui.analytics.mobileChartViews[chartKey]) || {};
+    return {
+      activityMode: saved.activityMode === 'cumulative' ? 'cumulative' : 'daily'
+    };
+  }
+
+  function mobileAnalyticsChartView(chartKey, allowPie, allowTrend) {
+    const saved = (ui.analytics.mobileChartViews && ui.analytics.mobileChartViews[chartKey]) || {};
+    return {
+      type: allowTrend && saved.type === 'trend' ? 'trend' : (allowPie && saved.type === 'pie' ? 'pie' : 'bar'),
+      valueMode: saved.valueMode === 'percentage' ? 'percentage' : 'count'
+    };
+  }
+
+  function renderMobileActivityTrendControls(chartKey, view) {
+    const buttons = [
+      ['daily', '每日新增'],
+      ['cumulative', '累積紀錄']
+    ];
+    return `
+      <div class="aim-chart-controls" aria-label="趨勢顯示模式">
+        <div class="aim-chart-segment">
+          ${buttons.map(([value, label]) => `<button data-action="mobile-analytics-chart-view" data-chart-key="${Store.escapeHtml(chartKey)}" data-control="activityMode" data-value="${value}" aria-pressed="${view.activityMode === value}" type="button">${label}</button>`).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  function renderMobileAnalyticsChartControls(chartKey, view, allowPie, allowTrend) {
+    const typeButtons = [
+      ['bar', '長條'],
+      ['pie', '圓餅'],
+      ['trend', '趨勢']
+    ].filter(([value]) => (value !== 'pie' || allowPie) && (value !== 'trend' || allowTrend));
+    const modeButtons = [
+      ['count', '筆數'],
+      ['percentage', '%']
+    ];
+    return `
+      <div class="aim-chart-controls" aria-label="圖表顯示模式">
+        <div class="aim-chart-segment">
+          ${typeButtons.map(([value, label]) => `<button data-action="mobile-analytics-chart-view" data-chart-key="${Store.escapeHtml(chartKey)}" data-control="type" data-value="${value}" aria-pressed="${view.type === value}" type="button">${label}</button>`).join('')}
+        </div>
+        <div class="aim-chart-segment">
+          ${modeButtons.map(([value, label]) => `<button data-action="mobile-analytics-chart-view" data-chart-key="${Store.escapeHtml(chartKey)}" data-control="valueMode" data-value="${value}" aria-pressed="${view.valueMode === value}" type="button">${label}</button>`).join('')}
+        </div>
+      </div>
+    `;
+  }
+
   function renderAnalyticsAiPanel(activity, records) {
     const presets = resolvedAnalyticsAiPresets();
     const ai = ui.analytics.ai || defaultAnalyticsState().ai;
@@ -3600,6 +3788,16 @@
       await window.ActivityIntelligenceSession.logout();
       return;
     }
+    if (action === 'mobile-analysis-enter' && canUseAnalytics() && isMobileFormViewport()) {
+      ui.mobileAnalysisMode = true;
+      ui.view = 'workspace';
+      await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
+    }
+    if (action === 'mobile-analysis-exit' && isMobileFormViewport()) {
+      disposeActivityAnalyticsCharts();
+      ui.mobileAnalysisMode = false;
+      ui.analyticsChartModal = null;
+    }
     if (action === 'add-field' && canDesignForm()) addField();
     if (action === 'select-field' && canDesignForm()) ui.selectedFieldId = el.dataset.id;
     if (action === 'move-field' && canDesignForm()) moveField(el.dataset.id, Number(el.dataset.dir));
@@ -3681,6 +3879,20 @@
         ui.analytics.chartViews = ui.analytics.chartViews || {};
         const current = ui.analytics.chartViews[chartKey] || { type: 'bar', valueMode: 'count', activityMode: 'daily' };
         ui.analytics.chartViews[chartKey] = {
+          type: control === 'type' && ['bar', 'pie', 'trend'].includes(value) ? value : current.type,
+          valueMode: control === 'valueMode' && ['count', 'percentage'].includes(value) ? value : current.valueMode,
+          activityMode: control === 'activityMode' && ['daily', 'cumulative'].includes(value) ? value : current.activityMode
+        };
+      }
+    }
+    if (action === 'mobile-analytics-chart-view' && canUseAnalytics() && ui.mobileAnalysisMode && isMobileFormViewport()) {
+      const chartKey = el.dataset.chartKey || '';
+      const control = el.dataset.control || '';
+      const value = el.dataset.value || '';
+      if (chartKey && ['type', 'valueMode', 'activityMode'].includes(control)) {
+        ui.analytics.mobileChartViews = ui.analytics.mobileChartViews || {};
+        const current = ui.analytics.mobileChartViews[chartKey] || { type: 'bar', valueMode: 'count', activityMode: 'daily' };
+        ui.analytics.mobileChartViews[chartKey] = {
           type: control === 'type' && ['bar', 'pie', 'trend'].includes(value) ? value : current.type,
           valueMode: control === 'valueMode' && ['count', 'percentage'].includes(value) ? value : current.valueMode,
           activityMode: control === 'activityMode' && ['daily', 'cumulative'].includes(value) ? value : current.activityMode
