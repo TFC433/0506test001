@@ -386,32 +386,53 @@ async function main() {
     const aiHarness = makeHarness({
         formAiTextGenerator: async payload => {
             aiCalls.push(payload);
-            return aiCalls.length === 1 ? '第一個完整分析結果' : '第二個完整分析結果';
+            if (aiCalls.length % 2 === 1) {
+                return JSON.stringify({
+                    strategy: 'tool_query',
+                    intent: 'contract test',
+                    toolCalls: [
+                        {
+                            tool: 'retrieve_submissions',
+                            arguments: {
+                                fields: [IDS.longKey],
+                                limit: 10
+                            }
+                        }
+                    ]
+                });
+            }
+            return aiCalls.length === 2 ? '第一個完整分析結果' : '第二個完整分析結果';
         }
     });
     const aiResult = await aiHarness.service.analyzeActivity(IDS.activity, { question: '請分析主要需求' }, actor());
     assert.deepStrictEqual(aiResult, { completed: true, answer: '第一個完整分析結果' });
     assert.strictEqual(aiHarness.calls.listSubmissions.activityId, IDS.activity);
-    assert.strictEqual(aiHarness.calls.listSubmissions.filters.dateStart, '2026-08-01');
-    assert.strictEqual(aiHarness.calls.listSubmissions.filters.dateEnd, '2026-08-31');
+    assert.strictEqual(aiHarness.calls.listSubmissions.filters.dateStart, null);
+    assert.strictEqual(aiHarness.calls.listSubmissions.filters.dateEnd, null);
     assert.strictEqual(aiHarness.calls.listSubmissions.filters.includeVoid, false);
-    assert(aiCalls[0].systemInstruction.includes('未受信任的商業資料'));
-    assert(aiCalls[0].systemInstruction.includes('不得聲稱可查詢 CRM'));
-    assert(aiCalls[0].systemInstruction.includes('繁體中文'));
-    assert(aiCalls[0].userPrompt.includes('完整長文字需求：客戶正在評估自動化產線'));
-    assert(aiCalls[0].userPrompt.includes('Card Co'));
-    assert(aiCalls[0].userPrompt.includes('RAW note'));
-    assert(!aiCalls[0].userPrompt.includes('This void answer must not reach Gemini context.'));
+    assert(aiCalls[0].systemInstruction.includes('資料查詢規劃器'));
+    assert(aiCalls[0].systemInstruction.includes('domainContext'));
+    assert(aiCalls[0].systemInstruction.includes('FORM 工具證據'));
+    assert(aiCalls[0].userPrompt.includes('domainContext'));
+    assert(aiCalls[1].systemInstruction.includes('表單資料分析助手'));
+    assert(aiCalls[1].systemInstruction.includes('一般回答不得輸出'));
+    assert(aiCalls[1].userPrompt.includes('以下是後端以唯讀 FORM 工具取得的結構化證據'));
+    assert(aiCalls[1].userPrompt.includes('不要暴露內部工具或識別碼'));
+    assert(aiCalls[1].userPrompt.includes('完整長文字需求：客戶正在評估自動化產線'));
+    assert(aiCalls[1].userPrompt.includes('Card Co'));
+    assert(aiCalls[1].userPrompt.includes('RAW note'));
+    assert(!aiCalls[1].userPrompt.includes('This void answer must not reach Gemini context.'));
+    assert(!aiCalls[1].userPrompt.includes('optionKey'));
     assert(!Object.prototype.hasOwnProperty.call(aiResult, 'model'));
 
     await aiHarness.service.analyzeActivity(IDS.activity, {
         question: '只看 Analyst',
         filters: { start: '2026-07-01', end: '2026-09-10', recorder: 'Analyst' }
     }, actor());
-    assert.strictEqual(aiHarness.calls.listSubmissions.filters.dateStart, '2026-08-01');
-    assert.strictEqual(aiHarness.calls.listSubmissions.filters.dateEnd, '2026-08-31');
+    assert.strictEqual(aiHarness.calls.listSubmissions.filters.dateStart, null);
+    assert.strictEqual(aiHarness.calls.listSubmissions.filters.dateEnd, null);
     assert.strictEqual(aiHarness.calls.listSubmissions.filters.recorderDisplayName, 'Analyst');
-    assert(!aiCalls[1].userPrompt.includes('第一個完整分析結果'));
+    assert(!aiCalls[2].userPrompt.includes('第一個完整分析結果'));
 
     await assertRejectsCode(() => aiHarness.service.analyzeActivity(IDS.activity, { question: '' }, actor()), 'FORM_AI_EMPTY_QUESTION');
     await assertRejectsCode(() => aiHarness.service.analyzeActivity(IDS.activity, { question: 'no data', filters: { recorder: 'Nobody' } }, actor()), 'FORM_AI_NO_DATA');

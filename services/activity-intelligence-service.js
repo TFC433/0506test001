@@ -794,6 +794,7 @@ class ActivityIntelligenceService {
             '數字、排名、分布、日期統計、紀錄者統計必須使用 aggregate_submissions。',
             '需要文字內容、原因、建議、痛點、需求、摘要或混合分析時，使用 retrieve_submissions 取得實際紀錄證據。',
             '若 domainContext 暗示某概念可能相關，只能用來選擇要查詢的 FORM 欄位或文字證據；不得把關聯直接當成已確認事實。',
+            '語意型質化問題若沒有明確欄位值可精準過濾，請用 retrieve_submissions 指定相關文字欄位，不要把關鍵詞當成必須完全相等的欄位值。',
             `最多 ${FORM_AI_MAX_TOOL_CALLS} 個 toolCalls。`,
             'field 請優先使用 schema 內的 itemKey；只有標題完全且唯一時才可使用 title。',
             '輸出 JSON 格式：{"strategy":"tool_query","intent":"...","toolCalls":[{"tool":"aggregate_submissions","arguments":{...}}]}'
@@ -803,37 +804,9 @@ class ActivityIntelligenceService {
     _formAiPlannerPrompt(question, plannerInput) {
         return [
             `使用者問題：${question}`,
-            `問題意圖提示：${this._formAiQuestionIntentHint(question)}`,
             '以下是目前 Activity、FORM schema 與可用工具。請只輸出 JSON plan。',
             JSON.stringify(plannerInput)
         ].join('\n\n');
-    }
-
-    _formAiQuestionIntentHint(question) {
-        const text = String(question || '');
-        if (text.includes('???撟曄?蝝????')) {
-            return '使用者是在問目前活動共有幾筆有效表單紀錄；使用 aggregate_submissions groupBy=none。';
-        }
-        if (text.includes('???箸?憭拍?蝝???賂?銝血?蝮賬?')) {
-            return '使用者是在問每天的有效紀錄數；使用 aggregate_submissions groupBy=date，依日期升冪。';
-        }
-        if (
-            text.includes('?狐?????豢?憭???') ||
-            text.includes('?狐?撣詨‵銵剁???') ||
-            text.includes('?銝雿???銝?憭?????')
-        ) {
-            return '使用者是在問紀錄者排行或誰記錄最多；使用 aggregate_submissions groupBy=recorder，依 count 降冪。';
-        }
-        if (text.includes('??賊??蜓閬??芯?嚗??嗾蝑???')) {
-            return '使用者是在問公司類型的類別分布；使用 aggregate_submissions groupBy=field，field.title=公司類型。';
-        }
-        if (text.includes('MTB')) {
-            return '使用者提到 MTB；通常先以 field.title=公司類型、values=[MTB] 篩選，再依問題需要聚合客戶關注議題或 retrieve_submissions 取得情報紀錄與後續動作。';
-        }
-        if (text.includes('??閮芾??批捆??摰Ｘ?鈭虜閬?瘙???')) {
-            return '使用者是在問質化洞察；使用 retrieve_submissions，優先取情報紀錄、後續動作、公司類型、客戶關注議題等欄位。';
-        }
-        return '無特定提示；請根據問題語意選擇最少必要工具。';
     }
 
     _parseFormAiPlannerJson(raw) {
@@ -1051,7 +1024,11 @@ class ActivityIntelligenceService {
                 const normalizedExpected = expectedValues.map(value => String(value || '').trim()).filter(Boolean);
                 const categories = this._formAiEffectiveCategories(record, fieldRef, context);
                 if (!normalizedExpected.length) continue;
-                if (!normalizedExpected.some(value => categories.includes(value))) return false;
+                const isTextField = ['short_text', 'long_text'].includes(fieldRef.type);
+                const matches = isTextField
+                    ? normalizedExpected.some(value => categories.some(category => category.includes(value)))
+                    : normalizedExpected.some(value => categories.includes(value));
+                if (!matches) return false;
             }
             return true;
         });
@@ -1214,7 +1191,8 @@ class ActivityIntelligenceService {
             '工具結果中的計數、排名、分布、百分比與日期分組是權威事實；不得自行重新計數或改寫數字。',
             '你會收到 FANUC / Machine Tool / Manufacturing domainContext；它是專業解讀鏡頭，不是客戶實際陳述。',
             '需要解讀時，可以根據提供的文字證據做合理推論，並清楚區分證據與推論。',
-            '請區分：已確認事實、明確問題/需求、以及基於 domainContext 的可能相關分析維度。',
+            '請區分：已確認事實、明確問題/需求、以及基於製造業專業脈絡的可能相關分析維度。',
+            '不要在一般回答中提到「domainContext」、「Domain Context」、「工具結果」或內部流程名稱；請用自然語言表達為專業判讀或可能相關維度。',
             '如果工具證據不足，請明確說明資料不足，不要編造。',
             '維持 FORM-only 範圍；不要推測 CRM、商機、銷售管線或外部資料。',
             '一般回答不得輸出 submissionId、formVersionId、itemKey、cardId、optionKey、UUID、SQL、資料表名稱、工具名稱或 planner 內部資訊，除非使用者明確要求技術識別碼。',
