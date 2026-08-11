@@ -662,6 +662,7 @@ class ActivityIntelligenceService {
 
     async _buildFormAiContext(activity, scope, submissions) {
         const publishedForm = await this.reader.getPublishedForm(activity.id);
+        const formVersions = this._formAiCanonicalFormVersions(submissions, publishedForm);
         return {
             product: 'FANUC forms AI 分析助手',
             dataBoundary: 'current_activity_form_data_only',
@@ -686,13 +687,44 @@ class ActivityIntelligenceService {
                 requestedDateStart: scope.requestedDateStart,
                 requestedDateEnd: scope.requestedDateEnd
             },
-            currentPublishedForm: publishedForm ? {
-                versionId: publishedForm.versionId,
-                versionNumber: publishedForm.versionNumber,
-                publishedAt: publishedForm.publishedAt,
-                fields: (publishedForm.items || []).map(item => this._formAiFieldContext(item))
-            } : null,
+            currentPublishedFormVersionId: publishedForm ? publishedForm.versionId : null,
+            formVersions,
             submissions: submissions.map(submission => this._formAiSubmissionContext(submission))
+        };
+    }
+
+    _formAiCanonicalFormVersions(submissions, publishedForm) {
+        const versions = new Map();
+        const addVersion = (version, source) => {
+            if (!version || !version.versionId) return;
+            const context = this._formAiVersionContext(version);
+            const serialized = JSON.stringify(context);
+            const existing = versions.get(context.versionId);
+            if (existing && existing.serialized !== serialized) {
+                throw new ActivityIntelligenceError(
+                    409,
+                    'Historical form snapshot is inconsistent for the same form version.',
+                    'FORM_AI_FORM_VERSION_SNAPSHOT_CONFLICT'
+                );
+            }
+            versions.set(context.versionId, { context, serialized, source });
+        };
+
+        (submissions || []).forEach(submission => addVersion(submission.formSnapshot, 'submission'));
+        addVersion(publishedForm, 'published');
+
+        return Array.from(versions.entries()).reduce((acc, [versionId, entry]) => {
+            acc[versionId] = entry.context;
+            return acc;
+        }, {});
+    }
+
+    _formAiVersionContext(version) {
+        return {
+            versionId: version.versionId,
+            versionNumber: version.versionNumber,
+            publishedAt: version.publishedAt,
+            fields: ((version.items || [])).map(item => this._formAiFieldContext(item))
         };
     }
 
@@ -704,12 +736,6 @@ class ActivityIntelligenceService {
             createdAt: submission.createdAt,
             createdByDisplayName: submission.createdByDisplayName,
             formVersionId: submission.formVersionId,
-            formSnapshot: submission.formSnapshot ? {
-                versionId: submission.formSnapshot.versionId,
-                versionNumber: submission.formSnapshot.versionNumber,
-                publishedAt: submission.formSnapshot.publishedAt,
-                fields: snapshotItems.map(item => this._formAiFieldContext(item))
-            } : null,
             answers: snapshotItems
                 .filter(item => ANSWER_ITEM_TYPES.has(item.type))
                 .map(item => this._formAiAnswerContext(item, submission.answers || {}, submission.otherAnswers || {}))
@@ -742,8 +768,6 @@ class ActivityIntelligenceService {
         if (this._isEmptyAnswer(answer) && !String(otherText || '').trim()) return null;
         return {
             itemKey: item.itemKey,
-            type: item.type,
-            title: item.title,
             value: this._formAiAnswerValue(item, answer),
             otherText: String(otherText || '').trim()
         };
@@ -820,7 +844,7 @@ class ActivityIntelligenceService {
         return [
             `使用者分析問題：${question}`,
             '以下是伺服器授權並完整提供的目前活動 FORM 資料脈絡。請只根據此資料回答。',
-            JSON.stringify(context, null, 2)
+            JSON.stringify(context)
         ].join('\n\n');
     }
 
