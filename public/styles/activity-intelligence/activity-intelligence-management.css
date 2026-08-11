@@ -3405,36 +3405,76 @@ a:focus-visible {
 }
 
 .aim-more-filters-panel {
-  grid-template-columns: repeat(3, minmax(150px, 1fr)) auto auto;
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  gap: 14px;
+}
+
+.aim-more-filters-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--aim-border);
+}
+
+.aim-more-filters-head strong {
+  color: var(--aim-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.aim-record-basic-filters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 240px)) minmax(140px, 1fr);
+  gap: 12px;
+  align-items: end;
+}
+
+.aim-record-low-filter {
+  min-height: 36px;
+  align-self: end;
+}
+
+.aim-record-choice-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(220px, 1fr));
+  gap: 12px;
+  align-items: start;
 }
 
 .aim-record-choice-filter-group {
   min-width: 0;
   margin: 0;
-  padding: 0;
-  border: 0;
+  padding: 10px;
+  border: 1px solid #dbe3ea;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.72);
 }
 
 .aim-record-choice-filter-group legend {
-  margin-bottom: 6px;
-  color: var(--aim-muted);
+  padding: 0 2px;
+  color: var(--aim-text);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .aim-record-choice-options {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 10px;
+  gap: 7px 8px;
+  margin-top: 8px;
 }
 
 .aim-record-choice-option {
   min-height: 28px;
   margin: 0;
-  padding: 4px 8px;
+  padding: 4px 9px;
   border: 1px solid var(--aim-border);
   border-radius: 6px;
   background: #fff;
+  line-height: 1.35;
 }
 
 .aim-field-error {
@@ -4185,7 +4225,11 @@ a:focus-visible {
   }
 
   .aim-more-filters-panel {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr;
+  }
+
+  .aim-record-choice-filter-grid {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
   }
 
   .aim-more-filters-panel .aim-checkbox,
@@ -4271,6 +4315,16 @@ a:focus-visible {
 
   .aim-field-type-picker {
     grid-template-columns: 1fr;
+  }
+
+  .aim-record-basic-filters,
+  .aim-record-choice-filter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .aim-more-filters-head {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .aim-form-card-link-designer,

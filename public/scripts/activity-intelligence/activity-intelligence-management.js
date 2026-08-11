@@ -21,14 +21,11 @@
   const choiceFieldTypes = ['single_choice', 'multiple_choice', 'dropdown'];
   const recordAdvancedChoiceFieldTypes = new Set(choiceFieldTypes);
   const answerBadgePalette = Object.freeze([
-    { bg: '#e0f2fe', text: '#075985', border: '#bae6fd' },
-    { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' },
-    { bg: '#fef3c7', text: '#92400e', border: '#fde68a' },
-    { bg: '#fce7f3', text: '#9d174d', border: '#fbcfe8' },
-    { bg: '#ede9fe', text: '#5b21b6', border: '#ddd6fe' },
-    { bg: '#ccfbf1', text: '#0f766e', border: '#99f6e4' },
-    { bg: '#ffedd5', text: '#9a3412', border: '#fed7aa' },
-    { bg: '#e2e8f0', text: '#334155', border: '#cbd5e1' }
+    { bg: '#eef3f6', text: '#33414a', border: '#c8d4db' },
+    { bg: '#eaf5f1', text: '#236156', border: '#bad8d0' },
+    { bg: '#fbf3dd', text: '#755722', border: '#e2cc8d' },
+    { bg: '#fbeee6', text: '#8a4e2e', border: '#e7c2ab' },
+    { bg: '#fae9e6', text: '#8b4540', border: '#e5b9b3' }
   ]);
   const fieldTypeGroups = [
     { label: '版面元件', types: ['section_heading', 'information_text', 'form_thumbnail'] },
@@ -1340,7 +1337,7 @@
 
   function answerBadgeStyle(field, value) {
     if (!field || field.fieldId === 'fld_priority') return '';
-    const identity = `${field.fieldId || field.itemKey || field.itemId || field.title || 'field'}|${String(value || '')}`;
+    const identity = field.fieldId || field.itemKey || field.itemId || field.title || 'field';
     const palette = answerBadgePalette[stableHash(identity) % answerBadgePalette.length];
     return ` style="--aim-answer-badge-bg:${palette.bg};--aim-answer-badge-text:${palette.text};--aim-answer-badge-border:${palette.border}"`;
   }
@@ -2466,11 +2463,16 @@
         ` : ''}
         ${ui.records.moreOpen ? `
           <div class="aim-filter-panel aim-more-filters-panel">
-            <div class="aim-field"><label for="aim-record-recorder">紀錄者</label><select class="aim-select" id="aim-record-recorder">${option('all', '全部紀錄者', ui.records.recorder)}${recorders.map(r => option(r, r, ui.records.recorder)).join('')}</select></div>
-            <div class="aim-field"><label for="aim-record-state">紀錄狀態</label><select class="aim-select" id="aim-record-state">${option('normal', '有效', ui.records.state)}${option('void', '作廢', ui.records.state)}${option('all', '有效與作廢', ui.records.state)}</select></div>
-            <label class="aim-checkbox"><input id="aim-record-low" type="checkbox" ${ui.records.low ? 'checked' : ''}> 低完整度</label>
-            ${choiceFilters}
-            <button class="aim-button" data-action="reset-more-filters" type="button">重設進階篩選</button>
+            <div class="aim-more-filters-head">
+              <strong>進階篩選</strong>
+              <button class="aim-button" data-action="reset-more-filters" type="button">重設進階篩選</button>
+            </div>
+            <div class="aim-record-basic-filters">
+              <div class="aim-field"><label for="aim-record-recorder">紀錄者</label><select class="aim-select" id="aim-record-recorder">${option('all', '全部紀錄者', ui.records.recorder)}${recorders.map(r => option(r, r, ui.records.recorder)).join('')}</select></div>
+              <div class="aim-field"><label for="aim-record-state">紀錄狀態</label><select class="aim-select" id="aim-record-state">${option('normal', '有效', ui.records.state)}${option('void', '作廢', ui.records.state)}${option('all', '有效與作廢', ui.records.state)}</select></div>
+              <label class="aim-checkbox aim-record-low-filter"><input id="aim-record-low" type="checkbox" ${ui.records.low ? 'checked' : ''}> 低完整度</label>
+            </div>
+            ${choiceFilters ? `<div class="aim-record-choice-filter-grid">${choiceFilters}</div>` : ''}
           </div>
         ` : ''}
         <div id="aim-record-results">${renderRecordResults(activity, scope, rows)}</div>
