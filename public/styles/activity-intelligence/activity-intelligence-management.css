@@ -3119,10 +3119,10 @@ a:focus-visible {
   align-items: center;
   min-height: 24px;
   padding: 3px 8px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--aim-answer-badge-border, #cbd5e1);
   border-radius: 4px;
-  background: #f8fafc;
-  color: #475569;
+  background: var(--aim-answer-badge-bg, #f8fafc);
+  color: var(--aim-answer-badge-text, #475569);
   font-size: 12px;
   font-weight: 600;
   line-height: 1.3;
@@ -3341,6 +3341,7 @@ a:focus-visible {
 
 .aim-period-group {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: stretch;
   border: 1px solid var(--aim-border-strong);
   border-radius: 6px;
@@ -3405,6 +3406,35 @@ a:focus-visible {
 
 .aim-more-filters-panel {
   grid-template-columns: repeat(3, minmax(150px, 1fr)) auto auto;
+}
+
+.aim-record-choice-filter-group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.aim-record-choice-filter-group legend {
+  margin-bottom: 6px;
+  color: var(--aim-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.aim-record-choice-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.aim-record-choice-option {
+  min-height: 28px;
+  margin: 0;
+  padding: 4px 8px;
+  border: 1px solid var(--aim-border);
+  border-radius: 6px;
+  background: #fff;
 }
 
 .aim-field-error {

@@ -19,6 +19,17 @@
     ['card_link', '名片連結']
   ];
   const choiceFieldTypes = ['single_choice', 'multiple_choice', 'dropdown'];
+  const recordAdvancedChoiceFieldTypes = new Set(choiceFieldTypes);
+  const answerBadgePalette = Object.freeze([
+    { bg: '#e0f2fe', text: '#075985', border: '#bae6fd' },
+    { bg: '#dcfce7', text: '#166534', border: '#bbf7d0' },
+    { bg: '#fef3c7', text: '#92400e', border: '#fde68a' },
+    { bg: '#fce7f3', text: '#9d174d', border: '#fbcfe8' },
+    { bg: '#ede9fe', text: '#5b21b6', border: '#ddd6fe' },
+    { bg: '#ccfbf1', text: '#0f766e', border: '#99f6e4' },
+    { bg: '#ffedd5', text: '#9a3412', border: '#fed7aa' },
+    { bg: '#e2e8f0', text: '#334155', border: '#cbd5e1' }
+  ]);
   const fieldTypeGroups = [
     { label: '版面元件', types: ['section_heading', 'information_text', 'form_thumbnail'] },
     { label: '文字與數值', types: ['short_text', 'long_text', 'number'] },
@@ -114,6 +125,7 @@
       end: '',
       customOpen: false,
       moreOpen: false,
+      choiceFilters: {},
       filterError: ''
     },
     analytics: defaultAnalyticsState(),
@@ -1326,8 +1338,24 @@
     return ' aim-answer-badge-neutral';
   }
 
+  function answerBadgeStyle(field, value) {
+    if (!field || field.fieldId === 'fld_priority') return '';
+    const identity = `${field.fieldId || field.itemKey || field.itemId || field.title || 'field'}|${String(value || '')}`;
+    const palette = answerBadgePalette[stableHash(identity) % answerBadgePalette.length];
+    return ` style="--aim-answer-badge-bg:${palette.bg};--aim-answer-badge-text:${palette.text};--aim-answer-badge-border:${palette.border}"`;
+  }
+
+  function stableHash(value) {
+    let hash = 2166136261;
+    String(value || '').split('').forEach(char => {
+      hash ^= char.charCodeAt(0);
+      hash = Math.imul(hash, 16777619);
+    });
+    return hash >>> 0;
+  }
+
   function renderCategoricalBadges(field, value, limit) {
-    return categoricalValues(value).slice(0, limit || Number.MAX_SAFE_INTEGER).map(item => `<span class="aim-answer-badge${answerBadgeClass(field, item)}">${Store.escapeHtml(item)}</span>`).join('');
+    return categoricalValues(value).slice(0, limit || Number.MAX_SAFE_INTEGER).map(item => `<span class="aim-answer-badge${answerBadgeClass(field, item)}"${answerBadgeStyle(field, item)}>${Store.escapeHtml(item)}</span>`).join('');
   }
 
   function renderPreviewPrimaryGroup(group) {
@@ -2400,13 +2428,15 @@
     const rows = filteredRecords(activity, scope);
     const recorders = unique(recordsFor(activity.id).map(r => r.createdByDisplayName));
     const advancedCount = activeAdvancedFilterCount();
+    const periodButtons = recordPeriodOptions(activity).map(([period, label]) => periodButton(period, label)).join('');
+    const choiceFilters = renderRecordChoiceFilters(activity);
     const title = scope === 'mine' ? '我的紀錄' : '全部紀錄';
     return `
       <div class="aim-panel">
         <div class="aim-records-head">
           <div>
             <h2>${title}</h2>
-            <p class="aim-small">目前結果共 ${rows.length} 筆</p>
+            <p class="aim-small" id="aim-record-result-count">目前結果共 ${rows.length} 筆</p>
           </div>
           <div class="aim-records-head-actions">
             ${renderVoidRecordsToggle('all')}
@@ -2422,11 +2452,7 @@
         <div class="aim-record-filter-bar" role="search">
           <div class="aim-record-search"><input class="aim-input" id="aim-record-q" value="${Store.escapeHtml(ui.records.q)}" placeholder="搜尋姓名、公司或內容" aria-label="搜尋紀錄"></div>
           <div class="aim-period-group" role="group" aria-label="快速期間篩選">
-            ${periodButton('all', '全部')}
-            ${periodButton('today', '今日')}
-            ${periodButton('yesterday', '昨日')}
-            ${periodButton('day_before', '前日')}
-            ${periodButton('custom', customPeriodLabel())}
+            ${periodButtons}
           </div>
           <button class="aim-button aim-more-filter-button" data-action="toggle-more-filters" aria-expanded="${ui.records.moreOpen}" type="button">更多篩選${advancedCount ? `（${advancedCount}）` : ''}</button>
         </div>
@@ -2443,12 +2469,39 @@
             <div class="aim-field"><label for="aim-record-recorder">紀錄者</label><select class="aim-select" id="aim-record-recorder">${option('all', '全部紀錄者', ui.records.recorder)}${recorders.map(r => option(r, r, ui.records.recorder)).join('')}</select></div>
             <div class="aim-field"><label for="aim-record-state">紀錄狀態</label><select class="aim-select" id="aim-record-state">${option('normal', '有效', ui.records.state)}${option('void', '作廢', ui.records.state)}${option('all', '有效與作廢', ui.records.state)}</select></div>
             <label class="aim-checkbox"><input id="aim-record-low" type="checkbox" ${ui.records.low ? 'checked' : ''}> 低完整度</label>
+            ${choiceFilters}
             <button class="aim-button" data-action="reset-more-filters" type="button">重設進階篩選</button>
           </div>
         ` : ''}
-        <div class="aim-record-card-list aim-record-card-list-all">${rows.map(record => renderRecordCard(record, activity, 'all')).join('') || '<div class="aim-empty">沒有符合篩選條件的紀錄。</div>'}</div>
+        <div id="aim-record-results">${renderRecordResults(activity, scope, rows)}</div>
       </div>
     `;
+  }
+
+  function renderRecordResults(activity, scope, rows) {
+    const visibleRows = rows || filteredRecords(activity, scope);
+    return `<div class="aim-record-card-list aim-record-card-list-all">${visibleRows.map(record => renderRecordCard(record, activity, 'all')).join('') || '<div class="aim-empty">沒有符合篩選條件的紀錄。</div>'}</div>`;
+  }
+
+  function renderRecordChoiceFilters(activity) {
+    const fields = recordChoiceFilterFields(activity);
+    if (!fields.length) return '';
+    return fields.map(field => {
+      const key = recordChoiceFilterKey(field);
+      const selected = new Set(recordSelectedChoiceFilterValues(key));
+      const optionsHtml = recordChoiceFilterOptions(field).map(value => `
+        <label class="aim-checkbox aim-record-choice-option">
+          <input class="aim-record-choice-filter" type="checkbox" data-field="${Store.escapeHtml(key)}" value="${Store.escapeHtml(value)}" ${selected.has(value) ? 'checked' : ''}>
+          ${Store.escapeHtml(value)}
+        </label>
+      `).join('');
+      return `
+        <fieldset class="aim-record-choice-filter-group">
+          <legend>${Store.escapeHtml(field.title)}</legend>
+          <div class="aim-record-choice-options">${optionsHtml}</div>
+        </fieldset>
+      `;
+    }).join('');
   }
 
   function renderRecordScopeSwitch() {
@@ -4040,7 +4093,7 @@
     bindFormDesignTextareas();
     bindThumbnailMediaControls();
     bindFormPreviewControls();
-    bind('aim-record-q', value => { ui.records.q = value; });
+    bindRecordSearch();
     bindMobileRecordSearch();
     bind('aim-record-recorder', value => { ui.records.recorder = value; }, 'change');
     bind('aim-record-state', value => {
@@ -4051,6 +4104,11 @@
     bindRecordDateField('aim-record-start', 'start');
     bindRecordDateField('aim-record-end', 'end');
     bindCheck('aim-record-low', value => { ui.records.low = value; });
+    document.querySelectorAll('.aim-record-choice-filter').forEach(node => node.addEventListener('change', () => {
+      setRecordChoiceFilter(node.dataset.field, node.value, node.checked);
+      save();
+      render();
+    }));
     document.querySelectorAll('.aim-show-void-records-input').forEach(node => node.addEventListener('change', () => {
       setVoidRecordsVisibility(node.checked);
       render();
@@ -4515,6 +4573,25 @@
     });
   }
 
+  function bindRecordSearch() {
+    const node = document.getElementById('aim-record-q');
+    if (!node) return;
+    let composing = false;
+    const update = () => {
+      ui.records.q = node.value;
+      save();
+      refreshRecordResults();
+    };
+    node.addEventListener('compositionstart', () => { composing = true; });
+    node.addEventListener('compositionend', () => {
+      composing = false;
+      update();
+    });
+    node.addEventListener('input', () => {
+      if (!composing) update();
+    });
+  }
+
   function bindMobileRecordSearch() {
     const node = document.getElementById('aim-mobile-record-q');
     if (!node) return;
@@ -4532,6 +4609,18 @@
     node.addEventListener('input', () => {
       if (!composing) update();
     });
+  }
+
+  function refreshRecordResults() {
+    const activity = selectedActivity();
+    if (!activity || ui.tab !== 'records' || !['mine', 'all'].includes(ui.records.scope)) return;
+    const target = document.getElementById('aim-record-results');
+    if (!target) return;
+    const rows = filteredRecords(activity, ui.records.scope);
+    target.innerHTML = renderRecordResults(activity, ui.records.scope, rows);
+    const count = document.getElementById('aim-record-result-count');
+    if (count) count.textContent = `目前結果共 ${rows.length} 筆`;
+    fitRecordPreviewBadges();
   }
 
   function refreshMobileRecordResults() {
@@ -4599,7 +4688,7 @@
   }
 
   function setRecordPeriod(period) {
-    if (!['all', 'today', 'yesterday', 'day_before', 'custom'].includes(period)) return;
+    if (!isRecordPeriodAllowed(period, selectedActivity())) return;
     ui.records.filterError = '';
     if (period === 'custom') {
       ui.records.customOpen = !ui.records.customOpen;
@@ -4607,6 +4696,25 @@
     }
     ui.records.period = period;
     ui.records.customOpen = false;
+  }
+
+  function recordPeriodOptions(activity) {
+    const days = activityFormOpenDays(activity);
+    return [['all', '全部'], ...days.map((date, index) => [`day:${date}`, `Day ${index + 1}`]), ['custom', customPeriodLabel()]];
+  }
+
+  function isRecordPeriodAllowed(period, activity) {
+    if (period === 'all' || period === 'custom') return true;
+    return recordPeriodOptions(activity).some(([value]) => value === period);
+  }
+
+  function activityFormOpenDays(activity) {
+    if (!activity || !isIsoDateOnly(activity.formOpenStart) || !isIsoDateOnly(activity.formOpenEnd) || activity.formOpenStart > activity.formOpenEnd) return [];
+    const days = [];
+    for (let date = activity.formOpenStart; date <= activity.formOpenEnd && days.length < 370; date = shiftLocalDate(date, 1)) {
+      days.push(date);
+    }
+    return days;
   }
 
   function applyCustomPeriod() {
@@ -4642,6 +4750,7 @@
     ui.records.state = 'normal';
     ui.records.showVoidRecords = false;
     ui.records.low = false;
+    ui.records.choiceFilters = {};
   }
 
   function activeAdvancedFilterCount() {
@@ -4649,7 +4758,8 @@
     return [
       ui.records.recorder !== 'all',
       stateFilterIsExplicit,
-      ui.records.low
+      ui.records.low,
+      ...Object.values(ui.records.choiceFilters || {}).map(values => Array.isArray(values) && values.length > 0)
     ].filter(Boolean).length;
   }
 
@@ -4658,15 +4768,11 @@
     return `自訂區間 ${formatCompactDateRange(ui.records.start, ui.records.end)}`;
   }
 
-  function recordDateRange() {
-    if (ui.records.period === 'today') return [Store.CURRENT_DATE, Store.CURRENT_DATE];
-    if (ui.records.period === 'yesterday') {
-      const date = shiftLocalDate(Store.CURRENT_DATE, -1);
-      return [date, date];
-    }
-    if (ui.records.period === 'day_before') {
-      const date = shiftLocalDate(Store.CURRENT_DATE, -2);
-      return [date, date];
+  function recordDateRange(activity) {
+    if (ui.records.period && ui.records.period.startsWith('day:')) {
+      const date = ui.records.period.slice(4);
+      if (activityFormOpenDays(activity).includes(date)) return [date, date];
+      return ['', ''];
     }
     if (ui.records.period === 'custom') return [ui.records.start, ui.records.end];
     return ['', ''];
@@ -4777,9 +4883,77 @@
     return { answered, total: fields.length, percent: fields.length ? Math.round(answered / fields.length * 100) : 0 };
   }
 
+  function recordChoiceFilterFields(activity) {
+    return publishedRecordItems(activity)
+      .filter(field => recordAdvancedChoiceFieldTypes.has(field.type))
+      .filter(field => recordChoiceFilterOptions(field).length > 0);
+  }
+
+  function recordChoiceFilterKey(field) {
+    return field.fieldId || field.itemKey || field.itemId || field.title || '';
+  }
+
+  function recordChoiceFilterOptions(field) {
+    return unique(analyticsFieldOptionLabels(field));
+  }
+
+  function recordSelectedChoiceFilterValues(fieldKey) {
+    return ((ui.records.choiceFilters || {})[fieldKey] || []).filter(Boolean);
+  }
+
+  function setRecordChoiceFilter(fieldKey, value, checked) {
+    if (!fieldKey || !value) return;
+    ui.records.choiceFilters = ui.records.choiceFilters || {};
+    const values = new Set(recordSelectedChoiceFilterValues(fieldKey));
+    if (checked) values.add(value);
+    else values.delete(value);
+    const next = Array.from(values);
+    if (next.length) ui.records.choiceFilters[fieldKey] = next;
+    else delete ui.records.choiceFilters[fieldKey];
+  }
+
+  function recordFieldForChoiceFilter(record, activity, fieldKey) {
+    return answerProducingItems(snapshotRecordItems(record, activity)).find(field => recordChoiceFilterKey(field) === fieldKey)
+      || recordChoiceFilterFields(activity).find(field => recordChoiceFilterKey(field) === fieldKey);
+  }
+
+  function recordChoiceAnswerLabels(record, field) {
+    const value = record.answers[field.fieldId];
+    const values = Array.isArray(value) ? value : [value];
+    return values.map(entry => String(optionLabel(entry, field) || '').trim()).filter(Boolean);
+  }
+
+  function recordMatchesChoiceFilters(record, activity) {
+    const filters = ui.records.choiceFilters || {};
+    return Object.entries(filters).every(([fieldKey, selectedValues]) => {
+      const selected = (selectedValues || []).filter(Boolean);
+      if (!selected.length) return true;
+      const field = recordFieldForChoiceFilter(record, activity, fieldKey);
+      if (!field) return false;
+      const answers = new Set(recordChoiceAnswerLabels(record, field));
+      return selected.some(value => answers.has(value));
+    });
+  }
+
+  function recordSearchText(record, activity) {
+    const chunks = [
+      Store.recordSummary(record),
+      record.createdByDisplayName,
+      Store.formatDateTime(record.createdAt)
+    ];
+    answerProducingItems(snapshotRecordItems(record, activity)).forEach(field => {
+      const value = displayAnswerValue(field, record.answers[field.fieldId], otherAnswersForRecord(record));
+      chunks.push(field.title, Store.answerText(value));
+    });
+    Object.values(otherAnswersForRecord(record)).forEach(value => chunks.push(value));
+    const card = cardLinkForRecord(record).card || {};
+    chunks.push(card.name, card.company, card.jobTitle);
+    return chunks.filter(hasValue).join(' ').toLowerCase();
+  }
+
   function filteredRecords(activity, scope) {
     const q = ui.records.q.trim().toLowerCase();
-    const [dateStart, dateEnd] = recordDateRange();
+    const [dateStart, dateEnd] = recordDateRange(activity);
     return recordsFor(activity.id).filter(r => {
       if (scope === 'mine' && r.createdByUserId !== currentUser.userId) return false;
       if (!ui.records.showVoidRecords && r.status === 'void') return false;
@@ -4788,8 +4962,8 @@
       if (dateStart && r.createdAt.slice(0, 10) < dateStart) return false;
       if (dateEnd && r.createdAt.slice(0, 10) > dateEnd) return false;
       if (ui.records.low && recordCoverage(r, activity).answered > 1) return false;
-      const text = `${Store.recordSummary(r)} ${Object.values(r.answers).flat().join(' ')}`.toLowerCase();
-      if (q && !text.includes(q)) return false;
+      if (!recordMatchesChoiceFilters(r, activity)) return false;
+      if (q && !recordSearchText(r, activity).includes(q)) return false;
       return true;
     }).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
