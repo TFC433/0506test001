@@ -20,13 +20,8 @@
   ];
   const choiceFieldTypes = ['single_choice', 'multiple_choice', 'dropdown'];
   const recordAdvancedChoiceFieldTypes = new Set(choiceFieldTypes);
-  const answerBadgePalette = Object.freeze([
-    { bg: '#eef3f6', text: '#33414a', border: '#c8d4db' },
-    { bg: '#eaf5f1', text: '#236156', border: '#bad8d0' },
-    { bg: '#fbf3dd', text: '#755722', border: '#e2cc8d' },
-    { bg: '#fbeee6', text: '#8a4e2e', border: '#e7c2ab' },
-    { bg: '#fae9e6', text: '#8b4540', border: '#e5b9b3' }
-  ]);
+  const answerBadgePaletteSize = 10;
+  const recordBadgePaletteFieldTypes = new Set(['yes_no', ...choiceFieldTypes]);
   const fieldTypeGroups = [
     { label: '版面元件', types: ['section_heading', 'information_text', 'form_thumbnail'] },
     { label: '文字與數值', types: ['short_text', 'long_text', 'number'] },
@@ -1335,24 +1330,26 @@
     return ' aim-answer-badge-neutral';
   }
 
-  function answerBadgeStyle(field, value) {
+  function answerBadgePaletteClass(field) {
     if (!field || field.fieldId === 'fld_priority') return '';
-    const identity = field.fieldId || field.itemKey || field.itemId || field.title || 'field';
-    const palette = answerBadgePalette[stableHash(identity) % answerBadgePalette.length];
-    return ` style="--aim-answer-badge-bg:${palette.bg};--aim-answer-badge-text:${palette.text};--aim-answer-badge-border:${palette.border}"`;
+    const index = answerBadgePaletteIndex(field, selectedActivity());
+    return index >= 0 ? ` aim-answer-badge-field-${index + 1}` : '';
   }
 
-  function stableHash(value) {
-    let hash = 2166136261;
-    String(value || '').split('').forEach(char => {
-      hash ^= char.charCodeAt(0);
-      hash = Math.imul(hash, 16777619);
-    });
-    return hash >>> 0;
+  function answerBadgePaletteIndex(field, activity) {
+    if (!isRecordBadgePaletteField(field) || !activity) return -1;
+    const key = recordChoiceFilterKey(field);
+    const fields = publishedRecordItems(activity).filter(isRecordBadgePaletteField);
+    const index = fields.findIndex(item => recordChoiceFilterKey(item) === key);
+    return index >= 0 && index < answerBadgePaletteSize ? index : -1;
+  }
+
+  function isRecordBadgePaletteField(field) {
+    return Boolean(field && field.fieldId !== 'fld_priority' && recordBadgePaletteFieldTypes.has(field.type));
   }
 
   function renderCategoricalBadges(field, value, limit) {
-    return categoricalValues(value).slice(0, limit || Number.MAX_SAFE_INTEGER).map(item => `<span class="aim-answer-badge${answerBadgeClass(field, item)}"${answerBadgeStyle(field, item)}>${Store.escapeHtml(item)}</span>`).join('');
+    return categoricalValues(value).slice(0, limit || Number.MAX_SAFE_INTEGER).map(item => `<span class="aim-answer-badge${answerBadgeClass(field, item)}${answerBadgePaletteClass(field)}">${Store.escapeHtml(item)}</span>`).join('');
   }
 
   function renderPreviewPrimaryGroup(group) {

@@ -3128,6 +3128,66 @@ a:focus-visible {
   line-height: 1.3;
 }
 
+.aim-answer-badge-field-1 {
+  --aim-answer-badge-bg: #eef3f6;
+  --aim-answer-badge-border: #c4d0d7;
+  --aim-answer-badge-text: #2d4452;
+}
+
+.aim-answer-badge-field-2 {
+  --aim-answer-badge-bg: #edf7f5;
+  --aim-answer-badge-border: #b8d9d3;
+  --aim-answer-badge-text: #2f746a;
+}
+
+.aim-answer-badge-field-3 {
+  --aim-answer-badge-bg: #fbf4df;
+  --aim-answer-badge-border: #e5d197;
+  --aim-answer-badge-text: #7c6328;
+}
+
+.aim-answer-badge-field-4 {
+  --aim-answer-badge-bg: #fcefe6;
+  --aim-answer-badge-border: #edc7aa;
+  --aim-answer-badge-text: #8f5a34;
+}
+
+.aim-answer-badge-field-5 {
+  --aim-answer-badge-bg: #faece8;
+  --aim-answer-badge-border: #e6bcae;
+  --aim-answer-badge-text: #914936;
+}
+
+.aim-answer-badge-field-6 {
+  --aim-answer-badge-bg: #f0f4f6;
+  --aim-answer-badge-border: #c8d3d8;
+  --aim-answer-badge-text: #455f6b;
+}
+
+.aim-answer-badge-field-7 {
+  --aim-answer-badge-bg: #f0f6f2;
+  --aim-answer-badge-border: #c8d9cc;
+  --aim-answer-badge-text: #55745d;
+}
+
+.aim-answer-badge-field-8 {
+  --aim-answer-badge-bg: #faf3e6;
+  --aim-answer-badge-border: #dcc393;
+  --aim-answer-badge-text: #765b2c;
+}
+
+.aim-answer-badge-field-9 {
+  --aim-answer-badge-bg: #fbefe8;
+  --aim-answer-badge-border: #dfbea8;
+  --aim-answer-badge-text: #795237;
+}
+
+.aim-answer-badge-field-10 {
+  --aim-answer-badge-bg: #faeeee;
+  --aim-answer-badge-border: #dcbcbc;
+  --aim-answer-badge-text: #754d4c;
+}
+
 .aim-answer-badge-high {
   color: var(--aim-red);
   background: var(--aim-red-soft);
