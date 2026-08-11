@@ -1,5 +1,6 @@
 ﻿const { randomUUID } = require('crypto');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const { plannerDomainContext, finalizerDomainContext } = require('./form-ai-domain-context');
 
 const ANSWER_ITEM_TYPES = new Set([
     'short_text',
@@ -728,6 +729,7 @@ class ActivityIntelligenceService {
                     }))
                 }
             ])),
+            domainContext: plannerDomainContext(),
             tools: this._formAiToolDefinitions()
         };
     }
@@ -787,9 +789,11 @@ class ActivityIntelligenceService {
         return [
             '你是 FANUC forms 的資料查詢規劃器，只輸出 JSON，不要回答使用者。',
             '你的工作是理解使用者問題，選擇必要的 FORM 工具，並產生機器可執行的 toolCalls。',
+            '你會收到 FANUC / Machine Tool / Manufacturing domainContext；它只能幫助理解術語與可能相關維度，不能替代 FORM 工具證據。',
             '不得輸出 SQL，不得引用資料表，不得編造工具結果，不得暴露內部資料庫架構。',
             '數字、排名、分布、日期統計、紀錄者統計必須使用 aggregate_submissions。',
             '需要文字內容、原因、建議、痛點、需求、摘要或混合分析時，使用 retrieve_submissions 取得實際紀錄證據。',
+            '若 domainContext 暗示某概念可能相關，只能用來選擇要查詢的 FORM 欄位或文字證據；不得把關聯直接當成已確認事實。',
             `最多 ${FORM_AI_MAX_TOOL_CALLS} 個 toolCalls。`,
             'field 請優先使用 schema 內的 itemKey；只有標題完全且唯一時才可使用 title。',
             '輸出 JSON 格式：{"strategy":"tool_query","intent":"...","toolCalls":[{"tool":"aggregate_submissions","arguments":{...}}]}'
@@ -1208,7 +1212,9 @@ class ActivityIntelligenceService {
             '你是 FANUC forms 的表單資料分析助手。',
             '請用繁體中文直接回答使用者原始問題。',
             '工具結果中的計數、排名、分布、百分比與日期分組是權威事實；不得自行重新計數或改寫數字。',
+            '你會收到 FANUC / Machine Tool / Manufacturing domainContext；它是專業解讀鏡頭，不是客戶實際陳述。',
             '需要解讀時，可以根據提供的文字證據做合理推論，並清楚區分證據與推論。',
+            '請區分：已確認事實、明確問題/需求、以及基於 domainContext 的可能相關分析維度。',
             '如果工具證據不足，請明確說明資料不足，不要編造。',
             '維持 FORM-only 範圍；不要推測 CRM、商機、銷售管線或外部資料。',
             '一般回答不得輸出 submissionId、formVersionId、itemKey、cardId、optionKey、UUID、SQL、資料表名稱、工具名稱或 planner 內部資訊，除非使用者明確要求技術識別碼。',
@@ -1220,7 +1226,7 @@ class ActivityIntelligenceService {
         return [
             `使用者原始問題：${question}`,
             '以下是後端以唯讀 FORM 工具取得的結構化證據。請根據證據回答，不要暴露內部工具或識別碼。',
-            JSON.stringify({ evidence: toolResults })
+            JSON.stringify({ domainContext: finalizerDomainContext(), evidence: toolResults })
         ].join('\n\n');
     }
 
