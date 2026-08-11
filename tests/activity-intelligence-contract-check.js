@@ -413,11 +413,17 @@ async function main() {
     assert(aiCalls[0].systemInstruction.includes('資料查詢規劃器'));
     assert(aiCalls[0].systemInstruction.includes('domainContext'));
     assert(aiCalls[0].systemInstruction.includes('FORM 工具證據'));
+    assert(aiCalls[0].systemInstruction.includes('CUSTOMER FORM EVIDENCE FIRST'));
+    assert(aiCalls[0].systemInstruction.includes('不得決定預設查詢主題'));
     assert(aiCalls[0].userPrompt.includes('domainContext'));
     assert(aiCalls[1].systemInstruction.includes('表單資料分析助手'));
     assert(aiCalls[1].systemInstruction.includes('一般回答不得輸出'));
-    assert(aiCalls[1].userPrompt.includes('以下是後端以唯讀 FORM 工具取得的結構化證據'));
+    assert(aiCalls[1].systemInstruction.includes('EVIDENCE FIRST, DOMAIN INTERPRETATION SECOND'));
+    assert(aiCalls[1].systemInstruction.includes('domainContext 單獨不足以支撐結論'));
+    assert(aiCalls[1].systemInstruction.includes('不要把 Domain Lens 類別當 checklist'));
+    assert(aiCalls[1].userPrompt.includes('先提供 evidence，再提供次要 domainContext'));
     assert(aiCalls[1].userPrompt.includes('不要暴露內部工具或識別碼'));
+    assert(aiCalls[1].userPrompt.indexOf('"evidence"') < aiCalls[1].userPrompt.indexOf('"domainContext"'));
     assert(aiCalls[1].userPrompt.includes('完整長文字需求：客戶正在評估自動化產線'));
     assert(aiCalls[1].userPrompt.includes('Card Co'));
     assert(aiCalls[1].userPrompt.includes('RAW note'));

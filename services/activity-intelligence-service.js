@@ -790,10 +790,14 @@ class ActivityIntelligenceService {
             '你是 FANUC forms 的資料查詢規劃器，只輸出 JSON，不要回答使用者。',
             '你的工作是理解使用者問題，選擇必要的 FORM 工具，並產生機器可執行的 toolCalls。',
             '你會收到 FANUC / Machine Tool / Manufacturing domainContext；它只能幫助理解術語與可能相關維度，不能替代 FORM 工具證據。',
+            'CUSTOMER FORM EVIDENCE FIRST：使用者要知道客戶實際填了什麼、有哪些真實分布與紀錄，不是一般製造業背景。',
             '不得輸出 SQL，不得引用資料表，不得編造工具結果，不得暴露內部資料庫架構。',
             '數字、排名、分布、日期統計、紀錄者統計必須使用 aggregate_submissions。',
             '需要文字內容、原因、建議、痛點、需求、摘要或混合分析時，使用 retrieve_submissions 取得實際紀錄證據。',
+            'domainContext 不得決定預設查詢主題；不要因為 domainContext 有 Digital Twin、MES、IoT、Tool Management、Competition 等概念，就自動查詢或組成主題清單。',
+            '除非使用者明確提問、欄位實際值、或已取回的 FORM 文字證據支持，否則不要把 domainContext 主題加入 toolCalls。',
             '若 domainContext 暗示某概念可能相關，只能用來選擇要查詢的 FORM 欄位或文字證據；不得把關聯直接當成已確認事實。',
+            '遇到 MTB、MTU、SI 等角色問題時，優先依實際公司類型/角色欄位過濾，再聚合實際相關欄位並 retrieve_submissions 取得文字紀錄。',
             '語意型質化問題若沒有明確欄位值可精準過濾，請用 retrieve_submissions 指定相關文字欄位，不要把關鍵詞當成必須完全相等的欄位值。',
             `最多 ${FORM_AI_MAX_TOOL_CALLS} 個 toolCalls。`,
             'field 請優先使用 schema 內的 itemKey；只有標題完全且唯一時才可使用 title。',
@@ -1190,6 +1194,17 @@ class ActivityIntelligenceService {
             '請用繁體中文直接回答使用者原始問題。',
             '工具結果中的計數、排名、分布、百分比與日期分組是權威事實；不得自行重新計數或改寫數字。',
             '你會收到 FANUC / Machine Tool / Manufacturing domainContext；它是專業解讀鏡頭，不是客戶實際陳述。',
+            'EVIDENCE FIRST, DOMAIN INTERPRETATION SECOND：每個主要結論都必須先由實際 FORM 客戶回覆或確定性工具結果支撐。',
+            'domainContext 單獨不足以支撐結論；不得因為 domainContext 提到某主題，就把該主題當作答案大綱或主要發現。',
+            '不要把 Domain Lens 類別當 checklist；Machining Efficiency、Digital Twin、IoT、MES、Competition、Maintenance 等主題只有在 evidence 明確支持時才可成為答案主題。',
+            '若使用段落標題或條列主題，標題必須來自 evidence 中反覆出現的客戶回覆、欄位值、問題或需求，不得直接套用 Domain Lens 分類名稱。',
+            'evidence 未提到或工具結果未支持的 domainContext 主題，請完全不要提及。',
+            '專業判讀只能補充與 evidence 直接相連的一層概念；不要延伸到相鄰但未被客戶提到的企業系統、管理指標或產品領域。',
+            '除非使用者問題或 evidence 明確出現，否則不要提及 MES、ERP、APS、OEE、Digital Twin、OPC UA、MTConnect、Competition 等 domainContext 名詞。',
+            '如果 evidence 使用「上位系統」、「報工」、「戰情室」、「設備連線」等客戶用語，請優先保留這些客戶用語；不要自動翻譯或升級成 MES、ERP、OEE 等未明講術語。',
+            '分析型回答請先整理最強的實際客戶訊號與客戶說法，再補充有限的專業解讀。',
+            '必要時保留客戶聲音：摘要實際長文字、短文字、otherText 或類別答案中出現的需求、痛點、關注點。',
+            '不要預設進入背景教育模式；除非使用者詢問定義或術語會造成歧義，否則不要解釋基本製造業概念。',
             '需要解讀時，可以根據提供的文字證據做合理推論，並清楚區分證據與推論。',
             '請區分：已確認事實、明確問題/需求、以及基於製造業專業脈絡的可能相關分析維度。',
             '不要在一般回答中提到「domainContext」、「Domain Context」、「工具結果」或內部流程名稱；請用自然語言表達為專業判讀或可能相關維度。',
@@ -1203,8 +1218,8 @@ class ActivityIntelligenceService {
     _formAiFinalizerPrompt(question, toolResults) {
         return [
             `使用者原始問題：${question}`,
-            '以下是後端以唯讀 FORM 工具取得的結構化證據。請根據證據回答，不要暴露內部工具或識別碼。',
-            JSON.stringify({ domainContext: finalizerDomainContext(), evidence: toolResults })
+            '以下 JSON 先提供 evidence，再提供次要 domainContext。請先以 evidence 建立答案；domainContext 只能在 evidence 支持時補充專業解讀。請不要暴露內部工具或識別碼。',
+            JSON.stringify({ evidence: toolResults, domainContext: finalizerDomainContext() })
         ].join('\n\n');
     }
 
