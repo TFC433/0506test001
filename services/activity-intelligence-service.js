@@ -311,8 +311,6 @@ class ActivityIntelligenceService {
         const question = this._normalizeAiQuestion(payload.question);
         const scope = this._normalizeAiScope(activity, payload.filters || payload);
         const submissions = await this.listSubmissions(activity.id, {
-            dateStart: scope.dateStart,
-            dateEnd: scope.dateEnd,
             recorderDisplayName: scope.recorderDisplayName,
             includeVoid: false
         });
@@ -643,23 +641,18 @@ class ActivityIntelligenceService {
     _normalizeAiScope(activity, filters = {}) {
         const formOpenStart = this._normalizeDate(activity.formOpenStart);
         const formOpenEnd = this._normalizeDate(activity.formOpenEnd);
-        if (!formOpenStart || !formOpenEnd) {
-            throw new ActivityIntelligenceError(409, 'Activity form effective period is unavailable.', 'FORM_AI_ACTIVITY_PERIOD_UNAVAILABLE');
-        }
 
         const suppliedStart = filters.dateStart || filters.start || null;
         const suppliedEnd = filters.dateEnd || filters.end || null;
         const filterStart = suppliedStart ? this._normalizeOptionalDate(suppliedStart) : null;
         const filterEnd = suppliedEnd ? this._normalizeOptionalDate(suppliedEnd) : null;
-        const dateStart = filterStart && filterStart > formOpenStart ? filterStart : formOpenStart;
-        const dateEnd = filterEnd && filterEnd < formOpenEnd ? filterEnd : formOpenEnd;
         const recorder = String(filters.recorderDisplayName || filters.recorder || '').trim();
 
         return {
-            dateStart,
-            dateEnd,
+            dateStart: null,
+            dateEnd: null,
             recorderDisplayName: recorder && recorder !== 'all' ? recorder : null,
-            defaultedToFormEffectivePeriod: !filterStart && !filterEnd,
+            defaultedToCurrentActivity: !filterStart && !filterEnd,
             requestedDateStart: filterStart,
             requestedDateEnd: filterEnd,
             activityFormOpenStart: formOpenStart,
@@ -687,7 +680,9 @@ class ActivityIntelligenceService {
                 dateField: 'submission.createdAt',
                 recorderDisplayName: scope.recorderDisplayName,
                 activeSubmissionsOnly: true,
-                defaultedToFormEffectivePeriod: scope.defaultedToFormEffectivePeriod,
+                formOpenPeriodUsedAsFilter: false,
+                exhibitionPeriodUsedAsFilter: false,
+                defaultedToCurrentActivity: scope.defaultedToCurrentActivity,
                 requestedDateStart: scope.requestedDateStart,
                 requestedDateEnd: scope.requestedDateEnd
             },

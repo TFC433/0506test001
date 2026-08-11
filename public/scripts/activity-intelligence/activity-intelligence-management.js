@@ -2811,7 +2811,7 @@
     let totalSelections = 0;
     records.forEach(record => {
       const value = record.answers[field.fieldId];
-      const labels = analyticsAnswerLabels(value, field);
+      const labels = analyticsAnswerLabels(value, field, record);
       if (!labels.length) return;
       answered += 1;
       const selected = field.type === 'multiple_choice' ? Array.from(new Set(labels)) : labels.slice(0, 1);
@@ -2855,7 +2855,7 @@
       const date = String(record.createdAt || '').slice(0, 10);
       const index = dateIndex.get(date);
       if (index === undefined) return;
-      const labels = analyticsAnswerLabels(record.answers[field.fieldId], field);
+      const labels = analyticsAnswerLabels(record.answers[field.fieldId], field, record);
       if (!labels.length) return;
       answeredByDate[index] += 1;
       const selected = field.type === 'multiple_choice' ? Array.from(new Set(labels)) : labels.slice(0, 1);
@@ -2884,20 +2884,33 @@
     return source.map(value => String(value || '').trim()).filter(Boolean);
   }
 
-  function analyticsAnswerLabels(value, field) {
+  function analyticsAnswerLabels(value, field, record) {
     const values = Array.isArray(value) ? value : [value];
-    return values.map(entry => analyticsAnswerLabel(entry, field)).filter(Boolean);
+    const otherText = analyticsOtherText(field, record);
+    return values.map(entry => analyticsAnswerLabel(entry, field, otherText)).filter(Boolean);
   }
 
-  function analyticsAnswerLabel(value, field) {
+  function analyticsAnswerLabel(value, field, otherText = '') {
     if (value === undefined || value === null || value === '') return '';
     if (field.type === 'yes_no') {
       if (value === true) return yesNoOptions[0];
       if (value === false) return yesNoOptions[1];
     }
     const label = String(optionLabel(value, field) || '').trim();
-    if (!label || label === '__other') return label === '__other' ? otherAnswerValue : '';
+    if (!label) return '';
+    if (label === '__other' || label === otherAnswerValue) return otherText || otherAnswerValue;
     return label;
+  }
+
+  function analyticsOtherText(field, record) {
+    const otherAnswers = otherAnswersForRecord(record);
+    const keys = [field && field.fieldId, field && field.itemKey, field && field.itemId].filter(Boolean);
+    for (const key of keys) {
+      if (Object.prototype.hasOwnProperty.call(otherAnswers, key)) {
+        return String(otherAnswers[key] || '').trim();
+      }
+    }
+    return '';
   }
 
   function categoricalChartRow(label, countValue, denominator, selectionDenominator) {
@@ -3257,17 +3270,29 @@
 
   function analyticsDateBuckets(records) {
     const activity = selectedActivity();
-    const recordDates = records.map(record => String(record.createdAt || '').slice(0, 10)).filter(Boolean).sort();
-    const start = (activity && activity.formOpenStart) || recordDates[0] || '';
-    const end = (activity && activity.formOpenEnd) || recordDates[recordDates.length - 1] || '';
+    const recordDates = records.map(record => String(record.createdAt || '').slice(0, 10)).filter(isIsoDateOnly).sort();
+    const formStart = activity && isIsoDateOnly(activity.formOpenStart) ? activity.formOpenStart : '';
+    const formEnd = activity && isIsoDateOnly(activity.formOpenEnd) ? activity.formOpenEnd : '';
+    const earliestRecord = recordDates[0] || '';
+    const latestRecord = recordDates[recordDates.length - 1] || '';
+    const startCandidates = [formStart, earliestRecord].filter(Boolean);
+    const endCandidates = [formEnd, latestRecord].filter(Boolean);
+    let start = startCandidates.length ? startCandidates.sort()[0] : '';
+    let end = endCandidates.length ? endCandidates.sort()[endCandidates.length - 1] : '';
+    if (!start && end) start = end;
+    if (start && !end) end = start;
     if (!start || !end || end < start) return [];
     const dates = [];
     let current = start;
-    while (current <= end && dates.length < 370) {
+    while (current <= end) {
       dates.push(current);
       current = shiftLocalDate(current, 1);
     }
     return dates;
+  }
+
+  function isIsoDateOnly(value) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(String(value || '').slice(0, 10));
   }
 
   function formatAnalyticsDateLabel(value) {
@@ -4738,9 +4763,6 @@
   function analyticsRecords(activity) {
     return recordsFor(activity.id).filter(r => {
       if (r.status === 'void') return false;
-      const createdDate = String(r.createdAt || '').slice(0, 10);
-      if (activity.formOpenStart && createdDate < activity.formOpenStart) return false;
-      if (activity.formOpenEnd && createdDate > activity.formOpenEnd) return false;
       return true;
     });
   }
