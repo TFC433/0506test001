@@ -26,6 +26,11 @@ const ANALYTICS_ROLES = new Set(['admin', 'super_admin']);
 const FORM_AI_MAX_QUESTION_LENGTH = 1000;
 const FORM_AI_MAX_CONTEXT_CHARS = 800000;
 const FORM_AI_PROVIDER_TIMEOUT_MS = 45000;
+const FORM_AI_MAX_TOOL_CALLS = 3;
+const FORM_AI_OTHER_VALUE = '其他';
+const FORM_AI_TOOL_NAMES = new Set(['aggregate_submissions', 'retrieve_submissions']);
+const FORM_AI_AGGREGATE_GROUPS = new Set(['none', 'date', 'recorder', 'field']);
+const FORM_AI_CHOICE_TYPES = new Set(['yes_no', 'single_choice', 'multiple_choice', 'dropdown']);
 
 class ActivityIntelligenceError extends Error {
     constructor(statusCode, message, code) {
@@ -320,15 +325,10 @@ class ActivityIntelligenceService {
             throw new ActivityIntelligenceError(400, '目前範圍沒有可分析的有效表單紀錄。', 'FORM_AI_NO_DATA');
         }
 
-        const context = await this._buildFormAiContext(activity, scope, activeSubmissions);
-        const systemInstruction = this._formAiSystemInstruction();
-        const userPrompt = this._formAiUserPrompt(question, context);
-        this._assertFormAiContextSize(systemInstruction, userPrompt);
-
-        const answer = await this._generateFormAiAnswer({ systemInstruction, userPrompt });
+        const analysis = await this._runFormAiDataAgent({ activity, scope, submissions: activeSubmissions, question });
         return {
             completed: true,
-            answer
+            answer: analysis.answer
         };
     }
 
@@ -660,6 +660,570 @@ class ActivityIntelligenceService {
         };
     }
 
+    async _runFormAiDataAgent({ activity, scope, submissions, question }) {
+        const context = await this._buildFormAiContext(activity, scope, submissions);
+        const plannerInput = this._formAiPlannerContext(activity, scope, context);
+        const plannerStartedAt = Date.now();
+        const plan = await this._generateFormAiPlan(question, plannerInput);
+        const plannerDurationMs = Date.now() - plannerStartedAt;
+
+        const toolStartedAt = Date.now();
+        const toolResults = this._executeFormAiToolCalls(plan.toolCalls, context);
+        const toolDurationMs = Date.now() - toolStartedAt;
+
+        const finalSystemInstruction = this._formAiFinalizerSystemInstruction();
+        const finalUserPrompt = this._formAiFinalizerPrompt(question, toolResults);
+        this._assertFormAiContextSize(finalSystemInstruction, finalUserPrompt);
+
+        const finalStartedAt = Date.now();
+        const answer = await this._generateFormAiAnswer({
+            systemInstruction: finalSystemInstruction,
+            userPrompt: finalUserPrompt
+        });
+        const finalDurationMs = Date.now() - finalStartedAt;
+
+        return {
+            answer,
+            trace: {
+                planner: {
+                    strategy: plan.strategy,
+                    intent: plan.intent || '',
+                    toolCalls: plan.toolCalls,
+                    durationMs: plannerDurationMs,
+                    inputChars: this._formAiPlannerPrompt(question, plannerInput).length
+                },
+                tools: {
+                    durationMs: toolDurationMs,
+                    results: toolResults
+                },
+                finalizer: {
+                    durationMs: finalDurationMs,
+                    inputChars: finalUserPrompt.length
+                }
+            }
+        };
+    }
+
+    _formAiPlannerContext(activity, scope, context) {
+        return {
+            activity: context.activity,
+            effectiveScope: context.effectiveScope,
+            dataset: {
+                nonVoidSubmissionCount: context.submissions.length,
+                createdAtDateRange: this._formAiDateRange(context.submissions),
+                recorders: [...new Set(context.submissions.map(submission => submission.createdByDisplayName).filter(Boolean))].sort()
+            },
+            formVersions: Object.fromEntries(Object.entries(context.formVersions || {}).map(([versionId, version]) => [
+                versionId,
+                {
+                    versionId,
+                    versionNumber: version.versionNumber,
+                    publishedAt: version.publishedAt,
+                    fields: (version.fields || []).map(field => ({
+                        itemKey: field.itemKey,
+                        type: field.type,
+                        title: field.title,
+                        options: field.options || [],
+                        allowOther: Boolean(field.allowOther)
+                    }))
+                }
+            ])),
+            tools: this._formAiToolDefinitions()
+        };
+    }
+
+    _formAiDateRange(submissions) {
+        const dates = (submissions || [])
+            .map(submission => String(submission.createdAt || '').slice(0, 10))
+            .filter(Boolean)
+            .sort();
+        return {
+            start: dates[0] || null,
+            end: dates[dates.length - 1] || null
+        };
+    }
+
+    _formAiToolDefinitions() {
+        return [
+            {
+                tool: 'aggregate_submissions',
+                purpose: 'Exact count, ranking, date grouping, recorder grouping, or categorical field distribution over all non-void submissions.',
+                arguments: {
+                    aggregate: 'count',
+                    groupBy: ['none', 'date', 'recorder', 'field'],
+                    field: 'Optional field reference for groupBy=field, as { itemKey } or exact unambiguous { title }.',
+                    filters: {
+                        dateStart: 'Optional YYYY-MM-DD createdAt lower bound.',
+                        dateEnd: 'Optional YYYY-MM-DD createdAt upper bound.',
+                        recorderDisplayName: 'Optional exact recorder display name.',
+                        fields: 'Optional exact field filters: [{ field: { itemKey } or { title }, values: [category/value] }].'
+                    },
+                    sort: 'Optional { by: "count"|"label", direction: "asc"|"desc" }.',
+                    limit: 'Optional positive integer.'
+                }
+            },
+            {
+                tool: 'retrieve_submissions',
+                purpose: 'Retrieve actual FORM record evidence for qualitative or hybrid answers. Individual text answers are never truncated.',
+                arguments: {
+                    filters: 'Same filter object as aggregate_submissions.',
+                    fields: 'Optional field references to include. Omit to include all answered fields.',
+                    limit: 'Optional positive integer, maximum 80.'
+                }
+            }
+        ];
+    }
+
+    async _generateFormAiPlan(question, plannerInput) {
+        const systemInstruction = this._formAiPlannerSystemInstruction();
+        const userPrompt = this._formAiPlannerPrompt(question, plannerInput);
+        this._assertFormAiContextSize(systemInstruction, userPrompt);
+        const raw = await this._generateFormAiAnswer({ systemInstruction, userPrompt, generationConfig: { responseMimeType: 'application/json' } });
+        const plan = this._parseFormAiPlannerJson(raw);
+        return this._validateFormAiPlan(plan, plannerInput);
+    }
+
+    _formAiPlannerSystemInstruction() {
+        return [
+            '你是 FANUC forms 的資料查詢規劃器，只輸出 JSON，不要回答使用者。',
+            '你的工作是理解使用者問題，選擇必要的 FORM 工具，並產生機器可執行的 toolCalls。',
+            '不得輸出 SQL，不得引用資料表，不得編造工具結果，不得暴露內部資料庫架構。',
+            '數字、排名、分布、日期統計、紀錄者統計必須使用 aggregate_submissions。',
+            '需要文字內容、原因、建議、痛點、需求、摘要或混合分析時，使用 retrieve_submissions 取得實際紀錄證據。',
+            `最多 ${FORM_AI_MAX_TOOL_CALLS} 個 toolCalls。`,
+            'field 請優先使用 schema 內的 itemKey；只有標題完全且唯一時才可使用 title。',
+            '輸出 JSON 格式：{"strategy":"tool_query","intent":"...","toolCalls":[{"tool":"aggregate_submissions","arguments":{...}}]}'
+        ].join('\n');
+    }
+
+    _formAiPlannerPrompt(question, plannerInput) {
+        return [
+            `使用者問題：${question}`,
+            `問題意圖提示：${this._formAiQuestionIntentHint(question)}`,
+            '以下是目前 Activity、FORM schema 與可用工具。請只輸出 JSON plan。',
+            JSON.stringify(plannerInput)
+        ].join('\n\n');
+    }
+
+    _formAiQuestionIntentHint(question) {
+        const text = String(question || '');
+        if (text.includes('???撟曄?蝝????')) {
+            return '使用者是在問目前活動共有幾筆有效表單紀錄；使用 aggregate_submissions groupBy=none。';
+        }
+        if (text.includes('???箸?憭拍?蝝???賂?銝血?蝮賬?')) {
+            return '使用者是在問每天的有效紀錄數；使用 aggregate_submissions groupBy=date，依日期升冪。';
+        }
+        if (
+            text.includes('?狐?????豢?憭???') ||
+            text.includes('?狐?撣詨‵銵剁???') ||
+            text.includes('?銝雿???銝?憭?????')
+        ) {
+            return '使用者是在問紀錄者排行或誰記錄最多；使用 aggregate_submissions groupBy=recorder，依 count 降冪。';
+        }
+        if (text.includes('??賊??蜓閬??芯?嚗??嗾蝑???')) {
+            return '使用者是在問公司類型的類別分布；使用 aggregate_submissions groupBy=field，field.title=公司類型。';
+        }
+        if (text.includes('MTB')) {
+            return '使用者提到 MTB；通常先以 field.title=公司類型、values=[MTB] 篩選，再依問題需要聚合客戶關注議題或 retrieve_submissions 取得情報紀錄與後續動作。';
+        }
+        if (text.includes('??閮芾??批捆??摰Ｘ?鈭虜閬?瘙???')) {
+            return '使用者是在問質化洞察；使用 retrieve_submissions，優先取情報紀錄、後續動作、公司類型、客戶關注議題等欄位。';
+        }
+        return '無特定提示；請根據問題語意選擇最少必要工具。';
+    }
+
+    _parseFormAiPlannerJson(raw) {
+        const text = String(raw || '').trim();
+        const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+        const jsonText = fenced ? fenced[1].trim() : text;
+        try {
+            return JSON.parse(jsonText);
+        } catch (error) {
+            throw new ActivityIntelligenceError(502, 'FORM AI planner returned invalid JSON.', 'FORM_AI_PLANNER_INVALID_JSON');
+        }
+    }
+
+    _validateFormAiPlan(plan) {
+        if (!plan || typeof plan !== 'object' || Array.isArray(plan)) {
+            throw new ActivityIntelligenceError(502, 'FORM AI planner returned an invalid plan.', 'FORM_AI_PLANNER_INVALID_PLAN');
+        }
+        this._assertAllowedKeys(plan, ['strategy', 'intent', 'toolCalls'], 'planner');
+        if (plan.strategy !== 'tool_query') {
+            throw new ActivityIntelligenceError(502, 'FORM AI planner selected an unsupported strategy.', 'FORM_AI_PLANNER_UNSUPPORTED_STRATEGY');
+        }
+        if (!Array.isArray(plan.toolCalls) || plan.toolCalls.length === 0 || plan.toolCalls.length > FORM_AI_MAX_TOOL_CALLS) {
+            throw new ActivityIntelligenceError(502, 'FORM AI planner requested an invalid number of tool calls.', 'FORM_AI_PLANNER_INVALID_TOOL_COUNT');
+        }
+        return {
+            strategy: plan.strategy,
+            intent: String(plan.intent || '').trim(),
+            toolCalls: plan.toolCalls.map((call, index) => this._validateFormAiToolCall(call, index))
+        };
+    }
+
+    _validateFormAiToolCall(call, index) {
+        if (!call || typeof call !== 'object' || Array.isArray(call)) {
+            throw new ActivityIntelligenceError(502, 'FORM AI planner returned an invalid tool call.', 'FORM_AI_PLANNER_INVALID_TOOL_CALL');
+        }
+        this._assertAllowedKeys(call, ['tool', 'arguments'], `toolCalls[${index}]`);
+        if (!FORM_AI_TOOL_NAMES.has(call.tool)) {
+            throw new ActivityIntelligenceError(502, 'FORM AI planner requested an unsupported tool.', 'FORM_AI_UNSUPPORTED_TOOL');
+        }
+        const args = call.arguments || {};
+        if (!args || typeof args !== 'object' || Array.isArray(args)) {
+            throw new ActivityIntelligenceError(502, 'FORM AI planner returned invalid tool arguments.', 'FORM_AI_INVALID_TOOL_ARGUMENTS');
+        }
+        const allowed = call.tool === 'aggregate_submissions'
+            ? ['aggregate', 'groupBy', 'field', 'filters', 'sort', 'limit']
+            : ['filters', 'fields', 'limit'];
+        this._assertAllowedKeys(args, allowed, `${call.tool}.arguments`);
+        return {
+            tool: call.tool,
+            arguments: args
+        };
+    }
+
+    _assertAllowedKeys(object, allowed, scope) {
+        const allowedSet = new Set(allowed);
+        const unknown = Object.keys(object || {}).filter(key => !allowedSet.has(key));
+        if (unknown.length) {
+            throw new ActivityIntelligenceError(502, `FORM AI planner returned unsupported ${scope} keys.`, 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
+        }
+    }
+
+    _executeFormAiToolCalls(toolCalls, context) {
+        return (toolCalls || []).map((call, index) => {
+            try {
+                const result = call.tool === 'aggregate_submissions'
+                    ? this._executeFormAiAggregateTool(call.arguments, context)
+                    : this._executeFormAiRetrieveTool(call.arguments, context);
+                return { index, tool: call.tool, ok: true, result };
+            } catch (error) {
+                if (error instanceof ActivityIntelligenceError) throw error;
+                throw new ActivityIntelligenceError(500, 'FORM AI tool execution failed.', 'FORM_AI_TOOL_EXECUTION_FAILED');
+            }
+        });
+    }
+
+    _executeFormAiAggregateTool(args, context) {
+        this._assertAllowedKeys(args, ['aggregate', 'groupBy', 'field', 'filters', 'sort', 'limit'], 'aggregate_submissions.arguments');
+        const aggregate = args.aggregate || 'count';
+        if (aggregate !== 'count') {
+            throw new ActivityIntelligenceError(502, 'FORM AI aggregate tool supports count only.', 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
+        }
+        const groupBy = Array.isArray(args.groupBy) && args.groupBy.length === 1
+            ? args.groupBy[0]
+            : (args.groupBy || 'none');
+        if (!FORM_AI_AGGREGATE_GROUPS.has(groupBy)) {
+            throw new ActivityIntelligenceError(502, 'FORM AI aggregate tool received unsupported groupBy.', 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
+        }
+        const records = this._filterFormAiSubmissions(context.submissions, args.filters || {}, context);
+        if (groupBy === 'none') {
+            return {
+                aggregate: 'count',
+                groupBy,
+                total: records.length,
+                filtersApplied: this._publicFormAiFilters(args.filters || {}, context)
+            };
+        }
+        if (groupBy === 'date') {
+            return this._formAiGroupedCount(records, record => String(record.createdAt || '').slice(0, 10) || '未提供', args, 'date');
+        }
+        if (groupBy === 'recorder') {
+            return this._formAiGroupedCount(records, record => String(record.createdByDisplayName || '').trim() || '未提供', args, 'recorder');
+        }
+        const fieldRef = this._resolveFormAiFieldReference(args.field, context);
+        return this._formAiCategoricalDistribution(records, fieldRef, args, context);
+    }
+
+    _executeFormAiRetrieveTool(args, context) {
+        this._assertAllowedKeys(args, ['filters', 'fields', 'limit'], 'retrieve_submissions.arguments');
+        const records = this._filterFormAiSubmissions(context.submissions, args.filters || {}, context);
+        const fields = Array.isArray(args.fields)
+            ? args.fields.map(field => this._resolveFormAiFieldReference(field, context))
+            : null;
+        const fieldKeys = fields ? new Set(fields.map(field => field.itemKey)) : null;
+        const limit = Math.min(this._positiveInteger(args.limit, 40), 80);
+        return {
+            retrieved: Math.min(records.length, limit),
+            totalMatching: records.length,
+            filtersApplied: this._publicFormAiFilters(args.filters || {}, context),
+            records: records.slice(0, limit).map((record, index) => this._formAiPublicRecordEvidence(record, context, fieldKeys, index + 1))
+        };
+    }
+
+    _formAiGroupedCount(records, groupFn, args, groupBy) {
+        const counts = new Map();
+        records.forEach(record => {
+            const key = groupFn(record);
+            counts.set(key, (counts.get(key) || 0) + 1);
+        });
+        const rows = this._sortAndLimitFormAiRows(
+            Array.from(counts.entries()).map(([label, count]) => ({
+                label,
+                count,
+                percent: records.length ? (count / records.length) * 100 : 0
+            })),
+            args
+        );
+        return {
+            aggregate: 'count',
+            groupBy,
+            total: records.length,
+            rows
+        };
+    }
+
+    _formAiCategoricalDistribution(records, fieldRef, args, context) {
+        const counts = new Map();
+        let answeredRecords = 0;
+        let selectionTotal = 0;
+        records.forEach(record => {
+            const categories = this._formAiEffectiveCategories(record, fieldRef, context);
+            if (!categories.length) return;
+            answeredRecords += 1;
+            const selected = fieldRef.type === 'multiple_choice' ? Array.from(new Set(categories)) : categories.slice(0, 1);
+            selectionTotal += selected.length;
+            selected.forEach(category => counts.set(category, (counts.get(category) || 0) + 1));
+        });
+        const rows = this._sortAndLimitFormAiRows(
+            Array.from(counts.entries()).map(([label, count]) => ({
+                label,
+                count,
+                recordPercent: answeredRecords ? (count / answeredRecords) * 100 : 0,
+                selectionPercent: selectionTotal ? (count / selectionTotal) * 100 : 0
+            })),
+            args
+        );
+        return {
+            aggregate: 'count',
+            groupBy: 'field',
+            field: {
+                title: fieldRef.title,
+                type: fieldRef.type
+            },
+            totalRecords: records.length,
+            answeredRecords,
+            selectionTotal,
+            multiChoice: fieldRef.type === 'multiple_choice',
+            denominatorSemantics: fieldRef.type === 'multiple_choice'
+                ? 'Bar/Trend percent uses answeredRecords; Pie share uses selectionTotal.'
+                : 'Percent uses answeredRecords.',
+            rows
+        };
+    }
+
+    _sortAndLimitFormAiRows(rows, args) {
+        const sort = args.sort || {};
+        const by = sort.by === 'label' ? 'label' : 'count';
+        const direction = sort.direction === 'asc' ? 'asc' : 'desc';
+        const sorted = rows.slice().sort((a, b) => {
+            const result = by === 'label'
+                ? String(a.label).localeCompare(String(b.label), 'zh-Hant')
+                : Number(a.count || 0) - Number(b.count || 0);
+            return direction === 'asc' ? result : -result;
+        });
+        const limit = this._positiveInteger(args.limit, 0);
+        return limit ? sorted.slice(0, limit) : sorted;
+    }
+
+    _positiveInteger(value, fallback) {
+        const number = Number(value);
+        return Number.isInteger(number) && number > 0 ? number : fallback;
+    }
+
+    _filterFormAiSubmissions(submissions, filters, context) {
+        this._validateFormAiFilters(filters);
+        return (submissions || []).filter(record => {
+            if (record.status === 'void') return false;
+            const createdDate = String(record.createdAt || '').slice(0, 10);
+            if (filters.dateStart && createdDate < filters.dateStart) return false;
+            if (filters.dateEnd && createdDate > filters.dateEnd) return false;
+            if (filters.recorderDisplayName && record.createdByDisplayName !== filters.recorderDisplayName) return false;
+            const fieldFilters = Array.isArray(filters.fields) ? filters.fields : [];
+            for (const filter of fieldFilters) {
+                const fieldRef = this._resolveFormAiFieldReference(filter.field || filter, context);
+                const expectedValues = Array.isArray(filter.values) ? filter.values : [filter.value];
+                const normalizedExpected = expectedValues.map(value => String(value || '').trim()).filter(Boolean);
+                const categories = this._formAiEffectiveCategories(record, fieldRef, context);
+                if (!normalizedExpected.length) continue;
+                if (!normalizedExpected.some(value => categories.includes(value))) return false;
+            }
+            return true;
+        });
+    }
+
+    _validateFormAiFilters(filters) {
+        if (!filters || typeof filters !== 'object' || Array.isArray(filters)) {
+            throw new ActivityIntelligenceError(502, 'FORM AI tool received invalid filters.', 'FORM_AI_INVALID_TOOL_ARGUMENTS');
+        }
+        this._assertAllowedKeys(filters, ['dateStart', 'dateEnd', 'recorderDisplayName', 'fields'], 'filters');
+        if (filters.fields !== undefined && !Array.isArray(filters.fields)) {
+            throw new ActivityIntelligenceError(502, 'FORM AI field filters must be an array.', 'FORM_AI_INVALID_TOOL_ARGUMENTS');
+        }
+        (filters.fields || []).forEach(filter => {
+            if (!filter || typeof filter !== 'object' || Array.isArray(filter)) {
+                throw new ActivityIntelligenceError(502, 'FORM AI field filter is invalid.', 'FORM_AI_INVALID_TOOL_ARGUMENTS');
+            }
+            this._assertAllowedKeys(filter, ['field', 'itemKey', 'title', 'value', 'values'], 'fieldFilter');
+        });
+    }
+
+    _publicFormAiFilters(filters, context) {
+        const result = {};
+        if (filters.dateStart) result.dateStart = filters.dateStart;
+        if (filters.dateEnd) result.dateEnd = filters.dateEnd;
+        if (filters.recorderDisplayName) result.recorderDisplayName = filters.recorderDisplayName;
+        if (Array.isArray(filters.fields) && filters.fields.length) {
+            result.fields = filters.fields.map(filter => {
+                const fieldRef = this._resolveFormAiFieldReference(filter.field || filter, context);
+                return {
+                    fieldTitle: fieldRef.title,
+                    values: Array.isArray(filter.values) ? filter.values : [filter.value]
+                };
+            });
+        }
+        return result;
+    }
+
+    _resolveFormAiFieldReference(reference, context) {
+        if (typeof reference === 'string') {
+            return this._resolveFormAiFieldReference({ itemKey: reference }, context);
+        }
+        if (!reference || typeof reference !== 'object' || Array.isArray(reference)) {
+            throw new ActivityIntelligenceError(502, 'FORM AI tool field reference is invalid.', 'FORM_AI_INVALID_FIELD_REFERENCE');
+        }
+        this._assertAllowedKeys(reference, ['itemKey', 'title'], 'fieldReference');
+        const fields = this._formAiAllFields(context);
+        if (reference.itemKey) {
+            const matches = fields.filter(field => field.itemKey === reference.itemKey);
+            if (!matches.length) throw new ActivityIntelligenceError(502, 'FORM AI tool referenced an unknown field.', 'FORM_AI_UNKNOWN_FIELD');
+            return matches[0];
+        }
+        if (reference.title) {
+            const matches = fields.filter(field => field.title === reference.title);
+            const itemKeys = [...new Set(matches.map(field => field.itemKey))];
+            if (!itemKeys.length) throw new ActivityIntelligenceError(502, 'FORM AI tool referenced an unknown field title.', 'FORM_AI_UNKNOWN_FIELD');
+            if (itemKeys.length > 1) throw new ActivityIntelligenceError(502, 'FORM AI tool referenced an ambiguous field title.', 'FORM_AI_AMBIGUOUS_FIELD');
+            return matches[0];
+        }
+        throw new ActivityIntelligenceError(502, 'FORM AI tool field reference is missing identity.', 'FORM_AI_INVALID_FIELD_REFERENCE');
+    }
+
+    _formAiAllFields(context) {
+        return Object.values(context.formVersions || {}).flatMap(version => {
+            return (version.fields || []).map(field => ({
+                ...field,
+                formVersionId: version.versionId
+            }));
+        });
+    }
+
+    _formAiFieldForRecord(record, itemKey, context) {
+        const version = context.formVersions && context.formVersions[record.formVersionId];
+        return version && (version.fields || []).find(field => field.itemKey === itemKey);
+    }
+
+    _formAiEffectiveCategories(record, fieldRef, context) {
+        const answer = (record.answers || []).find(entry => entry.itemKey === fieldRef.itemKey);
+        if (!answer) return [];
+        const field = this._formAiFieldForRecord(record, answer.itemKey, context) || fieldRef;
+        if (!FORM_AI_CHOICE_TYPES.has(field.type)) return this._formAiAnswerValues(answer.value).map(value => String(value || '').trim()).filter(Boolean);
+        const values = this._formAiAnswerValues(answer.value);
+        return values.map(value => this._formAiEffectiveCategory(value, answer.otherText, field)).filter(Boolean);
+    }
+
+    _formAiAnswerValues(value) {
+        if (Array.isArray(value)) return value;
+        if (value === undefined || value === null || value === '') return [];
+        return [value];
+    }
+
+    _formAiEffectiveCategory(value, otherText, field) {
+        if (field.type === 'yes_no') return String(value || '').trim();
+        const label = value && typeof value === 'object'
+            ? String(value.label || value.value || '').trim()
+            : String(value || '').trim();
+        if (!label) return '';
+        if (label === FORM_AI_OTHER_VALUE) {
+            const text = String(otherText || '').trim();
+            return text || FORM_AI_OTHER_VALUE;
+        }
+        return label;
+    }
+
+    _formAiPublicRecordEvidence(record, context, fieldKeys, ordinal) {
+        return {
+            recordNumber: ordinal,
+            createdAt: record.createdAt,
+            createdDate: String(record.createdAt || '').slice(0, 10),
+            createdByDisplayName: record.createdByDisplayName,
+            answers: (record.answers || [])
+                .filter(answer => !fieldKeys || fieldKeys.has(answer.itemKey))
+                .map(answer => {
+                    const field = this._formAiFieldForRecord(record, answer.itemKey, context);
+                    return {
+                        fieldTitle: field ? field.title : '未命名欄位',
+                        fieldType: field ? field.type : '',
+                        value: this._formAiPublicAnswerValue(answer.value),
+                        otherText: answer.otherText
+                    };
+                }),
+            rawCard: this._formAiPublicRawCardEvidence(record.rawCard)
+        };
+    }
+
+    _formAiPublicAnswerValue(value) {
+        if (Array.isArray(value)) return value.map(entry => this._formAiPublicAnswerValue(entry));
+        if (value && typeof value === 'object') {
+            return {
+                label: value.label || value.value || '',
+                value: value.value || value.label || ''
+            };
+        }
+        return value;
+    }
+
+    _formAiPublicRawCardEvidence(card) {
+        if (!card) return null;
+        return {
+            name: card.name,
+            company: card.company,
+            department: card.department,
+            position: card.position,
+            email: card.email,
+            phone: card.phone,
+            mobile: card.mobile,
+            fax: card.fax,
+            website: card.website,
+            address: card.address,
+            sourceFilename: card.sourceFilename,
+            driveFilename: card.driveFilename,
+            notes: card.notes
+        };
+    }
+
+    _formAiFinalizerSystemInstruction() {
+        return [
+            '你是 FANUC forms 的表單資料分析助手。',
+            '請用繁體中文直接回答使用者原始問題。',
+            '工具結果中的計數、排名、分布、百分比與日期分組是權威事實；不得自行重新計數或改寫數字。',
+            '需要解讀時，可以根據提供的文字證據做合理推論，並清楚區分證據與推論。',
+            '如果工具證據不足，請明確說明資料不足，不要編造。',
+            '維持 FORM-only 範圍；不要推測 CRM、商機、銷售管線或外部資料。',
+            '一般回答不得輸出 submissionId、formVersionId、itemKey、cardId、optionKey、UUID、SQL、資料表名稱、工具名稱或 planner 內部資訊，除非使用者明確要求技術識別碼。',
+            '不要輸出 JSON。'
+        ].join('\n');
+    }
+
+    _formAiFinalizerPrompt(question, toolResults) {
+        return [
+            `使用者原始問題：${question}`,
+            '以下是後端以唯讀 FORM 工具取得的結構化證據。請根據證據回答，不要暴露內部工具或識別碼。',
+            JSON.stringify({ evidence: toolResults })
+        ].join('\n\n');
+    }
+
     async _buildFormAiContext(activity, scope, submissions) {
         const publishedForm = await this.reader.getPublishedForm(activity.id);
         const formVersions = this._formAiCanonicalFormVersions(submissions, publishedForm);
@@ -848,7 +1412,7 @@ class ActivityIntelligenceService {
         ].join('\n\n');
     }
 
-    async _generateFormAiAnswer({ systemInstruction, userPrompt }) {
+    async _generateFormAiAnswer({ systemInstruction, userPrompt, generationConfig }) {
         const generator = this.formAiTextGenerator || this._createFormGeminiTextGenerator();
         let timeoutId = null;
         const timeout = new Promise((_, reject) => {
@@ -859,7 +1423,7 @@ class ActivityIntelligenceService {
 
         try {
             const text = await Promise.race([
-                generator({ systemInstruction, userPrompt }),
+                generator({ systemInstruction, userPrompt, generationConfig }),
                 timeout
             ]);
             const answer = String(text || '').trim();
@@ -879,11 +1443,12 @@ class ActivityIntelligenceService {
         if (!apiKey) throw new ActivityIntelligenceError(503, 'FORM Gemini API key is not configured.', 'FORM_AI_NOT_CONFIGURED');
         if (!modelName) throw new ActivityIntelligenceError(503, 'FORM Gemini API model is not configured.', 'FORM_AI_NOT_CONFIGURED');
 
-        return async ({ systemInstruction, userPrompt }) => {
+        return async ({ systemInstruction, userPrompt, generationConfig }) => {
             const genAI = new GoogleGenerativeAI(apiKey);
             const model = genAI.getGenerativeModel({
                 model: modelName,
-                systemInstruction
+                systemInstruction,
+                generationConfig
             });
             const result = await model.generateContent(userPrompt);
             const response = await result.response;
