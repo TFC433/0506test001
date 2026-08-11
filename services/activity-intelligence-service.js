@@ -32,6 +32,7 @@ const FORM_AI_OTHER_VALUE = '其他';
 const FORM_AI_TOOL_NAMES = new Set(['aggregate_submissions', 'retrieve_submissions']);
 const FORM_AI_AGGREGATE_GROUPS = new Set(['none', 'date', 'recorder', 'field']);
 const FORM_AI_CHOICE_TYPES = new Set(['yes_no', 'single_choice', 'multiple_choice', 'dropdown']);
+const FORM_AI_HARMLESS_PLANNER_METADATA_KEYS = new Set(['reason', 'rationale', 'description', 'explanation']);
 
 class ActivityIntelligenceError extends Error {
     constructor(statusCode, message, code) {
@@ -770,7 +771,8 @@ class ActivityIntelligenceService {
                 arguments: {
                     filters: 'Same filter object as aggregate_submissions.',
                     fields: 'Optional field references to include. Omit to include all answered fields.',
-                    limit: 'Optional positive integer, maximum 80.'
+                    limit: 'Optional positive integer, maximum 80.',
+                    fullTextScan: 'Optional true for comprehensive semantic analysis over every answered long_text field in the current Activity. Ignores field guesses and field keyword filters.'
                 }
             }
         ];
@@ -799,6 +801,8 @@ class ActivityIntelligenceService {
             '若 domainContext 暗示某概念可能相關，只能用來選擇要查詢的 FORM 欄位或文字證據；不得把關聯直接當成已確認事實。',
             '遇到 MTB、MTU、SI 等角色問題時，優先依實際公司類型/角色欄位過濾，再聚合實際相關欄位並 retrieve_submissions 取得文字紀錄。',
             '語意型質化問題若沒有明確欄位值可精準過濾，請用 retrieve_submissions 指定相關文字欄位，不要把關鍵詞當成必須完全相等的欄位值。',
+            '若使用者明確要求檢視全部、所有、完整的文字紀錄/情報紀錄，或要找出哪些紀錄符合後續追蹤、拜訪、再聯絡、寄資料、需求確認等語意，請使用 retrieve_submissions 並設定 arguments.fullTextScan=true。',
+            'fullTextScan=true 時不要依單一 long_text 欄位標題或關鍵字 filters 預先限縮；後端會依目前 Activity schema 收集所有有答案的 long_text 欄位，再交由 finalizer 做語意分類。',
             `最多 ${FORM_AI_MAX_TOOL_CALLS} 個 toolCalls。`,
             'field 請優先使用 schema 內的 itemKey；只有標題完全且唯一時才可使用 title。',
             '輸出 JSON 格式：{"strategy":"tool_query","intent":"...","toolCalls":[{"tool":"aggregate_submissions","arguments":{...}}]}'
@@ -828,17 +832,17 @@ class ActivityIntelligenceService {
         if (!plan || typeof plan !== 'object' || Array.isArray(plan)) {
             throw new ActivityIntelligenceError(502, 'FORM AI planner returned an invalid plan.', 'FORM_AI_PLANNER_INVALID_PLAN');
         }
-        this._assertAllowedKeys(plan, ['strategy', 'intent', 'toolCalls'], 'planner');
-        if (plan.strategy !== 'tool_query') {
+        const executablePlan = this._formAiExecutablePlannerObject(plan, ['strategy', 'intent', 'toolCalls'], 'planner');
+        if (executablePlan.strategy !== 'tool_query') {
             throw new ActivityIntelligenceError(502, 'FORM AI planner selected an unsupported strategy.', 'FORM_AI_PLANNER_UNSUPPORTED_STRATEGY');
         }
-        if (!Array.isArray(plan.toolCalls) || plan.toolCalls.length === 0 || plan.toolCalls.length > FORM_AI_MAX_TOOL_CALLS) {
+        if (!Array.isArray(executablePlan.toolCalls) || executablePlan.toolCalls.length === 0 || executablePlan.toolCalls.length > FORM_AI_MAX_TOOL_CALLS) {
             throw new ActivityIntelligenceError(502, 'FORM AI planner requested an invalid number of tool calls.', 'FORM_AI_PLANNER_INVALID_TOOL_COUNT');
         }
         return {
-            strategy: plan.strategy,
-            intent: String(plan.intent || '').trim(),
-            toolCalls: plan.toolCalls.map((call, index) => this._validateFormAiToolCall(call, index))
+            strategy: executablePlan.strategy,
+            intent: String(executablePlan.intent || '').trim(),
+            toolCalls: executablePlan.toolCalls.map((call, index) => this._validateFormAiToolCall(call, index))
         };
     }
 
@@ -846,22 +850,35 @@ class ActivityIntelligenceService {
         if (!call || typeof call !== 'object' || Array.isArray(call)) {
             throw new ActivityIntelligenceError(502, 'FORM AI planner returned an invalid tool call.', 'FORM_AI_PLANNER_INVALID_TOOL_CALL');
         }
-        this._assertAllowedKeys(call, ['tool', 'arguments'], `toolCalls[${index}]`);
-        if (!FORM_AI_TOOL_NAMES.has(call.tool)) {
+        const executableCall = this._formAiExecutablePlannerObject(call, ['tool', 'arguments'], `toolCalls[${index}]`);
+        if (!FORM_AI_TOOL_NAMES.has(executableCall.tool)) {
             throw new ActivityIntelligenceError(502, 'FORM AI planner requested an unsupported tool.', 'FORM_AI_UNSUPPORTED_TOOL');
         }
-        const args = call.arguments || {};
+        const args = executableCall.arguments || {};
         if (!args || typeof args !== 'object' || Array.isArray(args)) {
             throw new ActivityIntelligenceError(502, 'FORM AI planner returned invalid tool arguments.', 'FORM_AI_INVALID_TOOL_ARGUMENTS');
         }
-        const allowed = call.tool === 'aggregate_submissions'
+        const allowed = executableCall.tool === 'aggregate_submissions'
             ? ['aggregate', 'groupBy', 'field', 'filters', 'sort', 'limit']
-            : ['filters', 'fields', 'limit'];
-        this._assertAllowedKeys(args, allowed, `${call.tool}.arguments`);
+            : ['filters', 'fields', 'limit', 'fullTextScan'];
+        this._assertAllowedKeys(args, allowed, `${executableCall.tool}.arguments`);
         return {
-            tool: call.tool,
+            tool: executableCall.tool,
             arguments: args
         };
+    }
+
+    _formAiExecutablePlannerObject(object, executableKeys, scope) {
+        const executableSet = new Set(executableKeys);
+        const allowedSet = new Set([...executableKeys, ...FORM_AI_HARMLESS_PLANNER_METADATA_KEYS]);
+        const unknown = Object.keys(object || {}).filter(key => !allowedSet.has(key));
+        if (unknown.length) {
+            throw new ActivityIntelligenceError(502, `FORM AI planner returned unsupported ${scope} keys.`, 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
+        }
+        return Object.keys(object || {}).reduce((acc, key) => {
+            if (executableSet.has(key)) acc[key] = object[key];
+            return acc;
+        }, {});
     }
 
     _assertAllowedKeys(object, allowed, scope) {
@@ -918,7 +935,10 @@ class ActivityIntelligenceService {
     }
 
     _executeFormAiRetrieveTool(args, context) {
-        this._assertAllowedKeys(args, ['filters', 'fields', 'limit'], 'retrieve_submissions.arguments');
+        this._assertAllowedKeys(args, ['filters', 'fields', 'limit', 'fullTextScan'], 'retrieve_submissions.arguments');
+        if (args.fullTextScan === true) {
+            return this._executeFormAiFullTextScanTool(args, context);
+        }
         const records = this._filterFormAiSubmissions(context.submissions, args.filters || {}, context);
         const fields = Array.isArray(args.fields)
             ? args.fields.map(field => this._resolveFormAiFieldReference(field, context))
@@ -930,6 +950,41 @@ class ActivityIntelligenceService {
             totalMatching: records.length,
             filtersApplied: this._publicFormAiFilters(args.filters || {}, context),
             records: records.slice(0, limit).map((record, index) => this._formAiPublicRecordEvidence(record, context, fieldKeys, index + 1))
+        };
+    }
+
+    _executeFormAiFullTextScanTool(args, context) {
+        const filters = args.filters || {};
+        this._validateFormAiFilters(filters);
+        const records = this._filterFormAiSubmissionsForFullTextScan(context.submissions, filters);
+        const evidenceRecords = [];
+        let longTextAnswerCount = 0;
+        records.forEach(record => {
+            const longTextAnswers = this._formAiPublicLongTextAnswers(record, context);
+            if (!longTextAnswers.length) return;
+            longTextAnswerCount += longTextAnswers.length;
+            evidenceRecords.push({
+                recordNumber: evidenceRecords.length + 1,
+                createdAt: record.createdAt,
+                createdDate: String(record.createdAt || '').slice(0, 10),
+                createdByDisplayName: record.createdByDisplayName,
+                customer: this._formAiPublicIdentityValue(record, context, '客戶姓名'),
+                company: this._formAiPublicIdentityValue(record, context, '公司名稱') || (record.rawCard && record.rawCard.company) || '',
+                contextAnswers: this._formAiPublicContextAnswers(record, context),
+                longTextAnswers
+            });
+        });
+        return {
+            mode: 'full_long_text_scan',
+            fieldSelection: 'all_answered_long_text_fields',
+            limitApplied: false,
+            ignoredFieldFilters: Array.isArray(filters.fields) && filters.fields.length > 0,
+            totalMatchingRecords: records.length,
+            recordsWithLongText: evidenceRecords.length,
+            totalLongTextAnswers: longTextAnswerCount,
+            retrievedLongTextAnswers: longTextAnswerCount,
+            filtersApplied: this._publicFormAiFullTextScanFilters(filters),
+            records: evidenceRecords
         };
     }
 
@@ -1038,6 +1093,17 @@ class ActivityIntelligenceService {
         });
     }
 
+    _filterFormAiSubmissionsForFullTextScan(submissions, filters) {
+        return (submissions || []).filter(record => {
+            if (record.status === 'void') return false;
+            const createdDate = String(record.createdAt || '').slice(0, 10);
+            if (filters.dateStart && createdDate < filters.dateStart) return false;
+            if (filters.dateEnd && createdDate > filters.dateEnd) return false;
+            if (filters.recorderDisplayName && record.createdByDisplayName !== filters.recorderDisplayName) return false;
+            return true;
+        });
+    }
+
     _validateFormAiFilters(filters) {
         if (!filters || typeof filters !== 'object' || Array.isArray(filters)) {
             throw new ActivityIntelligenceError(502, 'FORM AI tool received invalid filters.', 'FORM_AI_INVALID_TOOL_ARGUMENTS');
@@ -1067,6 +1133,17 @@ class ActivityIntelligenceService {
                     values: Array.isArray(filter.values) ? filter.values : [filter.value]
                 };
             });
+        }
+        return result;
+    }
+
+    _publicFormAiFullTextScanFilters(filters) {
+        const result = {};
+        if (filters.dateStart) result.dateStart = filters.dateStart;
+        if (filters.dateEnd) result.dateEnd = filters.dateEnd;
+        if (filters.recorderDisplayName) result.recorderDisplayName = filters.recorderDisplayName;
+        if (Array.isArray(filters.fields) && filters.fields.length) {
+            result.ignoredFieldFilterCount = filters.fields.length;
         }
         return result;
     }
@@ -1156,6 +1233,49 @@ class ActivityIntelligenceService {
                 }),
             rawCard: this._formAiPublicRawCardEvidence(record.rawCard)
         };
+    }
+
+    _formAiPublicLongTextAnswers(record, context) {
+        return (record.answers || [])
+            .map(answer => {
+                const field = this._formAiFieldForRecord(record, answer.itemKey, context);
+                if (!field || field.type !== 'long_text') return null;
+                const value = this._formAiPublicAnswerValue(answer.value);
+                if (this._isEmptyAnswer(value) && !String(answer.otherText || '').trim()) return null;
+                return {
+                    fieldTitle: field.title,
+                    value,
+                    otherText: answer.otherText
+                };
+            })
+            .filter(Boolean);
+    }
+
+    _formAiPublicIdentityValue(record, context, title) {
+        const match = (record.answers || []).find(answer => {
+            const field = this._formAiFieldForRecord(record, answer.itemKey, context);
+            return field && field.title === title;
+        });
+        if (!match) return '';
+        return String(this._formAiPublicAnswerValue(match.value) || '').trim();
+    }
+
+    _formAiPublicContextAnswers(record, context) {
+        const preferredTitles = new Set(['客戶姓名', '公司名稱', '職稱', '公司類型', '客戶關注議題', '客戶產業大類', '客戶產業細項']);
+        return (record.answers || [])
+            .map(answer => {
+                const field = this._formAiFieldForRecord(record, answer.itemKey, context);
+                if (!field || !preferredTitles.has(field.title)) return null;
+                const value = this._formAiPublicAnswerValue(answer.value);
+                if (this._isEmptyAnswer(value) && !String(answer.otherText || '').trim()) return null;
+                return {
+                    fieldTitle: field.title,
+                    fieldType: field.type,
+                    value,
+                    otherText: answer.otherText
+                };
+            })
+            .filter(Boolean);
     }
 
     _formAiPublicAnswerValue(value) {

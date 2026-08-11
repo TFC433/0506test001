@@ -431,6 +431,83 @@ async function main() {
     assert(!aiCalls[1].userPrompt.includes('optionKey'));
     assert(!Object.prototype.hasOwnProperty.call(aiResult, 'model'));
 
+    const harmlessMetadataPlan = aiHarness.service._validateFormAiPlan({
+        strategy: 'tool_query',
+        intent: 'metadata tolerance',
+        rationale: 'planner note',
+        toolCalls: [{
+            tool: 'retrieve_submissions',
+            reason: 'need customer text',
+            arguments: { fields: [IDS.longKey], limit: 10 }
+        }]
+    });
+    assert.deepStrictEqual(harmlessMetadataPlan.toolCalls, [{
+        tool: 'retrieve_submissions',
+        arguments: { fields: [IDS.longKey], limit: 10 }
+    }]);
+    await assertRejectsCode(() => Promise.resolve(aiHarness.service._validateFormAiPlan({
+        strategy: 'tool_query',
+        intent: 'unsafe key',
+        toolCalls: [{
+            tool: 'retrieve_submissions',
+            sql: 'select * from submissions',
+            arguments: {}
+        }]
+    })), 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
+
+    const fullTextContext = {
+        formVersions: {
+            version1: {
+                fields: [
+                    { itemKey: 'companyField', type: 'short_text', title: '公司名稱' },
+                    { itemKey: 'nameField', type: 'short_text', title: '客戶姓名' },
+                    { itemKey: 'longAnswered', type: 'long_text', title: '情報紀錄' },
+                    { itemKey: 'longEmpty', type: 'long_text', title: '後續動作' }
+                ]
+            }
+        },
+        submissions: Array.from({ length: 167 }, (_, index) => ({
+            status: 'active',
+            createdAt: `2026-03-${String((index % 28) + 1).padStart(2, '0')}T00:00:00.000Z`,
+            createdByDisplayName: 'Analyst',
+            formVersionId: 'version1',
+            answers: [
+                { itemKey: 'companyField', value: '中華精測科技股份有限公司', otherText: '' },
+                { itemKey: 'nameField', value: `客戶${index + 1}`, otherText: '' },
+                ...(index < 165 ? [{
+                    itemKey: 'longAnswered',
+                    value: index === 0 ? '可以去介紹，約時間，寄mail相關資料' : `長文字 ${index + 1}`,
+                    otherText: ''
+                }] : [])
+            ],
+            rawCard: null
+        }))
+    };
+    const fullTextScan = aiHarness.service._executeFormAiRetrieveTool({
+        fullTextScan: true,
+        fields: ['longEmpty'],
+        filters: { fields: [{ field: { itemKey: 'longEmpty' }, values: ['拜訪'] }] },
+        limit: 1
+    }, fullTextContext);
+    assert.strictEqual(fullTextScan.mode, 'full_long_text_scan');
+    assert.strictEqual(fullTextScan.totalMatchingRecords, 167);
+    assert.strictEqual(fullTextScan.recordsWithLongText, 165);
+    assert.strictEqual(fullTextScan.totalLongTextAnswers, 165);
+    assert.strictEqual(fullTextScan.retrievedLongTextAnswers, 165);
+    assert.strictEqual(fullTextScan.limitApplied, false);
+    assert.strictEqual(fullTextScan.ignoredFieldFilters, true);
+    assert(JSON.stringify(fullTextScan).includes('可以去介紹，約時間，寄mail相關資料'));
+    assert(!/itemKey|formVersionId|submissionId|cardId|optionKey|longAnswered|version1/.test(JSON.stringify(fullTextScan)));
+
+    const narrowRetrieve = aiHarness.service._executeFormAiRetrieveTool({ fields: ['longAnswered'], limit: 80 }, fullTextContext);
+    assert.strictEqual(narrowRetrieve.retrieved, 80);
+    assert.strictEqual(narrowRetrieve.totalMatching, 167);
+
+    const entitySubstring = aiHarness.service._executeFormAiRetrieveTool({
+        filters: { fields: [{ field: { itemKey: 'companyField' }, values: ['中華精測'] }] }
+    }, fullTextContext);
+    assert.strictEqual(entitySubstring.totalMatching, 167);
+
     await aiHarness.service.analyzeActivity(IDS.activity, {
         question: '只看 Analyst',
         filters: { start: '2026-07-01', end: '2026-09-10', recorder: 'Analyst' }
