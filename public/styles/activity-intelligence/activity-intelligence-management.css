@@ -4429,17 +4429,19 @@ a:focus-visible {
   }
 
   .aim-mobile-analysis-header-action {
-    margin-top: 8px;
+    display: flex;
+    justify-content: flex-end;
+    margin-top: -2px;
   }
 
   .aim-mobile-analysis-entry,
   .aim-mobile-analysis-exit {
-    min-height: 34px;
-    padding: 6px 11px;
+    min-height: 32px;
+    padding: 5px 10px;
     border-color: rgba(224, 82, 45, 0.28);
     background: rgba(255, 255, 255, 0.78);
     color: var(--aim-form-primary-hover);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 700;
   }
 
@@ -4528,18 +4530,29 @@ a:focus-visible {
   .aim-mobile-analysis .aim-chart-controls {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
     gap: 8px;
   }
 
   .aim-mobile-analysis .aim-chart-segment {
     min-width: 0;
-    flex: 1 1 130px;
+    width: fit-content;
+    max-width: 100%;
+    flex: 0 0 auto;
   }
 
   .aim-mobile-analysis .aim-chart-segment button {
-    min-height: 34px;
-    padding: 6px 8px;
+    min-width: 30px;
+    min-height: 31px;
+    padding: 5px 8px;
+    flex: 0 0 auto;
     font-size: 12px;
+  }
+
+  .aim-mobile-analysis .aim-echart-empty {
+    min-height: 132px;
+    padding: 18px 12px;
   }
 
   body:not(.aim-auth-state) {
