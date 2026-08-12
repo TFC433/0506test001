@@ -31,14 +31,16 @@ const activityIntelligenceRoutes = require('./activity-intelligence.routes');
 const {
     requireLineLeadSession,
     isAllowedLocalDevRequest,
-    normalizeLineLeadRole
+    normalizeLineLeadRole,
+    isGuestLineLeadUser
 } = require('../middleware/line-lead-session.middleware');
 
 const ACTIVITY_INTELLIGENCE_LOCAL_ROLE_HEADER = 'x-activity-intelligence-local-role';
 
 function bridgeLineUserToActivityIntelligenceUser(req, res, next) {
     const lineUser = req.lineUser || {};
-    let role = normalizeLineLeadRole(lineUser.role);
+    const guest = isGuestLineLeadUser(lineUser);
+    let role = guest ? null : normalizeLineLeadRole(lineUser.role);
     const localRoleOverride = req.get(ACTIVITY_INTELLIGENCE_LOCAL_ROLE_HEADER);
 
     if (localRoleOverride) {
@@ -62,7 +64,9 @@ function bridgeLineUserToActivityIntelligenceUser(req, res, next) {
         displayName: lineUser.displayName || lineUser.userId,
         pictureUrl: lineUser.pictureUrl || null,
         role,
-        isLocalDev: lineUser.isLocalDev === true
+        isLocalDev: lineUser.isLocalDev === true,
+        accessClass: guest ? 'guest' : 'member',
+        whitelisted: !guest
     };
 
     return next();

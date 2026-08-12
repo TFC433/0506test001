@@ -3,6 +3,7 @@ const config = require('../config');
 
 const lineLeadConfig = config.LINE_LEAD;
 const LINE_ID_TOKEN_EXPIRED_CODE = 'LINE_ID_TOKEN_EXPIRED';
+const LINE_LEAD_ACCESS_CLASS_GUEST = 'guest';
 
 function parseCookies(cookieHeader) {
     const cookies = {};
@@ -98,6 +99,10 @@ function normalizeLineLeadRole(value) {
     return ['super_admin', 'admin', 'recorder'].includes(normalized) ? normalized : 'recorder';
 }
 
+function isGuestLineLeadUser(lineUser = {}) {
+    return lineUser.accessClass === LINE_LEAD_ACCESS_CLASS_GUEST && lineUser.whitelisted === false;
+}
+
 function findLineUserWhitelistEntry(systemConfig, lineUserId) {
     if (!systemConfig) return false;
 
@@ -181,6 +186,10 @@ function buildSessionPayload(lineUser) {
     if (lineUser.isLocalDev === true) {
         payload.isLocalDev = true;
     }
+    if (isGuestLineLeadUser(lineUser)) {
+        payload.accessClass = LINE_LEAD_ACCESS_CLASS_GUEST;
+        payload.whitelisted = false;
+    }
 
     return payload;
 }
@@ -223,12 +232,17 @@ function verifyLineLeadSessionJwt(token) {
         throw error;
     }
 
-    return {
+    const lineUser = {
         userId,
         displayName: typeof payload.displayName === 'string' ? payload.displayName : undefined,
         pictureUrl: typeof payload.pictureUrl === 'string' ? payload.pictureUrl : undefined,
         isLocalDev: payload.isLocalDev === true
     };
+    if (payload.accessClass === LINE_LEAD_ACCESS_CLASS_GUEST && payload.whitelisted === false) {
+        lineUser.accessClass = LINE_LEAD_ACCESS_CLASS_GUEST;
+        lineUser.whitelisted = false;
+    }
+    return lineUser;
 }
 
 function sendSafeSecretError(res) {
@@ -269,7 +283,8 @@ async function establishSessionForUser(req, res, lineUser, systemConfig) {
     const sessionDays = resolveLineLeadSessionDays(systemConfig);
     const sessionSeconds = sessionDays * 24 * 60 * 60;
     const token = issueLineLeadSessionJwt(lineUser, sessionSeconds);
-    const role = normalizeLineLeadRole(lineUser.role || resolveLineLeadRoleFromSystemConfig(systemConfig, lineUser.userId));
+    const guest = isGuestLineLeadUser(lineUser);
+    const role = guest ? null : normalizeLineLeadRole(lineUser.role || resolveLineLeadRoleFromSystemConfig(systemConfig, lineUser.userId));
 
     if (!token) {
         return sendSafeSecretError(res);
@@ -281,7 +296,7 @@ async function establishSessionForUser(req, res, lineUser, systemConfig) {
         getCookieOptions(req, sessionSeconds * 1000)
     );
 
-    return res.json({
+    const body = {
         success: true,
         authenticated: true,
         userId: lineUser.userId,
@@ -289,7 +304,34 @@ async function establishSessionForUser(req, res, lineUser, systemConfig) {
         pictureUrl: lineUser.pictureUrl,
         role,
         sessionDays
-    });
+    };
+
+    if (guest) {
+        body.accessClass = LINE_LEAD_ACCESS_CLASS_GUEST;
+        body.whitelisted = false;
+    }
+
+    return res.json(body);
+}
+
+function sendLineLeadSessionResponse(req, res, lineUser) {
+    req.lineUser = lineUser;
+    const guest = isGuestLineLeadUser(lineUser);
+    const body = {
+        success: true,
+        authenticated: true,
+        userId: lineUser.userId,
+        displayName: lineUser.displayName,
+        pictureUrl: lineUser.pictureUrl,
+        role: guest ? null : normalizeLineLeadRole(lineUser.role)
+    };
+
+    if (guest) {
+        body.accessClass = LINE_LEAD_ACCESS_CLASS_GUEST;
+        body.whitelisted = false;
+    }
+
+    return res.json(body);
 }
 
 async function getLineLeadSession(req, res) {
@@ -327,20 +369,16 @@ async function getLineLeadSession(req, res) {
         }
         const whitelistEntry = await getLineUserWhitelistEntry(req, lineUser.userId, systemConfig);
         if (!whitelistEntry) {
-            return sendForbidden(req, res, lineUser.userId);
+            if (!isGuestLineLeadUser(lineUser)) return sendForbidden(req, res, lineUser.userId);
+            lineUser.role = null;
+        } else {
+            lineUser.role = resolveLineLeadRoleFromWhitelistEntry(whitelistEntry);
+            delete lineUser.accessClass;
+            delete lineUser.whitelisted;
         }
-        lineUser.role = resolveLineLeadRoleFromWhitelistEntry(whitelistEntry);
     }
 
-    req.lineUser = lineUser;
-    return res.json({
-        success: true,
-        authenticated: true,
-        userId: lineUser.userId,
-        displayName: lineUser.displayName,
-        pictureUrl: lineUser.pictureUrl,
-        role: normalizeLineLeadRole(lineUser.role)
-    });
+    return sendLineLeadSessionResponse(req, res, lineUser);
 }
 
 async function createLineLeadSession(req, res) {
@@ -392,6 +430,12 @@ async function createLineLeadSession(req, res) {
     }
 
     const whitelistEntry = await getLineUserWhitelistEntry(req, lineUser.userId, systemConfig);
+    if (!whitelistEntry) {
+        lineUser.accessClass = LINE_LEAD_ACCESS_CLASS_GUEST;
+        lineUser.whitelisted = false;
+        lineUser.role = null;
+        return establishSessionForUser(req, res, lineUser, systemConfig);
+    }
     if (!whitelistEntry) {
         return res.status(403).json({
             success: false,
@@ -445,9 +489,13 @@ async function requireLineLeadSession(req, res, next) {
         }
         const whitelistEntry = await getLineUserWhitelistEntry(req, lineUser.userId, systemConfig);
         if (!whitelistEntry) {
-            return sendForbidden(req, res, lineUser.userId);
+            if (!isGuestLineLeadUser(lineUser)) return sendForbidden(req, res, lineUser.userId);
+            lineUser.role = null;
+        } else {
+            lineUser.role = resolveLineLeadRoleFromWhitelistEntry(whitelistEntry);
+            delete lineUser.accessClass;
+            delete lineUser.whitelisted;
         }
-        lineUser.role = resolveLineLeadRoleFromWhitelistEntry(whitelistEntry);
     }
 
     req.lineUser = lineUser;
@@ -466,6 +514,7 @@ module.exports = {
     clearLineLeadSessionCookie,
     resolveLineLeadSessionDays,
     normalizeLineLeadRole,
+    isGuestLineLeadUser,
     findLineUserWhitelistEntry,
     resolveLineLeadRoleFromWhitelistEntry,
     resolveLineLeadRoleFromSystemConfig,

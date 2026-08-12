@@ -27,6 +27,30 @@ function requireRole(allowedRoles) {
     };
 }
 
+function isGuestAccess(req) {
+    return req.user && req.user.accessClass === 'guest' && req.user.whitelisted === false;
+}
+
+function requireSubmissionCreateAccess(req, res, next) {
+    const role = req.user && req.user.role;
+    if (SUBMISSION_ROLES.has(role)) return next();
+    if (isGuestAccess(req)) {
+        if (req.body && req.body.cardId) {
+            return res.status(403).json({
+                success: false,
+                error: 'Activity Intelligence card linking is not allowed for guest access.',
+                code: 'ACTIVITY_INTELLIGENCE_GUEST_CARD_FORBIDDEN'
+            });
+        }
+        return next();
+    }
+    return res.status(403).json({
+        success: false,
+        error: 'Activity Intelligence permission denied.',
+        code: 'ACTIVITY_INTELLIGENCE_FORBIDDEN'
+    });
+}
+
 function isAdminRole(req) {
     return req.user && ADMIN_ROLES.has(req.user.role);
 }
@@ -105,7 +129,7 @@ router.post(
 router.post('/activities/:activityId/ai-analysis', requireRole(ADMIN_ROLES), (req, res, next) => getController(req).analyzeActivity(req, res, next));
 
 router.get('/activities/:activityId/submissions', requireRole(SUBMISSION_ROLES), scopeSubmissionList, (req, res, next) => getController(req).listSubmissions(req, res, next));
-router.post('/activities/:activityId/submissions', requireRole(SUBMISSION_ROLES), (req, res, next) => getController(req).createSubmission(req, res, next));
+router.post('/activities/:activityId/submissions', requireSubmissionCreateAccess, (req, res, next) => getController(req).createSubmission(req, res, next));
 router.get('/submissions/:submissionId', requireRole(SUBMISSION_ROLES), (req, res, next) => getController(req).getSubmission(req, res, next));
 router.patch('/submissions/:submissionId', requireRole(SUBMISSION_ROLES), requireSubmissionAccess, (req, res, next) => getController(req).updateSubmission(req, res, next));
 router.delete('/submissions/:submissionId', requireRole(HARD_DELETE_ROLES), (req, res, next) => getController(req).hardDeleteSubmission(req, res, next));

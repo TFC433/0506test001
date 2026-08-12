@@ -130,6 +130,11 @@
   async function init() {
     setFormAuthRootState(true);
     currentUser = await resolveFormalCurrentUser();
+    if (isGuestUser()) {
+      await initGuestFormMode();
+      render();
+      return;
+    }
     if (currentUser.authenticated) {
       try {
         await loadActivitiesFromApi();
@@ -183,8 +188,10 @@
     const session = await window.ActivityIntelligenceSession.ensureSession();
     return {
       authenticated: Boolean(session && session.authenticated),
-      role: session && session.role ? session.role : 'recorder',
+      role: session && session.accessClass === 'guest' && session.whitelisted === false ? null : (session && session.role ? session.role : 'recorder'),
       realRole: session && session.realRole,
+      accessClass: session && session.accessClass,
+      whitelisted: session && Object.prototype.hasOwnProperty.call(session, 'whitelisted') ? session.whitelisted : true,
       localPreviewRole: session && session.localPreviewRole,
       localPreviewEnabled: Boolean(session && session.localPreviewEnabled),
       userId: session && session.userId ? session.userId : '',
@@ -197,6 +204,27 @@
       canLocalLogin: Boolean(session && session.canLocalLogin),
       source: 'line-session'
     };
+  }
+
+  async function initGuestFormMode() {
+    ui.view = isMobileFormViewport() ? 'guestWorkspace' : 'guestDesktopBlocked';
+    ui.tab = 'records';
+    ui.records.scope = 'entry';
+    ui.quickAnswers = {};
+    ui.quickOtherAnswers = {};
+    ui.quickCardLink = { linked: false, cardId: null, card: null };
+    state.records = [];
+    recordLoadState.clear();
+
+    if (!isMobileFormViewport()) return;
+
+    try {
+      await loadActivitiesFromApi();
+      applyGuestLanding();
+      if (ui.selectedActivityId) await loadPublishedFormForActivity(ui.selectedActivityId);
+    } catch (error) {
+      toast(error.message || 'Guest form load failed.');
+    }
   }
 
   async function loadActivitiesFromApi() {
@@ -441,6 +469,31 @@
     ui.tab = 'overview';
   }
 
+  function applyGuestLanding() {
+    if (!isGuestUser()) return;
+    if (!isMobileFormViewport()) {
+      ui.view = 'guestDesktopBlocked';
+      return;
+    }
+    const open = openActivities();
+    ui.tab = 'records';
+    ui.records.scope = 'entry';
+    ui.quickAnswers = {};
+    ui.quickOtherAnswers = {};
+    ui.quickCardLink = { linked: false, cardId: null, card: null };
+    if (open.length === 1) {
+      ui.selectedActivityId = open[0].id;
+      ui.view = 'guestWorkspace';
+    } else if (open.length > 1) {
+      if (!open.some(activity => activity.id === ui.selectedActivityId)) ui.selectedActivityId = open[0].id;
+      ui.view = 'guestWorkspace';
+    } else {
+      ui.selectedActivityId = null;
+      ui.view = 'noOpenActivity';
+    }
+    state.selectedActivityId = ui.selectedActivityId || null;
+  }
+
   function isMobileFormViewport() {
     return typeof window !== 'undefined'
       && typeof window.matchMedia === 'function'
@@ -449,6 +502,10 @@
 
   function isRecorder() {
     return currentUser && currentUser.role === 'recorder';
+  }
+
+  function isGuestUser() {
+    return currentUser && currentUser.authenticated && currentUser.accessClass === 'guest' && currentUser.whitelisted === false;
   }
 
   function isSuperAdmin() {
@@ -514,6 +571,20 @@
       return;
     }
 
+    if (isGuestUser()) {
+      setFormAuthRootState(false);
+      root.innerHTML = guestShell();
+      bindInputs();
+      if (ui.focusQuickFirst) {
+        ui.focusQuickFirst = false;
+        window.setTimeout(() => {
+          const first = document.querySelector('.aim-quick-input:not([disabled])');
+          if (first) first.focus();
+        }, 0);
+      }
+      return;
+    }
+
     setFormAuthRootState(false);
     let content;
     if (isRecorder()) {
@@ -561,6 +632,27 @@
       ${renderAnalyticsChartModal()}
       ${renderHardDeleteConfirmDialog()}
       ${renderCardPickerDialog()}
+      ${ui.toast ? `<div class="aim-toast" role="status">${Store.escapeHtml(ui.toast)}</div>` : ''}
+    `;
+  }
+
+  function guestShell() {
+    const content = isMobileFormViewport() ? renderGuestMobileContent() : renderGuestDesktopBlocked();
+    return `
+      <div class="aim-shell aim-guest-shell">
+        <div class="aim-app-column">
+          <header class="aim-topbar">
+            ${renderMobileBrand()}
+            <nav class="aim-breadcrumb" aria-label="麵包屑"><span aria-current="page">Guest Form</span></nav>
+            <div class="aim-topbar-actions">
+              ${renderUserIdentity()}
+            </div>
+          </header>
+          <main class="aim-main aim-guest-main">
+            ${content}
+          </main>
+        </div>
+      </div>
       ${ui.toast ? `<div class="aim-toast" role="status">${Store.escapeHtml(ui.toast)}</div>` : ''}
     `;
   }
@@ -790,7 +882,7 @@
   function renderUserIdentity() {
     const picture = safePictureUrl(currentUser.pictureUrl);
     const name = currentUser.displayName || currentUser.userId || '未登入使用者';
-    const role = currentUser.authenticated ? (currentUser.role || '') : '';
+    const role = currentUser.authenticated ? (isGuestUser() ? 'guest' : (currentUser.role || '')) : '';
     return `
       <div class="aim-account-area" aria-label="目前使用者">
         <div class="aim-user">
@@ -927,6 +1019,10 @@
     ui.drawer = null;
     ui.dialog = null;
     ui.cardPicker = null;
+    if (isGuestUser()) {
+      applyGuestLanding();
+      return;
+    }
     if (ui.mobileAnalysisMode && isMobileFormViewport()) {
       disposeActivityAnalyticsCharts();
       ui.mobileAnalysisMode = false;
@@ -1143,6 +1239,67 @@
         </div>
         ${expanded ? renderInlineRecordDetail(record, activity) : ''}
       </article>
+    `;
+  }
+
+  function renderGuestMobileContent() {
+    if (ui.view === 'noOpenActivity') {
+      return `
+        <header class="aim-page-header"><div><h1>表單填寫</h1><p>目前沒有可填寫的活動。</p></div></header>
+        ${renderGuestUserIdBlock()}
+      `;
+    }
+    const activity = selectedActivity();
+    if (!activity) {
+      return `
+        <header class="aim-page-header"><div><h1>表單填寫</h1><p>目前沒有可填寫的活動。</p></div></header>
+        ${renderGuestUserIdBlock()}
+      `;
+    }
+    const status = activityStatus(activity);
+    return `
+      <header class="aim-page-header aim-activity-page-header aim-guest-page-header">
+        <div class="aim-activity-identity">
+          <div class="aim-activity-title-row"><h1>${Store.escapeHtml(activity.name)}</h1>${statusPill(status)}<span class="aim-form-period">表單開放：${Store.escapeHtml(formatHeaderDateRange(activity.formOpenStart, activity.formOpenEnd, true))}</span></div>
+          ${headerExhibitionSubtitle(activity) ? `<p class="aim-exhibition-subtitle">${Store.escapeHtml(headerExhibitionSubtitle(activity))}</p>` : ''}
+        </div>
+      </header>
+      ${renderGuestQuickEntry(activity)}
+    `;
+  }
+
+  function renderGuestDesktopBlocked() {
+    return `
+      <section class="aim-empty aim-guest-blocked">
+        <h1>請使用手機填寫表單</h1>
+        <p>Guest 表單填寫僅支援手機版。請使用手機重新進入表單。</p>
+        <p>若需要完整系統權限，請複製 User ID 並提供給管理員加入白名單。</p>
+        ${renderGuestUserIdBlock()}
+      </section>
+    `;
+  }
+
+  function renderGuestQuickEntry(activity) {
+    const status = activityStatus(activity);
+    const open = status.key === 'open';
+    const fields = quickEntryFields(activity);
+    const hasCardLink = fields.some(field => field.type === 'card_link');
+    return `
+      ${!open ? '<div class="aim-warning">表單目前未開放，無法新增紀錄。</div>' : ''}
+      <div class="aim-entry-layout aim-guest-entry-layout">
+        <div class="aim-panel aim-entry-form">
+          <div class="aim-panel-title-row">
+            <h2>新增紀錄</h2>
+          </div>
+          <div class="aim-answer-list">
+            ${fields.map(field => renderQuickField(field, open)).join('')}
+            ${hasCardLink ? '' : renderGuestUserIdBlock()}
+          </div>
+          <div class="aim-entry-save-actions">
+            <button class="aim-button aim-button-primary" data-action="quick-save-next" ${open ? '' : 'disabled'} type="button">儲存並繼續新增</button>
+          </div>
+        </div>
+      </div>
     `;
   }
 
@@ -1447,6 +1604,7 @@
   }
 
   function renderRuntimeCardLink(item, enabled, cardLink, context) {
+    if (isGuestUser()) return renderGuestUserIdBlock();
     const linked = cardLink && cardLink.linked;
     if (!linked) {
       return `
@@ -1458,6 +1616,21 @@
       `;
     }
     return renderLinkedCardSummary(item, enabled, cardLink, context);
+  }
+
+  function renderGuestUserIdBlock() {
+    const userId = currentUser && currentUser.userId ? currentUser.userId : '';
+    return `
+      <section class="aim-form-card-link aim-runtime-card-link aim-guest-user-id-block">
+        <h4>名片掃描資訊</h4>
+        <p>訪客表單不提供名片掃描與名片連結功能。若需要管理員加入白名單，請複製下方 User ID 並提供給管理員。</p>
+        <div class="aim-guest-user-id-copy">
+          <span class="aim-small">User ID</span>
+          <code>${Store.escapeHtml(userId || '未取得')}</code>
+          <button class="aim-button aim-button-soft" data-action="copy-guest-user-id" type="button" ${userId ? '' : 'disabled'}>${ui.guestUserIdCopied ? '已複製' : '複製 User ID'}</button>
+        </div>
+      </section>
+    `;
   }
 
   function renderLinkedCardSummary(item, enabled, cardLink, context) {
@@ -3788,6 +3961,10 @@
       await window.ActivityIntelligenceSession.logout();
       return;
     }
+    if (action === 'copy-guest-user-id' && isGuestUser()) {
+      await copyGuestUserId();
+      return;
+    }
     if (action === 'mobile-analysis-enter' && canUseAnalytics() && isMobileFormViewport()) {
       ui.mobileAnalysisMode = true;
       ui.view = 'workspace';
@@ -5787,7 +5964,36 @@
     else delete ui.quickOtherAnswers[fieldId];
   }
 
+  async function copyGuestUserId() {
+    const value = currentUser && currentUser.userId ? String(currentUser.userId) : '';
+    if (!value) return;
+    try {
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const textArea = document.createElement('textarea');
+        textArea.value = value;
+        textArea.setAttribute('readonly', '');
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        textArea.remove();
+      }
+      ui.guestUserIdCopied = true;
+      render();
+      window.setTimeout(() => {
+        ui.guestUserIdCopied = false;
+        if (isGuestUser()) render();
+      }, 1800);
+    } catch (error) {
+      toast('User ID 複製失敗，請手動選取複製。');
+    }
+  }
+
   async function setRuntimeCardLink(context, linked) {
+    if (isGuestUser()) return;
     if (!linked) {
       const next = { linked: false, cardId: null, card: null };
       if (context === 'drawer' && ui.drawer) ui.drawer.workingCardLink = next;
@@ -5869,9 +6075,9 @@
       const submission = await window.ActivityIntelligenceApi.createSubmission(activity.id, {
         answers: payloadAnswersForItems(answers, items),
         otherAnswers: cleanOtherAnswers(ui.quickOtherAnswers || {}, ui.quickAnswers || {}, items),
-        cardId: cardLink.cardId || null
+        cardId: isGuestUser() ? null : (cardLink.cardId || null)
       });
-      replaceRecord(submission);
+      if (!isGuestUser()) replaceRecord(submission);
       ui.quickAnswers = {};
       ui.quickOtherAnswers = {};
       ui.quickCardLink = { linked: false, cardId: null, card: null };

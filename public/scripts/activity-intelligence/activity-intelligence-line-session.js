@@ -51,6 +51,16 @@
 
   function effectiveSession(session) {
     if (!session || !session.authenticated) return session;
+    if (session.accessClass === 'guest' && session.whitelisted === false) {
+      return {
+        ...session,
+        role: null,
+        realRole: null,
+        localPreviewRole: '',
+        localPreviewEnabled: false,
+        canLocalLogin: isLocalDevelopment()
+      };
+    }
     const previewRole = localPreviewRole();
     return {
       ...session,
@@ -183,6 +193,7 @@
   }
 
   function requestHeaders() {
+    if (currentSession && currentSession.accessClass === 'guest' && currentSession.whitelisted === false) return {};
     const role = localPreviewRole();
     return role ? { [LOCAL_ROLE_HEADER]: role } : {};
   }
