@@ -4,10 +4,12 @@
   const LOCAL_ROLE_KEY = 'activity-intelligence-local-role';
   const LOCAL_MANUAL_LOGIN_KEY = 'activity-intelligence-local-manual-login';
   const LOCAL_ROLE_HEADER = 'x-activity-intelligence-local-role';
+  const LOCAL_ACCESS_HEADER = 'x-activity-intelligence-local-access';
+  const FORM_PRODUCT_HEADER = 'x-line-session-product';
   const LIFF_RETURN_TARGET_KEY = 'tfc_liff_return_target';
   const LIFF_LOGIN_ATTEMPT_KEY = 'tfc-liff-bridge-login-attempt';
   const LIFF_EXPIRED_TOKEN_RECOVERY_KEY = 'tfc-liff-expired-token-recovery';
-  const ALLOWED_ROLES = new Set(['super_admin', 'admin', 'recorder']);
+  const ALLOWED_ROLES = new Set(['super_admin', 'admin', 'recorder', 'guest']);
 
   let currentSession = null;
 
@@ -51,6 +53,19 @@
 
   function effectiveSession(session) {
     if (!session || !session.authenticated) return session;
+    const previewRole = localPreviewRole();
+    if (previewRole === 'guest') {
+      return {
+        ...session,
+        accessClass: 'guest',
+        whitelisted: false,
+        realRole: session.role,
+        role: null,
+        localPreviewRole: 'guest',
+        localPreviewEnabled: isLocalDevelopment(),
+        canLocalLogin: isLocalDevelopment()
+      };
+    }
     if (session.accessClass === 'guest' && session.whitelisted === false) {
       return {
         ...session,
@@ -61,7 +76,6 @@
         canLocalLogin: isLocalDevelopment()
       };
     }
-    const previewRole = localPreviewRole();
     return {
       ...session,
       realRole: session.role,
@@ -73,7 +87,10 @@
   }
 
   async function readSession() {
-    const response = await fetch('/api/line/session', { credentials: 'same-origin' });
+    const response = await fetch('/api/line/session', {
+      credentials: 'same-origin',
+      headers: { [FORM_PRODUCT_HEADER]: 'form' }
+    });
     const body = await response.json().catch(() => ({}));
     return { response, body };
   }
@@ -137,6 +154,7 @@
         };
       }
       headers.Authorization = 'Bearer TEST_LOCAL_TOKEN';
+      headers[FORM_PRODUCT_HEADER] = 'form';
     } else {
       return { authenticated: false, message: '請先使用 LINE 登入。', canLineLogin: true };
     }
@@ -195,6 +213,7 @@
   function requestHeaders() {
     if (currentSession && currentSession.accessClass === 'guest' && currentSession.whitelisted === false) return {};
     const role = localPreviewRole();
+    if (role === 'guest') return { [LOCAL_ACCESS_HEADER]: 'guest' };
     return role ? { [LOCAL_ROLE_HEADER]: role } : {};
   }
 

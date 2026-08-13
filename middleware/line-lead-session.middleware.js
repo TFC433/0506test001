@@ -4,6 +4,7 @@ const config = require('../config');
 const lineLeadConfig = config.LINE_LEAD;
 const LINE_ID_TOKEN_EXPIRED_CODE = 'LINE_ID_TOKEN_EXPIRED';
 const LINE_LEAD_ACCESS_CLASS_GUEST = 'guest';
+const LINE_LEAD_PRODUCT_FORM = 'form';
 
 function parseCookies(cookieHeader) {
     const cookies = {};
@@ -145,6 +146,19 @@ function getBearerToken(req) {
 
     const match = authHeader.match(/^Bearer\s+(.+)$/i);
     return match ? match[1] : null;
+}
+
+function resolveLineLeadSessionProduct(req) {
+    const headerValue = req && typeof req.get === 'function' ? req.get('x-line-session-product') : '';
+    const normalizedHeader = String(headerValue || '').trim().toLowerCase();
+    if (normalizedHeader) return normalizedHeader;
+    const originalUrl = String(req && req.originalUrl || req && req.url || '');
+    if (/\/api\/line\/activity-intelligence(?:\/|$)/.test(originalUrl)) return LINE_LEAD_PRODUCT_FORM;
+    return '';
+}
+
+function isFormLineLeadSessionRequest(req) {
+    return resolveLineLeadSessionProduct(req) === LINE_LEAD_PRODUCT_FORM;
 }
 
 function normalizeVerifiedLineUser(user) {
@@ -369,6 +383,7 @@ async function getLineLeadSession(req, res) {
         }
         const whitelistEntry = await getLineUserWhitelistEntry(req, lineUser.userId, systemConfig);
         if (!whitelistEntry) {
+            if (isGuestLineLeadUser(lineUser) && !isFormLineLeadSessionRequest(req)) return sendForbidden(req, res, lineUser.userId);
             if (!isGuestLineLeadUser(lineUser)) return sendForbidden(req, res, lineUser.userId);
             lineUser.role = null;
         } else {
@@ -431,6 +446,14 @@ async function createLineLeadSession(req, res) {
 
     const whitelistEntry = await getLineUserWhitelistEntry(req, lineUser.userId, systemConfig);
     if (!whitelistEntry) {
+        if (!isFormLineLeadSessionRequest(req)) {
+            return res.status(403).json({
+                success: false,
+                authenticated: false,
+                message: '?芣?甈?撣唾?',
+                yourUserId: lineUser.userId
+            });
+        }
         lineUser.accessClass = LINE_LEAD_ACCESS_CLASS_GUEST;
         lineUser.whitelisted = false;
         lineUser.role = null;

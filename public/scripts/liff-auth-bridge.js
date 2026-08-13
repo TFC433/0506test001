@@ -151,18 +151,21 @@
     setBusy(false);
   }
 
-  async function readExistingSession() {
-    const response = await fetch('/api/line/session', { credentials: 'same-origin' });
+  async function readExistingSession(productKey) {
+    const headers = validReturnKey(productKey) ? { 'x-line-session-product': productKey } : {};
+    const response = await fetch('/api/line/session', { credentials: 'same-origin', headers });
     const body = await response.json().catch(() => ({}));
     return { response, body };
   }
 
-  async function postLineSession(idToken) {
+  async function postLineSession(idToken, productKey) {
+    const headers = {
+      Authorization: `Bearer ${idToken}`
+    };
+    if (validReturnKey(productKey)) headers['x-line-session-product'] = productKey;
     const response = await fetch('/api/line/session', {
       method: 'POST',
-      headers: {
-        Authorization: `Bearer ${idToken}`
-      },
+      headers,
       credentials: 'same-origin'
     });
     const body = await response.json().catch(() => ({}));
@@ -295,7 +298,7 @@
     try {
       if (storedKey) {
         sessionChecked = true;
-        const existing = await readExistingSession();
+        const existing = await readExistingSession(storedKey);
         if (existing.response.ok && existing.body.success) {
           clearAttempt();
           clearReturnTarget();
@@ -333,7 +336,7 @@
 
       if (!sessionChecked) {
         try {
-          const existing = await readExistingSession();
+          const existing = await readExistingSession(activeReturnKey);
           if (existing.response.ok && existing.body.success) {
             clearAttempt();
             clearReturnTarget();
@@ -368,7 +371,7 @@
         return;
       }
 
-      const created = await postLineSession(idToken);
+      const created = await postLineSession(idToken, activeReturnKey);
       if (created.response.ok && created.body.success) {
         clearExpiredTokenRecovery();
         clearReturnTarget();

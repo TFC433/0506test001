@@ -337,6 +337,32 @@
     }
   }
 
+  async function loadGuestOwnRecordsForActivity(activityId) {
+    if (!activityId || !window.ActivityIntelligenceApi || !isGuestUser()) return [];
+    const loadKey = `guest-own:${activityId}`;
+    const current = recordLoadState.get(loadKey);
+    if (current === 'loaded') return visiblePersonalRecords(activityId);
+    if (current === 'loading') return visiblePersonalRecords(activityId);
+
+    recordLoadState.set(loadKey, 'loading');
+    try {
+      await loadPublishedFormForActivity(activityId);
+      const submissions = await window.ActivityIntelligenceApi.listSubmissions(activityId, {
+        state: 'active'
+      });
+      const normalized = (submissions || []).map(normalizeSubmissionDto);
+      const submissionIds = new Set(normalized.map(record => record.id));
+      state.records = state.records.filter(record => record.activityId !== activityId || !submissionIds.has(record.id));
+      state.records = state.records.filter(record => record.activityId !== activityId).concat(normalized);
+      recordLoadState.set(loadKey, 'loaded');
+      return visiblePersonalRecords(activityId);
+    } catch (error) {
+      recordLoadState.delete(loadKey);
+      toast(error.message || 'Guest record load failed.');
+      return visiblePersonalRecords(activityId);
+    }
+  }
+
   function replaceRecord(record) {
     const normalized = normalizeSubmissionDto(record);
     state.records = state.records.filter(item => item.id !== normalized.id).concat(normalized);
@@ -653,6 +679,7 @@
           </main>
         </div>
       </div>
+      ${renderDrawer()}
       ${ui.toast ? `<div class="aim-toast" role="status">${Store.escapeHtml(ui.toast)}</div>` : ''}
     `;
   }
@@ -965,6 +992,7 @@
             ${option('super_admin', 'super_admin', selected)}
             ${option('admin', 'admin', selected)}
             ${option('recorder', 'recorder', selected)}
+            ${option('guest', 'guest', selected)}
           </select>
         </label>
         <button class="aim-button aim-button-secondary aim-local-logout" data-action="local-test-logout" type="button">本機測試登出</button>
@@ -1264,7 +1292,25 @@
           ${headerExhibitionSubtitle(activity) ? `<p class="aim-exhibition-subtitle">${Store.escapeHtml(headerExhibitionSubtitle(activity))}</p>` : ''}
         </div>
       </header>
-      ${renderGuestQuickEntry(activity)}
+      ${renderGuestMobileTabs()}
+      ${ui.records.scope === 'mine' ? renderGuestOwnRecords(activity) : renderGuestQuickEntry(activity)}
+    `;
+  }
+
+  function renderGuestMobileTabs() {
+    const scope = ui.records.scope === 'mine' ? 'mine' : 'entry';
+    const tabButton = (value, label) => `
+      <button class="aim-mobile-tab" type="button" data-action="guest-record-scope" data-scope="${value}" aria-pressed="${scope === value}">
+        ${Store.escapeHtml(label)}
+      </button>
+    `;
+    return `
+      <section class="aim-mobile-framework aim-guest-mobile-tabs" aria-label="Guest 表單分頁">
+        <nav class="aim-mobile-tabs" aria-label="Guest 表單分頁">
+          ${tabButton('entry', '新增紀錄')}
+          ${tabButton('mine', '我的紀錄')}
+        </nav>
+      </section>
     `;
   }
 
@@ -1300,6 +1346,19 @@
           </div>
         </div>
       </div>
+    `;
+  }
+
+  function renderGuestOwnRecords(activity) {
+    const rows = visiblePersonalRecords(activity.id);
+    return `
+      <section class="aim-panel aim-guest-own-records">
+        <div class="aim-panel-title-row">
+          <h2>我的紀錄</h2>
+          <span class="aim-personal-record-count">${rows.length} 筆</span>
+        </div>
+        <div class="aim-latest-list aim-personal-record-list aim-record-card-list aim-record-card-list-personal">${rows.map(record => renderRecordCard(record, activity, 'personal')).join('') || '<div class="aim-empty">目前尚無我的紀錄。</div>'}</div>
+      </section>
     `;
   }
 
@@ -3965,6 +4024,13 @@
       await copyGuestUserId();
       return;
     }
+    if (action === 'guest-record-scope' && isGuestUser()) {
+      const scope = el.dataset.scope === 'mine' ? 'mine' : 'entry';
+      ui.records.scope = scope;
+      if (scope === 'mine') await loadGuestOwnRecordsForActivity(ui.selectedActivityId);
+      render();
+      return;
+    }
     if (action === 'mobile-analysis-enter' && canUseAnalytics() && isMobileFormViewport()) {
       ui.mobileAnalysisMode = true;
       ui.view = 'workspace';
@@ -6037,23 +6103,27 @@
 
   function canViewRecord(record, activity) {
     if (!currentUser || !currentUser.authenticated || !record || !activity || record.activityId !== activity.id) return false;
+    if (isGuestUser()) return record.createdByUserId === currentUser.userId;
     return canManageRecords() || isRecorder();
   }
 
   function canEditRecord(record, activity) {
     if (!canViewRecord(record, activity) || record.status === 'void') return false;
+    if (isGuestUser()) return record.createdByUserId === currentUser.userId;
     if (canManageRecords()) return true;
     return isRecorder() && record.createdByUserId === currentUser.userId;
   }
 
   function canVoidRecord(record, activity) {
     if (!canViewRecord(record, activity) || record.status === 'void') return false;
+    if (isGuestUser()) return false;
     if (canManageRecords()) return true;
     return isRecorder() && record.createdByUserId === currentUser.userId;
   }
 
   function canCancelVoidRecord(record, activity) {
     if (!canViewRecord(record, activity) || record.status !== 'void') return false;
+    if (isGuestUser()) return false;
     if (canManageRecords()) return true;
     return isRecorder() && record.createdByUserId === currentUser.userId;
   }
@@ -6078,6 +6148,7 @@
         cardId: isGuestUser() ? null : (cardLink.cardId || null)
       });
       if (!isGuestUser()) replaceRecord(submission);
+      else recordLoadState.delete(`guest-own:${activity.id}`);
       ui.quickAnswers = {};
       ui.quickOtherAnswers = {};
       ui.quickCardLink = { linked: false, cardId: null, card: null };
@@ -6104,7 +6175,7 @@
       const updated = await window.ActivityIntelligenceApi.updateSubmission(record.id, {
         answers: payloadAnswersForItems(answers, items),
         otherAnswers: cleanOtherAnswers(ui.drawer.workingOther || {}, ui.drawer.working || {}, items),
-        cardId: cardLink.cardId || null
+        cardId: isGuestUser() ? null : (cardLink.cardId || null)
       });
       replaceRecord(updated);
       ui.drawer = null;

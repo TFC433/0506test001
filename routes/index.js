@@ -36,17 +36,19 @@ const {
 } = require('../middleware/line-lead-session.middleware');
 
 const ACTIVITY_INTELLIGENCE_LOCAL_ROLE_HEADER = 'x-activity-intelligence-local-role';
+const ACTIVITY_INTELLIGENCE_LOCAL_ACCESS_HEADER = 'x-activity-intelligence-local-access';
 
 function bridgeLineUserToActivityIntelligenceUser(req, res, next) {
     const lineUser = req.lineUser || {};
-    const guest = isGuestLineLeadUser(lineUser);
+    const localAccessOverride = String(req.get(ACTIVITY_INTELLIGENCE_LOCAL_ACCESS_HEADER) || '').trim().toLowerCase();
+    const allowedLocalOverride = lineUser.isLocalDev === true && isAllowedLocalDevRequest(req);
+    const guest = isGuestLineLeadUser(lineUser) || (localAccessOverride === 'guest' && allowedLocalOverride);
     let role = guest ? null : normalizeLineLeadRole(lineUser.role);
     const localRoleOverride = req.get(ACTIVITY_INTELLIGENCE_LOCAL_ROLE_HEADER);
 
     if (localRoleOverride) {
         const requestedRole = String(localRoleOverride).trim().toLowerCase();
         const normalizedRole = normalizeLineLeadRole(requestedRole);
-        const allowedLocalOverride = lineUser.isLocalDev === true && isAllowedLocalDevRequest(req);
 
         if (!allowedLocalOverride || requestedRole !== normalizedRole) {
             return res.status(403).json({
@@ -57,6 +59,14 @@ function bridgeLineUserToActivityIntelligenceUser(req, res, next) {
         }
 
         role = normalizedRole;
+    }
+
+    if (localAccessOverride && localAccessOverride !== 'guest') {
+        return res.status(403).json({
+            success: false,
+            error: 'Activity Intelligence local access override is not allowed.',
+            code: 'ACTIVITY_INTELLIGENCE_LOCAL_ACCESS_FORBIDDEN'
+        });
     }
 
     req.user = {
