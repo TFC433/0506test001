@@ -1967,7 +1967,6 @@
       ${status.key === 'open' ? '<div class="aim-warning">表單目前開放中；本頁僅調整 Designer，不影響既有填寫資料。</div>' : ''}
       <div class="aim-form-designer">
         <div class="aim-panel">
-          <div class="aim-runtime-notice">表單設計已連接正式 Activity Intelligence 後端；紀錄表單將於後續階段開放。</div>
           <div class="aim-panel-title-row">
             <h2>表單設計</h2>
             <div class="aim-form-mode-tabs" role="tablist" aria-label="表單版本">
