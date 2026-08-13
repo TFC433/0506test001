@@ -1492,7 +1492,7 @@
     if (!hasValue(value)) return null;
     if (expandedCompactCategoricalFieldTypes.has(item.type)) return { kind: 'compact', html: renderRecordDetailCompactCategoricalField(item, value) };
     if (expandedCompactFieldTypes.has(item.type)) return { kind: 'compact', html: renderRecordDetailCompactField(item, value) };
-    if (item.type === 'multiple_choice') return { kind: 'full', html: renderRecordDetailChoiceField(item, value) };
+    if (item.type === 'multiple_choice') return { kind: 'full', html: renderRecordDetailChoiceField(item, value, record) };
     if (item.type === 'long_text') return { kind: 'full', html: renderRecordDetailLongText(item, value) };
     return null;
   }
@@ -1663,10 +1663,28 @@
     return `<div class="aim-record-detail-field aim-record-detail-field-categorical"><span class="aim-record-detail-label">${Store.escapeHtml(field.title)}</span><span class="aim-answer-badges">${badges}</span></div>`;
   }
 
-  function renderRecordDetailChoiceField(field, value) {
-    const badges = renderCategoricalBadges(field, value);
-    if (!badges) return '';
-    return `<section class="aim-record-detail-choice"><h3>${Store.escapeHtml(field.title)}</h3><div class="aim-answer-badges">${badges}</div></section>`;
+  function renderRecordDetailChoiceField(field, value, record) {
+    const values = categoricalValues(value);
+    if (!values.length) return '';
+    const notes = optionNotesForRecord(record);
+    const fieldNotes = notes[field.fieldId] || {};
+    const rows = values.map(label => {
+      const noteKey = optionNoteKeyForDisplay(field, label);
+      const note = String(fieldNotes[noteKey] || '').trim();
+      return `
+        <div class="aim-record-detail-choice-option">
+          <span class="aim-record-detail-choice-label">${Store.escapeHtml(label)}</span>
+          ${note ? `<p>${Store.escapeHtml(note)}</p>` : ''}
+        </div>
+      `;
+    }).join('');
+    return `<section class="aim-record-detail-choice"><h3>${Store.escapeHtml(field.title)}</h3><div class="aim-record-detail-choice-list">${rows}</div></section>`;
+  }
+
+  function optionNoteKeyForDisplay(field, label) {
+    const text = String(label || '').trim();
+    if (text === otherAnswerValue || text.startsWith(`${otherAnswerValue}：`)) return '__other__';
+    return optionIdentityForValue(field, text);
   }
 
   function renderRecordDetailLongText(field, value) {
@@ -1688,7 +1706,8 @@
     if (field.type === 'single_choice') return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}<div class="aim-runtime-choice-list">${(field.options || []).map(o => `<label class="aim-checkbox"><input class="aim-quick-radio" name="quick-${field.fieldId}" data-field="${field.fieldId}" type="radio" value="${Store.escapeHtml(o)}" ${value === o ? 'checked' : ''} ${enabled ? '' : 'disabled'}> ${Store.escapeHtml(o)}</label>`).join('')}${field.allowOther ? `<label class="aim-checkbox"><input class="aim-quick-radio" name="quick-${field.fieldId}" data-field="${field.fieldId}" type="radio" value="${otherAnswerValue}" ${value === otherAnswerValue ? 'checked' : ''} ${enabled ? '' : 'disabled'}> ${otherAnswerValue}</label>` : ''}</div>${field.allowOther && value === otherAnswerValue ? renderOtherInput(field, 'quick', otherValue, enabled) : ''}</div>`;
     if (field.type === 'multiple_choice') {
       const values = Array.isArray(value) ? value : [];
-      return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}${renderMultipleChoiceOptions(field, values, enabled, 'quick')}${field.allowOther && values.includes(otherAnswerValue) ? renderOtherInput(field, 'quick', otherValue, enabled) : ''}</div>`;
+      const otherSelected = field.allowOther && values.includes(otherAnswerValue);
+      return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}${renderMultipleChoiceOptions(field, values, enabled, 'quick')}${otherSelected ? renderOtherInput(field, 'quick', otherValue, enabled) : ''}${otherSelected ? renderOtherOptionNoteEditor(field, 'quick') : ''}</div>`;
     }
     return `<div class="aim-field">${label}<input class="aim-input aim-quick-input" data-field="${field.fieldId}" value="${Store.escapeHtml(value || '')}" placeholder="${Store.escapeHtml(field.placeholder || '')}" ${enabled ? '' : 'disabled'}></div>`;
   }
@@ -1719,7 +1738,8 @@
     const noteAction = fieldAllowsOptionNotes(field) && checked
       ? `<button class="aim-option-note-action${note ? ' aim-option-note-action-has-note' : ''}" type="button" data-action="toggle-option-note" data-context="${context}" data-field="${Store.escapeHtml(field.fieldId)}" data-option-key="${Store.escapeHtml(optionKey)}" aria-expanded="${expanded}">${expanded ? '收合' : (note ? '已備註' : '備註')}</button>`
       : '';
-    const editor = fieldAllowsOptionNotes(field) && checked && expanded
+    const isOther = optionValue === otherAnswerValue;
+    const editor = fieldAllowsOptionNotes(field) && checked && expanded && !isOther
       ? `<div class="aim-option-note-editor"><label>補充這個選項的說明</label><textarea class="aim-textarea aim-option-note-input" data-context="${context}" data-field="${Store.escapeHtml(field.fieldId)}" data-option-key="${Store.escapeHtml(optionKey)}" rows="2" placeholder="輸入選項備註">${Store.escapeHtml(note)}</textarea></div>`
       : '';
     return `
@@ -1731,6 +1751,12 @@
         ${editor}
       </div>
     `;
+  }
+
+  function renderOtherOptionNoteEditor(field, context) {
+    if (!fieldAllowsOptionNotes(field) || !optionNoteExpanded(context, field.fieldId, '__other__')) return '';
+    const note = optionNoteValue(context, field.fieldId, '__other__');
+    return `<div class="aim-option-note-editor aim-option-note-editor-other"><label>補充這個選項的說明</label><textarea class="aim-textarea aim-option-note-input" data-context="${context}" data-field="${Store.escapeHtml(field.fieldId)}" data-option-key="__other__" rows="2" placeholder="輸入選項備註">${Store.escapeHtml(note)}</textarea></div>`;
   }
 
   function fieldAllowsOptionNotes(field) {
@@ -4096,7 +4122,8 @@
     if (field.type === 'single_choice') return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}<div class="aim-runtime-choice-list">${(field.options || []).map(o => `<label class="aim-checkbox"><input class="aim-record-radio" name="${field.fieldId}" data-field="${field.fieldId}" type="radio" value="${Store.escapeHtml(o)}" ${value === o ? 'checked' : ''}> ${Store.escapeHtml(o)}</label>`).join('')}${field.allowOther ? `<label class="aim-checkbox"><input class="aim-record-radio" name="${field.fieldId}" data-field="${field.fieldId}" type="radio" value="${otherAnswerValue}" ${value === otherAnswerValue ? 'checked' : ''}> ${otherAnswerValue}</label>` : ''}</div>${field.allowOther && value === otherAnswerValue ? renderOtherInput(field, 'record', otherValue, true) : ''}</div>`;
     if (field.type === 'multiple_choice') {
       const values = Array.isArray(value) ? value : [];
-      return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}${renderMultipleChoiceOptions(field, values, true, 'record')}${field.allowOther && values.includes(otherAnswerValue) ? renderOtherInput(field, 'record', otherValue, true) : ''}</div>`;
+      const otherSelected = field.allowOther && values.includes(otherAnswerValue);
+      return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}${renderMultipleChoiceOptions(field, values, true, 'record')}${otherSelected ? renderOtherInput(field, 'record', otherValue, true) : ''}${otherSelected ? renderOtherOptionNoteEditor(field, 'record') : ''}</div>`;
     }
     return `<div class="aim-field">${label}<input class="aim-input aim-record-input" data-field="${field.fieldId}" value="${Store.escapeHtml(value || '')}" placeholder="${Store.escapeHtml(field.placeholder || '')}"></div>`;
   }
@@ -4877,6 +4904,15 @@
   function bindAutoGrowingTextareasIn(scope) {
     const rootNode = scope || document;
     rootNode.querySelectorAll('.aim-auto-grow:not(.aim-field-design-input)').forEach(textarea => {
+      autoGrowTextarea(textarea);
+      textarea.addEventListener('input', () => autoGrowTextarea(textarea));
+    });
+    bindOptionNoteTextareasIn(rootNode);
+  }
+
+  function bindOptionNoteTextareasIn(scope) {
+    const rootNode = scope || document;
+    rootNode.querySelectorAll('.aim-option-note-input').forEach(textarea => {
       autoGrowTextarea(textarea);
       textarea.addEventListener('input', () => autoGrowTextarea(textarea));
     });

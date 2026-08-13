@@ -3770,13 +3770,14 @@ a:focus-visible {
 .aim-option-note-action {
   flex: 0 0 auto;
   min-height: 24px;
-  padding: 2px 7px;
-  border: 1px solid transparent;
-  border-radius: 6px;
+  padding: 1px 2px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
   background: transparent;
   color: var(--aim-muted);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.2;
   cursor: pointer;
 }
@@ -3784,8 +3785,8 @@ a:focus-visible {
 .aim-option-note-action:hover,
 .aim-option-note-action:focus-visible,
 .aim-option-note-action[aria-expanded="true"] {
-  border-color: var(--aim-border);
-  background: var(--aim-form-primary-soft);
+  border-bottom-color: currentColor;
+  background: transparent;
   color: var(--aim-form-primary-hover);
 }
 
@@ -3795,6 +3796,10 @@ a:focus-visible {
 
 .aim-option-note-editor {
   margin: 3px 0 5px 24px;
+}
+
+.aim-option-note-editor-other {
+  margin-top: 8px;
 }
 
 .aim-option-note-editor label {
@@ -3810,6 +3815,8 @@ a:focus-visible {
   padding: 7px 9px;
   font-size: 13px;
   line-height: 1.45;
+  overflow: hidden;
+  resize: none;
 }
 
 .aim-runtime-other-input {
@@ -3832,6 +3839,38 @@ a:focus-visible {
   font-size: 13px;
   font-weight: 600;
   line-height: 1.35;
+}
+
+.aim-record-detail-choice-list {
+  display: grid;
+  gap: 7px;
+}
+
+.aim-record-detail-choice {
+  display: grid;
+  align-items: start;
+  gap: 6px;
+}
+
+.aim-record-detail-choice-option {
+  display: grid;
+  gap: 3px;
+}
+
+.aim-record-detail-choice-label {
+  color: var(--aim-text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.aim-record-detail-choice-option p {
+  margin: 0;
+  padding-left: 12px;
+  color: var(--aim-muted);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
 }
 
 .aim-answer {
