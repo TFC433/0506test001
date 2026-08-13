@@ -95,6 +95,8 @@
     formPreviewCardLinked: false,
     formPreviewCardVariant: 'default',
     quickOtherAnswers: {},
+    quickOptionNotes: {},
+    quickOptionNoteExpanded: {},
     quickCardLink: { linked: false, cardId: null, card: null },
     cardPicker: null,
     hardDeleteConfirm: null,
@@ -212,6 +214,8 @@
     ui.records.scope = 'entry';
     ui.quickAnswers = {};
     ui.quickOtherAnswers = {};
+    ui.quickOptionNotes = {};
+    ui.quickOptionNoteExpanded = {};
     ui.quickCardLink = { linked: false, cardId: null, card: null };
     state.records = [];
     recordLoadState.clear();
@@ -372,6 +376,8 @@
   function normalizeSubmissionDto(submission) {
     const formSnapshot = submission && (submission.formSnapshot || submission.formRuntimeSnapshot);
     const card = normalizeRawCard(submission && submission.card);
+    const snapshotItems = formSnapshot && formSnapshot.items;
+    const rawAnswers = submission.answers || {};
     return {
       ...submission,
       id: submission.submissionId || submission.id,
@@ -380,8 +386,9 @@
       formVersionId: submission.formVersionId,
       status: submission.status || 'active',
       cardId: submission.cardId || (card && card.cardId) || null,
-      answers: normalizeAnswerValues(submission.answers || {}, formSnapshot && formSnapshot.items),
+      answers: normalizeAnswerValues(rawAnswers, snapshotItems),
       runtimeOtherAnswers: submission.otherAnswers || submission.runtimeOtherAnswers || {},
+      runtimeOptionNotes: extractOptionNotes(rawAnswers, snapshotItems),
       runtimeCardLink: card ? { linked: true, cardId: card.cardId, card } : (submission.cardId ? { linked: true, cardId: submission.cardId, card: null } : { linked: false, cardId: null, card: null }),
       formRuntimeSnapshot: formSnapshot ? {
         versionId: formSnapshot.versionId,
@@ -390,6 +397,25 @@
         items: ((formSnapshot.items) || []).map(normalizeDesignerItem)
       } : null
     };
+  }
+
+  function extractOptionNotes(answers, items) {
+    const itemMap = new Map(((items || []).map(normalizeDesignerItem)).map(item => [item.fieldId, item]));
+    return Object.entries(answers || {}).reduce((acc, [fieldId, value]) => {
+      const item = itemMap.get(fieldId);
+      if (!fieldAllowsOptionNotes(item)) return acc;
+      const values = Array.isArray(value) ? value : [value];
+      values.forEach(entry => {
+        if (!entry || typeof entry !== 'object') return;
+        const note = String(entry.note || '').trim();
+        if (!note) return;
+        const optionKey = optionIdentityForValue(item, entry);
+        if (!optionKey) return;
+        if (!acc[item.fieldId]) acc[item.fieldId] = {};
+        acc[item.fieldId][optionKey] = note;
+      });
+      return acc;
+    }, {});
   }
 
   function normalizeAnswerValues(answers, items) {
@@ -466,6 +492,8 @@
       ui.tab = 'records';
       ui.records.scope = 'entry';
       ui.quickAnswers = {};
+      ui.quickOptionNotes = {};
+      ui.quickOptionNoteExpanded = {};
       if (open.length === 1) {
         ui.selectedActivityId = open[0].id;
         ui.view = 'workspace';
@@ -483,6 +511,8 @@
       ui.tab = 'records';
       ui.records.scope = 'entry';
       ui.quickAnswers = {};
+      ui.quickOptionNotes = {};
+      ui.quickOptionNoteExpanded = {};
       if (open.length === 1) {
         ui.selectedActivityId = open[0].id;
         ui.view = 'workspace';
@@ -506,6 +536,8 @@
     ui.records.scope = 'entry';
     ui.quickAnswers = {};
     ui.quickOtherAnswers = {};
+    ui.quickOptionNotes = {};
+    ui.quickOptionNoteExpanded = {};
     ui.quickCardLink = { linked: false, cardId: null, card: null };
     if (open.length === 1) {
       ui.selectedActivityId = open[0].id;
@@ -1513,6 +1545,10 @@
     return record && record.runtimeOtherAnswers ? record.runtimeOtherAnswers : {};
   }
 
+  function optionNotesForRecord(record) {
+    return record && record.runtimeOptionNotes ? record.runtimeOptionNotes : {};
+  }
+
   function cardLinkForRecord(record) {
     return record && record.runtimeCardLink ? record.runtimeCardLink : { linked: false, variant: 'default' };
   }
@@ -1652,7 +1688,7 @@
     if (field.type === 'single_choice') return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}<div class="aim-runtime-choice-list">${(field.options || []).map(o => `<label class="aim-checkbox"><input class="aim-quick-radio" name="quick-${field.fieldId}" data-field="${field.fieldId}" type="radio" value="${Store.escapeHtml(o)}" ${value === o ? 'checked' : ''} ${enabled ? '' : 'disabled'}> ${Store.escapeHtml(o)}</label>`).join('')}${field.allowOther ? `<label class="aim-checkbox"><input class="aim-quick-radio" name="quick-${field.fieldId}" data-field="${field.fieldId}" type="radio" value="${otherAnswerValue}" ${value === otherAnswerValue ? 'checked' : ''} ${enabled ? '' : 'disabled'}> ${otherAnswerValue}</label>` : ''}</div>${field.allowOther && value === otherAnswerValue ? renderOtherInput(field, 'quick', otherValue, enabled) : ''}</div>`;
     if (field.type === 'multiple_choice') {
       const values = Array.isArray(value) ? value : [];
-      return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}<div class="aim-runtime-choice-list">${(field.options || []).map(o => `<label class="aim-checkbox"><input class="aim-quick-check" data-field="${field.fieldId}" type="checkbox" value="${Store.escapeHtml(o)}" ${values.includes(o) ? 'checked' : ''} ${enabled ? '' : 'disabled'}> ${Store.escapeHtml(o)}</label>`).join('')}${field.allowOther ? `<label class="aim-checkbox"><input class="aim-quick-check" data-field="${field.fieldId}" type="checkbox" value="${otherAnswerValue}" ${values.includes(otherAnswerValue) ? 'checked' : ''} ${enabled ? '' : 'disabled'}> ${otherAnswerValue}</label>` : ''}</div>${field.allowOther && values.includes(otherAnswerValue) ? renderOtherInput(field, 'quick', otherValue, enabled) : ''}</div>`;
+      return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}${renderMultipleChoiceOptions(field, values, enabled, 'quick')}${field.allowOther && values.includes(otherAnswerValue) ? renderOtherInput(field, 'quick', otherValue, enabled) : ''}</div>`;
     }
     return `<div class="aim-field">${label}<input class="aim-input aim-quick-input" data-field="${field.fieldId}" value="${Store.escapeHtml(value || '')}" placeholder="${Store.escapeHtml(field.placeholder || '')}" ${enabled ? '' : 'disabled'}></div>`;
   }
@@ -1660,6 +1696,127 @@
   function renderOtherInput(field, context, value, enabled) {
     const klass = context === 'quick' ? 'aim-quick-other-input' : 'aim-record-other-input';
     return `<input class="aim-input aim-runtime-other-input ${klass}" data-field="${Store.escapeHtml(field.fieldId)}" value="${Store.escapeHtml(value || '')}" placeholder="請輸入其他內容" ${enabled ? '' : 'disabled'}>`;
+  }
+
+  function renderMultipleChoiceOptions(field, values, enabled, context) {
+    if (!fieldAllowsOptionNotes(field)) {
+      const inputClass = context === 'quick' ? 'aim-quick-check' : 'aim-record-check';
+      const optionRows = (field.options || []).map(optionValue => `<label class="aim-checkbox"><input class="${inputClass}" data-field="${Store.escapeHtml(field.fieldId)}" type="checkbox" value="${Store.escapeHtml(optionValue)}" ${values.includes(optionValue) ? 'checked' : ''} ${enabled ? '' : 'disabled'}> ${Store.escapeHtml(optionValue)}</label>`);
+      if (field.allowOther) optionRows.push(`<label class="aim-checkbox"><input class="${inputClass}" data-field="${Store.escapeHtml(field.fieldId)}" type="checkbox" value="${otherAnswerValue}" ${values.includes(otherAnswerValue) ? 'checked' : ''} ${enabled ? '' : 'disabled'}> ${otherAnswerValue}</label>`);
+      return `<div class="aim-runtime-choice-list">${optionRows.join('')}</div>`;
+    }
+    const optionRows = (field.options || []).map(optionValue => renderMultipleChoiceOption(field, optionValue, values, enabled, context));
+    if (field.allowOther) optionRows.push(renderMultipleChoiceOption(field, otherAnswerValue, values, enabled, context));
+    return `<div class="aim-runtime-choice-list aim-option-note-choice-list">${optionRows.join('')}</div>`;
+  }
+
+  function renderMultipleChoiceOption(field, optionValue, values, enabled, context) {
+    const checked = values.includes(optionValue);
+    const inputClass = context === 'quick' ? 'aim-quick-check' : 'aim-record-check';
+    const optionKey = optionIdentityForValue(field, optionValue);
+    const note = optionNoteValue(context, field.fieldId, optionKey);
+    const expanded = optionNoteExpanded(context, field.fieldId, optionKey);
+    const noteAction = fieldAllowsOptionNotes(field) && checked
+      ? `<button class="aim-option-note-action${note ? ' aim-option-note-action-has-note' : ''}" type="button" data-action="toggle-option-note" data-context="${context}" data-field="${Store.escapeHtml(field.fieldId)}" data-option-key="${Store.escapeHtml(optionKey)}" aria-expanded="${expanded}">${expanded ? '收合' : (note ? '已備註' : '備註')}</button>`
+      : '';
+    const editor = fieldAllowsOptionNotes(field) && checked && expanded
+      ? `<div class="aim-option-note-editor"><label>補充這個選項的說明</label><textarea class="aim-textarea aim-option-note-input" data-context="${context}" data-field="${Store.escapeHtml(field.fieldId)}" data-option-key="${Store.escapeHtml(optionKey)}" rows="2" placeholder="輸入選項備註">${Store.escapeHtml(note)}</textarea></div>`
+      : '';
+    return `
+      <div class="aim-option-note-option">
+        <div class="aim-option-note-row">
+          <label class="aim-checkbox"><input class="${inputClass}" data-field="${Store.escapeHtml(field.fieldId)}" type="checkbox" value="${Store.escapeHtml(optionValue)}" ${checked ? 'checked' : ''} ${enabled ? '' : 'disabled'}> ${Store.escapeHtml(optionValue)}</label>
+          ${noteAction}
+        </div>
+        ${editor}
+      </div>
+    `;
+  }
+
+  function fieldAllowsOptionNotes(field) {
+    return Boolean(field && field.type === 'multiple_choice' && (field.allowOptionNotes || (field.settings && field.settings.allowOptionNotes)));
+  }
+
+  function optionEntryForValue(field, value) {
+    const text = value && typeof value === 'object'
+      ? String(value.value || value.label || '').trim()
+      : String(value || '').trim();
+    const key = value && typeof value === 'object' ? (value.optionKey || value.option_key || '') : '';
+    return (field && field.optionEntries || []).find(option => {
+      if (key && option.optionKey === key) return true;
+      return option.value === text || option.label === text;
+    }) || null;
+  }
+
+  function optionIdentityForValue(field, value) {
+    const text = value && typeof value === 'object'
+      ? String(value.value || value.label || '').trim()
+      : String(value || '').trim();
+    if (text === otherAnswerValue || text === '__other') return '__other__';
+    const option = optionEntryForValue(field, value);
+    return option && option.optionKey ? option.optionKey : `value:${text}`;
+  }
+
+  function optionNoteState(context) {
+    if (context === 'record') {
+      if (!ui.drawer) return {};
+      if (!ui.drawer.workingOptionNotes) ui.drawer.workingOptionNotes = {};
+      return ui.drawer.workingOptionNotes;
+    }
+    if (!ui.quickOptionNotes) ui.quickOptionNotes = {};
+    return ui.quickOptionNotes;
+  }
+
+  function optionNoteExpandedState(context) {
+    if (context === 'record') {
+      if (!ui.drawer) return {};
+      if (!ui.drawer.optionNoteExpanded) ui.drawer.optionNoteExpanded = {};
+      return ui.drawer.optionNoteExpanded;
+    }
+    if (!ui.quickOptionNoteExpanded) ui.quickOptionNoteExpanded = {};
+    return ui.quickOptionNoteExpanded;
+  }
+
+  function optionNoteValue(context, fieldId, optionKey) {
+    const notes = optionNoteState(context);
+    return notes[fieldId] && notes[fieldId][optionKey] ? notes[fieldId][optionKey] : '';
+  }
+
+  function optionNoteExpanded(context, fieldId, optionKey) {
+    const expanded = optionNoteExpandedState(context);
+    return Boolean(expanded[fieldId] && expanded[fieldId][optionKey]);
+  }
+
+  function setOptionNote(context, fieldId, optionKey, value) {
+    const notes = optionNoteState(context);
+    if (!notes[fieldId]) notes[fieldId] = {};
+    if (String(value || '').trim()) notes[fieldId][optionKey] = String(value || '');
+    else delete notes[fieldId][optionKey];
+    if (!Object.keys(notes[fieldId]).length) delete notes[fieldId];
+  }
+
+  function toggleOptionNoteEditor(context, fieldId, optionKey) {
+    const expanded = optionNoteExpandedState(context);
+    if (!expanded[fieldId]) expanded[fieldId] = {};
+    if (expanded[fieldId][optionKey]) delete expanded[fieldId][optionKey];
+    else expanded[fieldId][optionKey] = true;
+    if (!Object.keys(expanded[fieldId]).length) delete expanded[fieldId];
+    render();
+  }
+
+  function collapseOptionNoteEditor(context, fieldId, optionKey) {
+    const expanded = optionNoteExpandedState(context);
+    if (!expanded[fieldId]) return;
+    delete expanded[fieldId][optionKey];
+    if (!Object.keys(expanded[fieldId]).length) delete expanded[fieldId];
+  }
+
+  function runtimeFieldById(fieldId, context) {
+    if (context === 'record' && ui.drawer && ui.drawer.id) {
+      const record = state.records.find(r => r.id === ui.drawer.id);
+      return snapshotRecordItems(record, selectedActivity()).find(field => field.fieldId === fieldId) || null;
+    }
+    return quickEntryFields(selectedActivity()).find(field => field.fieldId === fieldId) || null;
   }
 
   function renderRuntimeCardLink(item, enabled, cardLink, context) {
@@ -1742,6 +1899,10 @@
     const settings = { ...sourceSettings };
     if (previewPlacement) settings.previewPlacement = previewPlacement;
     else delete settings.previewPlacement;
+    const sourceAllowOptionNotes = item.allowOptionNotes !== undefined ? item.allowOptionNotes : sourceSettings.allowOptionNotes;
+    const allowOptionNotes = type === 'multiple_choice' && Boolean(sourceAllowOptionNotes);
+    if (allowOptionNotes) settings.allowOptionNotes = true;
+    else delete settings.allowOptionNotes;
     return {
       formItemId: item.formItemId || item.form_item_id || '',
       itemKey,
@@ -1755,6 +1916,7 @@
       options: entries.map(option => option.label),
       optionEntries: entries,
       allowOther: Boolean(item.allowOther || (item.settings && item.settings.allowOther)),
+      allowOptionNotes,
       settings,
       previewPlacement,
       visible: item.visible !== false,
@@ -1908,6 +2070,7 @@
       placeholder: normalized.placeholder || '',
       options: normalized.options || [],
       allowOther: Boolean(normalized.allowOther),
+      allowOptionNotes: Boolean(normalized.allowOptionNotes),
       visible: normalized.visible !== false,
       retired: Boolean(normalized.retired),
       removedInDraft: Boolean(normalized.removedInDraft),
@@ -2159,6 +2322,7 @@
           ${canHavePlaceholder ? `<div class="aim-field"><label for="aim-field-placeholder">提示文字</label><input class="aim-input aim-field-design-input" id="aim-field-placeholder" data-design-field="placeholder" value="${Store.escapeHtml(field.placeholder || '')}" ${field.retired ? 'disabled' : ''}></div>` : ''}
           ${choiceFieldTypes.includes(field.type) ? renderOptionEditor(field) : ''}
           ${choiceFieldTypes.includes(field.type) ? `<label class="aim-checkbox aim-form-other-toggle"><input id="aim-field-allow-other" type="checkbox" ${field.allowOther ? 'checked' : ''} ${field.retired ? 'disabled' : ''}> 允許填寫「其他」補充答案</label>` : ''}
+          ${field.type === 'multiple_choice' ? `<label class="aim-checkbox aim-form-option-notes-toggle"><input id="aim-field-allow-option-notes" type="checkbox" ${field.allowOptionNotes ? 'checked' : ''} ${field.retired ? 'disabled' : ''}> 允許選項備註</label>` : ''}
           ${renderPreviewPlacementEditor(field)}
         </div>
         <div class="aim-field-editor-actions">
@@ -3894,6 +4058,8 @@
     const editing = record.status !== 'void';
     const working = ui.drawer.working || Store.clone(record.answers);
     const workingOther = ui.drawer.workingOther || Store.clone(otherAnswersForRecord(record));
+    if (!ui.drawer.workingOptionNotes) ui.drawer.workingOptionNotes = Store.clone(optionNotesForRecord(record));
+    const workingOptionNotes = ui.drawer.workingOptionNotes;
     const workingCardLink = ui.drawer.workingCardLink || Store.clone(cardLinkForRecord(record));
     const items = snapshotRecordItems(record, activity);
     return `
@@ -3902,7 +4068,7 @@
         <div class="aim-drawer-head"><div><h2>編輯紀錄</h2>${editing ? '' : '<span class="aim-pill aim-pill-void">已作廢</span>'}</div><button class="aim-button aim-icon-button" data-action="close-drawer" type="button" aria-label="關閉紀錄">x</button></div>
         <div class="aim-drawer-body">
           <dl class="aim-definition-list aim-record-edit-meta" style="margin-bottom:14px"><dt>建立者</dt><dd>${Store.escapeHtml(record.createdByDisplayName)}</dd><dt>建立時間</dt><dd>${Store.formatDateTime(record.createdAt)}</dd><dt>最近更新者</dt><dd>${Store.escapeHtml(record.updatedByDisplayName)}</dd><dt>最近更新</dt><dd>${Store.formatDateTime(record.updatedAt)}</dd>${editing ? '' : '<dt>狀態</dt><dd><span class="aim-pill aim-pill-void">已作廢</span></dd>'}</dl>
-          <div class="aim-answer-list">${items.map(field => renderAnswer(field, working, editing, workingOther, workingCardLink)).join('')}</div>
+          <div class="aim-answer-list">${items.map(field => renderAnswer(field, working, editing, workingOther, workingCardLink, workingOptionNotes)).join('')}</div>
         </div>
         <div class="aim-drawer-foot aim-record-drawer-foot">
           ${editing && canVoidRecord(record, activity) ? `<button class="aim-button aim-button-danger" data-action="void-record" data-id="${record.id}" type="button">作廢紀錄</button>` : ''}
@@ -3913,7 +4079,7 @@
     `;
   }
 
-  function renderAnswer(field, answers, editable, otherAnswers, cardLink) {
+  function renderAnswer(field, answers, editable, otherAnswers, cardLink, optionNotes) {
     if (field.type === 'section_heading') return `<section class="aim-runtime-section"><h3>${Store.escapeHtml(field.title)}</h3>${field.helperText ? `<p>${Store.escapeHtml(field.helperText)}</p>` : ''}</section>`;
     if (field.type === 'information_text') return `<section class="aim-runtime-info"><h3>${Store.escapeHtml(field.title)}</h3>${field.helperText ? `<p>${Store.escapeHtml(field.helperText)}</p>` : ''}</section>`;
     if (field.type === 'form_thumbnail') return editable ? `<section class="aim-runtime-component">${renderFormThumbnailPreview(field)}</section>` : '';
@@ -3930,7 +4096,7 @@
     if (field.type === 'single_choice') return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}<div class="aim-runtime-choice-list">${(field.options || []).map(o => `<label class="aim-checkbox"><input class="aim-record-radio" name="${field.fieldId}" data-field="${field.fieldId}" type="radio" value="${Store.escapeHtml(o)}" ${value === o ? 'checked' : ''}> ${Store.escapeHtml(o)}</label>`).join('')}${field.allowOther ? `<label class="aim-checkbox"><input class="aim-record-radio" name="${field.fieldId}" data-field="${field.fieldId}" type="radio" value="${otherAnswerValue}" ${value === otherAnswerValue ? 'checked' : ''}> ${otherAnswerValue}</label>` : ''}</div>${field.allowOther && value === otherAnswerValue ? renderOtherInput(field, 'record', otherValue, true) : ''}</div>`;
     if (field.type === 'multiple_choice') {
       const values = Array.isArray(value) ? value : [];
-      return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}<div class="aim-runtime-choice-list">${(field.options || []).map(o => `<label class="aim-checkbox"><input class="aim-record-check" data-field="${field.fieldId}" type="checkbox" value="${Store.escapeHtml(o)}" ${values.includes(o) ? 'checked' : ''}> ${Store.escapeHtml(o)}</label>`).join('')}${field.allowOther ? `<label class="aim-checkbox"><input class="aim-record-check" data-field="${field.fieldId}" type="checkbox" value="${otherAnswerValue}" ${values.includes(otherAnswerValue) ? 'checked' : ''}> ${otherAnswerValue}</label>` : ''}</div>${field.allowOther && values.includes(otherAnswerValue) ? renderOtherInput(field, 'record', otherValue, true) : ''}</div>`;
+      return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}${renderMultipleChoiceOptions(field, values, true, 'record')}${field.allowOther && values.includes(otherAnswerValue) ? renderOtherInput(field, 'record', otherValue, true) : ''}</div>`;
     }
     return `<div class="aim-field">${label}<input class="aim-input aim-record-input" data-field="${field.fieldId}" value="${Store.escapeHtml(value || '')}" placeholder="${Store.escapeHtml(field.placeholder || '')}"></div>`;
   }
@@ -4077,6 +4243,9 @@
       toggleRecordExpansion(el.dataset.context, el.dataset.id);
     }
     if (action === 'toggle-all-records') toggleAllRecordExpansions(el.dataset.context);
+    if (action === 'toggle-option-note') {
+      toggleOptionNoteEditor(el.dataset.context || 'quick', el.dataset.field || '', el.dataset.optionKey || '');
+    }
     if (action === 'edit-record') {
       const record = state.records.find(r => r.id === el.dataset.id);
       if (canOpenRecordDrawer(record, selectedActivity())) ui.drawer = {
@@ -4085,6 +4254,8 @@
         id: record.id,
         working: Store.clone(record.answers || {}),
         workingOther: Store.clone(otherAnswersForRecord(record)),
+        workingOptionNotes: Store.clone(optionNotesForRecord(record)),
+        optionNoteExpanded: {},
         workingCardLink: Store.clone(cardLinkForRecord(record))
       };
     }
@@ -4610,11 +4781,18 @@
       const before = answerHasOther(ui.quickAnswers[node.dataset.field]);
       const list = new Set(ui.quickAnswers[node.dataset.field] || []);
       if (node.checked) list.add(node.value);
-      else list.delete(node.value);
+      else {
+        list.delete(node.value);
+        const field = runtimeFieldById(node.dataset.field, 'quick');
+        if (field) collapseOptionNoteEditor('quick', node.dataset.field, optionIdentityForValue(field, node.value));
+      }
       setQuickAnswer(node.dataset.field, Array.from(list));
-      refreshQuickAnswerListIfOtherChanged(before, ui.quickAnswers[node.dataset.field]);
+      const field = runtimeFieldById(node.dataset.field, 'quick');
+      if (fieldAllowsOptionNotes(field)) refreshQuickAnswerList();
+      else refreshQuickAnswerListIfOtherChanged(before, ui.quickAnswers[node.dataset.field]);
     }));
     rootNode.querySelectorAll('.aim-quick-other-input').forEach(node => node.addEventListener('input', () => setQuickOtherAnswer(node.dataset.field, node.value)));
+    rootNode.querySelectorAll('.aim-option-note-input[data-context="quick"]').forEach(node => node.addEventListener('input', () => setOptionNote('quick', node.dataset.field, node.dataset.optionKey, node.value)));
   }
 
   function bindRecordAnswerControls(scope) {
@@ -4638,11 +4816,18 @@
       const before = answerHasOther(ui.drawer.working[node.dataset.field]);
       const list = new Set(ui.drawer.working[node.dataset.field] || []);
       if (node.checked) list.add(node.value);
-      else list.delete(node.value);
+      else {
+        list.delete(node.value);
+        const field = runtimeFieldById(node.dataset.field, 'record');
+        if (field) collapseOptionNoteEditor('record', node.dataset.field, optionIdentityForValue(field, node.value));
+      }
       setWorking(node.dataset.field, Array.from(list));
-      refreshRecordDrawerAnswerListIfOtherChanged(before, ui.drawer.working[node.dataset.field]);
+      const field = runtimeFieldById(node.dataset.field, 'record');
+      if (fieldAllowsOptionNotes(field)) refreshRecordDrawerAnswerList();
+      else refreshRecordDrawerAnswerListIfOtherChanged(before, ui.drawer.working[node.dataset.field]);
     }));
     rootNode.querySelectorAll('.aim-record-other-input').forEach(node => node.addEventListener('input', () => setWorkingOther(node.dataset.field, node.value)));
+    rootNode.querySelectorAll('.aim-option-note-input[data-context="record"]').forEach(node => node.addEventListener('input', () => setOptionNote('record', node.dataset.field, node.dataset.optionKey, node.value)));
   }
 
   function answerHasOther(value) {
@@ -4676,9 +4861,11 @@
     const editing = record.status !== 'void';
     const working = ui.drawer.working || Store.clone(record.answers);
     const workingOther = ui.drawer.workingOther || Store.clone(otherAnswersForRecord(record));
+    if (!ui.drawer.workingOptionNotes) ui.drawer.workingOptionNotes = Store.clone(optionNotesForRecord(record));
+    const workingOptionNotes = ui.drawer.workingOptionNotes;
     const workingCardLink = ui.drawer.workingCardLink || Store.clone(cardLinkForRecord(record));
     const items = snapshotRecordItems(record, activity);
-    list.innerHTML = items.map(field => renderAnswer(field, working, editing, workingOther, workingCardLink)).join('');
+    list.innerHTML = items.map(field => renderAnswer(field, working, editing, workingOther, workingCardLink, workingOptionNotes)).join('');
     bindRecordAnswerControls(list);
     bindAutoGrowingTextareasIn(list);
   }
@@ -4726,6 +4913,14 @@
     const allowOther = document.getElementById('aim-field-allow-other');
     if (allowOther) allowOther.addEventListener('change', () => {
       updateFormDesignDraft({ allowOther: allowOther.checked });
+      scheduleFormPreviewRefresh();
+    });
+    const allowOptionNotes = document.getElementById('aim-field-allow-option-notes');
+    if (allowOptionNotes) allowOptionNotes.addEventListener('change', () => {
+      const settings = { ...((ui.formDesignDraft && ui.formDesignDraft.settings) || {}) };
+      if (allowOptionNotes.checked) settings.allowOptionNotes = true;
+      else delete settings.allowOptionNotes;
+      updateFormDesignDraft({ allowOptionNotes: allowOptionNotes.checked, settings });
       scheduleFormPreviewRefresh();
     });
     const previewEnabled = document.getElementById('aim-field-preview-enabled');
@@ -6142,7 +6337,7 @@
       const answers = cleanAnswersForItems(ui.quickAnswers || {}, items);
       const cardLink = cleanCardLink(ui.quickCardLink);
       const submission = await window.ActivityIntelligenceApi.createSubmission(activity.id, {
-        answers: payloadAnswersForItems(answers, items),
+        answers: payloadAnswersForItems(answers, items, ui.quickOptionNotes || {}),
         otherAnswers: cleanOtherAnswers(ui.quickOtherAnswers || {}, ui.quickAnswers || {}, items),
         cardId: isGuestUser() ? null : (cardLink.cardId || null)
       });
@@ -6150,6 +6345,8 @@
       else recordLoadState.delete(`guest-own:${activity.id}`);
       ui.quickAnswers = {};
       ui.quickOtherAnswers = {};
+      ui.quickOptionNotes = {};
+      ui.quickOptionNoteExpanded = {};
       ui.quickCardLink = { linked: false, cardId: null, card: null };
       ui.focusQuickFirst = true;
       ui.tab = 'records';
@@ -6172,7 +6369,7 @@
       const answers = cleanAnswersForItems(ui.drawer.working || {}, items);
       const cardLink = cleanCardLink(ui.drawer.workingCardLink || cardLinkForRecord(record));
       const updated = await window.ActivityIntelligenceApi.updateSubmission(record.id, {
-        answers: payloadAnswersForItems(answers, items),
+        answers: payloadAnswersForItems(answers, items, ui.drawer.workingOptionNotes || {}),
         otherAnswers: cleanOtherAnswers(ui.drawer.workingOther || {}, ui.drawer.working || {}, items),
         cardId: isGuestUser() ? null : (cardLink.cardId || null)
       });
@@ -6186,13 +6383,31 @@
     }
   }
 
-  function payloadAnswersForItems(answers, items) {
+  function payloadAnswersForItems(answers, items, optionNotes) {
     const itemsByField = new Map((items || []).map(item => [item.fieldId, item]));
     return Object.entries(answers || {}).reduce((acc, [fieldId, value]) => {
       const item = itemsByField.get(fieldId);
-      acc[fieldId] = item && item.type === 'yes_no' ? value === yesNoOptions[0] : value;
+      if (item && item.type === 'yes_no') acc[fieldId] = value === yesNoOptions[0];
+      else if (fieldAllowsOptionNotes(item) && Array.isArray(value)) acc[fieldId] = value.map(selected => selectedOptionPayload(item, selected, optionNotes)).filter(Boolean);
+      else acc[fieldId] = value;
       return acc;
     }, {});
+  }
+
+  function selectedOptionPayload(item, selected, optionNotes) {
+    const optionKey = optionIdentityForValue(item, selected);
+    const option = optionEntryForValue(item, selected);
+    const isOther = selected === otherAnswerValue || optionKey === '__other__';
+    const payload = isOther
+      ? { value: otherAnswerValue }
+      : {
+        optionKey: option && option.optionKey ? option.optionKey : undefined,
+        label: option ? option.label : selected,
+        value: option ? option.value : selected
+      };
+    const note = optionNotes && optionNotes[item.fieldId] ? String(optionNotes[item.fieldId][optionKey] || '').trim() : '';
+    if (note) payload.note = note;
+    return payload;
   }
 
   function cleanAnswersForItems(source, items) {

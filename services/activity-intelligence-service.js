@@ -28,7 +28,8 @@ const FORM_AI_MAX_QUESTION_LENGTH = 1000;
 const FORM_AI_MAX_CONTEXT_CHARS = 800000;
 const FORM_AI_PROVIDER_TIMEOUT_MS = 45000;
 const FORM_AI_MAX_TOOL_CALLS = 3;
-const FORM_AI_OTHER_VALUE = '其他';
+const OTHER_ANSWER_VALUE = '其他';
+const FORM_AI_OTHER_VALUE = OTHER_ANSWER_VALUE;
 const FORM_AI_TOOL_NAMES = new Set(['aggregate_submissions', 'retrieve_submissions']);
 const FORM_AI_AGGREGATE_GROUPS = new Set(['none', 'date', 'recorder', 'field']);
 const FORM_AI_CHOICE_TYPES = new Set(['yes_no', 'single_choice', 'multiple_choice', 'dropdown']);
@@ -480,9 +481,19 @@ class ActivityIntelligenceService {
     _normalizeItemSettings(item) {
         const sourceSettings = item.settings && typeof item.settings === 'object' ? item.settings : {};
         const settings = { ...sourceSettings };
+        const type = item.type || item.itemType || item.item_type;
 
         if (item.allowOther !== undefined || item.allow_other !== undefined || sourceSettings.allowOther !== undefined) {
             settings.allowOther = Boolean(item.allowOther || item.allow_other || sourceSettings.allowOther);
+        }
+
+        if (item.allowOptionNotes !== undefined || item.allow_option_notes !== undefined || sourceSettings.allowOptionNotes !== undefined) {
+            const supplied = item.allowOptionNotes !== undefined
+                ? item.allowOptionNotes
+                : (item.allow_option_notes !== undefined ? item.allow_option_notes : sourceSettings.allowOptionNotes);
+            const enabled = Boolean(supplied);
+            if (type === 'multiple_choice' && enabled) settings.allowOptionNotes = true;
+            else delete settings.allowOptionNotes;
         }
 
         ['thumbnailTitle', 'altText', 'thumbnailVariant'].forEach(key => {
@@ -565,20 +576,73 @@ class ActivityIntelligenceService {
         const cleaned = values
             .filter(entry => !this._isEmptyAnswer(entry))
             .map(entry => {
+                const note = this._allowsOptionNotes(item) ? this._normalizeOptionNote(entry) : '';
                 if (entry && typeof entry === 'object') {
-                    const optionKey = entry.optionKey || entry.option_key || null;
-                    if (optionKey) this._assertUuid(optionKey, 'optionKey');
-                    return {
-                        optionKey,
-                        label: entry.label || entry.value || '',
-                        value: entry.value || entry.label || ''
-                    };
+                    const normalized = this._normalizeChoiceEntryObject(entry, item);
+                    if (note) normalized.note = note;
+                    return normalized;
                 }
-                const option = (item.optionEntries || []).find(candidate => candidate.optionKey === entry || candidate.value === entry || candidate.label === entry);
-                return option ? { optionKey: option.optionKey, label: option.label, value: option.value } : { value: entry };
+                const normalized = this._normalizeChoiceEntryPrimitive(entry, item);
+                if (note) normalized.note = note;
+                return normalized;
             });
 
         return item.type === 'multiple_choice' ? cleaned : (cleaned[0] || null);
+    }
+
+    _normalizeChoiceEntryObject(entry, item) {
+        const optionKey = entry.optionKey || entry.option_key || null;
+        if (optionKey) this._assertUuid(optionKey, 'optionKey');
+        if (this._isOtherChoiceValue(entry.value || entry.label)) return this._normalizeOtherChoice(item);
+        const option = this._findChoiceOption(item, {
+            optionKey,
+            value: entry.value,
+            label: entry.label
+        });
+        if (!option) {
+            throw new ActivityIntelligenceError(400, `Invalid choice answer for ${item.itemKey}.`, 'INVALID_CHOICE_ANSWER');
+        }
+        return { optionKey: option.optionKey, label: option.label, value: option.value };
+    }
+
+    _normalizeChoiceEntryPrimitive(entry, item) {
+        if (this._isOtherChoiceValue(entry)) return this._normalizeOtherChoice(item);
+        const option = this._findChoiceOption(item, { value: entry, label: entry, optionKey: entry });
+        if (!option) {
+            throw new ActivityIntelligenceError(400, `Invalid choice answer for ${item.itemKey}.`, 'INVALID_CHOICE_ANSWER');
+        }
+        return { optionKey: option.optionKey, label: option.label, value: option.value };
+    }
+
+    _findChoiceOption(item, identity = {}) {
+        const optionKey = identity.optionKey || null;
+        const value = String(identity.value || '').trim();
+        const label = String(identity.label || '').trim();
+        return (item.optionEntries || []).find(candidate => {
+            if (optionKey && candidate.optionKey === optionKey) return true;
+            return (value && (candidate.value === value || candidate.label === value))
+                || (label && (candidate.label === label || candidate.value === label));
+        }) || null;
+    }
+
+    _isOtherChoiceValue(value) {
+        return String(value || '').trim() === OTHER_ANSWER_VALUE;
+    }
+
+    _normalizeOtherChoice(item) {
+        if (!item.allowOther) {
+            throw new ActivityIntelligenceError(400, `Other answer is not allowed for ${item.itemKey}.`, 'OTHER_ANSWER_NOT_ALLOWED');
+        }
+        return { value: OTHER_ANSWER_VALUE };
+    }
+
+    _normalizeOptionNote(entry) {
+        if (!entry || typeof entry !== 'object' || entry.note === undefined) return '';
+        return String(entry.note || '').trim();
+    }
+
+    _allowsOptionNotes(item) {
+        return Boolean(item && item.type === 'multiple_choice' && item.settings && item.settings.allowOptionNotes);
     }
 
     _normalizeBooleanAnswer(value) {

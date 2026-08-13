@@ -140,7 +140,7 @@ a:focus-visible {
   justify-content: center;
   min-height: 34px;
   padding: 7px 12px;
-  border-radius: 6px;
+  border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
   line-height: 1.35;
@@ -1442,7 +1442,7 @@ a:focus-visible {
   min-height: 20px;
   padding: 2px 7px;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: 6px;
   font-size: 11px;
   font-weight: 600;
   line-height: 1.25;
@@ -1893,6 +1893,10 @@ a:focus-visible {
 
 .aim-form-other-toggle {
   margin-top: 2px;
+}
+
+.aim-form-option-notes-toggle {
+  margin-top: -2px;
 }
 
 .aim-preview-section {
@@ -3741,6 +3745,71 @@ a:focus-visible {
 .aim-runtime-choice-list .aim-checkbox {
   min-height: 28px;
   align-items: center;
+}
+
+.aim-option-note-choice-list {
+  gap: 6px;
+}
+
+.aim-option-note-option {
+  min-width: 0;
+}
+
+.aim-option-note-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+}
+
+.aim-option-note-row .aim-checkbox {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.aim-option-note-action {
+  flex: 0 0 auto;
+  min-height: 24px;
+  padding: 2px 7px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--aim-muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.aim-option-note-action:hover,
+.aim-option-note-action:focus-visible,
+.aim-option-note-action[aria-expanded="true"] {
+  border-color: var(--aim-border);
+  background: var(--aim-form-primary-soft);
+  color: var(--aim-form-primary-hover);
+}
+
+.aim-option-note-action-has-note {
+  color: var(--aim-form-primary-hover);
+}
+
+.aim-option-note-editor {
+  margin: 3px 0 5px 24px;
+}
+
+.aim-option-note-editor label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--aim-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.aim-option-note-editor .aim-textarea {
+  min-height: 48px;
+  padding: 7px 9px;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .aim-runtime-other-input {
