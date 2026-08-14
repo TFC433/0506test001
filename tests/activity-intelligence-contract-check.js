@@ -1,6 +1,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const vm = require('vm');
 
 const ActivityIntelligenceService = require('../services/activity-intelligence-service');
 const ActivityIntelligenceController = require('../controllers/activity-intelligence.controller');
@@ -52,6 +53,19 @@ const baseActivity = {
     updatedByDisplayName: 'Creator',
     updatedAt: '2026-08-01T00:00:00.000Z'
 };
+
+const FORM_ASSIST_CJK_EXPECTED_COPY = Object.freeze({
+    activitySourcesTitle: '甇瑕撱箄降鞈?靘?',
+    activitySourcesHelper1: '?豢?甇斗暑?‵銵冽??舐?澆????砍甇瑕撱箄降?暑????',
+    activitySourcesHelper2: '?芷?遙雿暑??嚗???甇瑕鞈?撱箄降??',
+    currentActivity: '?桀?瘣餃?',
+    formActionLabel: '?勗?????',
+    cardImportTitle: '憟??鞈?嚗?',
+    cardImportDescription: '?桀?銵典撌脫?憪??蝔望??砍?批捆???豢??活??鞈????冽撘?',
+    cardImportCancel: '??',
+    cardImportPreserve: '靽?撌脫??批捆嚗鋆征甈?',
+    cardImportOverwrite: '閬?撌脫??批捆'
+});
 
 const publishedItems = [
     { formItemId: IDS.textItem, itemKey: IDS.textKey, fieldId: IDS.textKey, type: 'short_text', title: 'Text', options: [], optionEntries: [], visible: true, removedInDraft: false },
@@ -300,6 +314,32 @@ async function assertRejectsCode(fn, code) {
     return caught;
 }
 
+function assertFormAssistCjkContract(managementSource) {
+    const match = managementSource.match(/const FORM_ASSIST_COPY = Object\.freeze\((\{[\s\S]*?\n  \})\);/);
+    assert(match, 'FORM_ASSIST_COPY block must exist');
+    const sourceBlock = match[0];
+    const copy = vm.runInNewContext(`(${match[1]})`);
+
+    Object.entries(FORM_ASSIST_CJK_EXPECTED_COPY).forEach(([key, expected]) => {
+        assert.strictEqual(copy[key], expected, `FORM_ASSIST_COPY.${key} must match approved CJK copy`);
+        assert(sourceBlock.includes(`${key}: '${expected}'`), `FORM_ASSIST_COPY.${key} must be readable UTF-8 source`);
+    });
+
+    assert(!/\\u(?:[0-9a-fA-F]{4}|\{[0-9a-fA-F]+\})/.test(sourceBlock), 'FORM_ASSIST_COPY must not use Unicode escape source values');
+    Object.entries(copy).forEach(([key, value]) => {
+        const text = String(value);
+        assert(!text.includes('\uFFFD'), `FORM_ASSIST_COPY.${key} must not contain replacement characters`);
+        assert(!/嚙|謅/.test(text), `FORM_ASSIST_COPY.${key} must not contain known mojibake markers`);
+        if (/[\uE000-\uF8FF]/.test(text)) {
+            assert(
+                Object.prototype.hasOwnProperty.call(FORM_ASSIST_CJK_EXPECTED_COPY, key) &&
+                FORM_ASSIST_CJK_EXPECTED_COPY[key] === text,
+                `FORM_ASSIST_COPY.${key} contains unexpected private-use characters`
+            );
+        }
+    });
+}
+
 async function main() {
     const { service, calls, publishedItems } = makeHarness();
 
@@ -545,6 +585,7 @@ async function main() {
 
     const managementSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'scripts', 'activity-intelligence', 'activity-intelligence-management.js'), 'utf8');
     const apiSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'scripts', 'activity-intelligence', 'activity-intelligence-api.js'), 'utf8');
+    assertFormAssistCjkContract(managementSource);
     assert(managementSource.includes("if (ui.analytics.ai.state === 'loading') return;"));
     assert(managementSource.includes("state === 'loading'"));
     assert(!managementSource.includes('FORM_GEMINI_API_KEY'));

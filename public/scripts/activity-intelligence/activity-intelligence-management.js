@@ -48,24 +48,24 @@
   });
   const formAssistSourceSettingsKey = 'formAssistSuggestionSourceActivityIds';
   const FORM_ASSIST_COPY = Object.freeze({
-    activitySourcesTitle: '\u7507\u7455\ue3fe\u64b1\u7b84\u964d\u9788\uf2ea?\u9758\uf24d?',
-    activitySourcesHelper1: '?\u8c62?\u7507\u6597\u6691?\ue7df\u2035\u92b5\u51bd??\u8210\ue705?\u6f86??\uf69a??\u780d\ue404\u7507\u7455\ue3fe\u64b1\u7b84\u964d?\uf113\u6691?\ue7e2??\uea51\u0080?',
-    activitySourcesHelper2: '?\u82b7\uef0e?\uf2e8\u9059\u96ff\ue7e0\u6691?\ue7e0?\u5697\uf5f9??\ue4cd?\u7507\u7455\ue3fe\u9788\uf2ea?\u64b1\u7b84\u964d??',
-    currentActivity: '?\u6840?\u7623\u9903?',
-    formActionLabel: '?\u52d7??\uf2e9???',
-    suggestionsLoading: '\u641c\u5c0b\u4e2d',
-    companyTypePrefix: '\u985e\u578b\uff1a',
-    listSeparator: '\u3001',
-    visitCountSeparator: '\uff0c',
-    visitCountSuffix: '\u7b46',
-    cardImportFallbackTitle: '\u5df2\u9078\u64c7\u540d\u7247',
-    cardImportTitle: '\u619f\ue91b\ue705?\uf699?\u9788\uf2ea?\u5697?',
-    cardImportDescription: '?\u6840?\u92b5\u5178\ue845\u648c\u812b?\u61aa\ue6a5??\uef3e\uef0d\u8754\u671b??\u780d\ue404?\u6279\u6346?\uefdb??\u8c62??\uea54\u6d3b?\uf699?\u9788\uf2ea??\uf112??\u51bd\ue850\u6498\ue42f\u0080?',
-    cardImportCancel: '?\ue87d?',
-    cardImportPreserve: '\u977d\uecc9?\u648c\u812b??\u6279\u6346\u5697\uf5fa\ue3f6\u92c6\uec2c\u5f81\u7508?',
-    cardImportOverwrite: '\u95ac\uf24f?\u648c\u812b??\u6279\u6346',
-    close: '\u95dc\u9589',
-    activitySourcesEmpty: '\u76ee\u524d\u6c92\u6709\u53ef\u9078\u64c7\u7684\u6d3b\u52d5\u3002'
+    activitySourcesTitle: '甇瑕撱箄降鞈?靘?',
+    activitySourcesHelper1: '?豢?甇斗暑?‵銵冽??舐?澆????砍甇瑕撱箄降?暑????',
+    activitySourcesHelper2: '?芷?遙雿暑??嚗???甇瑕鞈?撱箄降??',
+    currentActivity: '?桀?瘣餃?',
+    formActionLabel: '?勗?????',
+    suggestionsLoading: '搜尋中',
+    companyTypePrefix: '類型：',
+    listSeparator: '、',
+    visitCountSeparator: '，',
+    visitCountSuffix: '筆',
+    cardImportFallbackTitle: '已選擇名片',
+    cardImportTitle: '憟??鞈?嚗?',
+    cardImportDescription: '?桀?銵典撌脫?憪??蝔望??砍?批捆???豢??活??鞈????冽撘?',
+    cardImportCancel: '??',
+    cardImportPreserve: '靽?撌脫??批捆嚗鋆征甈?',
+    cardImportOverwrite: '閬?撌脫??批捆',
+    close: '關閉',
+    activitySourcesEmpty: '目前沒有可選擇的活動。'
   });
   const thumbnailDefaults = Object.freeze({
     driveFileId: '',
