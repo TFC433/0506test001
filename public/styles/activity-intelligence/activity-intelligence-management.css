@@ -4592,11 +4592,10 @@ a:focus-visible {
   }
 
   .aim-record-detail-field-categorical>.aim-answer-badges {
-    flex: 1 1 140px;
-    min-width: min(100%, 140px);
+    flex: 1 0 max-content;
+    min-width: 0;
     max-width: 100%;
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: visible;
   }
 
   .aim-chart-controls {
