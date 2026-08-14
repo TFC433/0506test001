@@ -1668,20 +1668,26 @@
     if (!values.length) return '';
     const notes = optionNotesForRecord(record);
     const fieldNotes = notes[field.fieldId] || {};
+    const entries = values.map(label => {
+      const noteKey = optionNoteKeyForDisplay(field, label);
+      return {
+        label,
+        note: String(fieldNotes[noteKey] || '').trim()
+      };
+    });
+    if (!entries.some(entry => entry.note)) return renderRecordDetailCompactCategoricalField(field, value);
     const noNoteBadges = [];
     const notedRows = [];
-    values.forEach(label => {
-      const noteKey = optionNoteKeyForDisplay(field, label);
-      const note = String(fieldNotes[noteKey] || '').trim();
-      const badge = renderRecordDetailChoiceBadge(field, label);
-      if (!note) {
+    entries.forEach(entry => {
+      const badge = renderRecordDetailChoiceBadge(field, entry.label);
+      if (!entry.note) {
         noNoteBadges.push(badge);
         return;
       }
       notedRows.push(`
         <div class="aim-record-detail-choice-option">
           <span class="aim-record-detail-choice-badge">${badge}</span>
-          <p>${Store.escapeHtml(note)}</p>
+          <p>${Store.escapeHtml(entry.note)}</p>
         </div>
       `);
     });

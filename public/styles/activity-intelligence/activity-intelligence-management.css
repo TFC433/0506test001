@@ -3848,8 +3848,9 @@ a:focus-visible {
 }
 
 .aim-record-detail-choice-badge-row {
-  display: grid;
-  justify-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 5px;
   min-width: 0;
 }
@@ -3870,8 +3871,6 @@ a:focus-visible {
 .aim-record-detail-choice-badge {
   flex: 0 0 auto;
   display: inline-flex;
-  min-width: 0;
-  max-width: 100%;
 }
 
 .aim-record-detail-choice-option p {
@@ -3882,6 +3881,13 @@ a:focus-visible {
   font-size: 13px;
   line-height: 1.5;
   white-space: pre-wrap;
+}
+
+.aim-record-detail-choice-badge-row .aim-answer-badge,
+.aim-record-detail-choice-badge .aim-answer-badge,
+.aim-record-detail-field>.aim-answer-badges .aim-answer-badge {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 @media (min-width: 641px) {
@@ -3915,17 +3921,6 @@ a:focus-visible {
     flex-wrap: wrap;
     align-items: center;
     gap: 5px;
-  }
-
-  .aim-record-detail-choice-badge-row .aim-answer-badge,
-  .aim-record-detail-choice-badge .aim-answer-badge,
-  .aim-record-detail-field>.aim-answer-badges .aim-answer-badge {
-    flex: 0 0 auto;
-    max-width: 100%;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 }
 
