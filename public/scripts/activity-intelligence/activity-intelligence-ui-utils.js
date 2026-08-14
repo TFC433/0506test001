@@ -12,6 +12,31 @@
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
+  function localDateFromDate(date) {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  }
+
+  function localToday() {
+    return localDateFromDate(new Date());
+  }
+
+  function parseTimestamp(value) {
+    if (!value) return null;
+    if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+    const text = String(value).trim();
+    if (!text || /^\d{4}-\d{2}-\d{2}$/.test(text)) return null;
+    const parsed = new Date(text);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+    const normalized = text.replace(' ', 'T');
+    const fallback = new Date(normalized);
+    return Number.isNaN(fallback.getTime()) ? null : fallback;
+  }
+
+  function localDateForTimestamp(value) {
+    return localDateFromDate(parseTimestamp(value));
+  }
+
   function clone(value) {
     return JSON.parse(JSON.stringify(value));
   }
@@ -23,7 +48,11 @@
 
   function formatDateTime(value) {
     if (!value) return '';
-    return String(value).replace('T', ' ').slice(0, 16);
+    const text = String(value);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text.trim())) return text.slice(0, 10);
+    const date = parseTimestamp(value);
+    if (!date) return text.replace('T', ' ').slice(0, 16);
+    return `${localDateFromDate(date)} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
   }
 
   function answerText(value) {
@@ -60,6 +89,8 @@
 
   window.AIMStore = Object.freeze({
     CURRENT_DATE,
+    localToday,
+    localDateForTimestamp,
     nowStamp,
     clone,
     formatDate,

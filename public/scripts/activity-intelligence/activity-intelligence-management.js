@@ -47,6 +47,11 @@
     fld_job_title: 'jobTitle'
   });
   const formAssistSourceSettingsKey = 'formAssistSuggestionSourceActivityIds';
+  const activityStatusLabels = Object.freeze({
+    upcoming: '\u5c1a\u672a\u958b\u653e',
+    open: '\u958b\u653e\u4e2d',
+    ended: '\u5df2\u7d50\u675f'
+  });
   const FORM_ASSIST_COPY = Object.freeze({
     activitySourcesTitle: '歷史建議資料來源',
     activitySourcesHelper1: '選擇此活動填表時可用於姓名與公司歷史建議的活動資料。',
@@ -182,7 +187,9 @@
       }
     }
     applyRoleLanding();
-    if (currentUser.authenticated && ui.selectedActivityId && (ui.tab === 'records' || ui.tab === 'analytics')) {
+    if (currentUser.authenticated && canManageActivities() && ui.view === 'overview') {
+      await loadOverviewData({ force: true });
+    } else if (currentUser.authenticated && ui.selectedActivityId && (ui.tab === 'records' || ui.tab === 'analytics')) {
       await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
     }
     render();
@@ -277,6 +284,20 @@
     state.selectedActivityId = ui.selectedActivityId || null;
     state.records = [];
     recordLoadState.clear();
+  }
+
+  async function loadOverviewData(options) {
+    if (!currentUser || !currentUser.authenticated || !canManageActivities()) return;
+    if (options && options.refreshActivities) await loadActivitiesFromApi();
+    await refreshOverviewRecords({ force: Boolean(options && options.force) });
+  }
+
+  async function refreshOverviewRecords(options) {
+    const activities = state.activities.slice();
+    await Promise.all(activities.map(activity => loadRecordsForActivity(activity.id, {
+      includeVoid: true,
+      force: Boolean(options && options.force)
+    })));
   }
 
   function normalizeActivityDto(activity) {
@@ -375,10 +396,11 @@
   async function loadRecordsForActivity(activityId, options) {
     if (!activityId || !window.ActivityIntelligenceApi) return [];
     const includeVoid = options && options.includeVoid !== undefined ? options.includeVoid : true;
+    const force = Boolean(options && options.force);
     const loadKey = `${activityId}:${includeVoid ? 'all' : 'active'}`;
     const current = recordLoadState.get(loadKey);
-    if (current === 'loaded') return recordsFor(activityId);
-    if (current === 'loading') return recordsFor(activityId);
+    if (!force && current === 'loaded') return recordsFor(activityId);
+    if (!force && current === 'loading') return recordsFor(activityId);
 
     recordLoadState.set(loadKey, 'loading');
     try {
@@ -662,7 +684,34 @@
   }
 
   function activityStatus(activity) {
-    return (activity && activity.status) || { key: 'upcoming', label: '尚未開放' };
+    return normalizeActivityStatus(activity && activity.status) || deriveActivityStatus(activity);
+  }
+
+  function normalizeActivityStatus(status) {
+    if (!status) return null;
+    if (typeof status === 'string') return statusForKey(status);
+    if (typeof status !== 'object' || Array.isArray(status)) return null;
+    const normalized = statusForKey(status.key);
+    if (!normalized) return null;
+    const label = String(status.label || '').trim();
+    return {
+      key: normalized.key,
+      label: label || normalized.label
+    };
+  }
+
+  function deriveActivityStatus(activity) {
+    if (!activity || !activity.formOpenStart || !activity.formOpenEnd) return statusForKey('upcoming');
+    const today = new Date().toISOString().slice(0, 10);
+    if (today < activity.formOpenStart) return statusForKey('upcoming');
+    if (today >= activity.formOpenStart && today <= activity.formOpenEnd) return statusForKey('open');
+    return statusForKey('ended');
+  }
+
+  function statusForKey(key) {
+    const normalizedKey = String(key || '').trim().toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(activityStatusLabels, normalizedKey)) return null;
+    return { key: normalizedKey, label: activityStatusLabels[normalizedKey] };
   }
 
   function setFormAuthRootState(enabled) {
@@ -4383,12 +4432,17 @@
     if (await handleFormDesignAction(action, el, event)) return;
     if (action === 'home') {
       goHome();
+      if (ui.view === 'overview' && canManageActivities()) await loadOverviewData({ refreshActivities: true, force: true });
     }
     if (action === 'activity-overview' && canManageActivities()) {
       ui.view = 'workspace';
       ui.tab = 'overview';
     }
-    if (action === 'all' && canManageActivities()) { ui.view = 'overview'; ui.tab = 'overview'; }
+    if (action === 'all' && canManageActivities()) {
+      ui.view = 'overview';
+      ui.tab = 'overview';
+      await loadOverviewData({ refreshActivities: true, force: true });
+    }
     if (action === 'open' && canManageActivities()) {
       ui.selectedActivityId = el.dataset.id;
       ui.view = 'workspace';
@@ -5809,15 +5863,20 @@
     ui.records.state = showVoidRecords ? 'all' : 'normal';
   }
 
+  function recordLocalDate(record) {
+    return Store.localDateForTimestamp(record && record.createdAt);
+  }
+
   function activityMetrics(activityId) {
     const rows = recordsFor(activityId);
     const active = rows.filter(r => r.status !== 'void');
     const latest = rows.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     const activity = state.activities.find(a => a.id === activityId);
+    const today = Store.localToday();
     return {
       total: rows.length,
       active: active.length,
-      today: active.filter(r => r.createdAt.slice(0, 10) === Store.CURRENT_DATE).length,
+      today: active.filter(r => recordLocalDate(r) === today).length,
       recorders: unique(active.map(r => r.createdByUserId)).length,
       high: 0,
       low: active.filter(r => recordCoverage(r, activity).answered <= 1).length,
@@ -5826,10 +5885,11 @@
   }
 
   function overviewKpis() {
+    const today = Store.localToday();
     return {
       open: state.activities.filter(a => activityStatus(a).key === 'open').length,
       activeRecords: state.records.filter(r => r.status !== 'void').length,
-      today: state.records.filter(r => r.status !== 'void' && r.createdAt.slice(0, 10) === Store.CURRENT_DATE).length
+      today: state.records.filter(r => r.status !== 'void' && recordLocalDate(r) === today).length
     };
   }
 
@@ -7028,7 +7088,7 @@
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${activity.name}-${scope}-${Store.CURRENT_DATE}.csv`;
+    link.download = `${activity.name}-${scope}-${Store.localToday()}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
