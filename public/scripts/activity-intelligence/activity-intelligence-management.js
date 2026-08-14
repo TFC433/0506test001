@@ -1671,9 +1671,10 @@
     const rows = values.map(label => {
       const noteKey = optionNoteKeyForDisplay(field, label);
       const note = String(fieldNotes[noteKey] || '').trim();
+      const badge = renderCategoricalBadges(field, [label], 1);
       return `
         <div class="aim-record-detail-choice-option">
-          <span class="aim-record-detail-choice-label">${Store.escapeHtml(label)}</span>
+          <span class="aim-record-detail-choice-badge">${badge}</span>
           ${note ? `<p>${Store.escapeHtml(note)}</p>` : ''}
         </div>
       `;

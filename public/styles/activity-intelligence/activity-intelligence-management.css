@@ -3770,14 +3770,13 @@ a:focus-visible {
 .aim-option-note-action {
   flex: 0 0 auto;
   min-height: 24px;
-  padding: 1px 2px;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  border-radius: 0;
-  background: transparent;
-  color: var(--aim-muted);
+  padding: 2px 8px;
+  border: 1px solid var(--aim-form-primary-border);
+  border-radius: 6px;
+  background: var(--aim-form-primary-soft);
+  color: var(--aim-form-primary-hover);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.2;
   cursor: pointer;
 }
@@ -3785,12 +3784,14 @@ a:focus-visible {
 .aim-option-note-action:hover,
 .aim-option-note-action:focus-visible,
 .aim-option-note-action[aria-expanded="true"] {
-  border-bottom-color: currentColor;
-  background: transparent;
+  border-color: var(--aim-form-primary-hover);
+  background: rgba(224, 82, 45, 0.12);
   color: var(--aim-form-primary-hover);
 }
 
 .aim-option-note-action-has-note {
+  border-color: rgba(224, 82, 45, 0.38);
+  background: rgba(224, 82, 45, 0.1);
   color: var(--aim-form-primary-hover);
 }
 
@@ -3853,20 +3854,21 @@ a:focus-visible {
 }
 
 .aim-record-detail-choice-option {
-  display: grid;
-  gap: 3px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
 }
 
-.aim-record-detail-choice-label {
-  color: var(--aim-text);
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1.4;
+.aim-record-detail-choice-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
 }
 
 .aim-record-detail-choice-option p {
+  flex: 1 1 220px;
+  min-width: min(100%, 220px);
   margin: 0;
-  padding-left: 12px;
   color: var(--aim-muted);
   font-size: 13px;
   line-height: 1.5;
