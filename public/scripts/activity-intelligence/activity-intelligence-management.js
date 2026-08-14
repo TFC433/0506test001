@@ -47,6 +47,26 @@
     fld_job_title: 'jobTitle'
   });
   const formAssistSourceSettingsKey = 'formAssistSuggestionSourceActivityIds';
+  const FORM_ASSIST_COPY = Object.freeze({
+    activitySourcesTitle: '\u7507\u7455\ue3fe\u64b1\u7b84\u964d\u9788\uf2ea?\u9758\uf24d?',
+    activitySourcesHelper1: '?\u8c62?\u7507\u6597\u6691?\ue7df\u2035\u92b5\u51bd??\u8210\ue705?\u6f86??\uf69a??\u780d\ue404\u7507\u7455\ue3fe\u64b1\u7b84\u964d?\uf113\u6691?\ue7e2??\uea51\u0080?',
+    activitySourcesHelper2: '?\u82b7\uef0e?\uf2e8\u9059\u96ff\ue7e0\u6691?\ue7e0?\u5697\uf5f9??\ue4cd?\u7507\u7455\ue3fe\u9788\uf2ea?\u64b1\u7b84\u964d??',
+    currentActivity: '?\u6840?\u7623\u9903?',
+    formActionLabel: '?\u52d7??\uf2e9???',
+    suggestionsLoading: '\u641c\u5c0b\u4e2d',
+    companyTypePrefix: '\u985e\u578b\uff1a',
+    listSeparator: '\u3001',
+    visitCountSeparator: '\uff0c',
+    visitCountSuffix: '\u7b46',
+    cardImportFallbackTitle: '\u5df2\u9078\u64c7\u540d\u7247',
+    cardImportTitle: '\u619f\ue91b\ue705?\uf699?\u9788\uf2ea?\u5697?',
+    cardImportDescription: '?\u6840?\u92b5\u5178\ue845\u648c\u812b?\u61aa\ue6a5??\uef3e\uef0d\u8754\u671b??\u780d\ue404?\u6279\u6346?\uefdb??\u8c62??\uea54\u6d3b?\uf699?\u9788\uf2ea??\uf112??\u51bd\ue850\u6498\ue42f\u0080?',
+    cardImportCancel: '?\ue87d?',
+    cardImportPreserve: '\u977d\uecc9?\u648c\u812b??\u6279\u6346\u5697\uf5fa\ue3f6\u92c6\uec2c\u5f81\u7508?',
+    cardImportOverwrite: '\u95ac\uf24f?\u648c\u812b??\u6279\u6346',
+    close: '\u95dc\u9589',
+    activitySourcesEmpty: '\u76ee\u524d\u6c92\u6709\u53ef\u9078\u64c7\u7684\u6d3b\u52d5\u3002'
+  });
   const thumbnailDefaults = Object.freeze({
     driveFileId: '',
     fit: 'cover',
@@ -1793,7 +1813,7 @@
 
   function renderFormAssistSectionAction(field) {
     if (!canUseQuickFormAssist() || !isFormAssistIdentitySection(field)) return '';
-    return '<button class="aim-button aim-button-soft aim-form-assist-card-action" data-action="form-assist-card" type="button">選擇名片</button>';
+    return `<button class="aim-button aim-button-soft aim-form-assist-card-action" data-action="form-assist-card" type="button">${Store.escapeHtml(FORM_ASSIST_COPY.formActionLabel)}</button>`;
   }
 
   function renderQuickTextInputField(field, enabled, multiline) {
@@ -1813,7 +1833,7 @@
   function renderFormAssistSuggestions(field) {
     const assist = ui.formAssist || {};
     if (!field || assist.activeFieldId !== field.fieldId || !String(assist.q || '').trim()) return '';
-    if (assist.loading) return '<div class="aim-form-assist-suggestions"><div class="aim-form-assist-loading">搜尋中</div></div>';
+    if (assist.loading) return `<div class="aim-form-assist-suggestions"><div class="aim-form-assist-loading">${Store.escapeHtml(FORM_ASSIST_COPY.suggestionsLoading)}</div></div>`;
     if (!Array.isArray(assist.suggestions) || !assist.suggestions.length) return '';
     const rows = assist.kind === 'company'
       ? assist.suggestions.map(renderCompanyAssistSuggestion).join('')
@@ -1835,15 +1855,15 @@
   }
 
   function renderCompanyAssistSuggestion(item) {
-    const visitors = (item.recentVisitors || []).slice(0, 3).map(visitor => [visitor.personName, visitor.jobTitle].filter(Boolean).join(' / ')).filter(Boolean).join('、');
-    const types = (item.historicalCompanyTypes || []).slice(0, 3).map(entry => `${entry.value} ${entry.count}`).join('、');
+    const visitors = (item.recentVisitors || []).slice(0, 3).map(visitor => [visitor.personName, visitor.jobTitle].filter(Boolean).join(' / ')).filter(Boolean).join(FORM_ASSIST_COPY.listSeparator);
+    const types = (item.historicalCompanyTypes || []).slice(0, 3).map(entry => `${entry.value} ${entry.count}`).join(FORM_ASSIST_COPY.listSeparator);
     const context = [item.recentActivityName, Store.formatDate(item.recentSubmittedAt)].filter(Boolean).join(' / ');
     return `
       <button class="aim-form-assist-suggestion" data-action="form-assist-select-company" data-company-name="${Store.escapeHtml(item.companyName || '')}" type="button" role="option">
         <strong>${Store.escapeHtml(item.companyName || '')}</strong>
         ${visitors ? `<span>${Store.escapeHtml(visitors)}</span>` : ''}
-        ${types ? `<small>類型：${Store.escapeHtml(types)}</small>` : ''}
-        ${context ? `<small>${Store.escapeHtml(context)}，${Number(item.visitCount) || 0} 筆</small>` : ''}
+        ${types ? `<small>${Store.escapeHtml(FORM_ASSIST_COPY.companyTypePrefix)}${Store.escapeHtml(types)}</small>` : ''}
+        ${context ? `<small>${Store.escapeHtml(context)}${Store.escapeHtml(FORM_ASSIST_COPY.visitCountSeparator)}${Number(item.visitCount) || 0} ${Store.escapeHtml(FORM_ASSIST_COPY.visitCountSuffix)}</small>` : ''}
       </button>
     `;
   }
@@ -2988,19 +3008,19 @@
   function renderFormAssistCardImportConfirmDialog() {
     if (!ui.formAssistCardImportConfirm) return '';
     const card = normalizeRawCard(ui.formAssistCardImportConfirm.card);
-    const title = card && (card.name || card.company) ? [card.name, card.company].filter(Boolean).join(' / ') : '已選擇名片';
+    const title = card && (card.name || card.company) ? [card.name, card.company].filter(Boolean).join(' / ') : FORM_ASSIST_COPY.cardImportFallbackTitle;
     return `
       <div class="aim-dialog-backdrop aim-form-confirm-backdrop" data-action="cancel-form-assist-card-import"></div>
       <section class="aim-dialog aim-form-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="aim-form-assist-card-import-title">
-        <div class="aim-dialog-head"><h2 id="aim-form-assist-card-import-title">憟??鞈?嚗?</h2><button class="aim-button aim-icon-button" data-action="cancel-form-assist-card-import" type="button" aria-label="關閉">×</button></div>
+        <div class="aim-dialog-head"><h2 id="aim-form-assist-card-import-title">${Store.escapeHtml(FORM_ASSIST_COPY.cardImportTitle)}</h2><button class="aim-button aim-icon-button" data-action="cancel-form-assist-card-import" type="button" aria-label="${Store.escapeHtml(FORM_ASSIST_COPY.close)}">×</button></div>
         <div class="aim-dialog-body">
           <p>${Store.escapeHtml(title)}</p>
-          <p>?桀?銵典撌脫?憪??蝔望??砍?批捆???豢??活??鞈????冽撘?</p>
+          <p>${Store.escapeHtml(FORM_ASSIST_COPY.cardImportDescription)}</p>
         </div>
         <div class="aim-dialog-foot aim-form-assist-card-import-foot">
-          <button class="aim-button" data-action="cancel-form-assist-card-import" type="button">??</button>
-          <button class="aim-button" data-action="form-assist-card-import-preserve" type="button">靽?撌脫??批捆嚗鋆征甈?</button>
-          <button class="aim-button aim-button-primary" data-action="form-assist-card-import-overwrite" type="button">閬?撌脫??批捆</button>
+          <button class="aim-button" data-action="cancel-form-assist-card-import" type="button">${Store.escapeHtml(FORM_ASSIST_COPY.cardImportCancel)}</button>
+          <button class="aim-button" data-action="form-assist-card-import-preserve" type="button">${Store.escapeHtml(FORM_ASSIST_COPY.cardImportPreserve)}</button>
+          <button class="aim-button aim-button-primary" data-action="form-assist-card-import-overwrite" type="button">${Store.escapeHtml(FORM_ASSIST_COPY.cardImportOverwrite)}</button>
         </div>
       </section>
     `;
@@ -4262,7 +4282,7 @@
     const currentId = selectedActivity() && selectedActivity().id;
     const rows = (state.activities || []).map(activity => {
       const checked = selected.has(String(activity.id || '').toLowerCase());
-      const current = currentId && activity.id === currentId ? '<span class="aim-form-assist-source-current">?桀?瘣餃?</span>' : '';
+      const current = currentId && activity.id === currentId ? `<span class="aim-form-assist-source-current">${Store.escapeHtml(FORM_ASSIST_COPY.currentActivity)}</span>` : '';
       return `
         <label class="aim-form-assist-source-option">
           <input class="aim-settings-form-assist-source" type="checkbox" value="${Store.escapeHtml(activity.id)}" ${checked ? 'checked' : ''}>
@@ -4272,9 +4292,9 @@
     }).join('');
     return `
       <section class="aim-form-assist-source-settings">
-        <h3>甇瑕撱箄降鞈?靘?</h3>
-        <p>?豢?甇斗暑?‵銵冽??舐?澆????砍甇瑕撱箄降?暑????<br>?芷?遙雿暑??嚗???甇瑕鞈?撱箄降??</p>
-        <div class="aim-form-assist-source-list">${rows || '<div class="aim-empty">目前沒有可選擇的活動。</div>'}</div>
+        <h3>${Store.escapeHtml(FORM_ASSIST_COPY.activitySourcesTitle)}</h3>
+        <p>${Store.escapeHtml(FORM_ASSIST_COPY.activitySourcesHelper1)}<br>${Store.escapeHtml(FORM_ASSIST_COPY.activitySourcesHelper2)}</p>
+        <div class="aim-form-assist-source-list">${rows || `<div class="aim-empty">${Store.escapeHtml(FORM_ASSIST_COPY.activitySourcesEmpty)}</div>`}</div>
       </section>
     `;
   }
