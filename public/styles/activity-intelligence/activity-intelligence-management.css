@@ -2656,17 +2656,6 @@ a:focus-visible {
   background: var(--aim-surface-muted, #f8fafb);
 }
 
-.aim-raw-card-viewer-foot .aim-button-primary:not(:disabled) {
-  border-color: var(--aim-form-primary);
-  background: var(--aim-form-primary);
-  color: #fff;
-}
-
-.aim-raw-card-viewer-foot .aim-button-primary:hover:not(:disabled) {
-  border-color: var(--aim-form-primary-hover);
-  background: var(--aim-form-primary-hover);
-}
-
 .aim-record-toolbar {
   display: grid;
   grid-template-columns: 120px 140px 140px 150px 1fr 140px auto;
