@@ -48,22 +48,22 @@
   });
   const formAssistSourceSettingsKey = 'formAssistSuggestionSourceActivityIds';
   const FORM_ASSIST_COPY = Object.freeze({
-    activitySourcesTitle: '甇瑕撱箄降鞈?靘?',
-    activitySourcesHelper1: '?豢?甇斗暑?‵銵冽??舐?澆????砍甇瑕撱箄降?暑????',
-    activitySourcesHelper2: '?芷?遙雿暑??嚗???甇瑕鞈?撱箄降??',
-    currentActivity: '?桀?瘣餃?',
-    formActionLabel: '?勗?????',
+    activitySourcesTitle: '歷史建議資料來源',
+    activitySourcesHelper1: '選擇此活動填表時可用於姓名與公司歷史建議的活動資料。',
+    activitySourcesHelper2: '未選擇任何活動時，不提供歷史資料建議。',
+    currentActivity: '目前活動',
+    formActionLabel: '由名片導入',
     suggestionsLoading: '搜尋中',
     companyTypePrefix: '類型：',
     listSeparator: '、',
     visitCountSeparator: '，',
     visitCountSuffix: '筆',
     cardImportFallbackTitle: '已選擇名片',
-    cardImportTitle: '憟??鞈?嚗?',
-    cardImportDescription: '?桀?銵典撌脫?憪??蝔望??砍?批捆???豢??活??鞈????冽撘?',
-    cardImportCancel: '??',
-    cardImportPreserve: '靽?撌脫??批捆嚗鋆征甈?',
-    cardImportOverwrite: '閬?撌脫??批捆',
+    cardImportTitle: '套用名片資料？',
+    cardImportDescription: '目前表單已有姓名、職稱或公司內容。請選擇這次名片資料的套用方式。',
+    cardImportCancel: '取消',
+    cardImportPreserve: '保留已有內容，只補空欄',
+    cardImportOverwrite: '覆蓋已有內容',
     close: '關閉',
     activitySourcesEmpty: '目前沒有可選擇的活動。'
   });
