@@ -43,6 +43,8 @@ const FORM_ASSIST_FIXED_KEYS = Object.freeze({
     fld_job_title: 'jobTitle'
 });
 const FORM_ASSIST_SOURCE_SETTINGS_KEY = 'formAssistSuggestionSourceActivityIds';
+const AI_ANALYSIS_QUICK_QUESTIONS_SETTINGS_KEY = 'aiAnalysisQuickQuestions';
+const AI_ANALYSIS_QUICK_QUESTION_COUNT = 3;
 
 class ActivityIntelligenceError extends Error {
     constructor(statusCode, message, code) {
@@ -450,10 +452,23 @@ class ActivityIntelligenceService {
 
     _activitySettingsDto(settings) {
         const source = settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {};
-        return {
+        const dto = {
             ...source,
             [FORM_ASSIST_SOURCE_SETTINGS_KEY]: this._normalizedFormAssistSourceIdsFromSettings(source)
         };
+        const quickQuestions = this._normalizeAiAnalysisQuickQuestions(source[AI_ANALYSIS_QUICK_QUESTIONS_SETTINGS_KEY], { tolerateInvalid: true });
+        if (quickQuestions) dto[AI_ANALYSIS_QUICK_QUESTIONS_SETTINGS_KEY] = quickQuestions;
+        else delete dto[AI_ANALYSIS_QUICK_QUESTIONS_SETTINGS_KEY];
+        return dto;
+    }
+
+    _normalizeAiAnalysisQuickQuestions(value, options = {}) {
+        if (value === undefined || value === null) return null;
+        if (!Array.isArray(value)) {
+            if (options.tolerateInvalid) return null;
+            throw new ActivityIntelligenceError(400, 'AI Analysis quick questions must be an array.', 'AI_ANALYSIS_INVALID_QUICK_QUESTIONS');
+        }
+        return Array.from({ length: AI_ANALYSIS_QUICK_QUESTION_COUNT }, (_, index) => String(value[index] || '').trim());
     }
 
     async _normalizeActivitySettingsPatch(settingsPatch, existingSettings = {}) {
@@ -465,6 +480,9 @@ class ActivityIntelligenceService {
             const sourceActivityIds = this._normalizeFormAssistSourceActivityIds(patch[FORM_ASSIST_SOURCE_SETTINGS_KEY]);
             await this._assertExistingActivityIds(sourceActivityIds);
             next[FORM_ASSIST_SOURCE_SETTINGS_KEY] = sourceActivityIds;
+        }
+        if (Object.prototype.hasOwnProperty.call(patch, AI_ANALYSIS_QUICK_QUESTIONS_SETTINGS_KEY)) {
+            next[AI_ANALYSIS_QUICK_QUESTIONS_SETTINGS_KEY] = this._normalizeAiAnalysisQuickQuestions(patch[AI_ANALYSIS_QUICK_QUESTIONS_SETTINGS_KEY]);
         }
 
         return next;
@@ -1085,7 +1103,7 @@ class ActivityIntelligenceService {
                     filters: 'Same filter object as aggregate_submissions.',
                     fields: 'Optional field references to include. Omit to include all answered fields.',
                     limit: 'Optional positive integer, maximum 80.',
-                    fullTextScan: 'Optional true for comprehensive semantic analysis over every answered long_text field in the current Activity. Ignores field guesses and field keyword filters.'
+                    fullTextScan: 'Optional true for comprehensive semantic analysis over every answered long_text field and multiple-choice Option Note in the current Activity. Ignores field guesses and field keyword filters.'
                 }
             }
         ];
@@ -1272,10 +1290,15 @@ class ActivityIntelligenceService {
         const records = this._filterFormAiSubmissionsForFullTextScan(context.submissions, filters);
         const evidenceRecords = [];
         let longTextAnswerCount = 0;
+        let longTextRecordCount = 0;
+        let optionNoteAnswerCount = 0;
         records.forEach(record => {
             const longTextAnswers = this._formAiPublicLongTextAnswers(record, context);
-            if (!longTextAnswers.length) return;
+            const optionNoteAnswers = this._formAiPublicOptionNoteAnswers(record, context);
+            if (!longTextAnswers.length && !optionNoteAnswers.length) return;
             longTextAnswerCount += longTextAnswers.length;
+            if (longTextAnswers.length) longTextRecordCount += 1;
+            optionNoteAnswerCount += optionNoteAnswers.length;
             evidenceRecords.push({
                 recordNumber: evidenceRecords.length + 1,
                 createdAt: record.createdAt,
@@ -1284,18 +1307,22 @@ class ActivityIntelligenceService {
                 customer: this._formAiPublicIdentityValue(record, context, '客戶姓名'),
                 company: this._formAiPublicIdentityValue(record, context, '公司名稱') || (record.rawCard && record.rawCard.company) || '',
                 contextAnswers: this._formAiPublicContextAnswers(record, context),
-                longTextAnswers
+                longTextAnswers,
+                optionNoteAnswers
             });
         });
         return {
             mode: 'full_long_text_scan',
-            fieldSelection: 'all_answered_long_text_fields',
+            fieldSelection: 'all_answered_long_text_fields_and_option_notes',
             limitApplied: false,
             ignoredFieldFilters: Array.isArray(filters.fields) && filters.fields.length > 0,
             totalMatchingRecords: records.length,
-            recordsWithLongText: evidenceRecords.length,
+            recordsWithLongText: longTextRecordCount,
+            recordsWithQualitativeEvidence: evidenceRecords.length,
             totalLongTextAnswers: longTextAnswerCount,
             retrievedLongTextAnswers: longTextAnswerCount,
+            totalOptionNoteAnswers: optionNoteAnswerCount,
+            retrievedOptionNoteAnswers: optionNoteAnswerCount,
             filtersApplied: this._publicFormAiFullTextScanFilters(filters),
             records: evidenceRecords
         };
@@ -1564,6 +1591,28 @@ class ActivityIntelligenceService {
             .filter(Boolean);
     }
 
+    _formAiPublicOptionNoteAnswers(record, context) {
+        return (record.answers || [])
+            .flatMap(answer => {
+                const field = this._formAiFieldForRecord(record, answer.itemKey, context);
+                if (!field || field.type !== 'multiple_choice') return [];
+                return this._formAiAnswerValues(answer.value).map(value => {
+                    if (!value || typeof value !== 'object') return null;
+                    const note = String(value.note || '').trim();
+                    if (!note) return null;
+                    const selectedOption = this._formAiPublicChoiceValue(value);
+                    const isOther = selectedOption.value === FORM_AI_OTHER_VALUE || selectedOption.label === FORM_AI_OTHER_VALUE;
+                    return {
+                        fieldTitle: field.title,
+                        selectedOption,
+                        otherText: isOther ? String(answer.otherText || '').trim() : '',
+                        note
+                    };
+                });
+            })
+            .filter(Boolean);
+    }
+
     _formAiPublicIdentityValue(record, context, title) {
         const match = (record.answers || []).find(answer => {
             const field = this._formAiFieldForRecord(record, answer.itemKey, context);
@@ -1594,12 +1643,19 @@ class ActivityIntelligenceService {
     _formAiPublicAnswerValue(value) {
         if (Array.isArray(value)) return value.map(entry => this._formAiPublicAnswerValue(entry));
         if (value && typeof value === 'object') {
-            return {
-                label: value.label || value.value || '',
-                value: value.value || value.label || ''
-            };
+            const result = this._formAiPublicChoiceValue(value);
+            const note = String(value.note || '').trim();
+            if (note) result.note = note;
+            return result;
         }
         return value;
+    }
+
+    _formAiPublicChoiceValue(value) {
+        return {
+            label: value.label || value.value || '',
+            value: value.value || value.label || ''
+        };
     }
 
     _formAiPublicRawCardEvidence(card) {
@@ -1781,11 +1837,14 @@ class ActivityIntelligenceService {
 
     _formAiChoiceValue(value) {
         if (!value || typeof value !== 'object') return value;
-        return {
+        const result = {
             optionKey: value.optionKey || value.option_key || null,
             label: value.label || value.value || '',
             value: value.value || value.label || ''
         };
+        const note = String(value.note || '').trim();
+        if (note) result.note = note;
+        return result;
     }
 
     _formAiRawCardContext(card) {

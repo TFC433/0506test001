@@ -37,6 +37,7 @@ const IDS = {
     voidSubmission: '77777777-7777-4777-8777-777777777774',
     otherActivity: '11111111-1111-4111-8111-111111111114'
 };
+const OTHER_CHOICE_VALUE = Buffer.from('5YW25LuW', 'base64').toString('utf8');
 
 const baseActivity = {
     id: IDS.activity,
@@ -46,6 +47,7 @@ const baseActivity = {
     formOpenEnd: '2026-08-31',
     exhibitionStart: null,
     exhibitionEnd: null,
+    settings: {},
     createdByUserId: 'creator',
     createdByDisplayName: 'Creator',
     createdAt: '2026-08-01T00:00:00.000Z',
@@ -79,6 +81,7 @@ const publishedItems = [
         title: 'Choice',
         options: ['Display value should not be preferred'],
         optionEntries: [{ optionKey: IDS.optionAlpha, label: 'Alpha', value: 'Alpha' }],
+        settings: { allowOptionNotes: true },
         visible: true,
         removedInDraft: false
     },
@@ -100,7 +103,7 @@ function makeHarness(options = {}) {
             return [baseActivity];
         },
         async getActivityById(id) {
-            return id === 'missing' ? null : { ...baseActivity, id };
+            return id === 'missing' ? null : { ...baseActivity, id, settings: options.activitySettings || baseActivity.settings };
         },
         async getFormBundle() {
             return {
@@ -245,7 +248,10 @@ function makeHarness(options = {}) {
             [IDS.longKey]: '完整長文字需求：客戶正在評估自動化產線，要求九月前安排後續拜訪。',
             [IDS.numberKey]: 88,
             [IDS.boolKey]: true,
-            [IDS.choiceKey]: [{ optionKey: IDS.optionAlpha, label: 'Alpha', value: 'Alpha' }]
+            [IDS.choiceKey]: [
+                { optionKey: IDS.optionAlpha, label: 'Alpha', value: 'Alpha', note: 'PoC planned for December' },
+                { value: OTHER_CHOICE_VALUE, note: 'custom option should be evaluated next phase' }
+            ]
         },
         otherAnswers: { [IDS.choiceKey]: 'Other detail' },
         cardId: IDS.card,
@@ -362,6 +368,29 @@ async function main() {
     const activity = await service.getActivity(IDS.activity);
     assert.strictEqual(activity.id, IDS.activity);
     assert(activity.status && ['upcoming', 'open', 'ended'].includes(activity.status.key));
+
+    const settingsHarness = makeHarness({
+        activitySettings: {
+            formAssistSuggestionSourceActivityIds: [IDS.otherActivity],
+            untouched: 'keep'
+        }
+    });
+    await settingsHarness.service.updateActivity(IDS.activity, {
+        settings: {
+            aiAnalysisQuickQuestions: ['  First question  ', '', 'Third question', 'Ignored question']
+        }
+    }, actor());
+    assert.deepStrictEqual(settingsHarness.calls.updateActivity.row.settings.formAssistSuggestionSourceActivityIds, [IDS.otherActivity]);
+    assert.strictEqual(settingsHarness.calls.updateActivity.row.settings.untouched, 'keep');
+    assert.deepStrictEqual(settingsHarness.calls.updateActivity.row.settings.aiAnalysisQuickQuestions, ['First question', '', 'Third question']);
+    await assertRejectsCode(() => settingsHarness.service.updateActivity(IDS.activity, {
+        settings: { aiAnalysisQuickQuestions: 'invalid' }
+    }, actor()), 'AI_ANALYSIS_INVALID_QUICK_QUESTIONS');
+    const malformedSettingsHarness = makeHarness({
+        activitySettings: { aiAnalysisQuickQuestions: 'invalid' }
+    });
+    const malformedSettingsActivity = await malformedSettingsHarness.service.getActivity(IDS.activity);
+    assert(!Object.prototype.hasOwnProperty.call(malformedSettingsActivity.settings, 'aiAnalysisQuickQuestions'));
 
     const originalPublishedTitle = publishedItems[0].title;
     await service.saveDraft(IDS.activity, {
@@ -502,7 +531,8 @@ async function main() {
                     { itemKey: 'companyField', type: 'short_text', title: '公司名稱' },
                     { itemKey: 'nameField', type: 'short_text', title: '客戶姓名' },
                     { itemKey: 'longAnswered', type: 'long_text', title: '情報紀錄' },
-                    { itemKey: 'longEmpty', type: 'long_text', title: '後續動作' }
+                    { itemKey: 'longEmpty', type: 'long_text', title: '後續動作' },
+                    { itemKey: 'choiceWithNotes', type: 'multiple_choice', title: 'Choice With Notes', options: [{ label: 'Digital Twin', value: 'Digital Twin' }], allowOther: true }
                 ]
             }
         },
@@ -518,6 +548,14 @@ async function main() {
                     itemKey: 'longAnswered',
                     value: index === 0 ? '可以去介紹，約時間，寄mail相關資料' : `長文字 ${index + 1}`,
                     otherText: ''
+                }] : []),
+                ...(index === 0 ? [{
+                    itemKey: 'choiceWithNotes',
+                    value: [
+                        { label: 'Digital Twin', value: 'Digital Twin', note: 'PoC planned for December' },
+                        { label: OTHER_CHOICE_VALUE, value: OTHER_CHOICE_VALUE, note: 'evaluate next PoC phase' }
+                    ],
+                    otherText: 'AI visual inspection'
                 }] : [])
             ],
             rawCard: null
@@ -534,6 +572,11 @@ async function main() {
     assert.strictEqual(fullTextScan.recordsWithLongText, 165);
     assert.strictEqual(fullTextScan.totalLongTextAnswers, 165);
     assert.strictEqual(fullTextScan.retrievedLongTextAnswers, 165);
+    assert.strictEqual(fullTextScan.totalOptionNoteAnswers, 2);
+    assert.strictEqual(fullTextScan.retrievedOptionNoteAnswers, 2);
+    assert(JSON.stringify(fullTextScan).includes('PoC planned for December'));
+    assert(JSON.stringify(fullTextScan).includes('AI visual inspection'));
+    assert(!Object.prototype.hasOwnProperty.call(aiHarness.service._formAiChoiceValue({ label: 'Ignored Blank Note', value: 'Ignored Blank Note', note: '   ' }), 'note'));
     assert.strictEqual(fullTextScan.limitApplied, false);
     assert.strictEqual(fullTextScan.ignoredFieldFilters, true);
     assert(JSON.stringify(fullTextScan).includes('可以去介紹，約時間，寄mail相關資料'));
@@ -542,6 +585,22 @@ async function main() {
     const narrowRetrieve = aiHarness.service._executeFormAiRetrieveTool({ fields: ['longAnswered'], limit: 80 }, fullTextContext);
     assert.strictEqual(narrowRetrieve.retrieved, 80);
     assert.strictEqual(narrowRetrieve.totalMatching, 167);
+
+    const optionNoteRetrieve = aiHarness.service._executeFormAiRetrieveTool({ fields: ['choiceWithNotes'], limit: 1 }, fullTextContext);
+    const optionNoteJson = JSON.stringify(optionNoteRetrieve);
+    assert(optionNoteJson.includes('PoC planned for December'));
+    assert(optionNoteJson.includes('evaluate next PoC phase'));
+    assert(optionNoteJson.includes('AI visual inspection'));
+    assert(!optionNoteJson.includes('optionKey'));
+
+    const optionNoteAggregate = aiHarness.service._executeFormAiAggregateTool({
+        aggregate: 'count',
+        groupBy: 'field',
+        field: 'choiceWithNotes'
+    }, fullTextContext);
+    assert.strictEqual(optionNoteAggregate.selectionTotal, 2);
+    assert.deepStrictEqual(optionNoteAggregate.rows.map(row => row.label).sort(), ['AI visual inspection', 'Digital Twin']);
+    assert(!JSON.stringify(optionNoteAggregate).includes('PoC planned for December'));
 
     const entitySubstring = aiHarness.service._executeFormAiRetrieveTool({
         filters: { fields: [{ field: { itemKey: 'companyField' }, values: ['中華精測'] }] }

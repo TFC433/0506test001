@@ -72,6 +72,7 @@
     close: '關閉',
     activitySourcesEmpty: '目前沒有可選擇的活動。'
   });
+  const aiAnalysisQuickQuestionsSettingsKey = 'aiAnalysisQuickQuestions';
   const thumbnailDefaults = Object.freeze({
     driveFileId: '',
     fit: 'cover',
@@ -166,7 +167,8 @@
       filterError: ''
     },
     analytics: defaultAnalyticsState(),
-    analyticsAiPresetDrafts: [...analyticsAiDefaultPresets]
+    analyticsAiPresetDrafts: [...analyticsAiDefaultPresets],
+    analyticsAiPresetDraftActivityId: ''
   };
 
   init();
@@ -319,7 +321,15 @@
   function normalizeActivitySettings(settings) {
     const source = settings && typeof settings === 'object' && !Array.isArray(settings) ? { ...settings } : {};
     source[formAssistSourceSettingsKey] = normalizeActivityIdList(source[formAssistSourceSettingsKey]);
+    const quickQuestions = normalizeAnalyticsAiQuickQuestionsSetting(source[aiAnalysisQuickQuestionsSettingsKey]);
+    if (quickQuestions) source[aiAnalysisQuickQuestionsSettingsKey] = quickQuestions;
+    else delete source[aiAnalysisQuickQuestionsSettingsKey];
     return source;
+  }
+
+  function normalizeAnalyticsAiQuickQuestionsSetting(value) {
+    if (!Array.isArray(value)) return null;
+    return analyticsAiDefaultPresets.map((_, index) => String(value[index] || '').trim());
   }
 
   function normalizeActivityIdList(value) {
@@ -2430,16 +2440,17 @@
   }
 
   function renderFormAiAnalyticsSettings() {
+    const presets = analyticsAiPresetDraftSlots();
     return `
       <section class="aim-panel aim-desktop-only aim-ai-settings-panel" aria-label="AI 分析設定">
         <div class="aim-panel-title-row">
           <div>
             <h2>AI 分析設定</h2>
-            <p class="aim-subtitle">設定管理者在分析頁可快速選用的問題。此階段僅供介面規劃，重新整理後會回到預設。</p>
+            <p class="aim-subtitle">設定管理者在分析頁可快速選用的問題。</p>
           </div>
         </div>
         <div class="aim-ai-settings-grid">
-          ${analyticsAiPresetSlots().map((value, index) => `
+          ${presets.map((value, index) => `
             <label class="aim-field aim-ai-preset-field" for="aim-ai-preset-${index}">
               <span>快速問題 ${index + 1}</span>
               <input class="aim-input aim-ai-preset-input" id="aim-ai-preset-${index}" data-preset-index="${index}" maxlength="120" value="${Store.escapeHtml(value)}">
@@ -2448,19 +2459,34 @@
         </div>
         <div class="aim-ai-settings-foot">
           <p>這不是表單欄位，不會出現在填寫、預覽、匯出、完整度或提交答案中。</p>
+          <button class="aim-button aim-button-primary" data-action="save-ai-presets" type="button" ${writeInFlight ? 'disabled' : ''}>儲存設定</button>
           <button class="aim-button aim-button-soft" data-action="reset-ai-presets" type="button">還原預設</button>
         </div>
       </section>
     `;
   }
 
-  function analyticsAiPresetSlots() {
+  function analyticsAiPresetDraftSlots() {
+    ensureAnalyticsAiPresetDraft(selectedActivity());
     const source = Array.isArray(ui.analyticsAiPresetDrafts) ? ui.analyticsAiPresetDrafts : [];
     return analyticsAiDefaultPresets.map((fallback, index) => source[index] !== undefined ? source[index] : fallback);
   }
 
+  function ensureAnalyticsAiPresetDraft(activity) {
+    const activityId = activity && activity.id ? activity.id : '';
+    if (ui.analyticsAiPresetDraftActivityId === activityId) return;
+    ui.analyticsAiPresetDraftActivityId = activityId;
+    ui.analyticsAiPresetDrafts = persistedAnalyticsAiPresetSlots(activity);
+  }
+
+  function persistedAnalyticsAiPresetSlots(activity) {
+    const settings = activity && activity.settings;
+    const persisted = settings && normalizeAnalyticsAiQuickQuestionsSetting(settings[aiAnalysisQuickQuestionsSettingsKey]);
+    return persisted || [...analyticsAiDefaultPresets];
+  }
+
   function resolvedAnalyticsAiPresets() {
-    return analyticsAiPresetSlots().map(value => String(value || '').trim()).filter(Boolean).slice(0, analyticsAiDefaultPresets.length);
+    return persistedAnalyticsAiPresetSlots(selectedActivity()).map(value => String(value || '').trim()).filter(Boolean).slice(0, analyticsAiDefaultPresets.length);
   }
 
   function renderFieldTypePicker(design) {
@@ -4616,7 +4642,10 @@
         };
       }
     }
-    if (action === 'reset-ai-presets' && canDesignForm()) {
+    if (action === 'save-ai-presets' && canManageActivities()) {
+      await saveAnalyticsAiPresetSettings();
+    }
+    if (action === 'reset-ai-presets' && canManageActivities()) {
       ui.analyticsAiPresetDrafts = [...analyticsAiDefaultPresets];
     }
     save();
@@ -6182,6 +6211,31 @@
     Store.touch(a, currentUser);
     ui.drawer = null;
     toast('已儲存活動設定。');
+  }
+
+  async function saveAnalyticsAiPresetSettings() {
+    const activity = selectedActivity();
+    if (!activity || !canManageActivities()) return;
+    if (writeInFlight) return;
+    const quickQuestions = analyticsAiDefaultPresets.map((_, index) => String((ui.analyticsAiPresetDrafts || [])[index] || '').trim());
+    writeInFlight = true;
+    render();
+    try {
+      const updated = await window.ActivityIntelligenceApi.updateActivity(activity.id, {
+        settings: {
+          [aiAnalysisQuickQuestionsSettingsKey]: quickQuestions
+        }
+      });
+      const normalized = normalizeActivityDto(updated);
+      state.activities = state.activities.map(item => item.id === normalized.id ? { ...item, ...normalized } : item);
+      ui.analyticsAiPresetDraftActivityId = normalized.id;
+      ui.analyticsAiPresetDrafts = persistedAnalyticsAiPresetSlots(normalized);
+      toast('AI Analysis settings saved.');
+    } catch (error) {
+      toast(error.message || 'AI Analysis settings save failed.');
+    } finally {
+      writeInFlight = false;
+    }
   }
 
   function validateActivity(data) {
