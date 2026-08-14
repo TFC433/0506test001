@@ -3654,6 +3654,24 @@ a:focus-visible {
   border-bottom: 1px solid var(--aim-border);
 }
 
+.aim-runtime-section-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.aim-runtime-section-title-row>div {
+  min-width: 0;
+}
+
+.aim-form-assist-card-action {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
 .aim-runtime-section h3 {
   margin: 0 0 4px;
   color: var(--aim-text);
@@ -3745,6 +3763,69 @@ a:focus-visible {
 .aim-runtime-choice-list .aim-checkbox {
   min-height: 28px;
   align-items: center;
+}
+
+.aim-form-assist-field {
+  position: relative;
+}
+
+.aim-form-assist-suggestions {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: min(320px, 58vh);
+  overflow: auto;
+  padding: 5px;
+  border: 1px solid var(--aim-border);
+  border-radius: 8px;
+  background: var(--aim-surface);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+}
+
+.aim-form-assist-suggestion {
+  display: grid;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--aim-text);
+  text-align: left;
+  line-height: 1.35;
+  cursor: pointer;
+}
+
+.aim-form-assist-suggestion:hover,
+.aim-form-assist-suggestion:focus-visible {
+  background: var(--aim-surface-muted);
+  outline: none;
+}
+
+.aim-form-assist-suggestion strong,
+.aim-form-assist-suggestion span,
+.aim-form-assist-suggestion small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aim-form-assist-suggestion strong {
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.aim-form-assist-suggestion span,
+.aim-form-assist-suggestion small,
+.aim-form-assist-loading {
+  color: var(--aim-muted);
+  font-size: 12px;
+}
+
+.aim-form-assist-loading {
+  padding: 9px;
 }
 
 .aim-option-note-choice-list {

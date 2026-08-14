@@ -181,6 +181,7 @@ router.post(
 );
 router.post('/activities/:activityId/ai-analysis', requireRole(ADMIN_ROLES), (req, res, next) => getController(req).analyzeActivity(req, res, next));
 
+router.get('/activities/:activityId/form-assist/suggestions', requireRole(SUBMISSION_ROLES), (req, res, next) => getController(req).getFormAssistSuggestions(req, res, next));
 router.get('/activities/:activityId/submissions', requireSubmissionListAccess, scopeSubmissionList, (req, res, next) => getController(req).listSubmissions(req, res, next));
 router.post('/activities/:activityId/submissions', requireSubmissionCreateAccess, (req, res, next) => getController(req).createSubmission(req, res, next));
 router.get('/submissions/:submissionId', requireSubmissionReadAccess, (req, res, next) => getController(req).getSubmission(req, res, next));

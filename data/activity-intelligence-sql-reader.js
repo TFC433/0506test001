@@ -128,6 +128,66 @@ class ActivityIntelligenceSqlReader {
         return this.hydrateSubmissionDetails(submissions, { search: filters.search });
     }
 
+    async listFormAssistItems() {
+        const { data, error } = await supabase
+            .from(this.formItemsTable)
+            .select(ITEM_SELECT)
+            .order('sort_order', { ascending: true });
+
+        if (error) throw this._dbError('listFormAssistItems', error);
+        return (data || []).map(row => this.mapFormItemRow(row));
+    }
+
+    async searchSubmissionAnswersByItems(formItemIds, queryText, limit = 120) {
+        const ids = Array.isArray(formItemIds) ? formItemIds.filter(Boolean) : [];
+        const q = String(queryText || '').trim();
+        if (!ids.length || !q) return [];
+
+        const { data, error } = await supabase
+            .from(this.answersTable)
+            .select(ANSWER_SELECT)
+            .in('form_item_id', ids)
+            .ilike('value_text', `%${q}%`)
+            .order('submission_answer_id', { ascending: false })
+            .limit(Math.max(1, Math.min(Number(limit) || 120, 300)));
+
+        if (error) throw this._dbError('searchSubmissionAnswersByItems', error);
+        return (data || []).map(row => this.mapAnswerRow(row));
+    }
+
+    async getSubmissionsByIds(submissionIds) {
+        const ids = Array.isArray(submissionIds) ? [...new Set(submissionIds.filter(Boolean))] : [];
+        if (!ids.length) return [];
+
+        const { data, error } = await supabase
+            .from(this.submissionsTable)
+            .select(SUBMISSION_SELECT)
+            .in('submission_id', ids)
+            .neq('status', 'void')
+            .order('created_at', { ascending: false });
+
+        if (error) throw this._dbError('getSubmissionsByIds', error);
+
+        const submissions = (data || []).map(row => this.mapSubmissionRow(row));
+        return this.hydrateSubmissionDetails(submissions);
+    }
+
+    async getActivitiesByIds(activityIds) {
+        const ids = Array.isArray(activityIds) ? [...new Set(activityIds.filter(Boolean))] : [];
+        if (!ids.length) return new Map();
+
+        const { data, error } = await supabase
+            .from(this.activitiesTable)
+            .select(ACTIVITY_SELECT)
+            .in('activity_id', ids);
+
+        if (error) throw this._dbError('getActivitiesByIds', error);
+        return new Map((data || []).map(row => {
+            const activity = this.mapActivityRow(row);
+            return [activity.id, activity];
+        }));
+    }
+
     async getSubmissionById(submissionId) {
         const { data, error } = await supabase
             .from(this.submissionsTable)

@@ -113,6 +113,13 @@ class ActivityIntelligenceController {
         });
     };
 
+    getFormAssistSuggestions = async (req, res) => {
+        await this._handle(res, async () => {
+            const data = await this.activityIntelligenceService.getFormAssistSuggestions(req.params.activityId, req.query);
+            res.json({ success: true, data });
+        });
+    };
+
     createSubmission = async (req, res) => {
         await this._handle(res, async () => {
             const data = await this.activityIntelligenceService.createSubmission(req.params.activityId, req.body, req.user);

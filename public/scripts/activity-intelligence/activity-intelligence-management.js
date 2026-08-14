@@ -34,12 +34,18 @@
   const otherAnswerValue = '其他';
   const ocrScanUrl = 'https://line.me/R/ti/p/@302winpe';
   const rawCardPickerPageSize = 15;
+  const formAssistDebounceMs = 220;
   const previewPlacementValues = new Set(['none', 'primary', 'badges', 'text']);
   const previewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'multiple_choice', 'dropdown']);
   const compactPreviewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'dropdown']);
   const expandedCompactFieldTypes = new Set(['short_text', 'number', 'yes_no', 'single_choice', 'dropdown', 'boolean', 'checkbox', 'toggle']);
   const expandedCompactCategoricalFieldTypes = new Set(['yes_no', 'single_choice', 'dropdown']);
   const fixedPreviewFieldIds = new Set(['fld_customer_name', 'fld_company', 'fld_job_title', 'fld_priority']);
+  const formAssistFixedSemantics = Object.freeze({
+    fld_customer_name: 'customerName',
+    fld_company: 'companyName',
+    fld_job_title: 'jobTitle'
+  });
   const thumbnailDefaults = Object.freeze({
     driveFileId: '',
     fit: 'cover',
@@ -74,6 +80,8 @@
   let pendingAnalyticsChartConfigs = [];
   let analyticsChartRenderToken = 0;
   const activityAnalyticsChartIds = new Set();
+  let formAssistRequestSeq = 0;
+  let formAssistDebounceTimer = null;
   let ui = {
     view: 'overview',
     tab: 'overview',
@@ -98,6 +106,13 @@
     quickOptionNotes: {},
     quickOptionNoteExpanded: {},
     quickCardLink: { linked: false, cardId: null, card: null },
+    formAssist: {
+      activeFieldId: '',
+      kind: '',
+      q: '',
+      loading: false,
+      suggestions: []
+    },
     cardPicker: null,
     hardDeleteConfirm: null,
     focusQuickFirst: false,
@@ -1712,15 +1727,102 @@
     return `<section class="aim-record-detail-text"><h3>${Store.escapeHtml(field.title)}</h3><div>${Store.escapeHtml(Store.answerText(value))}</div></section>`;
   }
 
+  function formAssistSemanticForField(field) {
+    if (!field) return '';
+    const key = String(field.fieldId || field.itemKey || field.itemId || '').trim();
+    if (formAssistFixedSemantics[key]) return formAssistFixedSemantics[key];
+    const title = String(field.title || '').trim().replace(/\s+/g, '');
+    if (/^(客戶姓名|受訪者姓名|訪客姓名|姓名|聯絡人姓名)$/i.test(title)) return 'customerName';
+    if (/^(公司名稱|公司|企業名稱|單位名稱|組織名稱)$/i.test(title)) return 'companyName';
+    if (/^(職稱|職位|頭銜|職務|JobTitle|Title)$/i.test(title)) return 'jobTitle';
+    if (/^(公司類型|客戶產業大類|產業大類|產業別|產業類別|CompanyType|Industry)$/i.test(title)) return 'companyType';
+    return '';
+  }
+
+  function quickFormAssistFieldMap() {
+    const result = {};
+    quickEntryFields(selectedActivity()).forEach(field => {
+      const semantic = formAssistSemanticForField(field);
+      if (semantic && !result[semantic]) result[semantic] = field;
+    });
+    return result;
+  }
+
+  function canUseQuickFormAssist() {
+    if (!currentUser || !currentUser.authenticated || isGuestUser()) return false;
+    const fields = quickFormAssistFieldMap();
+    return Boolean(fields.customerName || fields.companyName);
+  }
+
+  function isFormAssistIdentitySection(field) {
+    const title = String(field && field.title || '').trim();
+    return /客戶訪談資訊|基本資訊|訪談資訊/.test(title);
+  }
+
+  function renderFormAssistSectionAction(field) {
+    if (!canUseQuickFormAssist() || !isFormAssistIdentitySection(field)) return '';
+    return '<button class="aim-button aim-button-soft aim-form-assist-card-action" data-action="form-assist-card" type="button">選擇名片</button>';
+  }
+
+  function renderQuickTextInputField(field, enabled, multiline) {
+    const value = ui.quickAnswers[field.fieldId];
+    const label = `<label>${Store.escapeHtml(field.title)}</label>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}`;
+    const semantic = formAssistSemanticForField(field);
+    const assistKind = semantic === 'customerName' ? 'person' : (semantic === 'companyName' ? 'company' : '');
+    const assistAttrs = assistKind ? ` data-assist-kind="${assistKind}" autocomplete="off"` : '';
+    const control = multiline
+      ? `<textarea class="aim-textarea aim-auto-grow aim-quick-input" data-field="${field.fieldId}"${assistAttrs} rows="1" placeholder="${Store.escapeHtml(field.placeholder || '')}" ${enabled ? '' : 'disabled'}>${Store.escapeHtml(value || '')}</textarea>`
+      : `<input class="aim-input aim-quick-input" data-field="${field.fieldId}"${assistAttrs} value="${Store.escapeHtml(value || '')}" placeholder="${Store.escapeHtml(field.placeholder || '')}" ${enabled ? '' : 'disabled'}>`;
+    return `<div class="aim-field aim-form-assist-field">${label}${control}${renderFormAssistSuggestions(field)}</div>`;
+  }
+
+  function renderFormAssistSuggestions(field) {
+    const assist = ui.formAssist || {};
+    if (!field || assist.activeFieldId !== field.fieldId || !String(assist.q || '').trim()) return '';
+    if (assist.loading) return '<div class="aim-form-assist-suggestions"><div class="aim-form-assist-loading">搜尋中</div></div>';
+    if (!Array.isArray(assist.suggestions) || !assist.suggestions.length) return '';
+    const rows = assist.kind === 'company'
+      ? assist.suggestions.map(renderCompanyAssistSuggestion).join('')
+      : assist.suggestions.map(renderPersonAssistSuggestion).join('');
+    return `<div class="aim-form-assist-suggestions" role="listbox">${rows}</div>`;
+  }
+
+  function renderPersonAssistSuggestion(item) {
+    const title = item.personName || '';
+    const meta = [item.companyName, item.jobTitle].filter(Boolean).join(' / ');
+    const context = [item.activityName, Store.formatDate(item.submittedAt), item.recorderName].filter(Boolean).join(' / ');
+    return `
+      <button class="aim-form-assist-suggestion" data-action="form-assist-select-person" data-submission-id="${Store.escapeHtml(item.submissionId || '')}" type="button" role="option">
+        <strong>${Store.escapeHtml(title)}</strong>
+        ${meta ? `<span>${Store.escapeHtml(meta)}</span>` : ''}
+        ${context ? `<small>${Store.escapeHtml(context)}</small>` : ''}
+      </button>
+    `;
+  }
+
+  function renderCompanyAssistSuggestion(item) {
+    const visitors = (item.recentVisitors || []).slice(0, 3).map(visitor => [visitor.personName, visitor.jobTitle].filter(Boolean).join(' / ')).filter(Boolean).join('、');
+    const types = (item.historicalCompanyTypes || []).slice(0, 3).map(entry => `${entry.value} ${entry.count}`).join('、');
+    const context = [item.recentActivityName, Store.formatDate(item.recentSubmittedAt)].filter(Boolean).join(' / ');
+    return `
+      <button class="aim-form-assist-suggestion" data-action="form-assist-select-company" data-company-name="${Store.escapeHtml(item.companyName || '')}" type="button" role="option">
+        <strong>${Store.escapeHtml(item.companyName || '')}</strong>
+        ${visitors ? `<span>${Store.escapeHtml(visitors)}</span>` : ''}
+        ${types ? `<small>類型：${Store.escapeHtml(types)}</small>` : ''}
+        ${context ? `<small>${Store.escapeHtml(context)}，${Number(item.visitCount) || 0} 筆</small>` : ''}
+      </button>
+    `;
+  }
+
   function renderQuickField(field, enabled) {
-    if (field.type === 'section_heading') return `<section class="aim-runtime-section"><h3>${Store.escapeHtml(field.title)}</h3>${field.helperText ? `<p>${Store.escapeHtml(field.helperText)}</p>` : ''}</section>`;
+    if (field.type === 'section_heading') return `<section class="aim-runtime-section aim-runtime-section-form-assist"><div class="aim-runtime-section-title-row"><div><h3>${Store.escapeHtml(field.title)}</h3>${field.helperText ? `<p>${Store.escapeHtml(field.helperText)}</p>` : ''}</div>${renderFormAssistSectionAction(field)}</div></section>`;
     if (field.type === 'information_text') return `<section class="aim-runtime-info"><h3>${Store.escapeHtml(field.title)}</h3>${field.helperText ? `<p>${Store.escapeHtml(field.helperText)}</p>` : ''}</section>`;
     if (field.type === 'form_thumbnail') return `<section class="aim-runtime-component">${renderFormThumbnailPreview(field)}</section>`;
     if (field.type === 'card_link') return renderRuntimeCardLink(field, enabled, ui.quickCardLink, 'quick');
     const value = ui.quickAnswers[field.fieldId];
     const otherValue = ui.quickOtherAnswers[field.fieldId] || '';
     const label = `<label>${Store.escapeHtml(field.title)}</label>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}`;
-    if (field.type === 'long_text') return `<div class="aim-field">${label}<textarea class="aim-textarea aim-auto-grow aim-quick-input" data-field="${field.fieldId}" rows="1" placeholder="${Store.escapeHtml(field.placeholder || '')}" ${enabled ? '' : 'disabled'}>${Store.escapeHtml(value || '')}</textarea></div>`;
+    if (field.type === 'long_text') return renderQuickTextInputField(field, enabled, true);
     if (field.type === 'number') return `<div class="aim-field">${label}<input class="aim-input aim-quick-input" type="number" data-field="${field.fieldId}" value="${Store.escapeHtml(value || '')}" placeholder="${Store.escapeHtml(field.placeholder || '')}" ${enabled ? '' : 'disabled'}></div>`;
     if (field.type === 'yes_no') return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}<div class="aim-runtime-choice-list">${yesNoOptions.map(o => `<label class="aim-checkbox"><input class="aim-quick-radio" name="quick-${field.fieldId}" data-field="${field.fieldId}" type="radio" value="${Store.escapeHtml(o)}" ${value === o ? 'checked' : ''} ${enabled ? '' : 'disabled'}> ${Store.escapeHtml(o)}</label>`).join('')}</div></div>`;
     if (field.type === 'dropdown') return `<div class="aim-field">${label}<select class="aim-select aim-quick-input" data-field="${field.fieldId}" ${enabled ? '' : 'disabled'}>${option('', '請選擇', value || '')}${(field.options || []).map(o => option(o, o, value || '')).join('')}${field.allowOther ? option(otherAnswerValue, otherAnswerValue, value || '') : ''}</select>${field.allowOther && value === otherAnswerValue ? renderOtherInput(field, 'quick', otherValue, enabled) : ''}</div>`;
@@ -1730,7 +1832,7 @@
       const otherSelected = field.allowOther && values.includes(otherAnswerValue);
       return `<div class="aim-field"><span class="aim-field-title">${Store.escapeHtml(field.title)}</span>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}${renderMultipleChoiceOptions(field, values, enabled, 'quick')}${otherSelected ? renderOtherInput(field, 'quick', otherValue, enabled) : ''}${otherSelected ? renderOtherOptionNoteEditor(field, 'quick') : ''}</div>`;
     }
-    return `<div class="aim-field">${label}<input class="aim-input aim-quick-input" data-field="${field.fieldId}" value="${Store.escapeHtml(value || '')}" placeholder="${Store.escapeHtml(field.placeholder || '')}" ${enabled ? '' : 'disabled'}></div>`;
+    return renderQuickTextInputField(field, enabled, false);
   }
 
   function renderOtherInput(field, context, value, enabled) {
@@ -4401,6 +4503,19 @@
       render();
       return true;
     }
+    if (action === 'form-assist-card') {
+      await openQuickFormAssistCardPicker();
+      render();
+      return true;
+    }
+    if (action === 'form-assist-select-person') {
+      selectFormAssistPerson(el.dataset.submissionId || '');
+      return true;
+    }
+    if (action === 'form-assist-select-company') {
+      selectFormAssistCompany(el.dataset.companyName || '');
+      return true;
+    }
     if (action === 'mock-link-card') {
       ui.formPreviewCardLinked = true;
       scheduleFormPreviewRefresh();
@@ -4816,8 +4931,17 @@
       node.addEventListener(eventName, () => {
         const before = answerHasOther(ui.quickAnswers[node.dataset.field]);
         setQuickAnswer(node.dataset.field, node.value);
+        if (node.dataset.assistKind) handleQuickFormAssistInput(node.dataset.field, node.dataset.assistKind, node.value);
         refreshQuickAnswerListIfOtherChanged(before, ui.quickAnswers[node.dataset.field]);
       });
+      if (node.dataset.assistKind) {
+        node.addEventListener('blur', () => {
+          window.setTimeout(() => {
+            resetFormAssistState();
+            refreshFormAssistSuggestions(node.dataset.field);
+          }, 180);
+        });
+      }
     });
     rootNode.querySelectorAll('.aim-quick-radio').forEach(node => node.addEventListener('change', () => {
       if (!node.checked) return;
@@ -6281,6 +6405,128 @@
     else delete ui.quickOtherAnswers[fieldId];
   }
 
+  function resetFormAssistState() {
+    if (formAssistDebounceTimer) {
+      window.clearTimeout(formAssistDebounceTimer);
+      formAssistDebounceTimer = null;
+    }
+    formAssistRequestSeq += 1;
+    ui.formAssist = { activeFieldId: '', kind: '', q: '', loading: false, suggestions: [] };
+  }
+
+  function quickAnswerIsBlank(fieldId) {
+    const value = ui.quickAnswers[fieldId];
+    return !(Array.isArray(value) ? value.length : String(value || '').trim());
+  }
+
+  function fillQuickFormAssistFields(source = {}, options = {}) {
+    const fields = quickFormAssistFieldMap();
+    const replacements = new Set(options.replaceFields || []);
+    const pairs = [
+      ['customerName', source.personName || source.customerName || source.name],
+      ['jobTitle', source.jobTitle || source.position || source.title],
+      ['companyName', source.companyName || source.company]
+    ];
+    let changed = false;
+    pairs.forEach(([semantic, value]) => {
+      const field = fields[semantic];
+      const text = String(value || '').trim();
+      if (!field || !text) return;
+      if (!replacements.has(semantic) && !quickAnswerIsBlank(field.fieldId)) return;
+      setQuickAnswer(field.fieldId, text);
+      changed = true;
+    });
+    return changed;
+  }
+
+  function importQuickAssistCard(card) {
+    const normalized = normalizeRawCard(card);
+    if (!normalized) return false;
+    return fillQuickFormAssistFields({
+      personName: normalized.name,
+      jobTitle: normalized.position,
+      companyName: normalized.company
+    });
+  }
+
+  async function openQuickFormAssistCardPicker() {
+    if (!canUseQuickFormAssist()) return;
+    try {
+      await loadRawCards({ force: true });
+      ui.cardPicker = { context: 'quick-assist', q: '', page: 1 };
+    } catch (error) {
+      toast(error.message || 'RAW card load failed.');
+    }
+  }
+
+  function selectFormAssistPerson(submissionId) {
+    const suggestion = (ui.formAssist && ui.formAssist.suggestions || []).find(item => item.submissionId === submissionId);
+    if (!suggestion) return;
+    fillQuickFormAssistFields(suggestion);
+    resetFormAssistState();
+    refreshQuickAnswerList();
+  }
+
+  function selectFormAssistCompany(companyName) {
+    const fields = quickFormAssistFieldMap();
+    if (fields.companyName && String(companyName || '').trim()) {
+      setQuickAnswer(fields.companyName.fieldId, String(companyName || '').trim());
+    }
+    resetFormAssistState();
+    refreshQuickAnswerList();
+  }
+
+  function handleQuickFormAssistInput(fieldId, kind, value) {
+    const q = String(value || '').trim();
+    if (!kind || !q || isGuestUser()) {
+      resetFormAssistState();
+      refreshFormAssistSuggestions(fieldId);
+      return;
+    }
+
+    if (formAssistDebounceTimer) window.clearTimeout(formAssistDebounceTimer);
+    const seq = formAssistRequestSeq + 1;
+    formAssistRequestSeq = seq;
+    ui.formAssist = { activeFieldId: fieldId, kind, q, loading: false, suggestions: [] };
+    refreshFormAssistSuggestions(fieldId);
+
+    formAssistDebounceTimer = window.setTimeout(async () => {
+      ui.formAssist = { activeFieldId: fieldId, kind, q, loading: true, suggestions: [] };
+      refreshFormAssistSuggestions(fieldId);
+      try {
+        const activity = selectedActivity();
+        const result = await window.ActivityIntelligenceApi.getFormAssistSuggestions(activity.id, { kind, q });
+        if (seq !== formAssistRequestSeq) return;
+        ui.formAssist = {
+          activeFieldId: fieldId,
+          kind,
+          q,
+          loading: false,
+          suggestions: (result && result.suggestions) || []
+        };
+      } catch (error) {
+        if (seq !== formAssistRequestSeq) return;
+        ui.formAssist = { activeFieldId: fieldId, kind, q, loading: false, suggestions: [] };
+      }
+      refreshFormAssistSuggestions(fieldId);
+    }, formAssistDebounceMs);
+  }
+
+  function refreshFormAssistSuggestions(fieldId) {
+    const field = runtimeFieldById(fieldId, 'quick');
+    const host = document.querySelector(`.aim-quick-input[data-field="${cssEscape(fieldId)}"]`)?.closest('.aim-form-assist-field');
+    if (!field || !host) return;
+    const existing = host.querySelector('.aim-form-assist-suggestions');
+    const html = renderFormAssistSuggestions(field);
+    if (existing) existing.remove();
+    if (html) host.insertAdjacentHTML('beforeend', html);
+  }
+
+  function cssEscape(value) {
+    if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(value);
+    return String(value || '').replace(/["\\]/g, '\\$&');
+  }
+
   async function copyGuestUserId() {
     const value = currentUser && currentUser.userId ? String(currentUser.userId) : '';
     if (!value) return;
@@ -6341,8 +6587,14 @@
   function selectRawCard(cardId) {
     const card = rawCardById(cardId);
     if (!card) return toast('找不到選擇的 RAW 名片。');
-    const next = { linked: true, cardId: card.cardId, card };
     const context = ui.cardPicker && ui.cardPicker.context;
+    if (context === 'quick-assist') {
+      importQuickAssistCard(card);
+      ui.cardPicker = null;
+      resetFormAssistState();
+      return;
+    }
+    const next = { linked: true, cardId: card.cardId, card };
     if (context === 'drawer' && ui.drawer) ui.drawer.workingCardLink = next;
     else if (context === 'quick') ui.quickCardLink = next;
     ui.cardPicker = null;
@@ -6405,6 +6657,7 @@
       ui.quickOptionNotes = {};
       ui.quickOptionNoteExpanded = {};
       ui.quickCardLink = { linked: false, cardId: null, card: null };
+      resetFormAssistState();
       ui.focusQuickFirst = true;
       ui.tab = 'records';
       ui.records.scope = 'entry';

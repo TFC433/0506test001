@@ -34,6 +34,14 @@ const FORM_AI_TOOL_NAMES = new Set(['aggregate_submissions', 'retrieve_submissio
 const FORM_AI_AGGREGATE_GROUPS = new Set(['none', 'date', 'recorder', 'field']);
 const FORM_AI_CHOICE_TYPES = new Set(['yes_no', 'single_choice', 'multiple_choice', 'dropdown']);
 const FORM_AI_HARMLESS_PLANNER_METADATA_KEYS = new Set(['reason', 'rationale', 'description', 'explanation']);
+const FORM_ASSIST_KINDS = new Set(['person', 'company']);
+const FORM_ASSIST_PRIMARY_LIMIT = 8;
+const FORM_ASSIST_ANSWER_SCAN_LIMIT = 160;
+const FORM_ASSIST_FIXED_KEYS = Object.freeze({
+    fld_customer_name: 'customerName',
+    fld_company: 'companyName',
+    fld_job_title: 'jobTitle'
+});
 
 class ActivityIntelligenceError extends Error {
     constructor(statusCode, message, code) {
@@ -231,6 +239,37 @@ class ActivityIntelligenceService {
         const filters = this._normalizeSubmissionFilters(query);
         const submissions = await this.reader.listSubmissions(activityId, filters);
         return this._enrichSubmissionCards(submissions);
+    }
+
+    async getFormAssistSuggestions(activityId, query = {}) {
+        await this._requireActivity(activityId);
+        const kind = String(query.kind || '').trim();
+        if (!FORM_ASSIST_KINDS.has(kind)) {
+            throw new ActivityIntelligenceError(400, 'Form assist suggestion kind is invalid.', 'FORM_ASSIST_INVALID_KIND');
+        }
+
+        const q = String(query.q || query.search || '').trim();
+        if (!q) return { kind, query: '', suggestions: [] };
+
+        const items = await this.reader.listFormAssistItems();
+        const matchSemantic = kind === 'person' ? 'customerName' : 'companyName';
+        const matchItemIds = items
+            .filter(item => this._formAssistSemanticForItem(item) === matchSemantic)
+            .map(item => item.formItemId)
+            .filter(Boolean);
+
+        if (!matchItemIds.length) return { kind, query: q, suggestions: [] };
+
+        const answerMatches = await this.reader.searchSubmissionAnswersByItems(matchItemIds, q, FORM_ASSIST_ANSWER_SCAN_LIMIT);
+        const submissionIds = answerMatches.map(answer => answer.submissionId);
+        const submissions = await this.reader.getSubmissionsByIds(submissionIds);
+        const activitiesById = await this.reader.getActivitiesByIds(submissions.map(submission => submission.activityId));
+        const orderedSubmissions = this._sortFormAssistSubmissions(submissions, answerMatches, q, matchSemantic);
+        const suggestions = kind === 'person'
+            ? this._formAssistPersonSuggestions(orderedSubmissions, activitiesById, q)
+            : this._formAssistCompanySuggestions(orderedSubmissions, activitiesById, q);
+
+        return { kind, query: q, suggestions: suggestions.slice(0, FORM_ASSIST_PRIMARY_LIMIT) };
     }
 
     async createSubmission(activityId, payload = {}, user = {}) {
@@ -668,6 +707,142 @@ class ActivityIntelligenceService {
             includeVoid: query.includeVoid === 'true' || query.includeVoid === true || state === 'void' || state === 'all',
             search: query.search || query.q || ''
         };
+    }
+
+    _formAssistSemanticForItem(item = {}) {
+        const key = String(item.itemKey || item.fieldId || item.itemId || '').trim();
+        if (FORM_ASSIST_FIXED_KEYS[key]) return FORM_ASSIST_FIXED_KEYS[key];
+
+        const title = String(item.title || '').trim();
+        const compactTitle = title.replace(/\s+/g, '');
+        if (/^(客戶姓名|受訪者姓名|訪客姓名|姓名|聯絡人姓名)$/i.test(compactTitle)) return 'customerName';
+        if (/^(公司名稱|公司|企業名稱|單位名稱|組織名稱)$/i.test(compactTitle)) return 'companyName';
+        if (/^(職稱|職位|頭銜|職務|JobTitle|Title)$/i.test(compactTitle)) return 'jobTitle';
+        if (/^(公司類型|客戶產業大類|產業大類|產業別|產業類別|CompanyType|Industry)$/i.test(compactTitle)) return 'companyType';
+        return '';
+    }
+
+    _formAssistValuesForSubmission(submission = {}) {
+        const values = {
+            customerName: '',
+            companyName: '',
+            jobTitle: '',
+            companyType: ''
+        };
+        const answers = submission.answers || {};
+        const items = submission.formSnapshot && Array.isArray(submission.formSnapshot.items)
+            ? submission.formSnapshot.items
+            : [];
+
+        items.forEach(item => {
+            const semantic = this._formAssistSemanticForItem(item);
+            if (!semantic || values[semantic]) return;
+            const value = this._formAssistAnswerText(answers[item.fieldId || item.itemKey]);
+            if (value) values[semantic] = value;
+        });
+
+        return values;
+    }
+
+    _formAssistAnswerText(value) {
+        if (value === null || value === undefined) return '';
+        if (Array.isArray(value)) {
+            return value.map(entry => this._formAssistAnswerText(entry)).filter(Boolean).join('、');
+        }
+        if (typeof value === 'object') {
+            return String(value.label || value.value || '').trim();
+        }
+        return String(value).trim();
+    }
+
+    _sortFormAssistSubmissions(submissions, answerMatches, q, semantic) {
+        const needle = String(q || '').trim().toLowerCase();
+        const matchedIds = new Set((answerMatches || []).map(answer => answer.submissionId));
+        return [...(submissions || [])]
+            .filter(submission => matchedIds.has(submission.id))
+            .sort((a, b) => {
+                const aValue = this._formAssistValuesForSubmission(a)[semantic] || '';
+                const bValue = this._formAssistValuesForSubmission(b)[semantic] || '';
+                const aRank = aValue.toLowerCase() === needle ? 0 : (aValue.toLowerCase().startsWith(needle) ? 1 : 2);
+                const bRank = bValue.toLowerCase() === needle ? 0 : (bValue.toLowerCase().startsWith(needle) ? 1 : 2);
+                if (aRank !== bRank) return aRank - bRank;
+                return String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+            });
+    }
+
+    _formAssistPersonSuggestions(submissions, activitiesById, q) {
+        const needle = String(q || '').trim().toLowerCase();
+        return (submissions || []).map(submission => {
+            const values = this._formAssistValuesForSubmission(submission);
+            if (!values.customerName || !values.customerName.toLowerCase().includes(needle)) return null;
+            const activity = activitiesById.get(submission.activityId) || {};
+            return {
+                type: 'person',
+                submissionId: submission.id,
+                personName: values.customerName,
+                jobTitle: values.jobTitle,
+                companyName: values.companyName,
+                companyType: values.companyType,
+                activityId: submission.activityId,
+                activityName: activity.name || '',
+                submittedAt: submission.createdAt,
+                recorderName: submission.createdByDisplayName || ''
+            };
+        }).filter(Boolean);
+    }
+
+    _formAssistCompanySuggestions(submissions, activitiesById, q) {
+        const needle = String(q || '').trim().toLowerCase();
+        const groups = new Map();
+
+        (submissions || []).forEach(submission => {
+            const values = this._formAssistValuesForSubmission(submission);
+            const companyName = values.companyName;
+            if (!companyName || !companyName.toLowerCase().includes(needle)) return;
+
+            if (!groups.has(companyName)) {
+                groups.set(companyName, {
+                    type: 'company',
+                    companyName,
+                    visitCount: 0,
+                    recentVisitors: [],
+                    historicalCompanyTypes: [],
+                    recentActivityName: '',
+                    recentSubmittedAt: ''
+                });
+            }
+
+            const group = groups.get(companyName);
+            const activity = activitiesById.get(submission.activityId) || {};
+            group.visitCount += 1;
+            if (!group.recentSubmittedAt || String(submission.createdAt || '') > String(group.recentSubmittedAt || '')) {
+                group.recentSubmittedAt = submission.createdAt || '';
+                group.recentActivityName = activity.name || '';
+            }
+            if (values.customerName && group.recentVisitors.length < 4) {
+                group.recentVisitors.push({
+                    personName: values.customerName,
+                    jobTitle: values.jobTitle,
+                    submittedAt: submission.createdAt,
+                    activityName: activity.name || '',
+                    recorderName: submission.createdByDisplayName || ''
+                });
+            }
+            if (values.companyType) {
+                const current = group.historicalCompanyTypes.find(entry => entry.value === values.companyType);
+                if (current) current.count += 1;
+                else group.historicalCompanyTypes.push({ value: values.companyType, count: 1 });
+            }
+        });
+
+        return Array.from(groups.values()).sort((a, b) => {
+            const aValue = a.companyName.toLowerCase();
+            const bValue = b.companyName.toLowerCase();
+            const aRank = aValue === needle ? 0 : (aValue.startsWith(needle) ? 1 : 2);
+            const bRank = bValue === needle ? 0 : (bValue.startsWith(needle) ? 1 : 2);
+            if (aRank !== bRank) return aRank - bRank;
+            return String(b.recentSubmittedAt || '').localeCompare(String(a.recentSubmittedAt || ''));
+        });
     }
 
     async _setSubmissionStatus(submissionId, status, user) {

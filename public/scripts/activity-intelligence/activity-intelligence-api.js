@@ -118,6 +118,15 @@
       return jsonRequest('POST', `/activities/${encodeURIComponent(activityId)}/ai-analysis`, payload);
     },
 
+    getFormAssistSuggestions(activityId, query) {
+      const params = new URLSearchParams();
+      Object.entries(query || {}).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') params.set(key, value);
+      });
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      return request(`/activities/${encodeURIComponent(activityId)}/form-assist/suggestions${suffix}`);
+    },
+
     listSubmissions(activityId, query) {
       const params = new URLSearchParams();
       Object.entries(query || {}).forEach(([key, value]) => {
