@@ -59,7 +59,7 @@ const FORM_ASSIST_CJK_EXPECTED_COPY = Object.freeze({
     activitySourcesHelper1: '選擇此活動填表時可用於姓名與公司歷史建議的活動資料。',
     activitySourcesHelper2: '未選擇任何活動時，不提供歷史資料建議。',
     currentActivity: '目前活動',
-    formActionLabel: '由名片導入',
+    formActionLabel: '從名片帶入',
     cardImportTitle: '套用名片資料？',
     cardImportDescription: '目前表單已有姓名、職稱或公司內容。請選擇這次名片資料的套用方式。',
     cardImportCancel: '取消',

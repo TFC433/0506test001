@@ -52,7 +52,7 @@
     activitySourcesHelper1: '選擇此活動填表時可用於姓名與公司歷史建議的活動資料。',
     activitySourcesHelper2: '未選擇任何活動時，不提供歷史資料建議。',
     currentActivity: '目前活動',
-    formActionLabel: '由名片導入',
+    formActionLabel: '從名片帶入',
     suggestionsLoading: '搜尋中',
     companyTypePrefix: '類型：',
     listSeparator: '、',
@@ -4623,10 +4623,12 @@
     }
     if (action === 'form-assist-card-import-preserve') {
       applyPendingFormAssistCardImport('preserve');
+      render();
       return true;
     }
     if (action === 'form-assist-card-import-overwrite') {
       applyPendingFormAssistCardImport('overwrite');
+      render();
       return true;
     }
     if (action === 'mock-link-card') {
@@ -6592,7 +6594,8 @@
       ui.formAssistCardImportConfirm = { card: normalized };
       return false;
     }
-    return fillQuickFormAssistFields(cardAssistSourceValues(normalized));
+    fillQuickFormAssistFields(cardAssistSourceValues(normalized));
+    return linkQuickAssistCard(normalized);
   }
 
   function applyPendingFormAssistCardImport(mode) {
@@ -6600,9 +6603,17 @@
     if (!pending) return;
     const replaceFields = mode === 'overwrite' ? ['customerName', 'jobTitle', 'companyName'] : [];
     fillQuickFormAssistFields(cardAssistSourceValues(pending.card), { replaceFields });
+    if (!linkQuickAssistCard(pending.card)) return;
     ui.formAssistCardImportConfirm = null;
     resetFormAssistState();
     refreshQuickAnswerList();
+  }
+
+  function linkQuickAssistCard(card) {
+    const normalized = normalizeRawCard(card);
+    if (!normalized || !normalized.cardId) return false;
+    ui.quickCardLink = { linked: true, cardId: normalized.cardId, card: normalized };
+    return true;
   }
 
   async function openQuickFormAssistCardPicker() {
