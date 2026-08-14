@@ -2656,6 +2656,13 @@ a:focus-visible {
   background: var(--aim-surface-muted, #f8fafb);
 }
 
+.aim-raw-card-viewer-foot .aim-button-primary:not(:disabled) {
+  border-color: var(--aim-form-primary-hover);
+  background: var(--aim-form-primary-hover);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(126, 36, 24, 0.22);
+}
+
 .aim-record-toolbar {
   display: grid;
   grid-template-columns: 120px 140px 140px 150px 1fr 140px auto;
