@@ -2992,13 +2992,13 @@
     return `
       <div class="aim-dialog-backdrop aim-form-confirm-backdrop" data-action="cancel-form-assist-card-import"></div>
       <section class="aim-dialog aim-form-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="aim-form-assist-card-import-title">
-        <div class="aim-dialog-head"><h2 id="aim-form-assist-card-import-title">套用名片資料？</h2><button class="aim-button aim-icon-button" data-action="cancel-form-assist-card-import" type="button" aria-label="關閉">×</button></div>
+        <div class="aim-dialog-head"><h2 id="aim-form-assist-card-import-title">憟??鞈?嚗?</h2><button class="aim-button aim-icon-button" data-action="cancel-form-assist-card-import" type="button" aria-label="關閉">×</button></div>
         <div class="aim-dialog-body">
           <p>${Store.escapeHtml(title)}</p>
-          <p>目前表單已有姓名、職稱或公司內容。請選擇這次名片資料的套用方式。</p>
+          <p>?桀?銵典撌脫?憪??蝔望??砍?批捆???豢??活??鞈????冽撘?</p>
         </div>
         <div class="aim-dialog-foot aim-form-assist-card-import-foot">
-          <button class="aim-button" data-action="cancel-form-assist-card-import" type="button">取消</button>
+          <button class="aim-button" data-action="cancel-form-assist-card-import" type="button">??</button>
           <button class="aim-button" data-action="form-assist-card-import-preserve" type="button">靽?撌脫??批捆嚗鋆征甈?</button>
           <button class="aim-button aim-button-primary" data-action="form-assist-card-import-overwrite" type="button">閬?撌脫??批捆</button>
         </div>
@@ -4262,7 +4262,7 @@
     const currentId = selectedActivity() && selectedActivity().id;
     const rows = (state.activities || []).map(activity => {
       const checked = selected.has(String(activity.id || '').toLowerCase());
-      const current = currentId && activity.id === currentId ? '<span class="aim-form-assist-source-current">目前活動</span>' : '';
+      const current = currentId && activity.id === currentId ? '<span class="aim-form-assist-source-current">?桀?瘣餃?</span>' : '';
       return `
         <label class="aim-form-assist-source-option">
           <input class="aim-settings-form-assist-source" type="checkbox" value="${Store.escapeHtml(activity.id)}" ${checked ? 'checked' : ''}>
