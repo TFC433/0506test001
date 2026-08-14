@@ -1,3 +1,9 @@
+.aim-app,
+.aim-raw-card-viewer {
+  --aim-form-primary: #e0522d;
+  --aim-form-primary-hover: #bd3c24;
+}
+
 .aim-app {
   --aim-bg: #f5f7fa;
   --aim-surface: #ffffff;
@@ -16,8 +22,6 @@
   --aim-form-sidebar-active: #5a261f;
   --aim-form-sidebar-text: #f8e7df;
   --aim-form-sidebar-muted: #d5aaa0;
-  --aim-form-primary: #e0522d;
-  --aim-form-primary-hover: #bd3c24;
   --aim-form-primary-soft: #fff1ec;
   --aim-form-primary-border: #f3b29f;
   --aim-form-focus: rgba(224, 82, 45, 0.28);
