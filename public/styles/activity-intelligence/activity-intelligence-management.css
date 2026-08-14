@@ -4733,6 +4733,14 @@ a:focus-visible {
 }
 
 @media (max-width: 640px) {
+  .aim-input,
+  .aim-select,
+  .aim-textarea,
+  .aim-preview-control .aim-select,
+  .aim-option-note-editor .aim-textarea {
+    font-size: 16px;
+  }
+
   .aim-record-detail-field-categorical {
     flex-wrap: wrap;
     align-items: center;
