@@ -42,6 +42,7 @@ const FORM_ASSIST_FIXED_KEYS = Object.freeze({
     fld_company: 'companyName',
     fld_job_title: 'jobTitle'
 });
+const FORM_ASSIST_SOURCE_SETTINGS_KEY = 'formAssistSuggestionSourceActivityIds';
 
 class ActivityIntelligenceError extends Error {
     constructor(statusCode, message, code) {
@@ -92,8 +93,11 @@ class ActivityIntelligenceService {
     }
 
     async updateActivity(activityId, payload = {}, user = {}) {
-        await this._requireActivity(activityId);
+        const current = await this._requireActivity(activityId);
         const input = this._validateActivityInput(payload, { requireAll: false });
+        if (payload.settings !== undefined) {
+            input.settings = await this._normalizeActivitySettingsPatch(payload.settings, current.settings || {});
+        }
         const actor = this._actorFromUser(user);
 
         const row = {
@@ -242,7 +246,7 @@ class ActivityIntelligenceService {
     }
 
     async getFormAssistSuggestions(activityId, query = {}) {
-        await this._requireActivity(activityId);
+        const activity = await this._requireActivity(activityId);
         const kind = String(query.kind || '').trim();
         if (!FORM_ASSIST_KINDS.has(kind)) {
             throw new ActivityIntelligenceError(400, 'Form assist suggestion kind is invalid.', 'FORM_ASSIST_INVALID_KIND');
@@ -250,6 +254,12 @@ class ActivityIntelligenceService {
 
         const q = String(query.q || query.search || '').trim();
         if (!q) return { kind, query: '', suggestions: [] };
+
+        const sourceActivityIds = this._normalizedFormAssistSourceIdsFromSettings(activity.settings || {});
+        if (!sourceActivityIds.length) return { kind, query: q, suggestions: [] };
+
+        const sourceSubmissionIds = await this.reader.listSubmissionIdsByActivityIds(sourceActivityIds);
+        if (!sourceSubmissionIds.length) return { kind, query: q, suggestions: [] };
 
         const items = await this.reader.listFormAssistItems();
         const matchSemantic = kind === 'person' ? 'customerName' : 'companyName';
@@ -260,9 +270,11 @@ class ActivityIntelligenceService {
 
         if (!matchItemIds.length) return { kind, query: q, suggestions: [] };
 
-        const answerMatches = await this.reader.searchSubmissionAnswersByItems(matchItemIds, q, FORM_ASSIST_ANSWER_SCAN_LIMIT);
+        const answerMatches = await this.reader.searchSubmissionAnswersByItems(matchItemIds, q, FORM_ASSIST_ANSWER_SCAN_LIMIT, {
+            submissionIds: sourceSubmissionIds
+        });
         const submissionIds = answerMatches.map(answer => answer.submissionId);
-        const submissions = await this.reader.getSubmissionsByIds(submissionIds);
+        const submissions = await this.reader.getSubmissionsByIds(submissionIds, { activityIds: sourceActivityIds });
         const activitiesById = await this.reader.getActivitiesByIds(submissions.map(submission => submission.activityId));
         const orderedSubmissions = this._sortFormAssistSubmissions(submissions, answerMatches, q, matchSemantic);
         const suggestions = kind === 'person'
@@ -419,6 +431,7 @@ class ActivityIntelligenceService {
         const row = {};
         if (input.name !== undefined) row.name = input.name;
         if (input.description !== undefined) row.description = input.description;
+        if (input.settings !== undefined) row.settings = input.settings;
         if (input.formOpenStart !== undefined) row.form_open_start = input.formOpenStart;
         if (input.formOpenEnd !== undefined) row.form_open_end = input.formOpenEnd;
         if (input.exhibitionStart !== undefined) row.exhibition_start = input.exhibitionStart;
@@ -430,8 +443,69 @@ class ActivityIntelligenceService {
         if (!activity) return null;
         return {
             ...activity,
+            settings: this._activitySettingsDto(activity.settings),
             status: this._deriveActivityStatus(activity)
         };
+    }
+
+    _activitySettingsDto(settings) {
+        const source = settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {};
+        return {
+            ...source,
+            [FORM_ASSIST_SOURCE_SETTINGS_KEY]: this._normalizedFormAssistSourceIdsFromSettings(source)
+        };
+    }
+
+    async _normalizeActivitySettingsPatch(settingsPatch, existingSettings = {}) {
+        const existing = existingSettings && typeof existingSettings === 'object' && !Array.isArray(existingSettings) ? existingSettings : {};
+        const patch = settingsPatch && typeof settingsPatch === 'object' && !Array.isArray(settingsPatch) ? settingsPatch : {};
+        const next = { ...existing };
+
+        if (Object.prototype.hasOwnProperty.call(patch, FORM_ASSIST_SOURCE_SETTINGS_KEY)) {
+            const sourceActivityIds = this._normalizeFormAssistSourceActivityIds(patch[FORM_ASSIST_SOURCE_SETTINGS_KEY]);
+            await this._assertExistingActivityIds(sourceActivityIds);
+            next[FORM_ASSIST_SOURCE_SETTINGS_KEY] = sourceActivityIds;
+        }
+
+        return next;
+    }
+
+    _normalizedFormAssistSourceIdsFromSettings(settings = {}) {
+        const source = settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {};
+        return this._normalizeFormAssistSourceActivityIds(source[FORM_ASSIST_SOURCE_SETTINGS_KEY], { tolerateInvalid: true });
+    }
+
+    _normalizeFormAssistSourceActivityIds(value, options = {}) {
+        if (value === undefined || value === null || value === '') return [];
+        if (!Array.isArray(value)) {
+            if (options.tolerateInvalid) return [];
+            throw new ActivityIntelligenceError(400, 'Form Assist source activities must be an array.', 'FORM_ASSIST_INVALID_SOURCE_ACTIVITIES');
+        }
+
+        const seen = new Set();
+        const result = [];
+        value.forEach(entry => {
+            const id = String(entry || '').trim();
+            if (!id) return;
+            if (!UUID_REGEX.test(id)) {
+                if (options.tolerateInvalid) return;
+                throw new ActivityIntelligenceError(400, 'Form Assist source activity IDs must be valid UUIDs.', 'FORM_ASSIST_INVALID_SOURCE_ACTIVITY_ID');
+            }
+            const normalized = id.toLowerCase();
+            if (seen.has(normalized)) return;
+            seen.add(normalized);
+            result.push(normalized);
+        });
+        return result;
+    }
+
+    async _assertExistingActivityIds(activityIds) {
+        if (!activityIds.length) return;
+        const activities = await this.reader.getActivitiesByIds(activityIds);
+        const missing = activityIds.filter(id => !activities.has(id));
+        if (missing.length) {
+            throw new ActivityIntelligenceError(400, 'Form Assist source activity was not found.', 'FORM_ASSIST_SOURCE_ACTIVITY_NOT_FOUND');
+        }
     }
 
     _deriveActivityStatus(activity) {

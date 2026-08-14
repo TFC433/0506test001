@@ -46,6 +46,7 @@
     fld_company: 'companyName',
     fld_job_title: 'jobTitle'
   });
+  const formAssistSourceSettingsKey = 'formAssistSuggestionSourceActivityIds';
   const thumbnailDefaults = Object.freeze({
     driveFileId: '',
     fit: 'cover',
@@ -98,6 +99,7 @@
     formDesignConfirm: null,
     analyticsAiConfirm: null,
     analyticsChartModal: null,
+    formAssistCardImportConfirm: null,
     mobileAnalysisMode: false,
     formPreviewAnswers: {},
     formPreviewCardLinked: false,
@@ -258,17 +260,38 @@
   }
 
   function normalizeActivityDto(activity) {
+    const settings = normalizeActivitySettings(activity && activity.settings);
     return {
       ...activity,
       id: activity.activityId || activity.id,
       name: activity.name || '',
       description: activity.description || '',
+      settings,
       formOpenStart: activity.formOpenStart || '',
       formOpenEnd: activity.formOpenEnd || '',
       exhibitionStart: activity.exhibitionStart || '',
       exhibitionEnd: activity.exhibitionEnd || '',
       formFields: []
     };
+  }
+
+  function normalizeActivitySettings(settings) {
+    const source = settings && typeof settings === 'object' && !Array.isArray(settings) ? { ...settings } : {};
+    source[formAssistSourceSettingsKey] = normalizeActivityIdList(source[formAssistSourceSettingsKey]);
+    return source;
+  }
+
+  function normalizeActivityIdList(value) {
+    if (!Array.isArray(value)) return [];
+    const seen = new Set();
+    const result = [];
+    value.forEach(entry => {
+      const id = String(entry || '').trim().toLowerCase();
+      if (!id || seen.has(id)) return;
+      seen.add(id);
+      result.push(id);
+    });
+    return result;
   }
 
   async function loadFormForActivity(activityId) {
@@ -702,6 +725,7 @@
       ${renderDrawer()}
       ${renderFormDesignConfirmDialog()}
       ${renderAnalyticsAiConfirmDialog()}
+      ${renderFormAssistCardImportConfirmDialog()}
       ${renderAnalyticsChartModal()}
       ${renderHardDeleteConfirmDialog()}
       ${renderCardPickerDialog()}
@@ -1754,6 +1778,14 @@
     return Boolean(fields.customerName || fields.companyName);
   }
 
+  function configuredFormAssistSourceActivityIds(activity) {
+    return normalizeActivityIdList(activity && activity.settings && activity.settings[formAssistSourceSettingsKey]);
+  }
+
+  function canUseHistoricalFormAssistSuggestions() {
+    return canUseQuickFormAssist() && configuredFormAssistSourceActivityIds(selectedActivity()).length > 0;
+  }
+
   function isFormAssistIdentitySection(field) {
     const title = String(field && field.title || '').trim();
     return /客戶訪談資訊|基本資訊|訪談資訊/.test(title);
@@ -1768,7 +1800,9 @@
     const value = ui.quickAnswers[field.fieldId];
     const label = `<label>${Store.escapeHtml(field.title)}</label>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}`;
     const semantic = formAssistSemanticForField(field);
-    const assistKind = semantic === 'customerName' ? 'person' : (semantic === 'companyName' ? 'company' : '');
+    const assistKind = canUseHistoricalFormAssistSuggestions()
+      ? (semantic === 'customerName' ? 'person' : (semantic === 'companyName' ? 'company' : ''))
+      : '';
     const assistAttrs = assistKind ? ` data-assist-kind="${assistKind}" autocomplete="off"` : '';
     const control = multiline
       ? `<textarea class="aim-textarea aim-auto-grow aim-quick-input" data-field="${field.fieldId}"${assistAttrs} rows="1" placeholder="${Store.escapeHtml(field.placeholder || '')}" ${enabled ? '' : 'disabled'}>${Store.escapeHtml(value || '')}</textarea>`
@@ -2947,6 +2981,27 @@
           <p>目前畫面已有一筆分析結果。繼續後會先清除舊結果，再重新分析。</p>
         </div>
         <div class="aim-dialog-foot"><button class="aim-button" data-action="cancel-analytics-ai-confirm" type="button">取消</button><button class="aim-button aim-button-primary" data-action="confirm-analytics-ai-replace" type="button">繼續分析</button></div>
+      </section>
+    `;
+  }
+
+  function renderFormAssistCardImportConfirmDialog() {
+    if (!ui.formAssistCardImportConfirm) return '';
+    const card = normalizeRawCard(ui.formAssistCardImportConfirm.card);
+    const title = card && (card.name || card.company) ? [card.name, card.company].filter(Boolean).join(' / ') : '已選擇名片';
+    return `
+      <div class="aim-dialog-backdrop aim-form-confirm-backdrop" data-action="cancel-form-assist-card-import"></div>
+      <section class="aim-dialog aim-form-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="aim-form-assist-card-import-title">
+        <div class="aim-dialog-head"><h2 id="aim-form-assist-card-import-title">套用名片資料？</h2><button class="aim-button aim-icon-button" data-action="cancel-form-assist-card-import" type="button" aria-label="關閉">×</button></div>
+        <div class="aim-dialog-body">
+          <p>${Store.escapeHtml(title)}</p>
+          <p>目前表單已有姓名、職稱或公司內容。請選擇這次名片資料的套用方式。</p>
+        </div>
+        <div class="aim-dialog-foot aim-form-assist-card-import-foot">
+          <button class="aim-button" data-action="cancel-form-assist-card-import" type="button">取消</button>
+          <button class="aim-button" data-action="form-assist-card-import-preserve" type="button">靽?撌脫??批捆嚗鋆征甈?</button>
+          <button class="aim-button aim-button-primary" data-action="form-assist-card-import-overwrite" type="button">閬?撌脫??批捆</button>
+        </div>
       </section>
     `;
   }
@@ -4181,6 +4236,7 @@
           <div class="aim-field"><label>活動名稱</label><input class="aim-input" id="aim-settings-name" value="${Store.escapeHtml(draft.name || '')}"></div>
           <div class="aim-modal-grid"><div class="aim-field"><label>表單開放開始日期</label><input class="aim-input" id="aim-settings-form-start" type="date" value="${draft.formOpenStart || ''}"></div><div class="aim-field"><label>表單開放結束日期</label><input class="aim-input" id="aim-settings-form-end" type="date" value="${draft.formOpenEnd || ''}"></div><div class="aim-field"><label>展期開始日期（選填）</label><input class="aim-input" id="aim-settings-ex-start" type="date" value="${draft.exhibitionStart || ''}"></div><div class="aim-field"><label>展期結束日期（選填）</label><input class="aim-input" id="aim-settings-ex-end" type="date" value="${draft.exhibitionEnd || ''}"></div></div>
           <div class="aim-field"><label>活動說明</label><textarea class="aim-textarea" id="aim-settings-description">${Store.escapeHtml(draft.description || '')}</textarea></div>
+          ${renderFormAssistSourceSettings(draft)}
           <dl class="aim-definition-list"><dt>建立者</dt><dd>${Store.escapeHtml(activity.createdByDisplayName)}</dd><dt>建立時間</dt><dd>${Store.formatDateTime(activity.createdAt)}</dd><dt>最近更新者</dt><dd>${Store.escapeHtml(activity.updatedByDisplayName)}</dd><dt>最近更新</dt><dd>${Store.formatDateTime(activity.updatedAt)}</dd><dt>狀態</dt><dd>${statusPill(activityStatus({ ...activity, ...draft }))}</dd></dl>
         </div>
         <div class="aim-drawer-foot"><button class="aim-button" data-action="close-drawer" type="button">關閉</button><button class="aim-button aim-button-primary" data-action="save-settings" type="button">儲存設定</button></div>
@@ -4196,8 +4252,31 @@
       formOpenEnd: activity.formOpenEnd,
       exhibitionStart: activity.exhibitionStart || '',
       exhibitionEnd: activity.exhibitionEnd || '',
-      description: activity.description || ''
+      description: activity.description || '',
+      settings: normalizeActivitySettings(activity.settings)
     };
+  }
+
+  function renderFormAssistSourceSettings(draft) {
+    const selected = new Set(normalizeActivityIdList(draft && draft.settings && draft.settings[formAssistSourceSettingsKey]));
+    const currentId = selectedActivity() && selectedActivity().id;
+    const rows = (state.activities || []).map(activity => {
+      const checked = selected.has(String(activity.id || '').toLowerCase());
+      const current = currentId && activity.id === currentId ? '<span class="aim-form-assist-source-current">目前活動</span>' : '';
+      return `
+        <label class="aim-form-assist-source-option">
+          <input class="aim-settings-form-assist-source" type="checkbox" value="${Store.escapeHtml(activity.id)}" ${checked ? 'checked' : ''}>
+          <span><strong>${Store.escapeHtml(activity.name || '未命名活動')}</strong><small>${Store.formatDate(activity.formOpenStart)} - ${Store.formatDate(activity.formOpenEnd)}${current ? ` · ${current}` : ''}</small></span>
+        </label>
+      `;
+    }).join('');
+    return `
+      <section class="aim-form-assist-source-settings">
+        <h3>甇瑕撱箄降鞈?靘?</h3>
+        <p>?豢?甇斗暑?‵銵冽??舐?澆????砍甇瑕撱箄降?暑????<br>?芷?遙雿暑??嚗???甇瑕鞈?撱箄降??</p>
+        <div class="aim-form-assist-source-list">${rows || '<div class="aim-empty">目前沒有可選擇的活動。</div>'}</div>
+      </section>
+    `;
   }
 
   function recordDrawer() {
@@ -4269,6 +4348,7 @@
     if (event.key !== 'Escape') return;
     if (ui.formDesignConfirm) ui.formDesignConfirm = null;
     else if (ui.analyticsAiConfirm) ui.analyticsAiConfirm = null;
+    else if (ui.formAssistCardImportConfirm) ui.formAssistCardImportConfirm = null;
     else if (ui.analyticsChartModal) ui.analyticsChartModal = null;
     else if (ui.hardDeleteConfirm) ui.hardDeleteConfirm = null;
     else if (ui.cardPicker) ui.cardPicker = null;
@@ -4514,6 +4594,19 @@
     }
     if (action === 'form-assist-select-company') {
       selectFormAssistCompany(el.dataset.companyName || '');
+      return true;
+    }
+    if (action === 'cancel-form-assist-card-import') {
+      ui.formAssistCardImportConfirm = null;
+      render();
+      return true;
+    }
+    if (action === 'form-assist-card-import-preserve') {
+      applyPendingFormAssistCardImport('preserve');
+      return true;
+    }
+    if (action === 'form-assist-card-import-overwrite') {
+      applyPendingFormAssistCardImport('overwrite');
       return true;
     }
     if (action === 'mock-link-card') {
@@ -4877,6 +4970,7 @@
     bindSettingsField('aim-settings-ex-start', 'exhibitionStart', 'change');
     bindSettingsField('aim-settings-ex-end', 'exhibitionEnd', 'change');
     bindSettingsField('aim-settings-description', 'description');
+    bindFormAssistSourceSettings();
     bindFormDesignTextareas();
     bindThumbnailMediaControls();
     bindFormPreviewControls();
@@ -5369,6 +5463,17 @@
     };
     node.addEventListener(eventName || 'input', updateDraft);
     if (!eventName) node.addEventListener('change', updateDraft);
+  }
+
+  function bindFormAssistSourceSettings() {
+    document.querySelectorAll('.aim-settings-form-assist-source').forEach(node => node.addEventListener('change', () => {
+      if (!ui.drawer || ui.drawer.type !== 'settings') return;
+      const selected = Array.from(document.querySelectorAll('.aim-settings-form-assist-source:checked')).map(input => input.value);
+      ui.drawer.settings = {
+        ...(ui.drawer.settings || {}),
+        [formAssistSourceSettingsKey]: normalizeActivityIdList(selected)
+      };
+    }));
   }
 
   function bindRecordDateField(id, key) {
@@ -5884,7 +5989,7 @@
   }
 
   function activityPayloadFromDialog(dialog) {
-    return {
+    const payload = {
       name: String(dialog.name || '').trim(),
       formOpenStart: dialog.formOpenStart,
       formOpenEnd: dialog.formOpenEnd,
@@ -5892,6 +5997,8 @@
       exhibitionEnd: dialog.exhibitionEnd || '',
       description: dialog.description || ''
     };
+    if (dialog.settings !== undefined) payload.settings = normalizeActivitySettings(dialog.settings);
+    return payload;
   }
 
   async function saveActivityDialog() {
@@ -6439,14 +6546,43 @@
     return changed;
   }
 
-  function importQuickAssistCard(card) {
+  function cardAssistSourceValues(card) {
     const normalized = normalizeRawCard(card);
-    if (!normalized) return false;
-    return fillQuickFormAssistFields({
+    if (!normalized) return {};
+    return {
       personName: normalized.name,
       jobTitle: normalized.position,
       companyName: normalized.company
-    });
+    };
+  }
+
+  function quickFormAssistTargetFieldIds() {
+    const fields = quickFormAssistFieldMap();
+    return ['customerName', 'jobTitle', 'companyName'].map(semantic => fields[semantic] && fields[semantic].fieldId).filter(Boolean);
+  }
+
+  function hasExistingQuickFormAssistTargetValue() {
+    return quickFormAssistTargetFieldIds().some(fieldId => !quickAnswerIsBlank(fieldId));
+  }
+
+  function importQuickAssistCard(card) {
+    const normalized = normalizeRawCard(card);
+    if (!normalized) return false;
+    if (hasExistingQuickFormAssistTargetValue()) {
+      ui.formAssistCardImportConfirm = { card: normalized };
+      return false;
+    }
+    return fillQuickFormAssistFields(cardAssistSourceValues(normalized));
+  }
+
+  function applyPendingFormAssistCardImport(mode) {
+    const pending = ui.formAssistCardImportConfirm;
+    if (!pending) return;
+    const replaceFields = mode === 'overwrite' ? ['customerName', 'jobTitle', 'companyName'] : [];
+    fillQuickFormAssistFields(cardAssistSourceValues(pending.card), { replaceFields });
+    ui.formAssistCardImportConfirm = null;
+    resetFormAssistState();
+    refreshQuickAnswerList();
   }
 
   async function openQuickFormAssistCardPicker() {
@@ -6478,7 +6614,7 @@
 
   function handleQuickFormAssistInput(fieldId, kind, value) {
     const q = String(value || '').trim();
-    if (!kind || !q || isGuestUser()) {
+    if (!kind || !q || isGuestUser() || !canUseHistoricalFormAssistSuggestions()) {
       resetFormAssistState();
       refreshFormAssistSuggestions(fieldId);
       return;

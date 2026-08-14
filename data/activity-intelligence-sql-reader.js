@@ -138,16 +138,21 @@ class ActivityIntelligenceSqlReader {
         return (data || []).map(row => this.mapFormItemRow(row));
     }
 
-    async searchSubmissionAnswersByItems(formItemIds, queryText, limit = 120) {
+    async searchSubmissionAnswersByItems(formItemIds, queryText, limit = 120, filters = {}) {
         const ids = Array.isArray(formItemIds) ? formItemIds.filter(Boolean) : [];
         const q = String(queryText || '').trim();
         if (!ids.length || !q) return [];
 
-        const { data, error } = await supabase
+        let query = supabase
             .from(this.answersTable)
             .select(ANSWER_SELECT)
             .in('form_item_id', ids)
-            .ilike('value_text', `%${q}%`)
+            .ilike('value_text', `%${q}%`);
+
+        const submissionIds = Array.isArray(filters.submissionIds) ? filters.submissionIds.filter(Boolean) : [];
+        if (submissionIds.length) query = query.in('submission_id', submissionIds);
+
+        const { data, error } = await query
             .order('submission_answer_id', { ascending: false })
             .limit(Math.max(1, Math.min(Number(limit) || 120, 300)));
 
@@ -155,16 +160,35 @@ class ActivityIntelligenceSqlReader {
         return (data || []).map(row => this.mapAnswerRow(row));
     }
 
-    async getSubmissionsByIds(submissionIds) {
-        const ids = Array.isArray(submissionIds) ? [...new Set(submissionIds.filter(Boolean))] : [];
+    async listSubmissionIdsByActivityIds(activityIds) {
+        const ids = Array.isArray(activityIds) ? [...new Set(activityIds.filter(Boolean))] : [];
         if (!ids.length) return [];
 
         const { data, error } = await supabase
             .from(this.submissionsTable)
-            .select(SUBMISSION_SELECT)
-            .in('submission_id', ids)
+            .select('submission_id')
+            .in('activity_id', ids)
             .neq('status', 'void')
             .order('created_at', { ascending: false });
+
+        if (error) throw this._dbError('listSubmissionIdsByActivityIds', error);
+        return (data || []).map(row => row.submission_id).filter(Boolean);
+    }
+
+    async getSubmissionsByIds(submissionIds, filters = {}) {
+        const ids = Array.isArray(submissionIds) ? [...new Set(submissionIds.filter(Boolean))] : [];
+        if (!ids.length) return [];
+
+        let query = supabase
+            .from(this.submissionsTable)
+            .select(SUBMISSION_SELECT)
+            .in('submission_id', ids)
+            .neq('status', 'void');
+
+        const activityIds = Array.isArray(filters.activityIds) ? filters.activityIds.filter(Boolean) : [];
+        if (activityIds.length) query = query.in('activity_id', activityIds);
+
+        const { data, error } = await query.order('created_at', { ascending: false });
 
         if (error) throw this._dbError('getSubmissionsByIds', error);
 
@@ -296,6 +320,7 @@ class ActivityIntelligenceSqlReader {
             id: row.activity_id,
             name: row.name,
             description: row.description || '',
+            settings: row.settings && typeof row.settings === 'object' ? row.settings : {},
             formOpenStart: row.form_open_start,
             formOpenEnd: row.form_open_end,
             exhibitionStart: row.exhibition_start,

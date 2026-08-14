@@ -3828,6 +3828,75 @@ a:focus-visible {
   padding: 9px;
 }
 
+.aim-form-assist-source-settings {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--aim-border);
+  border-radius: 8px;
+  background: var(--aim-surface-muted);
+}
+
+.aim-form-assist-source-settings h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--aim-text);
+}
+
+.aim-form-assist-source-settings p {
+  margin: 0;
+  color: var(--aim-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.aim-form-assist-source-list {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.aim-form-assist-source-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px;
+  border: 1px solid var(--aim-border);
+  border-radius: 6px;
+  background: var(--aim-surface);
+}
+
+.aim-form-assist-source-option span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.aim-form-assist-source-option strong,
+.aim-form-assist-source-option small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aim-form-assist-source-option strong {
+  color: var(--aim-text);
+  font-size: 13px;
+}
+
+.aim-form-assist-source-option small,
+.aim-form-assist-source-current {
+  color: var(--aim-muted);
+  font-size: 12px;
+}
+
+.aim-form-assist-card-import-foot {
+  flex-wrap: wrap;
+}
+
 .aim-option-note-choice-list {
   gap: 6px;
 }
