@@ -3847,6 +3847,13 @@ a:focus-visible {
   gap: 7px;
 }
 
+.aim-record-detail-choice-badge-row {
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+  min-width: 0;
+}
+
 .aim-record-detail-choice {
   display: grid;
   align-items: start;
@@ -3863,6 +3870,8 @@ a:focus-visible {
 .aim-record-detail-choice-badge {
   flex: 0 0 auto;
   display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .aim-record-detail-choice-option p {
@@ -3873,6 +3882,51 @@ a:focus-visible {
   font-size: 13px;
   line-height: 1.5;
   white-space: pre-wrap;
+}
+
+@media (min-width: 641px) {
+  .aim-record-detail-field,
+  .aim-record-detail-choice,
+  .aim-record-detail-text {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    column-gap: 10px;
+    align-items: baseline;
+  }
+
+  .aim-record-detail-label,
+  .aim-record-detail-choice h3,
+  .aim-record-detail-text h3 {
+    min-width: 0;
+    max-width: 220px;
+    white-space: nowrap;
+  }
+
+  .aim-record-detail-field>.aim-answer-badges,
+  .aim-record-detail-choice-list,
+  .aim-record-detail-text>div,
+  .aim-record-detail-value {
+    min-width: 0;
+  }
+
+  .aim-record-detail-choice-badge-row,
+  .aim-record-detail-field>.aim-answer-badges {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .aim-record-detail-choice-badge-row .aim-answer-badge,
+  .aim-record-detail-choice-badge .aim-answer-badge,
+  .aim-record-detail-field>.aim-answer-badges .aim-answer-badge {
+    flex: 0 0 auto;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 .aim-answer {

@@ -1658,7 +1658,7 @@
   }
 
   function renderRecordDetailCompactCategoricalField(field, value) {
-    const badges = renderCategoricalBadges(field, value);
+    const badges = categoricalValues(value).map(label => renderRecordDetailChoiceBadge(field, label)).join('');
     if (!badges) return '';
     return `<div class="aim-record-detail-field aim-record-detail-field-categorical"><span class="aim-record-detail-label">${Store.escapeHtml(field.title)}</span><span class="aim-answer-badges">${badges}</span></div>`;
   }
@@ -1668,18 +1668,32 @@
     if (!values.length) return '';
     const notes = optionNotesForRecord(record);
     const fieldNotes = notes[field.fieldId] || {};
-    const rows = values.map(label => {
+    const noNoteBadges = [];
+    const notedRows = [];
+    values.forEach(label => {
       const noteKey = optionNoteKeyForDisplay(field, label);
       const note = String(fieldNotes[noteKey] || '').trim();
-      const badge = renderCategoricalBadges(field, [label], 1);
-      return `
+      const badge = renderRecordDetailChoiceBadge(field, label);
+      if (!note) {
+        noNoteBadges.push(badge);
+        return;
+      }
+      notedRows.push(`
         <div class="aim-record-detail-choice-option">
           <span class="aim-record-detail-choice-badge">${badge}</span>
-          ${note ? `<p>${Store.escapeHtml(note)}</p>` : ''}
+          <p>${Store.escapeHtml(note)}</p>
         </div>
-      `;
-    }).join('');
+      `);
+    });
+    const rows = [
+      noNoteBadges.length ? `<div class="aim-record-detail-choice-badge-row">${noNoteBadges.join('')}</div>` : '',
+      ...notedRows
+    ].filter(Boolean).join('');
     return `<section class="aim-record-detail-choice"><h3>${Store.escapeHtml(field.title)}</h3><div class="aim-record-detail-choice-list">${rows}</div></section>`;
+  }
+
+  function renderRecordDetailChoiceBadge(field, label) {
+    return `<span class="aim-answer-badge${answerBadgeClass(field, label)}${answerBadgePaletteClass(field)}" title="${Store.escapeHtml(label)}">${Store.escapeHtml(label)}</span>`;
   }
 
   function optionNoteKeyForDisplay(field, label) {
