@@ -411,6 +411,85 @@ function assertVisitorKpiOtherNumericContract(managementSource) {
     assert.strictEqual(contract.visitorRecordCountValue(record('3', '10'), field), 3);
 }
 
+async function assertVisitorKpiCacheHydrationContract(managementSource) {
+    const source = [
+        `const otherAnswerValue = ${JSON.stringify(OTHER_CHOICE_VALUE)};`,
+        `const visitorCountFieldTitle = String.fromCodePoint(0x540C, 0x884C, 0x4EBA, 0x6578);`,
+        'const state = { activities: [] };',
+        'const formBundles = new Map();',
+        'let apiPublished = null;',
+        'let publishedFetchCount = 0;',
+        'const Store = { clone(value) { return JSON.parse(JSON.stringify(value)); } };',
+        'const window = { ActivityIntelligenceApi: { async getPublishedForm() { publishedFetchCount += 1; return Store.clone(apiPublished); } } };',
+        'function otherAnswersForRecord(record) { return record && record.runtimeOtherAnswers ? record.runtimeOtherAnswers : {}; }',
+        'function optionLabel(value) { return value && typeof value === "object" ? (value.label || value.value || "") : value; }',
+        'function normalizeDesignerItem(item) { return { ...item, itemKey: item.itemKey || item.fieldId || item.itemId, itemId: item.itemId || item.itemKey || item.fieldId, fieldId: item.fieldId || item.itemKey || item.itemId, visible: item.visible !== false, retired: Boolean(item.retired), removedInDraft: Boolean(item.removedInDraft) }; }',
+        extractFunctionDeclaration(managementSource, 'loadPublishedFormForActivity').replace(/^function /, 'async function '),
+        extractFunctionDeclaration(managementSource, 'hydrateActivityFormBundle'),
+        extractFunctionDeclaration(managementSource, 'normalizeFormBundleDto'),
+        extractFunctionDeclaration(managementSource, 'normalizeVersionDto'),
+        extractFunctionDeclaration(managementSource, 'publishedRecordItems'),
+        extractFunctionDeclaration(managementSource, 'formDesign'),
+        extractFunctionDeclaration(managementSource, 'currentVisitorCountField'),
+        extractFunctionDeclaration(managementSource, 'analyticsOtherText'),
+        extractFunctionDeclaration(managementSource, 'visitorCountTotal'),
+        extractFunctionDeclaration(managementSource, 'visitorRecordCountValue'),
+        extractFunctionDeclaration(managementSource, 'visitorAnswerIsOther'),
+        extractFunctionDeclaration(managementSource, 'visitorNumberValue'),
+        '({ state, formBundles, loadPublishedFormForActivity, publishedRecordItems, currentVisitorCountField, visitorCountTotal, getFetchCount: () => publishedFetchCount, setApiPublished: value => { apiPublished = value; } });'
+    ].join('\n');
+    const contract = vm.runInNewContext(source, {});
+    const activityId = 'activity-visitor-cache';
+    const visitorField = {
+        itemKey: 'visitorField',
+        fieldId: 'visitorField',
+        itemId: 'visitorField',
+        type: 'single_choice',
+        title: String.fromCodePoint(0x540C, 0x884C, 0x4EBA, 0x6578),
+        options: ['1', '3', '4', OTHER_CHOICE_VALUE],
+        visible: true
+    };
+    const published = {
+        versionId: 'published-v1',
+        versionNumber: 1,
+        publishedAt: '2026-08-15T00:00:00.000Z',
+        publishedByUserId: 'admin',
+        publishedByDisplayName: 'Admin',
+        items: [visitorField]
+    };
+    const makeActivity = () => ({ id: activityId, formFields: [] });
+    const record = (answer, otherText) => ({
+        answers: { visitorField: answer },
+        runtimeOtherAnswers: otherText === undefined ? {} : { visitorField: otherText }
+    });
+
+    contract.state.activities = [makeActivity()];
+    contract.setApiPublished(published);
+    const coldBundle = await contract.loadPublishedFormForActivity(activityId);
+    assert.strictEqual(contract.getFetchCount(), 1);
+    assert.strictEqual(coldBundle.published.versionId, 'published-v1');
+    assert.strictEqual(contract.state.activities[0].formDesignRuntime, coldBundle);
+    assert.deepStrictEqual(contract.state.activities[0].formFields, coldBundle.published.items);
+    assert.strictEqual(contract.publishedRecordItems(contract.state.activities[0])[0].fieldId, 'visitorField');
+
+    contract.state.activities = [makeActivity()];
+    const cachedBundle = await contract.loadPublishedFormForActivity(activityId);
+    assert.strictEqual(contract.getFetchCount(), 1);
+    assert.strictEqual(cachedBundle, coldBundle);
+    assert.strictEqual(contract.state.activities[0].formDesignRuntime, cachedBundle);
+    assert.deepStrictEqual(contract.state.activities[0].formFields, cachedBundle.published.items);
+
+    const cacheVisibleItems = contract.publishedRecordItems(contract.state.activities[0]);
+    assert.deepStrictEqual(cacheVisibleItems, contract.publishedRecordItems({ formDesignRuntime: coldBundle }));
+    assert.strictEqual(contract.currentVisitorCountField(contract.state.activities[0]).fieldId, 'visitorField');
+    assert.strictEqual(contract.visitorCountTotal([
+        record('1'),
+        record('3'),
+        record('4'),
+        record(OTHER_CHOICE_VALUE, '10')
+    ], visitorField), 18);
+}
+
 function makeRetrieveCompletenessContext(count) {
     return {
         formVersions: {
@@ -1086,6 +1165,7 @@ async function main() {
     const apiSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'scripts', 'activity-intelligence', 'activity-intelligence-api.js'), 'utf8');
     assertFormAssistCjkContract(managementSource);
     assertVisitorKpiOtherNumericContract(managementSource);
+    await assertVisitorKpiCacheHydrationContract(managementSource);
     assert(managementSource.includes("if (ui.analytics.ai.state === 'loading') return;"));
     assert(managementSource.includes("state === 'loading'"));
     assert(!managementSource.includes('FORM_GEMINI_API_KEY'));

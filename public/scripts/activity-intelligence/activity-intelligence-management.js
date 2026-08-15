@@ -356,7 +356,9 @@
   async function loadPublishedFormForActivity(activityId) {
     if (!activityId) return null;
     const existing = formBundles.get(activityId);
-    if (existing && existing.published && existing.published.versionId && existing.published.items.length) return existing;
+    if (existing && existing.published && existing.published.versionId && existing.published.items.length) {
+      return hydrateActivityFormBundle(activityId, existing);
+    }
     const published = await window.ActivityIntelligenceApi.getPublishedForm(activityId);
     const merged = {
       ...(existing || normalizeFormBundleDto(null)),
@@ -364,18 +366,17 @@
       isCompleteBundle: Boolean(existing && existing.isCompleteBundle)
     };
     formBundles.set(activityId, merged);
-    const activity = state.activities.find(item => item.id === activityId);
-    if (activity) {
-      activity.formDesignRuntime = merged;
-      activity.formFields = Store.clone(merged.published.items || []);
-    }
-    return merged;
+    return hydrateActivityFormBundle(activityId, merged);
   }
 
   function updateActivityFormBundle(activityId, form) {
     const bundle = normalizeFormBundleDto(form);
     bundle.isCompleteBundle = true;
     formBundles.set(activityId, bundle);
+    return hydrateActivityFormBundle(activityId, bundle);
+  }
+
+  function hydrateActivityFormBundle(activityId, bundle) {
     const activity = state.activities.find(item => item.id === activityId);
     if (activity) {
       activity.formDesignRuntime = bundle;
