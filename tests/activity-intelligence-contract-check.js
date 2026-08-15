@@ -636,6 +636,91 @@ async function main() {
         tool: 'retrieve_submissions',
         arguments: { fields: [IDS.longKey], limit: 10 }
     }]);
+    const aggregateFieldsStringPlan = aiHarness.service._validateFormAiPlan({
+        strategy: 'tool_query',
+        intent: 'fields string alias',
+        toolCalls: [{
+            tool: 'aggregate_submissions',
+            arguments: {
+                aggregate: 'count',
+                groupBy: 'field',
+                fields: 'field-a'
+            }
+        }]
+    });
+    assert.deepStrictEqual(aggregateFieldsStringPlan.toolCalls[0].arguments, {
+        aggregate: 'count',
+        groupBy: 'field',
+        field: 'field-a'
+    });
+    const aggregateFieldsArrayPlan = aiHarness.service._validateFormAiPlan({
+        strategy: 'tool_query',
+        intent: 'fields single array alias',
+        toolCalls: [{
+            tool: 'aggregate_submissions',
+            arguments: {
+                aggregate: 'count',
+                groupBy: 'field',
+                fields: ['field-a']
+            }
+        }]
+    });
+    assert.deepStrictEqual(aggregateFieldsArrayPlan.toolCalls[0].arguments, {
+        aggregate: 'count',
+        groupBy: 'field',
+        field: 'field-a'
+    });
+    const aggregateFieldsDuplicatePlan = aiHarness.service._validateFormAiPlan({
+        strategy: 'tool_query',
+        intent: 'matching field and fields alias',
+        toolCalls: [{
+            tool: 'aggregate_submissions',
+            arguments: {
+                aggregate: 'count',
+                groupBy: 'field',
+                field: 'field-a',
+                fields: ['field-a']
+            }
+        }]
+    });
+    assert.deepStrictEqual(aggregateFieldsDuplicatePlan.toolCalls[0].arguments, {
+        aggregate: 'count',
+        groupBy: 'field',
+        field: 'field-a'
+    });
+    const ambiguousAliasWarnings = await captureConsoleWarn(async () => {
+        await assertRejectsCode(() => Promise.resolve(aiHarness.service._validateFormAiPlan({
+            strategy: 'tool_query',
+            intent: 'ambiguous fields alias',
+            toolCalls: [{
+                tool: 'aggregate_submissions',
+                arguments: {
+                    aggregate: 'count',
+                    groupBy: 'field',
+                    fields: ['field-a', 'field-b']
+                }
+            }]
+        })), 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
+    });
+    assert.strictEqual(ambiguousAliasWarnings[0][1].category, 'ambiguous_semantic_alias');
+    assert.deepStrictEqual(ambiguousAliasWarnings[0][1].unsupportedKeys, ['fields']);
+    const conflictingAliasWarnings = await captureConsoleWarn(async () => {
+        await assertRejectsCode(() => Promise.resolve(aiHarness.service._validateFormAiPlan({
+            strategy: 'tool_query',
+            intent: 'conflicting field aliases',
+            toolCalls: [{
+                tool: 'aggregate_submissions',
+                arguments: {
+                    aggregate: 'count',
+                    groupBy: 'field',
+                    field: 'field-a',
+                    fields: ['field-b']
+                }
+            }]
+        })), 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
+    });
+    assert.strictEqual(conflictingAliasWarnings[0][1].category, 'conflicting_semantic_alias');
+    assert.deepStrictEqual(conflictingAliasWarnings[0][1].unsupportedKeys, ['fields']);
     const aggregateMetadataPlan = aiHarness.service._validateFormAiPlan({
         strategy: 'tool_query',
         intent: 'count IoT',
@@ -692,6 +777,15 @@ async function main() {
     });
     assert.strictEqual(strictExecutorWarnings.length, 1);
     assert.strictEqual(strictExecutorWarnings[0][1].category, 'executor_contract_violation');
+    const strictAggregateFieldsWarnings = await captureConsoleWarn(async () => {
+        await assertRejectsCode(() => Promise.resolve(aiHarness.service._executeFormAiAggregateTool({
+            aggregate: 'count',
+            groupBy: 'field',
+            fields: 'topicField'
+        }, makeRetrieveCompletenessContext(1))), 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
+    });
+    assert.strictEqual(strictAggregateFieldsWarnings.length, 1);
+    assert.strictEqual(strictAggregateFieldsWarnings[0][1].category, 'executor_contract_violation');
     const directDomainPlan = aiHarness.service._validateFormAiPlan({
         strategy: 'direct_domain_answer',
         intent: 'terminology',

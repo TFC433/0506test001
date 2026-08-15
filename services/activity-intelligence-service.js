@@ -1247,9 +1247,10 @@ class ActivityIntelligenceService {
 
     _normalizeFormAiToolArguments(tool, args) {
         const contract = this._formAiToolArgumentContract(tool);
+        const semanticArgs = this._normalizeFormAiSemanticArgumentAliases(tool, args, contract);
         const executableSet = new Set(contract.executableKeys);
         const harmlessMetadataSet = contract.harmlessMetadataKeys || new Set();
-        const unknown = Object.keys(args || {}).filter(key => !executableSet.has(key) && !harmlessMetadataSet.has(key));
+        const unknown = Object.keys(semanticArgs || {}).filter(key => !executableSet.has(key) && !harmlessMetadataSet.has(key));
         if (unknown.length) {
             this._logFormAiUnsupportedToolArgument({
                 tool,
@@ -1259,10 +1260,81 @@ class ActivityIntelligenceService {
             });
             throw new ActivityIntelligenceError(502, `FORM AI planner returned unsupported ${tool}.arguments keys.`, 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
         }
-        return Object.keys(args || {}).reduce((acc, key) => {
-            if (executableSet.has(key)) acc[key] = args[key];
+        return Object.keys(semanticArgs || {}).reduce((acc, key) => {
+            if (executableSet.has(key)) acc[key] = semanticArgs[key];
             return acc;
         }, {});
+    }
+
+    _normalizeFormAiSemanticArgumentAliases(tool, args, contract) {
+        if (tool !== 'aggregate_submissions' || !Object.prototype.hasOwnProperty.call(args, 'fields')) {
+            return args;
+        }
+        const alias = this._normalizeFormAiAggregateFieldAlias(args.fields);
+        if (!alias.ok) {
+            this._logFormAiUnsupportedToolArgument({
+                tool,
+                unsupportedKeys: ['fields'],
+                supportedKeys: contract.executableKeys,
+                category: 'ambiguous_semantic_alias'
+            });
+            throw new ActivityIntelligenceError(502, `FORM AI planner returned unsupported ${tool}.arguments keys.`, 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
+        }
+        const normalized = { ...args };
+        if (Object.prototype.hasOwnProperty.call(args, 'field')) {
+            const canonical = this._normalizeFormAiAggregateFieldAlias(args.field);
+            if (!canonical.ok || !this._sameFormAiPlannerValue(canonical.value, alias.value)) {
+                this._logFormAiUnsupportedToolArgument({
+                    tool,
+                    unsupportedKeys: ['fields'],
+                    supportedKeys: contract.executableKeys,
+                    category: 'conflicting_semantic_alias'
+                });
+                throw new ActivityIntelligenceError(502, `FORM AI planner returned unsupported ${tool}.arguments keys.`, 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
+            }
+        } else {
+            normalized.field = alias.value;
+        }
+        delete normalized.fields;
+        return normalized;
+    }
+
+    _normalizeFormAiAggregateFieldAlias(value) {
+        if (Array.isArray(value)) {
+            if (value.length !== 1) return { ok: false };
+            return this._normalizeFormAiAggregateFieldAlias(value[0]);
+        }
+        if (typeof value === 'string') {
+            const itemKey = value.trim();
+            return itemKey ? { ok: true, value: itemKey } : { ok: false };
+        }
+        if (value && typeof value === 'object') {
+            const unknown = Object.keys(value).filter(key => !['itemKey', 'title'].includes(key));
+            if (unknown.length) return { ok: false };
+            const itemKey = String(value.itemKey || '').trim();
+            const title = String(value.title || '').trim();
+            if (!itemKey && !title) return { ok: false };
+            const normalized = {};
+            if (itemKey) normalized.itemKey = itemKey;
+            if (title) normalized.title = title;
+            return { ok: true, value: normalized };
+        }
+        return { ok: false };
+    }
+
+    _sameFormAiPlannerValue(left, right) {
+        return JSON.stringify(this._stableFormAiPlannerValue(left)) === JSON.stringify(this._stableFormAiPlannerValue(right));
+    }
+
+    _stableFormAiPlannerValue(value) {
+        if (Array.isArray(value)) return value.map(entry => this._stableFormAiPlannerValue(entry));
+        if (value && typeof value === 'object') {
+            return Object.keys(value).sort().reduce((acc, key) => {
+                acc[key] = this._stableFormAiPlannerValue(value[key]);
+                return acc;
+            }, {});
+        }
+        return value;
     }
 
     _strictFormAiToolArguments(tool, args) {
