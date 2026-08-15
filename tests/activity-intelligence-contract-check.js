@@ -320,6 +320,18 @@ async function assertRejectsCode(fn, code) {
     return caught;
 }
 
+async function captureConsoleWarn(fn) {
+    const originalWarn = console.warn;
+    const warnings = [];
+    console.warn = (...args) => warnings.push(args);
+    try {
+        await fn(warnings);
+    } finally {
+        console.warn = originalWarn;
+    }
+    return warnings;
+}
+
 function assertFormAssistCjkContract(managementSource) {
     const match = managementSource.match(/const FORM_ASSIST_COPY = Object\.freeze\((\{[\s\S]*?\n  \})\);/);
     assert(match, 'FORM_ASSIST_COPY block must exist');
@@ -596,6 +608,34 @@ async function main() {
         tool: 'retrieve_submissions',
         arguments: { fields: [IDS.longKey], limit: 10 }
     }]);
+    const toolDefinitions = aiHarness.service._formAiToolDefinitions();
+    toolDefinitions.forEach(definition => {
+        const contract = aiHarness.service._formAiToolArgumentContract(definition.tool);
+        assert.deepStrictEqual(
+            Object.keys(definition.arguments).sort(),
+            contract.executableKeys.slice().sort()
+        );
+    });
+    const metadataShapesPlan = aiHarness.service._validateFormAiPlan({
+        strategy: 'tool_query',
+        intent: 'metadata shapes',
+        toolCalls: [{
+            tool: 'retrieve_submissions',
+            arguments: {
+                fields: [IDS.longKey],
+                limit: 10,
+                reason: 'need customer text',
+                rationale: 'planner rationale',
+                description: 'descriptive planner note',
+                explanation: 'why this tool is relevant',
+                intent: 'retrieve supporting evidence'
+            }
+        }]
+    });
+    assert.deepStrictEqual(metadataShapesPlan.toolCalls, [{
+        tool: 'retrieve_submissions',
+        arguments: { fields: [IDS.longKey], limit: 10 }
+    }]);
     const aggregateMetadataPlan = aiHarness.service._validateFormAiPlan({
         strategy: 'tool_query',
         intent: 'count IoT',
@@ -623,19 +663,35 @@ async function main() {
         makeRetrieveCompletenessContext(74)
     );
     assert.strictEqual(aggregateMetadataResult.total, 74);
-    await assertRejectsCode(() => Promise.resolve(aiHarness.service._validateFormAiPlan({
-        strategy: 'tool_query',
-        intent: 'semantic unknown',
-        toolCalls: [{
-            tool: 'aggregate_submissions',
-            arguments: {
-                aggregate: 'count',
-                groupBy: 'none',
-                filters: { fields: [{ field: { itemKey: 'topicField' }, values: ['IoT'] }] },
-                operator: 'contains'
-            }
-        }]
-    })), 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
+    const semanticWarnings = await captureConsoleWarn(async () => {
+        await assertRejectsCode(() => Promise.resolve(aiHarness.service._validateFormAiPlan({
+            strategy: 'tool_query',
+            intent: 'semantic unknown',
+            toolCalls: [{
+                tool: 'aggregate_submissions',
+                arguments: {
+                    aggregate: 'count',
+                    groupBy: 'none',
+                    filters: { fields: [{ field: { itemKey: 'topicField' }, values: ['IoT'] }] },
+                    operator: 'contains'
+                }
+            }]
+        })), 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
+    });
+    assert.strictEqual(semanticWarnings.length, 1);
+    assert.strictEqual(semanticWarnings[0][0], '[ActivityIntelligence] FORM AI unsupported tool argument');
+    assert.strictEqual(semanticWarnings[0][1].tool, 'aggregate_submissions');
+    assert.deepStrictEqual(semanticWarnings[0][1].unsupportedKeys, ['operator']);
+    assert(semanticWarnings[0][1].supportedKeys.includes('filters'));
+    assert.strictEqual(semanticWarnings[0][1].category, 'semantic_or_unknown_argument');
+    const strictExecutorWarnings = await captureConsoleWarn(async () => {
+        await assertRejectsCode(() => Promise.resolve(aiHarness.service._executeFormAiAggregateTool({
+            aggregate: 'count',
+            reason: 'planner note that should not reach executor'
+        }, makeRetrieveCompletenessContext(1))), 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
+    });
+    assert.strictEqual(strictExecutorWarnings.length, 1);
+    assert.strictEqual(strictExecutorWarnings[0][1].category, 'executor_contract_violation');
     const directDomainPlan = aiHarness.service._validateFormAiPlan({
         strategy: 'direct_domain_answer',
         intent: 'terminology',

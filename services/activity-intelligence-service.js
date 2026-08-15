@@ -1251,6 +1251,12 @@ class ActivityIntelligenceService {
         const harmlessMetadataSet = contract.harmlessMetadataKeys || new Set();
         const unknown = Object.keys(args || {}).filter(key => !executableSet.has(key) && !harmlessMetadataSet.has(key));
         if (unknown.length) {
+            this._logFormAiUnsupportedToolArgument({
+                tool,
+                unsupportedKeys: unknown,
+                supportedKeys: contract.executableKeys,
+                category: 'semantic_or_unknown_argument'
+            });
             throw new ActivityIntelligenceError(502, `FORM AI planner returned unsupported ${tool}.arguments keys.`, 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
         }
         return Object.keys(args || {}).reduce((acc, key) => {
@@ -1261,8 +1267,28 @@ class ActivityIntelligenceService {
 
     _strictFormAiToolArguments(tool, args) {
         const contract = this._formAiToolArgumentContract(tool);
-        this._assertAllowedKeys(args, contract.executableKeys, `${tool}.arguments`);
+        const allowedSet = new Set(contract.executableKeys);
+        const unknown = Object.keys(args || {}).filter(key => !allowedSet.has(key));
+        if (unknown.length) {
+            this._logFormAiUnsupportedToolArgument({
+                tool,
+                unsupportedKeys: unknown,
+                supportedKeys: contract.executableKeys,
+                category: 'executor_contract_violation'
+            });
+            throw new ActivityIntelligenceError(502, `FORM AI planner returned unsupported ${tool}.arguments keys.`, 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
+        }
         return args;
+    }
+
+    _logFormAiUnsupportedToolArgument({ tool, unsupportedKeys, supportedKeys, category }) {
+        const payload = {
+            tool,
+            unsupportedKeys: (unsupportedKeys || []).map(key => String(key)),
+            supportedKeys: (supportedKeys || []).map(key => String(key)),
+            category
+        };
+        console.warn('[ActivityIntelligence] FORM AI unsupported tool argument', payload);
     }
 
     _formAiExecutablePlannerObject(object, executableKeys, scope) {
