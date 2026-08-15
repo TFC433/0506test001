@@ -384,6 +384,17 @@ function retrieveIot(service, count, args = {}) {
     }, makeRetrieveCompletenessContext(count));
 }
 
+function aggregateIot(service, count, args = {}) {
+    return service._executeFormAiAggregateTool({
+        aggregate: 'count',
+        groupBy: 'none',
+        filters: {
+            fields: [{ field: { itemKey: 'topicField' }, values: ['IoT'] }]
+        },
+        ...args
+    }, makeRetrieveCompletenessContext(count));
+}
+
 async function main() {
     const { service, calls, publishedItems } = makeHarness();
 
@@ -457,6 +468,11 @@ async function main() {
     assert.strictEqual(retrieveLimited.records.length, 5);
     assert.strictEqual(retrieveLimited.truncated, true);
     assert.strictEqual(retrieveLimited.explicitLimit, 5);
+
+    const aggregate74 = aggregateIot(service, 74);
+    assert.strictEqual(aggregate74.aggregate, 'count');
+    assert.strictEqual(aggregate74.groupBy, 'none');
+    assert.strictEqual(aggregate74.total, 74);
 
     const originalPublishedTitle = publishedItems[0].title;
     await service.saveDraft(IDS.activity, {
@@ -580,6 +596,46 @@ async function main() {
         tool: 'retrieve_submissions',
         arguments: { fields: [IDS.longKey], limit: 10 }
     }]);
+    const aggregateMetadataPlan = aiHarness.service._validateFormAiPlan({
+        strategy: 'tool_query',
+        intent: 'count IoT',
+        toolCalls: [{
+            tool: 'aggregate_submissions',
+            arguments: {
+                aggregate: 'count',
+                groupBy: 'none',
+                filters: { fields: [{ field: { itemKey: 'topicField' }, values: ['IoT'] }] },
+                intent: 'count records selecting IoT',
+                reason: 'simple count'
+            }
+        }]
+    });
+    assert.deepStrictEqual(aggregateMetadataPlan.toolCalls, [{
+        tool: 'aggregate_submissions',
+        arguments: {
+            aggregate: 'count',
+            groupBy: 'none',
+            filters: { fields: [{ field: { itemKey: 'topicField' }, values: ['IoT'] }] }
+        }
+    }]);
+    const aggregateMetadataResult = aiHarness.service._executeFormAiAggregateTool(
+        aggregateMetadataPlan.toolCalls[0].arguments,
+        makeRetrieveCompletenessContext(74)
+    );
+    assert.strictEqual(aggregateMetadataResult.total, 74);
+    await assertRejectsCode(() => Promise.resolve(aiHarness.service._validateFormAiPlan({
+        strategy: 'tool_query',
+        intent: 'semantic unknown',
+        toolCalls: [{
+            tool: 'aggregate_submissions',
+            arguments: {
+                aggregate: 'count',
+                groupBy: 'none',
+                filters: { fields: [{ field: { itemKey: 'topicField' }, values: ['IoT'] }] },
+                operator: 'contains'
+            }
+        }]
+    })), 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
     const directDomainPlan = aiHarness.service._validateFormAiPlan({
         strategy: 'direct_domain_answer',
         intent: 'terminology',
@@ -600,11 +656,19 @@ async function main() {
     assert(plannerSystemInstruction.includes('complete enumeration'));
     assert(plannerSystemInstruction.includes('without a limit'));
     assert(plannerSystemInstruction.includes('exact internal glossary'));
+    assert(plannerSystemInstruction.includes('Activity, customers, companies, people, submissions'));
+    assert(plannerSystemInstruction.includes('Use only the documented executable argument keys'));
+    assert(plannerSystemInstruction.includes('semantic arguments outside the documented contract are invalid'));
     const finalizerSystemInstruction = aiHarness.service._formAiFinalizerSystemInstruction();
     assert(finalizerSystemInstruction.includes('totalMatching'));
     assert(finalizerSystemInstruction.includes('returnedCount'));
     assert(finalizerSystemInstruction.includes('Answer the user question first'));
     assert(finalizerSystemInstruction.includes('Do not add a mandatory domain paragraph'));
+    assert(finalizerSystemInstruction.includes('For simple deterministic counts'));
+    assert(finalizerSystemInstruction.includes('concrete FORM evidence'));
+    assert(finalizerSystemInstruction.includes('customer/person name'));
+    assert(finalizerSystemInstruction.includes('Option Note'));
+    assert(finalizerSystemInstruction.includes('must not replace available FORM evidence'));
     await assertRejectsCode(() => Promise.resolve(aiHarness.service._validateFormAiPlan({
         strategy: 'tool_query',
         intent: 'unsafe key',

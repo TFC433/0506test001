@@ -34,6 +34,17 @@ const FORM_AI_TOOL_NAMES = new Set(['aggregate_submissions', 'retrieve_submissio
 const FORM_AI_AGGREGATE_GROUPS = new Set(['none', 'date', 'recorder', 'field']);
 const FORM_AI_CHOICE_TYPES = new Set(['yes_no', 'single_choice', 'multiple_choice', 'dropdown']);
 const FORM_AI_HARMLESS_PLANNER_METADATA_KEYS = new Set(['reason', 'rationale', 'description', 'explanation']);
+const FORM_AI_HARMLESS_TOOL_ARGUMENT_METADATA_KEYS = new Set([...FORM_AI_HARMLESS_PLANNER_METADATA_KEYS, 'intent']);
+const FORM_AI_TOOL_ARGUMENT_CONTRACTS = Object.freeze({
+    aggregate_submissions: Object.freeze({
+        executableKeys: Object.freeze(['aggregate', 'groupBy', 'field', 'filters', 'sort', 'limit']),
+        harmlessMetadataKeys: FORM_AI_HARMLESS_TOOL_ARGUMENT_METADATA_KEYS
+    }),
+    retrieve_submissions: Object.freeze({
+        executableKeys: Object.freeze(['filters', 'fields', 'limit', 'fullTextScan']),
+        harmlessMetadataKeys: FORM_AI_HARMLESS_TOOL_ARGUMENT_METADATA_KEYS
+    })
+});
 const FORM_ASSIST_KINDS = new Set(['person', 'company']);
 const FORM_ASSIST_PRIMARY_LIMIT = 8;
 const FORM_ASSIST_ANSWER_SCAN_LIMIT = 160;
@@ -1134,11 +1145,14 @@ class ActivityIntelligenceService {
             '數字、排名、分布、日期統計、紀錄者統計必須使用 aggregate_submissions。',
             '需要文字內容、原因、建議、痛點、需求、摘要或混合分析時，使用 retrieve_submissions 取得實際紀錄證據。',
             'For pure terminology, glossary, abbreviation, or general professional/domain questions that do not require Activity submission evidence, use strategy direct_domain_answer and omit toolCalls.',
+            'If the user asks about this Activity, customers, companies, people, submissions, interests, needs, trends, opportunities, signals, follow-up priority, PoC, competitors, recorded comments, Option Notes, or collected FORM data, use strategy tool_query.',
             'For mixed questions that combine Activity records with domain judgment, use strategy tool_query and retrieve/aggregate FORM evidence before interpretation.',
             'For exact count questions, use aggregate_submissions and treat aggregate totals as authoritative; do not count retrieved rows as the total.',
             'For complete enumeration requests such as list all, show all, which records, or enumerate every matching record, use retrieve_submissions without a limit.',
             'Only set retrieve_submissions.arguments.limit when the user explicitly asks for examples, a sample, top N, first N, or a specific number of records.',
             'For prioritization questions, retrieve the complete relevant candidate population unless the user supplied a limit.',
+            'Use only the documented executable argument keys for each tool. Do not place planner notes inside tool arguments.',
+            'Descriptive planner metadata may be tolerated outside executable semantics, but semantic arguments outside the documented contract are invalid.',
             'When resolving terms, prefer exact internal glossary/domainContext definitions first. If absent, use FORM context, related internal domain knowledge, reliable professional knowledge, and general knowledge as appropriate.',
             'Do not invent company-specific acronym expansions, internal aliases, product identities, or official term equivalences without evidence. Expose ambiguity only when it materially changes the answer.',
             'Use glossary/domain knowledge for reasoning; do not cause definitions or generic background to be recited unless the user asks or the definition is necessary.',
@@ -1216,14 +1230,39 @@ class ActivityIntelligenceService {
         if (!args || typeof args !== 'object' || Array.isArray(args)) {
             throw new ActivityIntelligenceError(502, 'FORM AI planner returned invalid tool arguments.', 'FORM_AI_INVALID_TOOL_ARGUMENTS');
         }
-        const allowed = executableCall.tool === 'aggregate_submissions'
-            ? ['aggregate', 'groupBy', 'field', 'filters', 'sort', 'limit']
-            : ['filters', 'fields', 'limit', 'fullTextScan'];
-        this._assertAllowedKeys(args, allowed, `${executableCall.tool}.arguments`);
+        const normalizedArgs = this._normalizeFormAiToolArguments(executableCall.tool, args);
         return {
             tool: executableCall.tool,
-            arguments: args
+            arguments: normalizedArgs
         };
+    }
+
+    _formAiToolArgumentContract(tool) {
+        const contract = FORM_AI_TOOL_ARGUMENT_CONTRACTS[tool];
+        if (!contract) {
+            throw new ActivityIntelligenceError(502, 'FORM AI planner requested an unsupported tool.', 'FORM_AI_UNSUPPORTED_TOOL');
+        }
+        return contract;
+    }
+
+    _normalizeFormAiToolArguments(tool, args) {
+        const contract = this._formAiToolArgumentContract(tool);
+        const executableSet = new Set(contract.executableKeys);
+        const harmlessMetadataSet = contract.harmlessMetadataKeys || new Set();
+        const unknown = Object.keys(args || {}).filter(key => !executableSet.has(key) && !harmlessMetadataSet.has(key));
+        if (unknown.length) {
+            throw new ActivityIntelligenceError(502, `FORM AI planner returned unsupported ${tool}.arguments keys.`, 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
+        }
+        return Object.keys(args || {}).reduce((acc, key) => {
+            if (executableSet.has(key)) acc[key] = args[key];
+            return acc;
+        }, {});
+    }
+
+    _strictFormAiToolArguments(tool, args) {
+        const contract = this._formAiToolArgumentContract(tool);
+        this._assertAllowedKeys(args, contract.executableKeys, `${tool}.arguments`);
+        return args;
     }
 
     _formAiExecutablePlannerObject(object, executableKeys, scope) {
@@ -1276,47 +1315,47 @@ class ActivityIntelligenceService {
     }
 
     _executeFormAiAggregateTool(args, context) {
-        this._assertAllowedKeys(args, ['aggregate', 'groupBy', 'field', 'filters', 'sort', 'limit'], 'aggregate_submissions.arguments');
-        const aggregate = args.aggregate || 'count';
+        const safeArgs = this._strictFormAiToolArguments('aggregate_submissions', args);
+        const aggregate = safeArgs.aggregate || 'count';
         if (aggregate !== 'count') {
             throw new ActivityIntelligenceError(502, 'FORM AI aggregate tool supports count only.', 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
         }
-        const groupBy = Array.isArray(args.groupBy) && args.groupBy.length === 1
-            ? args.groupBy[0]
-            : (args.groupBy || 'none');
+        const groupBy = Array.isArray(safeArgs.groupBy) && safeArgs.groupBy.length === 1
+            ? safeArgs.groupBy[0]
+            : (safeArgs.groupBy || 'none');
         if (!FORM_AI_AGGREGATE_GROUPS.has(groupBy)) {
             throw new ActivityIntelligenceError(502, 'FORM AI aggregate tool received unsupported groupBy.', 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
         }
-        const records = this._filterFormAiSubmissions(context.submissions, args.filters || {}, context);
+        const records = this._filterFormAiSubmissions(context.submissions, safeArgs.filters || {}, context);
         if (groupBy === 'none') {
             return {
                 aggregate: 'count',
                 groupBy,
                 total: records.length,
-                filtersApplied: this._publicFormAiFilters(args.filters || {}, context)
+                filtersApplied: this._publicFormAiFilters(safeArgs.filters || {}, context)
             };
         }
         if (groupBy === 'date') {
-            return this._formAiGroupedCount(records, record => String(record.createdAt || '').slice(0, 10) || '未提供', args, 'date');
+            return this._formAiGroupedCount(records, record => String(record.createdAt || '').slice(0, 10) || '未提供', safeArgs, 'date');
         }
         if (groupBy === 'recorder') {
-            return this._formAiGroupedCount(records, record => String(record.createdByDisplayName || '').trim() || '未提供', args, 'recorder');
+            return this._formAiGroupedCount(records, record => String(record.createdByDisplayName || '').trim() || '未提供', safeArgs, 'recorder');
         }
-        const fieldRef = this._resolveFormAiFieldReference(args.field, context);
-        return this._formAiCategoricalDistribution(records, fieldRef, args, context);
+        const fieldRef = this._resolveFormAiFieldReference(safeArgs.field, context);
+        return this._formAiCategoricalDistribution(records, fieldRef, safeArgs, context);
     }
 
     _executeFormAiRetrieveTool(args, context) {
-        this._assertAllowedKeys(args, ['filters', 'fields', 'limit', 'fullTextScan'], 'retrieve_submissions.arguments');
-        if (args.fullTextScan === true) {
-            return this._executeFormAiFullTextScanTool(args, context);
+        const safeArgs = this._strictFormAiToolArguments('retrieve_submissions', args);
+        if (safeArgs.fullTextScan === true) {
+            return this._executeFormAiFullTextScanTool(safeArgs, context);
         }
-        const records = this._filterFormAiSubmissions(context.submissions, args.filters || {}, context);
-        const fields = Array.isArray(args.fields)
-            ? args.fields.map(field => this._resolveFormAiFieldReference(field, context))
+        const records = this._filterFormAiSubmissions(context.submissions, safeArgs.filters || {}, context);
+        const fields = Array.isArray(safeArgs.fields)
+            ? safeArgs.fields.map(field => this._resolveFormAiFieldReference(field, context))
             : null;
         const fieldKeys = fields ? new Set(fields.map(field => field.itemKey)) : null;
-        const explicitLimit = this._positiveInteger(args.limit, 0);
+        const explicitLimit = this._positiveInteger(safeArgs.limit, 0);
         const recordsToReturn = explicitLimit ? records.slice(0, explicitLimit) : records;
         return {
             retrieved: recordsToReturn.length,
@@ -1324,7 +1363,7 @@ class ActivityIntelligenceService {
             totalMatching: records.length,
             truncated: recordsToReturn.length < records.length,
             explicitLimit: explicitLimit || null,
-            filtersApplied: this._publicFormAiFilters(args.filters || {}, context),
+            filtersApplied: this._publicFormAiFilters(safeArgs.filters || {}, context),
             records: recordsToReturn.map((record, index) => this._formAiPublicRecordEvidence(record, context, fieldKeys, index + 1))
         };
     }
@@ -1728,14 +1767,20 @@ class ActivityIntelligenceService {
             '請用繁體中文直接回答使用者原始問題。',
             '工具結果中的計數、排名、分布、百分比與日期分組是權威事實；不得自行重新計數或改寫數字。',
             'Answer the user question first. Do not force a standard report structure.',
+            'Response hierarchy: answer the actual question, use actual FORM evidence, surface concrete relevant records, synthesize across records when needed, apply domain knowledge to interpret evidence, and add general knowledge only when it improves the answer.',
             'If tool evidence includes totalMatching, treat totalMatching as the authoritative matching population. Do not derive the total from records.length when returnedCount differs.',
             'If returnedCount is smaller than totalMatching and truncated is true, never present the returned records as the complete set.',
             'If the user asked for a complete list and the tool returned all matches, enumerate all matching records rather than changing the task into examples or a summary.',
             'If the user asked for examples, sample, top N, first N, or a specific number, a truncated tool result may be used, but clearly answer according to that limited request.',
             'Use answer length and structure based on the user intent and actual result volume: concise for counts, complete for complete lists, synthetic for summaries, ranked for prioritization, explanatory for terminology questions.',
+            'For simple deterministic counts, answer with the exact aggregate result without forcing a customer list.',
+            'For Activity-related synthesis, trend analysis, prioritization, opportunity assessment, recommendations, professional interpretation, comparisons, or important signals, ground major conclusions in concrete FORM evidence where available.',
+            'Concrete FORM evidence may include customer/person name, company name, title or role, selected option, other_text, Option Note, long-text answer, submission date/time, or other recorded fields relevant to the answer.',
+            'Do not fabricate missing identity fields. If a record has no person or company name, describe only the recorded evidence that exists.',
             '你會收到 FANUC / Machine Tool / Manufacturing domainContext；它是專業解讀鏡頭，不是客戶實際陳述。',
             'EVIDENCE FIRST, DOMAIN INTERPRETATION SECOND：每個主要結論都必須先由實際 FORM 客戶回覆或確定性工具結果支撐。',
             'domainContext 單獨不足以支撐結論；不得因為 domainContext 提到某主題，就把該主題當作答案大綱或主要發現。',
+            'Domain and general knowledge must explain or judge available Activity FORM evidence; it must not replace available FORM evidence.',
             '不要把 Domain Lens 類別當 checklist；Machining Efficiency、Digital Twin、IoT、MES、Competition、Maintenance 等主題只有在 evidence 明確支持時才可成為答案主題。',
             '若使用段落標題或條列主題，標題必須來自 evidence 中反覆出現的客戶回覆、欄位值、問題或需求，不得直接套用 Domain Lens 分類名稱。',
             'evidence 未提到或工具結果未支持的 domainContext 主題，請完全不要提及。',
