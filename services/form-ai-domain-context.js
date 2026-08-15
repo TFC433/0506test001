@@ -113,7 +113,11 @@ const FORM_AI_DOMAIN_CONTEXT = {
         'Do not infer dissatisfaction, replacement intent, or FANUC product need from a competitor/controller mention unless evidence explicitly supports it.',
         'Do not recommend a product unless the question asks for recommendations and evidence supports the need.',
         'Use relevant dimensions only; do not force every answer to discuss all domain topics.',
-        'For simple deterministic questions, keep the answer simple and avoid unnecessary domain discussion.'
+        'For simple deterministic questions, keep the answer simple and avoid unnecessary domain discussion.',
+        'For terminology, prefer exact glossary meanings when present.',
+        'When the glossary has no exact entry, use FORM context, related domain knowledge, reliable professional knowledge, and general knowledge when appropriate.',
+        'Do not invent company-specific acronym expansions, internal aliases, product identities, or official terminology mappings without evidence.',
+        'Resolve terms silently when possible; explain definitions only when asked, necessary, or materially ambiguous.'
     ],
     exhibitionContext: [
         'Machine tool exhibitions often increase relevance of CNC, SERVO, machining, accuracy, Cycle Time, Digital Twin, MTB, MTU, and machine development.',

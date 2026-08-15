@@ -346,6 +346,44 @@ function assertFormAssistCjkContract(managementSource) {
     });
 }
 
+function makeRetrieveCompletenessContext(count) {
+    return {
+        formVersions: {
+            version1: {
+                fields: [
+                    {
+                        itemKey: 'topicField',
+                        type: 'multiple_choice',
+                        title: 'Topic',
+                        options: [{ label: 'IoT', value: 'IoT' }]
+                    }
+                ]
+            }
+        },
+        submissions: Array.from({ length: count }, (_, index) => ({
+            status: 'active',
+            createdAt: `2026-04-${String((index % 28) + 1).padStart(2, '0')}T00:00:00.000Z`,
+            createdByDisplayName: 'Analyst',
+            formVersionId: 'version1',
+            answers: [{
+                itemKey: 'topicField',
+                value: [{ label: 'IoT', value: 'IoT' }],
+                otherText: ''
+            }],
+            rawCard: null
+        }))
+    };
+}
+
+function retrieveIot(service, count, args = {}) {
+    return service._executeFormAiRetrieveTool({
+        filters: {
+            fields: [{ field: { itemKey: 'topicField' }, values: ['IoT'] }]
+        },
+        ...args
+    }, makeRetrieveCompletenessContext(count));
+}
+
 async function main() {
     const { service, calls, publishedItems } = makeHarness();
 
@@ -391,6 +429,34 @@ async function main() {
     });
     const malformedSettingsActivity = await malformedSettingsHarness.service.getActivity(IDS.activity);
     assert(!Object.prototype.hasOwnProperty.call(malformedSettingsActivity.settings, 'aiAnalysisQuickQuestions'));
+
+    const retrieve74 = retrieveIot(service, 74);
+    assert.strictEqual(retrieve74.totalMatching, 74);
+    assert.strictEqual(retrieve74.returnedCount, 74);
+    assert.strictEqual(retrieve74.retrieved, 74);
+    assert.strictEqual(retrieve74.records.length, 74);
+    assert.strictEqual(retrieve74.truncated, false);
+    assert.strictEqual(retrieve74.explicitLimit, null);
+
+    const retrieve120 = retrieveIot(service, 120);
+    assert.strictEqual(retrieve120.totalMatching, 120);
+    assert.strictEqual(retrieve120.returnedCount, 120);
+    assert.strictEqual(retrieve120.records.length, 120);
+    assert.strictEqual(retrieve120.truncated, false);
+
+    const retrieve200 = retrieveIot(service, 200);
+    assert.strictEqual(retrieve200.totalMatching, 200);
+    assert.strictEqual(retrieve200.returnedCount, 200);
+    assert.strictEqual(retrieve200.records.length, 200);
+    assert.strictEqual(retrieve200.truncated, false);
+
+    const retrieveLimited = retrieveIot(service, 74, { limit: 5 });
+    assert.strictEqual(retrieveLimited.totalMatching, 74);
+    assert.strictEqual(retrieveLimited.returnedCount, 5);
+    assert.strictEqual(retrieveLimited.retrieved, 5);
+    assert.strictEqual(retrieveLimited.records.length, 5);
+    assert.strictEqual(retrieveLimited.truncated, true);
+    assert.strictEqual(retrieveLimited.explicitLimit, 5);
 
     const originalPublishedTitle = publishedItems[0].title;
     await service.saveDraft(IDS.activity, {
@@ -514,6 +580,31 @@ async function main() {
         tool: 'retrieve_submissions',
         arguments: { fields: [IDS.longKey], limit: 10 }
     }]);
+    const directDomainPlan = aiHarness.service._validateFormAiPlan({
+        strategy: 'direct_domain_answer',
+        intent: 'terminology',
+        toolCalls: []
+    });
+    assert.deepStrictEqual(directDomainPlan, {
+        strategy: 'direct_domain_answer',
+        intent: 'terminology',
+        toolCalls: []
+    });
+    await assertRejectsCode(() => Promise.resolve(aiHarness.service._validateFormAiPlan({
+        strategy: 'direct_domain_answer',
+        intent: 'bad direct',
+        toolCalls: [{ tool: 'retrieve_submissions', arguments: {} }]
+    })), 'FORM_AI_PLANNER_INVALID_TOOL_COUNT');
+    const plannerSystemInstruction = aiHarness.service._formAiPlannerSystemInstruction();
+    assert(plannerSystemInstruction.includes('direct_domain_answer'));
+    assert(plannerSystemInstruction.includes('complete enumeration'));
+    assert(plannerSystemInstruction.includes('without a limit'));
+    assert(plannerSystemInstruction.includes('exact internal glossary'));
+    const finalizerSystemInstruction = aiHarness.service._formAiFinalizerSystemInstruction();
+    assert(finalizerSystemInstruction.includes('totalMatching'));
+    assert(finalizerSystemInstruction.includes('returnedCount'));
+    assert(finalizerSystemInstruction.includes('Answer the user question first'));
+    assert(finalizerSystemInstruction.includes('Do not add a mandatory domain paragraph'));
     await assertRejectsCode(() => Promise.resolve(aiHarness.service._validateFormAiPlan({
         strategy: 'tool_query',
         intent: 'unsafe key',

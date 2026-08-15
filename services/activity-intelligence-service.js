@@ -1001,7 +1001,9 @@ class ActivityIntelligenceService {
         const plannerDurationMs = Date.now() - plannerStartedAt;
 
         const toolStartedAt = Date.now();
-        const toolResults = this._executeFormAiToolCalls(plan.toolCalls, context);
+        const toolResults = plan.strategy === 'tool_query'
+            ? this._executeFormAiToolCalls(plan.toolCalls, context)
+            : this._formAiDirectAnswerToolResult(plan);
         const toolDurationMs = Date.now() - toolStartedAt;
 
         const finalSystemInstruction = this._formAiFinalizerSystemInstruction();
@@ -1021,7 +1023,7 @@ class ActivityIntelligenceService {
                 planner: {
                     strategy: plan.strategy,
                     intent: plan.intent || '',
-                    toolCalls: plan.toolCalls,
+                    toolCalls: plan.toolCalls || [],
                     durationMs: plannerDurationMs,
                     inputChars: this._formAiPlannerPrompt(question, plannerInput).length
                 },
@@ -1062,6 +1064,10 @@ class ActivityIntelligenceService {
                 }
             ])),
             domainContext: plannerDomainContext(),
+            strategies: {
+                tool_query: 'Use for any Activity data, count, evidence, matching-record, summary, comparison, prioritization, or mixed data/domain question.',
+                direct_domain_answer: 'Use only for pure terminology, glossary, or general professional/domain questions that do not need Activity submission evidence.'
+            },
             tools: this._formAiToolDefinitions()
         };
     }
@@ -1102,7 +1108,7 @@ class ActivityIntelligenceService {
                 arguments: {
                     filters: 'Same filter object as aggregate_submissions.',
                     fields: 'Optional field references to include. Omit to include all answered fields.',
-                    limit: 'Optional positive integer, maximum 80.',
+                    limit: 'Optional positive integer only when the user explicitly asks for examples, sample, top N, first N, or a specific number. Omit limit for complete matching-record retrieval.',
                     fullTextScan: 'Optional true for comprehensive semantic analysis over every answered long_text field and multiple-choice Option Note in the current Activity. Ignores field guesses and field keyword filters.'
                 }
             }
@@ -1127,6 +1133,15 @@ class ActivityIntelligenceService {
             '不得輸出 SQL，不得引用資料表，不得編造工具結果，不得暴露內部資料庫架構。',
             '數字、排名、分布、日期統計、紀錄者統計必須使用 aggregate_submissions。',
             '需要文字內容、原因、建議、痛點、需求、摘要或混合分析時，使用 retrieve_submissions 取得實際紀錄證據。',
+            'For pure terminology, glossary, abbreviation, or general professional/domain questions that do not require Activity submission evidence, use strategy direct_domain_answer and omit toolCalls.',
+            'For mixed questions that combine Activity records with domain judgment, use strategy tool_query and retrieve/aggregate FORM evidence before interpretation.',
+            'For exact count questions, use aggregate_submissions and treat aggregate totals as authoritative; do not count retrieved rows as the total.',
+            'For complete enumeration requests such as list all, show all, which records, or enumerate every matching record, use retrieve_submissions without a limit.',
+            'Only set retrieve_submissions.arguments.limit when the user explicitly asks for examples, a sample, top N, first N, or a specific number of records.',
+            'For prioritization questions, retrieve the complete relevant candidate population unless the user supplied a limit.',
+            'When resolving terms, prefer exact internal glossary/domainContext definitions first. If absent, use FORM context, related internal domain knowledge, reliable professional knowledge, and general knowledge as appropriate.',
+            'Do not invent company-specific acronym expansions, internal aliases, product identities, or official term equivalences without evidence. Expose ambiguity only when it materially changes the answer.',
+            'Use glossary/domain knowledge for reasoning; do not cause definitions or generic background to be recited unless the user asks or the definition is necessary.',
             'domainContext 不得決定預設查詢主題；不要因為 domainContext 有 Digital Twin、MES、IoT、Tool Management、Competition 等概念，就自動查詢或組成主題清單。',
             '除非使用者明確提問、欄位實際值、或已取回的 FORM 文字證據支持，否則不要把 domainContext 主題加入 toolCalls。',
             '若 domainContext 暗示某概念可能相關，只能用來選擇要查詢的 FORM 欄位或文字證據；不得把關聯直接當成已確認事實。',
@@ -1136,7 +1151,8 @@ class ActivityIntelligenceService {
             'fullTextScan=true 時不要依單一 long_text 欄位標題或關鍵字 filters 預先限縮；後端會依目前 Activity schema 收集所有有答案的 long_text 欄位，再交由 finalizer 做語意分類。',
             `最多 ${FORM_AI_MAX_TOOL_CALLS} 個 toolCalls。`,
             'field 請優先使用 schema 內的 itemKey；只有標題完全且唯一時才可使用 title。',
-            '輸出 JSON 格式：{"strategy":"tool_query","intent":"...","toolCalls":[{"tool":"aggregate_submissions","arguments":{...}}]}'
+            'Output JSON format for data or mixed questions: {"strategy":"tool_query","intent":"...","toolCalls":[{"tool":"aggregate_submissions","arguments":{...}}]}',
+            'Output JSON format for direct/domain questions: {"strategy":"direct_domain_answer","intent":"...","toolCalls":[]}'
         ].join('\n');
     }
 
@@ -1164,8 +1180,19 @@ class ActivityIntelligenceService {
             throw new ActivityIntelligenceError(502, 'FORM AI planner returned an invalid plan.', 'FORM_AI_PLANNER_INVALID_PLAN');
         }
         const executablePlan = this._formAiExecutablePlannerObject(plan, ['strategy', 'intent', 'toolCalls'], 'planner');
-        if (executablePlan.strategy !== 'tool_query') {
+        if (!['tool_query', 'direct_domain_answer'].includes(executablePlan.strategy)) {
             throw new ActivityIntelligenceError(502, 'FORM AI planner selected an unsupported strategy.', 'FORM_AI_PLANNER_UNSUPPORTED_STRATEGY');
+        }
+        if (executablePlan.strategy === 'direct_domain_answer') {
+            const directToolCalls = Array.isArray(executablePlan.toolCalls) ? executablePlan.toolCalls : [];
+            if (directToolCalls.length > 0) {
+                throw new ActivityIntelligenceError(502, 'FORM AI planner returned tool calls for direct answer strategy.', 'FORM_AI_PLANNER_INVALID_TOOL_COUNT');
+            }
+            return {
+                strategy: executablePlan.strategy,
+                intent: String(executablePlan.intent || '').trim(),
+                toolCalls: []
+            };
         }
         if (!Array.isArray(executablePlan.toolCalls) || executablePlan.toolCalls.length === 0 || executablePlan.toolCalls.length > FORM_AI_MAX_TOOL_CALLS) {
             throw new ActivityIntelligenceError(502, 'FORM AI planner requested an invalid number of tool calls.', 'FORM_AI_PLANNER_INVALID_TOOL_COUNT');
@@ -1234,6 +1261,20 @@ class ActivityIntelligenceService {
         });
     }
 
+    _formAiDirectAnswerToolResult(plan) {
+        return [{
+            index: 0,
+            tool: 'direct_domain_answer',
+            ok: true,
+            result: {
+                mode: 'direct_domain_answer',
+                dataEvidenceUsed: false,
+                intent: plan.intent || '',
+                guidance: 'Answer from internal domain context and reliable professional knowledge only. Do not claim Activity-specific submission evidence.'
+            }
+        }];
+    }
+
     _executeFormAiAggregateTool(args, context) {
         this._assertAllowedKeys(args, ['aggregate', 'groupBy', 'field', 'filters', 'sort', 'limit'], 'aggregate_submissions.arguments');
         const aggregate = args.aggregate || 'count';
@@ -1275,12 +1316,16 @@ class ActivityIntelligenceService {
             ? args.fields.map(field => this._resolveFormAiFieldReference(field, context))
             : null;
         const fieldKeys = fields ? new Set(fields.map(field => field.itemKey)) : null;
-        const limit = Math.min(this._positiveInteger(args.limit, 40), 80);
+        const explicitLimit = this._positiveInteger(args.limit, 0);
+        const recordsToReturn = explicitLimit ? records.slice(0, explicitLimit) : records;
         return {
-            retrieved: Math.min(records.length, limit),
+            retrieved: recordsToReturn.length,
+            returnedCount: recordsToReturn.length,
             totalMatching: records.length,
+            truncated: recordsToReturn.length < records.length,
+            explicitLimit: explicitLimit || null,
             filtersApplied: this._publicFormAiFilters(args.filters || {}, context),
-            records: records.slice(0, limit).map((record, index) => this._formAiPublicRecordEvidence(record, context, fieldKeys, index + 1))
+            records: recordsToReturn.map((record, index) => this._formAiPublicRecordEvidence(record, context, fieldKeys, index + 1))
         };
     }
 
@@ -1682,6 +1727,12 @@ class ActivityIntelligenceService {
             '你是 FANUC forms 的表單資料分析助手。',
             '請用繁體中文直接回答使用者原始問題。',
             '工具結果中的計數、排名、分布、百分比與日期分組是權威事實；不得自行重新計數或改寫數字。',
+            'Answer the user question first. Do not force a standard report structure.',
+            'If tool evidence includes totalMatching, treat totalMatching as the authoritative matching population. Do not derive the total from records.length when returnedCount differs.',
+            'If returnedCount is smaller than totalMatching and truncated is true, never present the returned records as the complete set.',
+            'If the user asked for a complete list and the tool returned all matches, enumerate all matching records rather than changing the task into examples or a summary.',
+            'If the user asked for examples, sample, top N, first N, or a specific number, a truncated tool result may be used, but clearly answer according to that limited request.',
+            'Use answer length and structure based on the user intent and actual result volume: concise for counts, complete for complete lists, synthetic for summaries, ranked for prioritization, explanatory for terminology questions.',
             '你會收到 FANUC / Machine Tool / Manufacturing domainContext；它是專業解讀鏡頭，不是客戶實際陳述。',
             'EVIDENCE FIRST, DOMAIN INTERPRETATION SECOND：每個主要結論都必須先由實際 FORM 客戶回覆或確定性工具結果支撐。',
             'domainContext 單獨不足以支撐結論；不得因為 domainContext 提到某主題，就把該主題當作答案大綱或主要發現。',
@@ -1694,6 +1745,11 @@ class ActivityIntelligenceService {
             '分析型回答請先整理最強的實際客戶訊號與客戶說法，再補充有限的專業解讀。',
             '必要時保留客戶聲音：摘要實際長文字、短文字、otherText 或類別答案中出現的需求、痛點、關注點。',
             '不要預設進入背景教育模式；除非使用者詢問定義或術語會造成歧義，否則不要解釋基本製造業概念。',
+            'Use internal glossary/domain knowledge silently when it helps. Prefer exact internal definitions when present.',
+            'If no exact internal definition exists, use FORM context, related domain context, reliable professional knowledge, and general knowledge when appropriate.',
+            'Do not invent company-specific acronym expansions, internal aliases, product identities, or official terminology mappings. State uncertainty only when ambiguity materially affects the answer.',
+            'Do not add a mandatory domain paragraph, generic industry background, recommendations, or textbook definitions merely because domainContext is available.',
+            'For direct_domain_answer results, do not claim Activity-specific customer facts or submission evidence.',
             '需要解讀時，可以根據提供的文字證據做合理推論，並清楚區分證據與推論。',
             '請區分：已確認事實、明確問題/需求、以及基於製造業專業脈絡的可能相關分析維度。',
             '不要在一般回答中提到「domainContext」、「Domain Context」、「工具結果」或內部流程名稱；請用自然語言表達為專業判讀或可能相關維度。',
