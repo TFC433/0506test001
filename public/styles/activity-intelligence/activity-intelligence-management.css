@@ -4981,6 +4981,24 @@ a:focus-visible {
     font-weight: 700;
   }
 
+  .aim-mobile-analysis-icon-action {
+    width: 34px;
+    min-width: 34px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0;
+  }
+
+  .aim-mobile-analysis-icon {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+  }
+
   .aim-mobile-analysis-framework {
     padding-top: 10px;
     padding-bottom: 10px;

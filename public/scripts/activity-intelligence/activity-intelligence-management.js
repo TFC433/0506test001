@@ -1131,7 +1131,17 @@
 
   function renderMobileAnalysisHeaderAction() {
     if (!isMobileFormViewport() || !canUseAnalytics() || ui.mobileAnalysisMode) return '';
-    return '<div class="aim-mobile-analysis-header-action"><button class="aim-button aim-mobile-analysis-entry" data-action="mobile-analysis-enter" type="button">數據分析</button></div>';
+    return `
+      <div class="aim-mobile-analysis-header-action">
+        <button class="aim-button aim-mobile-analysis-entry aim-mobile-analysis-icon-action" data-action="mobile-analysis-enter" type="button" aria-label="數據分析" title="數據分析">
+          <svg class="aim-mobile-analysis-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M5 19V11"></path>
+            <path d="M12 19V5"></path>
+            <path d="M19 19V9"></path>
+          </svg>
+        </button>
+      </div>
+    `;
   }
 
   function formatHeaderDateRange(start, end, compactSameMonth) {
