@@ -1240,6 +1240,37 @@ a:focus-visible {
   margin: 0;
 }
 
+.aim-entry-title-row {
+  margin-bottom: 10px;
+}
+
+.aim-entry-title-row h2 {
+  min-width: 0;
+}
+
+.aim-entry-mode-action {
+  flex: 0 0 auto;
+  max-width: 50%;
+  min-height: 30px;
+  padding: 4px 0 4px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--aim-muted);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.aim-entry-mode-action:hover,
+.aim-entry-mode-action:focus-visible {
+  color: var(--aim-form-primary-hover);
+}
+
 .aim-definition-list {
   display: grid;
   grid-template-columns: 150px 1fr;
@@ -1340,16 +1371,10 @@ a:focus-visible {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
-.aim-record-context-tabs {
-  margin: 0 0 12px;
-}
-
-.aim-record-context-tabs,
 .aim-analytics-scope-tabs {
   max-width: 100%;
 }
 
-.aim-record-context-tabs .aim-mode-tab,
 .aim-analytics-scope-tabs .aim-mode-tab {
   min-width: 96px;
   white-space: nowrap;
@@ -4884,14 +4909,12 @@ a:focus-visible {
     grid-template-columns: 1fr;
   }
 
-  .aim-record-context-tabs,
   .aim-analytics-scope-tabs {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
   }
 
-  .aim-record-context-tabs .aim-mode-tab,
   .aim-analytics-scope-tabs .aim-mode-tab {
     min-width: 0;
     padding-right: 6px;

@@ -1370,10 +1370,10 @@
       ${!open ? '<div class="aim-warning">表單目前未開放，無法新增紀錄。</div>' : ''}
       <div class="aim-entry-layout">
         <div class="aim-panel aim-entry-form">
-          <div class="aim-panel-title-row">
-            <h2>新增紀錄</h2>
+          <div class="aim-panel-title-row aim-entry-title-row">
+            <h2>${ui.recordContextMode === recordContextActiveMode ? '主動情報' : '新增紀錄'}</h2>
+            ${renderRecordContextHeaderAction()}
           </div>
-          ${renderRecordContextSelector()}
           <div class="aim-answer-list">
             ${renderQuickEntryAnswerContent(activity, open)}
           </div>
@@ -1426,12 +1426,12 @@
     `;
   }
 
-  function renderRecordContextSelector() {
+  function renderRecordContextHeaderAction() {
+    const active = ui.recordContextMode === recordContextActiveMode;
+    const mode = active ? recordContextVisitorMode : recordContextActiveMode;
+    const label = active ? '返回訪客紀錄' : '主動情報';
     return `
-      <div class="aim-form-mode-tabs aim-record-context-tabs" role="tablist" aria-label="紀錄類型">
-        <button class="aim-mode-tab" type="button" data-action="record-context-mode" data-mode="${recordContextVisitorMode}" role="tab" aria-selected="${ui.recordContextMode !== recordContextActiveMode}">訪客紀錄</button>
-        <button class="aim-mode-tab" type="button" data-action="record-context-mode" data-mode="${recordContextActiveMode}" role="tab" aria-selected="${ui.recordContextMode === recordContextActiveMode}">主動情報</button>
-      </div>
+      <button class="aim-entry-mode-action" type="button" data-action="record-context-mode" data-mode="${mode}">${Store.escapeHtml(label)}</button>
     `;
   }
 
