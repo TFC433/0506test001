@@ -1270,58 +1270,50 @@ class ActivityIntelligenceService {
         if (tool !== 'aggregate_submissions' || !Object.prototype.hasOwnProperty.call(args, 'fields')) {
             return args;
         }
-        const alias = this._normalizeFormAiAggregateFieldAlias(args.fields);
-        if (!alias.ok) {
+        const promoted = this._normalizeFormAiPromotedFilterFields(args.fields);
+        if (!promoted.ok) {
             this._logFormAiSemanticAliasShape({
                 tool,
                 alias: 'fields',
-                canonicalField: args.field,
+                canonicalFiltersFields: args.filters && args.filters.fields,
                 fields: args.fields,
                 category: 'ambiguous_semantic_alias'
             });
             throw new ActivityIntelligenceError(502, `FORM AI planner returned unsupported ${tool}.arguments keys.`, 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
         }
         const normalized = { ...args };
-        if (Object.prototype.hasOwnProperty.call(args, 'field')) {
-            const canonical = this._normalizeFormAiAggregateFieldAlias(args.field);
-            if (!canonical.ok || !this._sameFormAiPlannerValue(canonical.value, alias.value)) {
+        const filters = args.filters === undefined ? {} : args.filters;
+        if (!filters || typeof filters !== 'object' || Array.isArray(filters)) {
+            throw new ActivityIntelligenceError(502, 'FORM AI tool received invalid filters.', 'FORM_AI_INVALID_TOOL_ARGUMENTS');
+        }
+        this._assertAllowedKeys(filters, ['dateStart', 'dateEnd', 'recorderDisplayName', 'fields'], 'filters');
+        if (Object.prototype.hasOwnProperty.call(filters, 'fields')) {
+            const canonical = this._normalizeFormAiPromotedFilterFields(filters.fields);
+            if (!canonical.ok || !this._sameFormAiPlannerValue(canonical.value, promoted.value)) {
                 this._logFormAiSemanticAliasShape({
                     tool,
                     alias: 'fields',
-                    canonicalField: args.field,
+                    canonicalFiltersFields: filters.fields,
                     fields: args.fields,
                     category: 'conflicting_semantic_alias'
                 });
                 throw new ActivityIntelligenceError(502, `FORM AI planner returned unsupported ${tool}.arguments keys.`, 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
             }
         } else {
-            normalized.field = alias.value;
+            normalized.filters = { ...filters, fields: promoted.value };
         }
         delete normalized.fields;
         return normalized;
     }
 
-    _normalizeFormAiAggregateFieldAlias(value) {
-        if (Array.isArray(value)) {
-            if (value.length !== 1) return { ok: false };
-            return this._normalizeFormAiAggregateFieldAlias(value[0]);
+    _normalizeFormAiPromotedFilterFields(value) {
+        if (!Array.isArray(value)) return { ok: false };
+        try {
+            this._validateFormAiFilters({ fields: value });
+        } catch (error) {
+            return { ok: false };
         }
-        if (typeof value === 'string') {
-            const itemKey = value.trim();
-            return itemKey ? { ok: true, value: itemKey } : { ok: false };
-        }
-        if (value && typeof value === 'object') {
-            const unknown = Object.keys(value).filter(key => !['itemKey', 'title'].includes(key));
-            if (unknown.length) return { ok: false };
-            const itemKey = String(value.itemKey || '').trim();
-            const title = String(value.title || '').trim();
-            if (!itemKey && !title) return { ok: false };
-            const normalized = {};
-            if (itemKey) normalized.itemKey = itemKey;
-            if (title) normalized.title = title;
-            return { ok: true, value: normalized };
-        }
-        return { ok: false };
+        return { ok: true, value };
     }
 
     _sameFormAiPlannerValue(left, right) {
@@ -1365,15 +1357,15 @@ class ActivityIntelligenceService {
         console.warn('[ActivityIntelligence] FORM AI unsupported tool argument', payload);
     }
 
-    _logFormAiSemanticAliasShape({ tool, alias, canonicalField, fields, category }) {
+    _logFormAiSemanticAliasShape({ tool, alias, canonicalFiltersFields, fields, category }) {
         const fieldItems = Array.isArray(fields) ? fields : [fields];
         const objectItems = fieldItems.filter(item => item && typeof item === 'object' && !Array.isArray(item));
         const payload = {
             tool,
             alias,
             category,
-            canonicalFieldPresent: canonicalField !== undefined,
-            canonicalFieldType: this._formAiPlannerValueType(canonicalField),
+            canonicalFiltersFieldsPresent: canonicalFiltersFields !== undefined,
+            canonicalFiltersFieldsType: this._formAiPlannerValueType(canonicalFiltersFields),
             fieldsType: this._formAiPlannerValueType(fields),
             fieldsLength: Array.isArray(fields) ? fields.length : null,
             fieldsItemTypes: fieldItems.map(item => this._formAiPlannerValueType(item)),

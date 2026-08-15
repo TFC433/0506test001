@@ -636,69 +636,103 @@ async function main() {
         tool: 'retrieve_submissions',
         arguments: { fields: [IDS.longKey], limit: 10 }
     }]);
-    const aggregateFieldsStringPlan = aiHarness.service._validateFormAiPlan({
+    const promotedRuntimePlan = aiHarness.service._validateFormAiPlan({
         strategy: 'tool_query',
-        intent: 'fields string alias',
+        intent: 'promoted filter fields',
         toolCalls: [{
             tool: 'aggregate_submissions',
             arguments: {
                 aggregate: 'count',
-                groupBy: 'field',
-                fields: 'field-a'
+                groupBy: 'none',
+                fields: [{ field: 'topicField', values: ['IoT'] }]
             }
         }]
     });
-    assert.deepStrictEqual(aggregateFieldsStringPlan.toolCalls[0].arguments, {
+    assert.deepStrictEqual(promotedRuntimePlan.toolCalls[0].arguments, {
         aggregate: 'count',
-        groupBy: 'field',
-        field: 'field-a'
+        groupBy: 'none',
+        filters: { fields: [{ field: 'topicField', values: ['IoT'] }] }
     });
-    const aggregateFieldsArrayPlan = aiHarness.service._validateFormAiPlan({
+    const promotedRuntimeResult = aiHarness.service._executeFormAiAggregateTool(
+        promotedRuntimePlan.toolCalls[0].arguments,
+        makeRetrieveCompletenessContext(74)
+    );
+    assert.strictEqual(promotedRuntimeResult.total, 74);
+    const promotedWithOtherFiltersPlan = aiHarness.service._validateFormAiPlan({
         strategy: 'tool_query',
-        intent: 'fields single array alias',
+        intent: 'promoted filter fields with other filters',
         toolCalls: [{
             tool: 'aggregate_submissions',
             arguments: {
                 aggregate: 'count',
-                groupBy: 'field',
-                fields: ['field-a']
+                groupBy: 'none',
+                filters: { dateStart: '2026-04-01' },
+                fields: [{ field: 'topicField', values: ['IoT'] }]
             }
         }]
     });
-    assert.deepStrictEqual(aggregateFieldsArrayPlan.toolCalls[0].arguments, {
+    assert.deepStrictEqual(promotedWithOtherFiltersPlan.toolCalls[0].arguments, {
         aggregate: 'count',
-        groupBy: 'field',
-        field: 'field-a'
+        groupBy: 'none',
+        filters: {
+            dateStart: '2026-04-01',
+            fields: [{ field: 'topicField', values: ['IoT'] }]
+        }
     });
-    const aggregateFieldsDuplicatePlan = aiHarness.service._validateFormAiPlan({
+    const duplicatePromotedPlan = aiHarness.service._validateFormAiPlan({
         strategy: 'tool_query',
-        intent: 'matching field and fields alias',
+        intent: 'duplicate promoted filter fields',
         toolCalls: [{
             tool: 'aggregate_submissions',
             arguments: {
                 aggregate: 'count',
-                groupBy: 'field',
-                field: 'field-a',
-                fields: ['field-a']
+                groupBy: 'none',
+                filters: { fields: [{ field: 'topicField', values: ['IoT'] }] },
+                fields: [{ field: 'topicField', values: ['IoT'] }]
             }
         }]
     });
-    assert.deepStrictEqual(aggregateFieldsDuplicatePlan.toolCalls[0].arguments, {
+    assert.deepStrictEqual(duplicatePromotedPlan.toolCalls[0].arguments, {
         aggregate: 'count',
-        groupBy: 'field',
-        field: 'field-a'
+        groupBy: 'none',
+        filters: { fields: [{ field: 'topicField', values: ['IoT'] }] }
+    });
+    const multiplePromotedPlan = aiHarness.service._validateFormAiPlan({
+        strategy: 'tool_query',
+        intent: 'multiple promoted filter fields',
+        toolCalls: [{
+            tool: 'aggregate_submissions',
+            arguments: {
+                aggregate: 'count',
+                groupBy: 'none',
+                fields: [
+                    { field: 'topicField', values: ['IoT'] },
+                    { field: { itemKey: 'topicField' }, value: 'IoT' }
+                ]
+            }
+        }]
+    });
+    assert.deepStrictEqual(multiplePromotedPlan.toolCalls[0].arguments, {
+        aggregate: 'count',
+        groupBy: 'none',
+        filters: {
+            fields: [
+                { field: 'topicField', values: ['IoT'] },
+                { field: { itemKey: 'topicField' }, value: 'IoT' }
+            ]
+        }
     });
     const ambiguousAliasWarnings = await captureConsoleWarn(async () => {
         const nonAsciiFieldTitle = String.fromCodePoint(0x6B04, 0x4F4D, 0x4E59);
         await assertRejectsCode(() => Promise.resolve(aiHarness.service._validateFormAiPlan({
             strategy: 'tool_query',
-            intent: 'ambiguous fields alias',
+            intent: 'malformed promoted filter fields',
             toolCalls: [{
                 tool: 'aggregate_submissions',
                 arguments: {
                     aggregate: 'count',
-                    groupBy: 'field',
-                    fields: ['field-a', nonAsciiFieldTitle, { itemKey: 'field-c', title: 'Ignored title' }]
+                    groupBy: 'none',
+                    fields: [{ badKey: nonAsciiFieldTitle }]
                 }
             }]
         })), 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
@@ -708,45 +742,28 @@ async function main() {
     assert.strictEqual(ambiguousAliasWarnings[0][1].tool, 'aggregate_submissions');
     assert.strictEqual(ambiguousAliasWarnings[0][1].alias, 'fields');
     assert.strictEqual(ambiguousAliasWarnings[0][1].category, 'ambiguous_semantic_alias');
-    assert.strictEqual(ambiguousAliasWarnings[0][1].canonicalFieldPresent, false);
-    assert.strictEqual(ambiguousAliasWarnings[0][1].canonicalFieldType, 'undefined');
+    assert.strictEqual(ambiguousAliasWarnings[0][1].canonicalFiltersFieldsPresent, false);
+    assert.strictEqual(ambiguousAliasWarnings[0][1].canonicalFiltersFieldsType, 'undefined');
     assert.strictEqual(ambiguousAliasWarnings[0][1].fieldsType, 'array');
-    assert.strictEqual(ambiguousAliasWarnings[0][1].fieldsLength, 3);
-    assert.deepStrictEqual(ambiguousAliasWarnings[0][1].fieldsItemTypes, ['string', 'string', 'object']);
-    assert.deepStrictEqual(ambiguousAliasWarnings[0][1].fieldsObjectKeys, [['itemKey', 'title']]);
+    assert.strictEqual(ambiguousAliasWarnings[0][1].fieldsLength, 1);
+    assert.deepStrictEqual(ambiguousAliasWarnings[0][1].fieldsItemTypes, ['object']);
+    assert.deepStrictEqual(ambiguousAliasWarnings[0][1].fieldsObjectKeys, [['badKey']]);
     assert.deepStrictEqual(ambiguousAliasWarnings[0][1].fieldsItems[0], {
-        type: 'string',
-        ascii: true,
-        length: 7,
-        value: 'field-a'
-    });
-    assert.strictEqual(ambiguousAliasWarnings[0][1].fieldsItems[1].type, 'string');
-    assert.strictEqual(ambiguousAliasWarnings[0][1].fieldsItems[1].ascii, false);
-    assert.deepStrictEqual(ambiguousAliasWarnings[0][1].fieldsItems[1].codePoints, ['U+6B04', 'U+4F4D', 'U+4E59']);
-    assert.strictEqual(ambiguousAliasWarnings[0][1].fieldsItems[1].utf8Hex, Buffer.from(String.fromCodePoint(0x6B04, 0x4F4D, 0x4E59), 'utf8').toString('hex'));
-    assert.deepStrictEqual(ambiguousAliasWarnings[0][1].fieldsItems[2], {
         type: 'object',
-        keys: ['itemKey', 'title'],
-        identifiers: {
-            itemKey: {
-                type: 'string',
-                ascii: true,
-                length: 7,
-                value: 'field-c'
-            }
-        }
+        keys: ['badKey'],
+        identifiers: {}
     });
     const conflictingAliasWarnings = await captureConsoleWarn(async () => {
         await assertRejectsCode(() => Promise.resolve(aiHarness.service._validateFormAiPlan({
             strategy: 'tool_query',
-            intent: 'conflicting field aliases',
+            intent: 'conflicting promoted filter fields',
             toolCalls: [{
                 tool: 'aggregate_submissions',
                 arguments: {
                     aggregate: 'count',
-                    groupBy: 'field',
-                    field: 'field-a',
-                    fields: ['field-b']
+                    groupBy: 'none',
+                    filters: { fields: [{ field: 'topicField', values: ['MES'] }] },
+                    fields: [{ field: 'topicField', values: ['IoT'] }]
                 }
             }]
         })), 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
@@ -754,10 +771,38 @@ async function main() {
     assert.strictEqual(conflictingAliasWarnings.length, 1);
     assert.strictEqual(conflictingAliasWarnings[0][0], '[ActivityIntelligence] FORM AI ambiguous semantic alias');
     assert.strictEqual(conflictingAliasWarnings[0][1].category, 'conflicting_semantic_alias');
-    assert.strictEqual(conflictingAliasWarnings[0][1].canonicalFieldPresent, true);
-    assert.strictEqual(conflictingAliasWarnings[0][1].canonicalFieldType, 'string');
+    assert.strictEqual(conflictingAliasWarnings[0][1].canonicalFiltersFieldsPresent, true);
+    assert.strictEqual(conflictingAliasWarnings[0][1].canonicalFiltersFieldsType, 'array');
     assert.strictEqual(conflictingAliasWarnings[0][1].fieldsType, 'array');
     assert.strictEqual(conflictingAliasWarnings[0][1].fieldsLength, 1);
+    const removedScalarAliasWarnings = await captureConsoleWarn(async () => {
+        await assertRejectsCode(() => Promise.resolve(aiHarness.service._validateFormAiPlan({
+            strategy: 'tool_query',
+            intent: 'removed scalar fields alias',
+            toolCalls: [{
+                tool: 'aggregate_submissions',
+                arguments: {
+                    aggregate: 'count',
+                    groupBy: 'field',
+                    fields: 'field-a'
+                }
+            }]
+        })), 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
+        await assertRejectsCode(() => Promise.resolve(aiHarness.service._validateFormAiPlan({
+            strategy: 'tool_query',
+            intent: 'removed scalar fields array alias',
+            toolCalls: [{
+                tool: 'aggregate_submissions',
+                arguments: {
+                    aggregate: 'count',
+                    groupBy: 'field',
+                    fields: ['field-a']
+                }
+            }]
+        })), 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
+    });
+    assert.strictEqual(removedScalarAliasWarnings.length, 2);
+    assert(removedScalarAliasWarnings.every(entry => entry[1].category === 'ambiguous_semantic_alias'));
     const aggregateMetadataPlan = aiHarness.service._validateFormAiPlan({
         strategy: 'tool_query',
         intent: 'count IoT',
