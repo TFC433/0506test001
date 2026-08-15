@@ -1272,10 +1272,11 @@ class ActivityIntelligenceService {
         }
         const alias = this._normalizeFormAiAggregateFieldAlias(args.fields);
         if (!alias.ok) {
-            this._logFormAiUnsupportedToolArgument({
+            this._logFormAiSemanticAliasShape({
                 tool,
-                unsupportedKeys: ['fields'],
-                supportedKeys: contract.executableKeys,
+                alias: 'fields',
+                canonicalField: args.field,
+                fields: args.fields,
                 category: 'ambiguous_semantic_alias'
             });
             throw new ActivityIntelligenceError(502, `FORM AI planner returned unsupported ${tool}.arguments keys.`, 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
@@ -1284,10 +1285,11 @@ class ActivityIntelligenceService {
         if (Object.prototype.hasOwnProperty.call(args, 'field')) {
             const canonical = this._normalizeFormAiAggregateFieldAlias(args.field);
             if (!canonical.ok || !this._sameFormAiPlannerValue(canonical.value, alias.value)) {
-                this._logFormAiUnsupportedToolArgument({
+                this._logFormAiSemanticAliasShape({
                     tool,
-                    unsupportedKeys: ['fields'],
-                    supportedKeys: contract.executableKeys,
+                    alias: 'fields',
+                    canonicalField: args.field,
+                    fields: args.fields,
                     category: 'conflicting_semantic_alias'
                 });
                 throw new ActivityIntelligenceError(502, `FORM AI planner returned unsupported ${tool}.arguments keys.`, 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
@@ -1361,6 +1363,78 @@ class ActivityIntelligenceService {
             category
         };
         console.warn('[ActivityIntelligence] FORM AI unsupported tool argument', payload);
+    }
+
+    _logFormAiSemanticAliasShape({ tool, alias, canonicalField, fields, category }) {
+        const fieldItems = Array.isArray(fields) ? fields : [fields];
+        const objectItems = fieldItems.filter(item => item && typeof item === 'object' && !Array.isArray(item));
+        const payload = {
+            tool,
+            alias,
+            category,
+            canonicalFieldPresent: canonicalField !== undefined,
+            canonicalFieldType: this._formAiPlannerValueType(canonicalField),
+            fieldsType: this._formAiPlannerValueType(fields),
+            fieldsLength: Array.isArray(fields) ? fields.length : null,
+            fieldsItemTypes: fieldItems.map(item => this._formAiPlannerValueType(item)),
+            fieldsObjectKeys: objectItems.map(item => Object.keys(item).sort()),
+            fieldsItems: fieldItems.map(item => this._safeFormAiPlannerAliasItem(item))
+        };
+        console.warn('[ActivityIntelligence] FORM AI ambiguous semantic alias', payload);
+    }
+
+    _safeFormAiPlannerAliasItem(item) {
+        const type = this._formAiPlannerValueType(item);
+        if (type === 'string') {
+            return this._safeFormAiPlannerString(item);
+        }
+        if (type === 'object') {
+            const keys = Object.keys(item).sort();
+            const identifierKeys = ['fieldId', 'id', 'itemKey', 'key', 'type'];
+            const identifiers = {};
+            identifierKeys.forEach(key => {
+                if (Object.prototype.hasOwnProperty.call(item, key) && ['string', 'number', 'boolean'].includes(this._formAiPlannerValueType(item[key]))) {
+                    identifiers[key] = this._safeFormAiPlannerScalar(item[key]);
+                }
+            });
+            return {
+                type,
+                keys,
+                identifiers
+            };
+        }
+        return { type };
+    }
+
+    _safeFormAiPlannerScalar(value) {
+        if (typeof value === 'string') return this._safeFormAiPlannerString(value);
+        return {
+            type: this._formAiPlannerValueType(value),
+            value
+        };
+    }
+
+    _safeFormAiPlannerString(value) {
+        const text = String(value);
+        const ascii = /^[\x20-\x7E]*$/.test(text);
+        const result = {
+            type: 'string',
+            ascii,
+            length: text.length
+        };
+        if (ascii) {
+            result.value = text;
+        } else {
+            result.codePoints = Array.from(text).map(char => `U+${char.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}`);
+            result.utf8Hex = Buffer.from(text, 'utf8').toString('hex');
+        }
+        return result;
+    }
+
+    _formAiPlannerValueType(value) {
+        if (Array.isArray(value)) return 'array';
+        if (value === null) return 'null';
+        return typeof value;
     }
 
     _formAiExecutablePlannerObject(object, executableKeys, scope) {

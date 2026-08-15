@@ -689,6 +689,7 @@ async function main() {
         field: 'field-a'
     });
     const ambiguousAliasWarnings = await captureConsoleWarn(async () => {
+        const nonAsciiFieldTitle = String.fromCodePoint(0x6B04, 0x4F4D, 0x4E59);
         await assertRejectsCode(() => Promise.resolve(aiHarness.service._validateFormAiPlan({
             strategy: 'tool_query',
             intent: 'ambiguous fields alias',
@@ -697,13 +698,44 @@ async function main() {
                 arguments: {
                     aggregate: 'count',
                     groupBy: 'field',
-                    fields: ['field-a', 'field-b']
+                    fields: ['field-a', nonAsciiFieldTitle, { itemKey: 'field-c', title: 'Ignored title' }]
                 }
             }]
         })), 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
     });
+    assert.strictEqual(ambiguousAliasWarnings.length, 1);
+    assert.strictEqual(ambiguousAliasWarnings[0][0], '[ActivityIntelligence] FORM AI ambiguous semantic alias');
+    assert.strictEqual(ambiguousAliasWarnings[0][1].tool, 'aggregate_submissions');
+    assert.strictEqual(ambiguousAliasWarnings[0][1].alias, 'fields');
     assert.strictEqual(ambiguousAliasWarnings[0][1].category, 'ambiguous_semantic_alias');
-    assert.deepStrictEqual(ambiguousAliasWarnings[0][1].unsupportedKeys, ['fields']);
+    assert.strictEqual(ambiguousAliasWarnings[0][1].canonicalFieldPresent, false);
+    assert.strictEqual(ambiguousAliasWarnings[0][1].canonicalFieldType, 'undefined');
+    assert.strictEqual(ambiguousAliasWarnings[0][1].fieldsType, 'array');
+    assert.strictEqual(ambiguousAliasWarnings[0][1].fieldsLength, 3);
+    assert.deepStrictEqual(ambiguousAliasWarnings[0][1].fieldsItemTypes, ['string', 'string', 'object']);
+    assert.deepStrictEqual(ambiguousAliasWarnings[0][1].fieldsObjectKeys, [['itemKey', 'title']]);
+    assert.deepStrictEqual(ambiguousAliasWarnings[0][1].fieldsItems[0], {
+        type: 'string',
+        ascii: true,
+        length: 7,
+        value: 'field-a'
+    });
+    assert.strictEqual(ambiguousAliasWarnings[0][1].fieldsItems[1].type, 'string');
+    assert.strictEqual(ambiguousAliasWarnings[0][1].fieldsItems[1].ascii, false);
+    assert.deepStrictEqual(ambiguousAliasWarnings[0][1].fieldsItems[1].codePoints, ['U+6B04', 'U+4F4D', 'U+4E59']);
+    assert.strictEqual(ambiguousAliasWarnings[0][1].fieldsItems[1].utf8Hex, Buffer.from(String.fromCodePoint(0x6B04, 0x4F4D, 0x4E59), 'utf8').toString('hex'));
+    assert.deepStrictEqual(ambiguousAliasWarnings[0][1].fieldsItems[2], {
+        type: 'object',
+        keys: ['itemKey', 'title'],
+        identifiers: {
+            itemKey: {
+                type: 'string',
+                ascii: true,
+                length: 7,
+                value: 'field-c'
+            }
+        }
+    });
     const conflictingAliasWarnings = await captureConsoleWarn(async () => {
         await assertRejectsCode(() => Promise.resolve(aiHarness.service._validateFormAiPlan({
             strategy: 'tool_query',
@@ -719,8 +751,13 @@ async function main() {
             }]
         })), 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
     });
+    assert.strictEqual(conflictingAliasWarnings.length, 1);
+    assert.strictEqual(conflictingAliasWarnings[0][0], '[ActivityIntelligence] FORM AI ambiguous semantic alias');
     assert.strictEqual(conflictingAliasWarnings[0][1].category, 'conflicting_semantic_alias');
-    assert.deepStrictEqual(conflictingAliasWarnings[0][1].unsupportedKeys, ['fields']);
+    assert.strictEqual(conflictingAliasWarnings[0][1].canonicalFieldPresent, true);
+    assert.strictEqual(conflictingAliasWarnings[0][1].canonicalFieldType, 'string');
+    assert.strictEqual(conflictingAliasWarnings[0][1].fieldsType, 'array');
+    assert.strictEqual(conflictingAliasWarnings[0][1].fieldsLength, 1);
     const aggregateMetadataPlan = aiHarness.service._validateFormAiPlan({
         strategy: 'tool_query',
         intent: 'count IoT',
