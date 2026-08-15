@@ -47,21 +47,21 @@ class ActivityIntelligenceController {
 
     getForm = async (req, res) => {
         await this._handle(res, async () => {
-            const data = await this.activityIntelligenceService.getForm(req.params.activityId);
+            const data = await this.activityIntelligenceService.getForm(req.params.activityId, formContextFromRequest(req));
             res.json({ success: true, data });
         });
     };
 
     getDraftForm = async (req, res) => {
         await this._handle(res, async () => {
-            const data = await this.activityIntelligenceService.getDraftForm(req.params.activityId);
+            const data = await this.activityIntelligenceService.getDraftForm(req.params.activityId, formContextFromRequest(req));
             res.json({ success: true, data });
         });
     };
 
     getPublishedForm = async (req, res) => {
         await this._handle(res, async () => {
-            const data = await this.activityIntelligenceService.getPublishedForm(req.params.activityId);
+            const data = await this.activityIntelligenceService.getPublishedForm(req.params.activityId, formContextFromRequest(req));
             res.json({ success: true, data });
         });
     };
@@ -75,14 +75,14 @@ class ActivityIntelligenceController {
 
     discardDraft = async (req, res) => {
         await this._handle(res, async () => {
-            const data = await this.activityIntelligenceService.discardDraft(req.params.activityId, req.user);
+            const data = await this.activityIntelligenceService.discardDraft(req.params.activityId, req.user, formContextFromRequest(req));
             res.json({ success: true, data });
         });
     };
 
     publishDraft = async (req, res) => {
         await this._handle(res, async () => {
-            const data = await this.activityIntelligenceService.publishDraft(req.params.activityId, req.user);
+            const data = await this.activityIntelligenceService.publishDraft(req.params.activityId, req.user, formContextFromRequest(req));
             res.json({ success: true, data });
         });
     };
@@ -276,6 +276,12 @@ function mediaUploadError(message, code) {
     error.statusCode = 400;
     error.code = code;
     return error;
+}
+
+function formContextFromRequest(req) {
+    const query = req.query || {};
+    const body = req.body || {};
+    return query.formContext || query.form_context || query.context || body.formContext || body.form_context || body.context;
 }
 
 module.exports = ActivityIntelligenceController;

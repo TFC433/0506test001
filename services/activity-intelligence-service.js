@@ -56,6 +56,8 @@ const FORM_ASSIST_FIXED_KEYS = Object.freeze({
 const FORM_ASSIST_SOURCE_SETTINGS_KEY = 'formAssistSuggestionSourceActivityIds';
 const AI_ANALYSIS_QUICK_QUESTIONS_SETTINGS_KEY = 'aiAnalysisQuickQuestions';
 const AI_ANALYSIS_QUICK_QUESTION_COUNT = 3;
+const DEFAULT_FORM_CONTEXT = 'visitor';
+const FORM_CONTEXTS = new Set([DEFAULT_FORM_CONTEXT, 'field_intelligence']);
 
 class ActivityIntelligenceError extends Error {
     constructor(statusCode, message, code) {
@@ -160,22 +162,25 @@ class ActivityIntelligenceService {
         return { activityId: activity.id, deleted: true };
     }
 
-    async getForm(activityId) {
+    async getForm(activityId, formContext) {
         await this._requireActivity(activityId);
-        const form = await this.reader.getFormBundle(activityId);
+        const context = this._normalizeFormContext(formContext);
+        const form = await this.reader.getFormBundle(activityId, context);
         return this._formBundleDto(form);
     }
 
-    async getDraftForm(activityId) {
+    async getDraftForm(activityId, formContext) {
         await this._requireActivity(activityId);
-        const draft = await this.reader.getDraftForm(activityId);
+        const context = this._normalizeFormContext(formContext);
+        const draft = await this.reader.getDraftForm(activityId, context);
         if (!draft) throw new ActivityIntelligenceError(404, 'Draft form not found.', 'DRAFT_NOT_FOUND');
         return this._versionDto(draft);
     }
 
-    async getPublishedForm(activityId) {
+    async getPublishedForm(activityId, formContext) {
         await this._requireActivity(activityId);
-        const published = await this.reader.getPublishedForm(activityId);
+        const context = this._normalizeFormContext(formContext);
+        const published = await this.reader.getPublishedForm(activityId, context);
         if (!published) throw new ActivityIntelligenceError(404, 'Published form not found.', 'PUBLISHED_NOT_FOUND');
         return this._versionDto(published);
     }
@@ -183,39 +188,45 @@ class ActivityIntelligenceService {
     async saveDraft(activityId, payload = {}, user = {}) {
         await this._requireActivity(activityId);
         const actor = this._actorFromUser(user);
+        const formContext = this._normalizeFormContext(payload.formContext || payload.form_context || payload.context);
         const items = this._normalizeFormItems(payload.items || [], { assignMissingKeys: true });
 
         await this.writer.saveDraft({
             p_activity_id: activityId,
+            p_form_context: formContext,
             p_items: items,
             p_actor: actor
         });
 
-        return this.getForm(activityId);
+        return this.getForm(activityId, formContext);
     }
 
-    async discardDraft(activityId, user = {}) {
+    async discardDraft(activityId, user = {}, formContext) {
         await this._requireActivity(activityId);
         const actor = this._actorFromUser(user);
+        const context = this._normalizeFormContext(formContext);
 
         await this.writer.discardDraft({
             p_activity_id: activityId,
+            p_form_context: context,
             p_actor: actor
         });
 
-        return this.getForm(activityId);
+        return this.getForm(activityId, context);
     }
 
-    async publishDraft(activityId, user = {}) {
+    async publishDraft(activityId, user = {}, formContext) {
         await this._requireActivity(activityId);
         const actor = this._actorFromUser(user);
+        const context = this._normalizeFormContext(formContext);
 
         await this.writer.publishDraft({
             p_activity_id: activityId,
+            p_form_context: context,
             p_actor: actor
         });
 
-        return this.getForm(activityId);
+        return this.getForm(activityId, context);
     }
 
     async uploadFormMedia(payload = {}) {
@@ -299,7 +310,8 @@ class ActivityIntelligenceService {
 
     async createSubmission(activityId, payload = {}, user = {}) {
         await this._requireActivity(activityId);
-        const published = await this.reader.getPublishedForm(activityId);
+        const recordContext = this._normalizeFormContext(payload.recordContext || payload.record_context || payload.formContext || payload.form_context || payload.context);
+        const published = await this.reader.getPublishedForm(activityId, recordContext);
         if (!published) throw new ActivityIntelligenceError(409, 'Activity has no current published form.', 'NO_CURRENT_PUBLISHED_FORM');
 
         const actor = this._actorFromUser(user);
@@ -311,6 +323,7 @@ class ActivityIntelligenceService {
                 submission_id: randomUUID(),
                 activity_id: activityId,
                 form_version_id: published.versionId,
+                record_context: published.formContext || recordContext,
                 card_id: cardId,
                 status: 'active',
                 ...this._actorCreateRow(actor)
@@ -554,6 +567,7 @@ class ActivityIntelligenceService {
         if (!version) return null;
         return {
             versionId: version.versionId,
+            formContext: version.formContext || DEFAULT_FORM_CONTEXT,
             versionNumber: version.versionNumber,
             publishedAt: version.publishedAt,
             publishedByUserId: version.publishedByUserId,
@@ -585,6 +599,14 @@ class ActivityIntelligenceService {
         if (thumbnails > 1) throw new ActivityIntelligenceError(400, 'Only one form_thumbnail item is allowed.', 'DUPLICATE_FORM_THUMBNAIL');
 
         return normalized;
+    }
+
+    _normalizeFormContext(value) {
+        const context = String(value || DEFAULT_FORM_CONTEXT).trim();
+        if (!FORM_CONTEXTS.has(context)) {
+            throw new ActivityIntelligenceError(400, 'Form context is invalid.', 'INVALID_FORM_CONTEXT');
+        }
+        return context;
     }
 
     _normalizeFormItem(item = {}, index, seenKeys, options = {}) {
@@ -802,6 +824,9 @@ class ActivityIntelligenceService {
         }
 
         return {
+            recordContext: query.recordContext || query.record_context || query.context
+                ? this._normalizeFormContext(query.recordContext || query.record_context || query.context)
+                : null,
             dateStart: this._normalizeOptionalDate(query.dateStart || query.start),
             dateEnd: this._normalizeOptionalDate(query.dateEnd || query.end),
             recorderUserId: query.recorderUserId || query.userId || null,

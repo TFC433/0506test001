@@ -105,17 +105,20 @@ function makeHarness(options = {}) {
         async getActivityById(id) {
             return id === 'missing' ? null : { ...baseActivity, id, settings: options.activitySettings || baseActivity.settings };
         },
-        async getFormBundle() {
+        async getFormBundle(activityId, formContext = 'visitor') {
+            calls.getFormBundle = { activityId, formContext };
             return {
-                published: { versionId: IDS.publishedVersion, versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems },
-                draft: { versionId: IDS.draftVersion, versionNumber: 2, items: publishedItems.map(item => ({ ...item })) }
+                published: { versionId: IDS.publishedVersion, formContext, versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems },
+                draft: { versionId: IDS.draftVersion, formContext, versionNumber: 2, items: publishedItems.map(item => ({ ...item })) }
             };
         },
-        async getPublishedForm() {
-            return { versionId: IDS.publishedVersion, versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems };
+        async getPublishedForm(activityId, formContext = 'visitor') {
+            calls.getPublishedForm = { activityId, formContext };
+            return { versionId: IDS.publishedVersion, formContext, versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems };
         },
-        async getDraftForm() {
-            return { versionId: IDS.draftVersion, versionNumber: 2, items: publishedItems.map(item => ({ ...item })) };
+        async getDraftForm(activityId, formContext = 'visitor') {
+            calls.getDraftForm = { activityId, formContext };
+            return { versionId: IDS.draftVersion, formContext, versionNumber: 2, items: publishedItems.map(item => ({ ...item })) };
         },
         async getVersionWithItems(versionId) {
             return versionId === IDS.oldVersion
@@ -128,6 +131,7 @@ function makeHarness(options = {}) {
                 if (submission.activityId !== activityId) return false;
                 if (filters.state && filters.state !== 'all' && submission.status !== filters.state) return false;
                 if (!filters.includeVoid && submission.status === 'void') return false;
+                if (filters.recordContext && submission.recordContext !== filters.recordContext) return false;
                 if (filters.dateStart && submission.createdAt.slice(0, 10) < filters.dateStart) return false;
                 if (filters.dateEnd && submission.createdAt.slice(0, 10) > filters.dateEnd) return false;
                 if (filters.recorderDisplayName && submission.createdByDisplayName !== filters.recorderDisplayName) return false;
@@ -166,12 +170,13 @@ function makeHarness(options = {}) {
                 id: IDS.newSubmission,
                 activityId: payload.p_submission.activity_id,
                 formVersionId: payload.p_submission.form_version_id,
+                recordContext: payload.p_submission.record_context || 'visitor',
                 status: 'active',
                 answers: {},
                 otherAnswers: {},
                 cardId: payload.p_submission.card_id,
                 card: null,
-                formSnapshot: { versionId: IDS.publishedVersion, versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems },
+                formSnapshot: { versionId: IDS.publishedVersion, formContext: payload.p_submission.record_context || 'visitor', versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems },
                 createdByUserId: payload.p_actor.userId,
                 createdByDisplayName: payload.p_actor.displayName,
                 createdAt: '2026-08-02T00:00:00.000Z',
@@ -224,12 +229,13 @@ function makeHarness(options = {}) {
         id: IDS.oldSubmission,
         activityId: IDS.activity,
         formVersionId: IDS.oldVersion,
+        recordContext: 'visitor',
         status: 'active',
         answers: { [IDS.oldTextKey]: 'existing answer' },
         otherAnswers: {},
         cardId: IDS.card,
         card: null,
-        formSnapshot: { versionId: IDS.oldVersion, versionNumber: 1, publishedAt: '2026-07-01T00:00:00.000Z', items: oldItems },
+        formSnapshot: { versionId: IDS.oldVersion, formContext: 'visitor', versionNumber: 1, publishedAt: '2026-07-01T00:00:00.000Z', items: oldItems },
         createdByUserId: 'old-user',
         createdByDisplayName: 'Old User',
         createdAt: '2026-07-01T00:00:00.000Z',
@@ -242,6 +248,7 @@ function makeHarness(options = {}) {
         id: IDS.aiSubmission,
         activityId: IDS.activity,
         formVersionId: IDS.publishedVersion,
+        recordContext: 'visitor',
         status: 'active',
         answers: {
             [IDS.textKey]: 'Structured short text',
@@ -256,7 +263,7 @@ function makeHarness(options = {}) {
         otherAnswers: { [IDS.choiceKey]: 'Other detail' },
         cardId: IDS.card,
         card: null,
-        formSnapshot: { versionId: IDS.publishedVersion, versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems },
+        formSnapshot: { versionId: IDS.publishedVersion, formContext: 'visitor', versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems },
         createdByUserId: 'analyst',
         createdByDisplayName: 'Analyst',
         createdAt: '2026-08-15T10:00:00.000Z',
@@ -269,12 +276,13 @@ function makeHarness(options = {}) {
         id: IDS.voidSubmission,
         activityId: IDS.activity,
         formVersionId: IDS.publishedVersion,
+        recordContext: 'visitor',
         status: 'void',
         answers: { [IDS.longKey]: 'This void answer must not reach Gemini context.' },
         otherAnswers: {},
         cardId: null,
         card: null,
-        formSnapshot: { versionId: IDS.publishedVersion, versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems },
+        formSnapshot: { versionId: IDS.publishedVersion, formContext: 'visitor', versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems },
         createdByUserId: 'analyst',
         createdByDisplayName: 'Analyst',
         createdAt: '2026-08-16T10:00:00.000Z',
@@ -599,6 +607,24 @@ function assertMobileAnalyticsBreakpointRerenderContract(managementSource) {
     assert(!shortcutContract.renderShortcut().includes('mobile-analysis-enter'), 'mobile Analysis Mode guard must remain respected');
 }
 
+function assertContextFoundationSqlContract(sqlSource) {
+    assert(sqlSource.includes('add column if not exists form_context text'), 'form_versions must add form_context');
+    assert(sqlSource.includes('add column if not exists record_context text'), 'submissions must add record_context');
+    assert(sqlSource.includes("check (form_context in ('visitor', 'field_intelligence'))"), 'form_context must be constrained');
+    assert(sqlSource.includes("check (record_context in ('visitor', 'field_intelligence'))"), 'record_context must be constrained');
+    assert(sqlSource.includes('activity_intelligence_form_versions_activity_context_version_uidx'), 'version numbers must be unique per activity/context');
+    assert(sqlSource.includes('activity_intelligence_form_versions_one_draft_per_context_uidx'), 'draft uniqueness must be context-aware');
+    assert(sqlSource.includes('activity_intelligence_form_versions_one_published_per_context_uidx'), 'published uniqueness must be context-aware');
+    assert(sqlSource.includes('activity_intelligence_submissions_activity_context_status_created_idx'), 'submission query index must include context');
+    assert(sqlSource.includes("and form_context = v_form_context\n      and status = 'draft'"), 'draft lookup must include context');
+    assert(sqlSource.includes("and form_context = v_form_context\n      and status = 'published'"), 'published lookup must include context');
+    assert(sqlSource.includes('select form_version_id, form_context'), 'submission creation must read selected version context');
+    assert(sqlSource.includes('and form_context = v_requested_context'), 'submission creation must select by requested context');
+    assert(sqlSource.includes('Activity Intelligence form_context is immutable'), 'form_context must be immutable');
+    assert(sqlSource.includes('Activity Intelligence submission record_context is immutable'), 'record_context must be immutable');
+    assert(sqlSource.includes('Submission record_context must match form version context'), 'submission context must match form version context');
+}
+
 async function main() {
     const { service, calls, publishedItems } = makeHarness();
 
@@ -686,6 +712,7 @@ async function main() {
             { itemKey: IDS.cardKey, type: 'card_link', title: 'Card', removedInDraft: true }
         ]
     }, actor());
+    assert.strictEqual(calls.saveDraft.p_form_context, 'visitor');
     assert.strictEqual(calls.saveDraft.p_items[0].title, 'Draft Text');
     assert.strictEqual(calls.saveDraft.p_items[0].is_hidden, true);
     assert.strictEqual(calls.saveDraft.p_items[2].is_removed, true);
@@ -695,7 +722,9 @@ async function main() {
 
     await service.publishDraft(IDS.activity, actor());
     assert.strictEqual(calls.publishDraft.p_activity_id, IDS.activity);
+    assert.strictEqual(calls.publishDraft.p_form_context, 'visitor');
     assert.strictEqual(calls.publishDraft.p_actor.userId, 'real-user');
+    assert.strictEqual(calls.getFormBundle.formContext, 'visitor');
 
     await service.createSubmission(IDS.activity, {
         cardId: IDS.card,
@@ -710,12 +739,36 @@ async function main() {
         }
     }, actor());
     const answerByFormItemId = new Map(calls.createSubmission.p_answers.map(row => [row.form_item_id, row]));
+    assert.strictEqual(calls.getPublishedForm.formContext, 'visitor');
+    assert.strictEqual(calls.createSubmission.p_submission.record_context, 'visitor');
     assert.strictEqual(answerByFormItemId.get(IDS.textItem).value_text, 'hello');
     assert.strictEqual(answerByFormItemId.get(IDS.numberItem).value_number, 42);
     assert.strictEqual(answerByFormItemId.get(IDS.boolItem).value_boolean, true);
     assert.strictEqual(answerByFormItemId.get(IDS.choiceItem).value_jsonb[0].optionKey, IDS.optionAlpha);
     assert.strictEqual(answerByFormItemId.get(IDS.choiceItem).other_text, 'custom');
     assert(!answerByFormItemId.has(IDS.cardItem));
+
+    const contextHarness = makeHarness();
+    const fieldPublished = await contextHarness.service.getPublishedForm(IDS.activity, 'field_intelligence');
+    assert.strictEqual(contextHarness.calls.getPublishedForm.formContext, 'field_intelligence');
+    assert.strictEqual(fieldPublished.formContext, 'field_intelligence');
+    await contextHarness.service.saveDraft(IDS.activity, {
+        formContext: 'field_intelligence',
+        items: [{ itemKey: IDS.textKey, type: 'short_text', title: 'Field Text' }]
+    }, actor());
+    assert.strictEqual(contextHarness.calls.saveDraft.p_form_context, 'field_intelligence');
+    assert.strictEqual(contextHarness.calls.getFormBundle.formContext, 'field_intelligence');
+    await contextHarness.service.publishDraft(IDS.activity, actor(), 'field_intelligence');
+    assert.strictEqual(contextHarness.calls.publishDraft.p_form_context, 'field_intelligence');
+    await contextHarness.service.createSubmission(IDS.activity, {
+        recordContext: 'field_intelligence',
+        answers: { [IDS.textKey]: 'field note' }
+    }, actor());
+    assert.strictEqual(contextHarness.calls.getPublishedForm.formContext, 'field_intelligence');
+    assert.strictEqual(contextHarness.calls.createSubmission.p_submission.record_context, 'field_intelligence');
+    await contextHarness.service.listSubmissions(IDS.activity, { recordContext: 'visitor' });
+    assert.strictEqual(contextHarness.calls.listSubmissions.filters.recordContext, 'visitor');
+    await assertRejectsCode(() => contextHarness.service.getPublishedForm(IDS.activity, 'invalid'), 'INVALID_FORM_CONTEXT');
 
     await service.updateSubmission(IDS.oldSubmission, { cardId: IDS.secondCard }, actor());
     assert.strictEqual(calls.updateSubmission.p_card_id, IDS.secondCard);
@@ -729,6 +782,7 @@ async function main() {
 
     await assertRejectsStatus(() => service.createSubmission(IDS.activity, { cardId: IDS.missingCard }, actor()), 404);
     const enriched = await service.getSubmission(IDS.oldSubmission);
+    assert.strictEqual(enriched.recordContext, 'visitor');
     assert.strictEqual(enriched.card.cardId, IDS.card);
     assert.strictEqual(enriched.card.thumbnailUrl, '/api/external/thumbnail?fileId=drive-1');
 
@@ -1223,10 +1277,12 @@ async function main() {
 
     const managementSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'scripts', 'activity-intelligence', 'activity-intelligence-management.js'), 'utf8');
     const apiSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'scripts', 'activity-intelligence', 'activity-intelligence-api.js'), 'utf8');
+    const activityIntelligenceSqlSource = fs.readFileSync(path.join(__dirname, '..', 'docs', 'schema', 'activity-intelligence-transactions-v1.sql'), 'utf8');
     assertFormAssistCjkContract(managementSource);
     assertVisitorKpiOtherNumericContract(managementSource);
     await assertVisitorKpiCacheHydrationContract(managementSource);
     assertMobileAnalyticsBreakpointRerenderContract(managementSource);
+    assertContextFoundationSqlContract(activityIntelligenceSqlSource);
     assert(managementSource.includes("if (ui.analytics.ai.state === 'loading') return;"));
     assert(managementSource.includes("state === 'loading'"));
     assert(!managementSource.includes('FORM_GEMINI_API_KEY'));

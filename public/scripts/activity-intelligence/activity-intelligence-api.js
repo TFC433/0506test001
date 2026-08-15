@@ -38,6 +38,10 @@
     });
   }
 
+  function formContextSuffix(formContext) {
+    return formContext ? `?formContext=${encodeURIComponent(formContext)}` : '';
+  }
+
   async function lineRequest(path) {
     const sessionHeaders = window.ActivityIntelligenceSession && typeof window.ActivityIntelligenceSession.requestHeaders === 'function'
       ? window.ActivityIntelligenceSession.requestHeaders()
@@ -78,28 +82,28 @@
       return request(`/activities/${encodeURIComponent(activityId)}`, { method: 'DELETE' });
     },
 
-    getForm(activityId) {
-      return request(`/activities/${encodeURIComponent(activityId)}/form`);
+    getForm(activityId, formContext) {
+      return request(`/activities/${encodeURIComponent(activityId)}/form${formContextSuffix(formContext)}`);
     },
 
-    getDraftForm(activityId) {
-      return request(`/activities/${encodeURIComponent(activityId)}/form/draft`);
+    getDraftForm(activityId, formContext) {
+      return request(`/activities/${encodeURIComponent(activityId)}/form/draft${formContextSuffix(formContext)}`);
     },
 
-    getPublishedForm(activityId) {
-      return request(`/activities/${encodeURIComponent(activityId)}/form/published`);
+    getPublishedForm(activityId, formContext) {
+      return request(`/activities/${encodeURIComponent(activityId)}/form/published${formContextSuffix(formContext)}`);
     },
 
-    saveDraft(activityId, items) {
-      return jsonRequest('PUT', `/activities/${encodeURIComponent(activityId)}/form/draft`, { items });
+    saveDraft(activityId, items, formContext) {
+      return jsonRequest('PUT', `/activities/${encodeURIComponent(activityId)}/form/draft`, { items, ...(formContext ? { formContext } : {}) });
     },
 
-    discardDraft(activityId) {
-      return jsonRequest('POST', `/activities/${encodeURIComponent(activityId)}/form/discard-draft`);
+    discardDraft(activityId, formContext) {
+      return jsonRequest('POST', `/activities/${encodeURIComponent(activityId)}/form/discard-draft`, formContext ? { formContext } : {});
     },
 
-    publishDraft(activityId) {
-      return jsonRequest('POST', `/activities/${encodeURIComponent(activityId)}/form/publish`);
+    publishDraft(activityId, formContext) {
+      return jsonRequest('POST', `/activities/${encodeURIComponent(activityId)}/form/publish`, formContext ? { formContext } : {});
     },
 
     uploadMedia(file, metadata) {

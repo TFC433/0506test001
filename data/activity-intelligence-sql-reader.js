@@ -6,6 +6,7 @@ const ITEM_SELECT = '*';
 const SUBMISSION_SELECT = '*';
 const ANSWER_SELECT = '*';
 const ANSWER_HYDRATION_PAGE_SIZE = 500;
+const DEFAULT_FORM_CONTEXT = 'visitor';
 
 class ActivityIntelligenceSqlReader {
     constructor() {
@@ -38,11 +39,12 @@ class ActivityIntelligenceSqlReader {
         return data ? this.mapActivityRow(data) : null;
     }
 
-    async getFormBundle(activityId) {
+    async getFormBundle(activityId, formContext = DEFAULT_FORM_CONTEXT) {
         const { data: versions, error: versionError } = await supabase
             .from(this.formVersionsTable)
             .select(VERSION_SELECT)
             .eq('activity_id', activityId)
+            .eq('form_context', formContext || DEFAULT_FORM_CONTEXT)
             .in('status', ['draft', 'published'])
             .order('version_number', { ascending: true });
 
@@ -58,12 +60,12 @@ class ActivityIntelligenceSqlReader {
         };
     }
 
-    async getPublishedForm(activityId) {
-        return this._getSingleVersionWithItems(activityId, 'published');
+    async getPublishedForm(activityId, formContext = DEFAULT_FORM_CONTEXT) {
+        return this._getSingleVersionWithItems(activityId, 'published', formContext);
     }
 
-    async getDraftForm(activityId) {
-        return this._getSingleVersionWithItems(activityId, 'draft');
+    async getDraftForm(activityId, formContext = DEFAULT_FORM_CONTEXT) {
+        return this._getSingleVersionWithItems(activityId, 'draft', formContext);
     }
 
     async getVersionWithItems(formVersionId) {
@@ -119,6 +121,7 @@ class ActivityIntelligenceSqlReader {
         if (filters.dateEnd) query = query.lte('created_at', `${filters.dateEnd}T23:59:59.999Z`);
         if (filters.recorderUserId) query = query.eq('created_by_user_id', filters.recorderUserId);
         if (filters.recorderDisplayName) query = query.eq('created_by_display_name', filters.recorderDisplayName);
+        if (filters.recordContext) query = query.eq('record_context', filters.recordContext);
 
         const { data, error } = await query.order('created_at', { ascending: false });
 
@@ -340,6 +343,7 @@ class ActivityIntelligenceSqlReader {
         return {
             versionId: row.form_version_id,
             activityId: row.activity_id,
+            formContext: row.form_context || DEFAULT_FORM_CONTEXT,
             versionNumber: row.version_number,
             status: row.status,
             publishedAt: row.published_at,
@@ -384,6 +388,7 @@ class ActivityIntelligenceSqlReader {
             id: row.submission_id,
             activityId: row.activity_id,
             formVersionId: row.form_version_id,
+            recordContext: row.record_context || DEFAULT_FORM_CONTEXT,
             status: row.status,
             cardId: row.card_id,
             createdByUserId: row.created_by_user_id,
@@ -434,6 +439,7 @@ class ActivityIntelligenceSqlReader {
             card: null,
             formSnapshot: formVersion ? {
                 versionId: formVersion.versionId,
+                formContext: formVersion.formContext || DEFAULT_FORM_CONTEXT,
                 versionNumber: formVersion.versionNumber,
                 publishedAt: formVersion.publishedAt,
                 items: items || []
@@ -449,11 +455,12 @@ class ActivityIntelligenceSqlReader {
         };
     }
 
-    async _getSingleVersionWithItems(activityId, status) {
+    async _getSingleVersionWithItems(activityId, status, formContext = DEFAULT_FORM_CONTEXT) {
         const { data, error } = await supabase
             .from(this.formVersionsTable)
             .select(VERSION_SELECT)
             .eq('activity_id', activityId)
+            .eq('form_context', formContext || DEFAULT_FORM_CONTEXT)
             .eq('status', status)
             .maybeSingle();
 

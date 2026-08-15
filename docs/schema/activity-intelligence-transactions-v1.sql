@@ -15,6 +15,161 @@ BEGIN;
 
 create extension if not exists pgcrypto;
 
+alter table public.activity_intelligence_form_versions
+    add column if not exists form_context text;
+
+alter table public.activity_intelligence_submissions
+    add column if not exists record_context text;
+
+update public.activity_intelligence_form_versions
+set form_context = 'visitor'
+where form_context is null;
+
+update public.activity_intelligence_submissions
+set record_context = 'visitor'
+where record_context is null;
+
+alter table public.activity_intelligence_form_versions
+    alter column form_context set default 'visitor',
+    alter column form_context set not null;
+
+alter table public.activity_intelligence_submissions
+    alter column record_context set default 'visitor',
+    alter column record_context set not null;
+
+do $$
+begin
+    if not exists (
+        select 1
+        from pg_constraint
+        where conname = 'activity_intelligence_form_versions_context_chk'
+          and conrelid = 'public.activity_intelligence_form_versions'::regclass
+    ) then
+        alter table public.activity_intelligence_form_versions
+            add constraint activity_intelligence_form_versions_context_chk
+            check (form_context in ('visitor', 'field_intelligence'));
+    end if;
+
+    if not exists (
+        select 1
+        from pg_constraint
+        where conname = 'activity_intelligence_submissions_context_chk'
+          and conrelid = 'public.activity_intelligence_submissions'::regclass
+    ) then
+        alter table public.activity_intelligence_submissions
+            add constraint activity_intelligence_submissions_context_chk
+            check (record_context in ('visitor', 'field_intelligence'));
+    end if;
+end;
+$$;
+
+do $$
+declare
+    v_constraint record;
+begin
+    for v_constraint in
+        select conname
+        from pg_constraint c
+        where c.conrelid = 'public.activity_intelligence_form_versions'::regclass
+          and c.contype = 'u'
+          and (
+              select array_agg(a.attname::text order by u.ord)
+              from unnest(c.conkey) with ordinality as u(attnum, ord)
+              join pg_attribute a
+                on a.attrelid = c.conrelid
+               and a.attnum = u.attnum
+          ) = array['activity_id', 'version_number']
+    loop
+        execute format('alter table public.activity_intelligence_form_versions drop constraint %I', v_constraint.conname);
+    end loop;
+end;
+$$;
+
+do $$
+declare
+    v_index record;
+begin
+    for v_index in
+        select i.relname
+        from pg_index x
+        join pg_class i on i.oid = x.indexrelid
+        join pg_class t on t.oid = x.indrelid
+        join pg_namespace n on n.oid = t.relnamespace
+        where n.nspname = 'public'
+          and t.relname = 'activity_intelligence_form_versions'
+          and x.indisunique
+          and pg_get_expr(x.indpred, x.indrelid) is null
+          and (
+              select array_agg(a.attname::text order by u.ord)
+              from unnest(x.indkey) with ordinality as u(attnum, ord)
+              join pg_attribute a
+                on a.attrelid = x.indrelid
+               and a.attnum = u.attnum
+              where u.attnum > 0
+          ) = array['activity_id', 'version_number']
+    loop
+        execute format('drop index if exists public.%I', v_index.relname);
+    end loop;
+end;
+$$;
+
+do $$
+declare
+    v_index record;
+begin
+    for v_index in
+        select i.relname
+        from pg_index x
+        join pg_class i on i.oid = x.indexrelid
+        join pg_class t on t.oid = x.indrelid
+        join pg_namespace n on n.oid = t.relnamespace
+        where n.nspname = 'public'
+          and t.relname = 'activity_intelligence_form_versions'
+          and x.indisunique
+          and pg_get_indexdef(x.indexrelid) like '%(activity_id)%'
+          and pg_get_expr(x.indpred, x.indrelid) is not null
+          and (
+              pg_get_expr(x.indpred, x.indrelid) like '%status%published%'
+              or pg_get_expr(x.indpred, x.indrelid) like '%status%draft%'
+          )
+    loop
+        execute format('drop index if exists public.%I', v_index.relname);
+    end loop;
+end;
+$$;
+
+create unique index if not exists activity_intelligence_form_versions_activity_context_version_uidx
+    on public.activity_intelligence_form_versions (activity_id, form_context, version_number);
+
+create unique index if not exists activity_intelligence_form_versions_one_draft_per_context_uidx
+    on public.activity_intelligence_form_versions (activity_id, form_context)
+    where status = 'draft';
+
+create unique index if not exists activity_intelligence_form_versions_one_published_per_context_uidx
+    on public.activity_intelligence_form_versions (activity_id, form_context)
+    where status = 'published';
+
+create index if not exists activity_intelligence_submissions_activity_context_status_created_idx
+    on public.activity_intelligence_submissions (activity_id, record_context, status, created_at desc);
+
+create or replace function public.activity_intelligence_private_normalize_context(
+    p_context text
+)
+returns text
+language plpgsql
+immutable
+as $$
+declare
+    v_context text := coalesce(nullif(trim(p_context), ''), 'visitor');
+begin
+    if v_context not in ('visitor', 'field_intelligence') then
+        raise exception 'Invalid Activity Intelligence context: %', v_context using errcode = '22023';
+    end if;
+
+    return v_context;
+end;
+$$;
+
 create or replace function public.activity_intelligence_private_rekey_options(
     p_options jsonb
 )
@@ -166,6 +321,7 @@ begin
     insert into public.activity_intelligence_form_versions (
         form_version_id,
         activity_id,
+        form_context,
         version_number,
         status,
         published_at,
@@ -177,6 +333,7 @@ begin
     values (
         v_version_1_id,
         v_activity_id,
+        'visitor',
         1,
         'draft',
         null,
@@ -199,6 +356,7 @@ begin
     insert into public.activity_intelligence_form_versions (
         form_version_id,
         activity_id,
+        form_context,
         version_number,
         status,
         published_at,
@@ -210,6 +368,7 @@ begin
     values (
         v_draft_version_id,
         v_activity_id,
+        'visitor',
         2,
         'draft',
         null,
@@ -278,6 +437,7 @@ begin
     into v_source_published_id
     from public.activity_intelligence_form_versions
     where activity_id = p_source_activity_id
+      and form_context = 'visitor'
       and status = 'published';
 
     if v_source_published_id is null then
@@ -318,6 +478,7 @@ begin
     insert into public.activity_intelligence_form_versions (
         form_version_id,
         activity_id,
+        form_context,
         version_number,
         status,
         published_at,
@@ -329,6 +490,7 @@ begin
     values (
         v_version_1_id,
         v_activity_id,
+        'visitor',
         1,
         'draft',
         null,
@@ -384,6 +546,7 @@ begin
     insert into public.activity_intelligence_form_versions (
         form_version_id,
         activity_id,
+        form_context,
         version_number,
         status,
         published_at,
@@ -395,6 +558,7 @@ begin
     values (
         v_draft_version_id,
         v_activity_id,
+        'visitor',
         2,
         'draft',
         null,
@@ -443,10 +607,15 @@ begin
 end;
 $$;
 
+drop function if exists public.activity_intelligence_save_draft(uuid, jsonb, jsonb);
+drop function if exists public.activity_intelligence_discard_draft(uuid, jsonb);
+drop function if exists public.activity_intelligence_publish_draft(uuid, jsonb);
+
 create or replace function public.activity_intelligence_save_draft(
     p_activity_id uuid,
     p_items jsonb,
-    p_actor jsonb
+    p_actor jsonb,
+    p_form_context text default 'visitor'
 )
 returns jsonb
 language plpgsql
@@ -455,11 +624,13 @@ set search_path = public, pg_temp
 as $$
 declare
     v_draft_version_id uuid;
+    v_form_context text := public.activity_intelligence_private_normalize_context(p_form_context);
 begin
     select form_version_id
     into v_draft_version_id
     from public.activity_intelligence_form_versions
     where activity_id = p_activity_id
+      and form_context = v_form_context
       and status = 'draft';
 
     if v_draft_version_id is null then
@@ -481,13 +652,14 @@ begin
         updated_at = now()
     where activity_id = p_activity_id;
 
-    return jsonb_build_object('activity_id', p_activity_id, 'form_version_id', v_draft_version_id);
+    return jsonb_build_object('activity_id', p_activity_id, 'form_context', v_form_context, 'form_version_id', v_draft_version_id);
 end;
 $$;
 
 create or replace function public.activity_intelligence_discard_draft(
     p_activity_id uuid,
-    p_actor jsonb
+    p_actor jsonb,
+    p_form_context text default 'visitor'
 )
 returns jsonb
 language plpgsql
@@ -497,17 +669,20 @@ as $$
 declare
     v_published_version_id uuid;
     v_draft_version_id uuid;
+    v_form_context text := public.activity_intelligence_private_normalize_context(p_form_context);
 begin
     select form_version_id
     into v_published_version_id
     from public.activity_intelligence_form_versions
     where activity_id = p_activity_id
+      and form_context = v_form_context
       and status = 'published';
 
     select form_version_id
     into v_draft_version_id
     from public.activity_intelligence_form_versions
     where activity_id = p_activity_id
+      and form_context = v_form_context
       and status = 'draft';
 
     if v_published_version_id is null or v_draft_version_id is null then
@@ -558,13 +733,14 @@ begin
         updated_at = now()
     where activity_id = p_activity_id;
 
-    return jsonb_build_object('activity_id', p_activity_id, 'form_version_id', v_draft_version_id);
+    return jsonb_build_object('activity_id', p_activity_id, 'form_context', v_form_context, 'form_version_id', v_draft_version_id);
 end;
 $$;
 
 create or replace function public.activity_intelligence_publish_draft(
     p_activity_id uuid,
-    p_actor jsonb
+    p_actor jsonb,
+    p_form_context text default 'visitor'
 )
 returns jsonb
 language plpgsql
@@ -576,17 +752,20 @@ declare
     v_current_draft_id uuid;
     v_next_draft_id uuid := gen_random_uuid();
     v_next_version_number integer;
+    v_form_context text := public.activity_intelligence_private_normalize_context(p_form_context);
 begin
     select form_version_id
     into v_current_published_id
     from public.activity_intelligence_form_versions
     where activity_id = p_activity_id
+      and form_context = v_form_context
       and status = 'published';
 
     select form_version_id, version_number + 1
     into v_current_draft_id, v_next_version_number
     from public.activity_intelligence_form_versions
     where activity_id = p_activity_id
+      and form_context = v_form_context
       and status = 'draft';
 
     if v_current_published_id is null or v_current_draft_id is null then
@@ -613,6 +792,7 @@ begin
     insert into public.activity_intelligence_form_versions (
         form_version_id,
         activity_id,
+        form_context,
         version_number,
         status,
         published_at,
@@ -624,6 +804,7 @@ begin
     values (
         v_next_draft_id,
         p_activity_id,
+        v_form_context,
         v_next_version_number,
         'draft',
         null,
@@ -676,6 +857,7 @@ begin
 
     return jsonb_build_object(
         'activity_id', p_activity_id,
+        'form_context', v_form_context,
         'published_form_version_id', v_current_draft_id,
         'draft_form_version_id', v_next_draft_id
     );
@@ -759,12 +941,15 @@ as $$
 declare
     v_submission_id uuid := coalesce((p_submission->>'submission_id')::uuid, gen_random_uuid());
     v_activity_id uuid := (p_submission->>'activity_id')::uuid;
+    v_requested_context text := public.activity_intelligence_private_normalize_context(coalesce(p_submission->>'record_context', p_submission->>'form_context'));
     v_form_version_id uuid;
+    v_form_context text;
 begin
-    select form_version_id
-    into v_form_version_id
+    select form_version_id, form_context
+    into v_form_version_id, v_form_context
     from public.activity_intelligence_form_versions
     where activity_id = v_activity_id
+      and form_context = v_requested_context
       and status = 'published';
 
     if v_form_version_id is null then
@@ -775,6 +960,7 @@ begin
         submission_id,
         activity_id,
         form_version_id,
+        record_context,
         status,
         card_id,
         created_by_user_id,
@@ -788,6 +974,7 @@ begin
         v_submission_id,
         v_activity_id,
         v_form_version_id,
+        v_form_context,
         'active',
         nullif(p_submission->>'card_id', '')::uuid,
         p_actor->>'userId',
@@ -908,6 +1095,14 @@ begin
         return OLD;
     end if;
 
+    if tg_op = 'INSERT' then
+        NEW.form_context := coalesce(nullif(trim(NEW.form_context), ''), 'visitor');
+        if NEW.form_context not in ('visitor', 'field_intelligence') then
+            raise exception 'Invalid Activity Intelligence form_context: %', NEW.form_context using errcode = '22023';
+        end if;
+        return NEW;
+    end if;
+
     if tg_op = 'DELETE' then
         if OLD.status <> 'draft' then
             raise exception 'Only draft Activity Intelligence form versions may be deleted.' using errcode = '23514';
@@ -920,6 +1115,9 @@ begin
     end if;
     if NEW.activity_id is distinct from OLD.activity_id then
         raise exception 'Activity Intelligence form version activity_id is immutable' using errcode = '23514';
+    end if;
+    if NEW.form_context is distinct from OLD.form_context then
+        raise exception 'Activity Intelligence form_context is immutable' using errcode = '23514';
     end if;
     if NEW.version_number is distinct from OLD.version_number then
         raise exception 'Activity Intelligence form version_number is immutable' using errcode = '23514';
@@ -949,6 +1147,85 @@ begin
     return NEW;
 end;
 $$;
+
+create or replace function public.activity_intelligence_guard_submission()
+returns trigger
+language plpgsql
+set search_path = public, pg_temp
+as $$
+declare
+    v_version record;
+begin
+    if tg_op = 'DELETE' then
+        return OLD;
+    end if;
+
+    if tg_op = 'INSERT' then
+        NEW.record_context := coalesce(nullif(trim(NEW.record_context), ''), 'visitor');
+        if NEW.record_context not in ('visitor', 'field_intelligence') then
+            raise exception 'Invalid Activity Intelligence record_context: %', NEW.record_context using errcode = '22023';
+        end if;
+
+        select activity_id, status, form_context
+        into v_version
+        from public.activity_intelligence_form_versions
+        where form_version_id = NEW.form_version_id;
+
+        if v_version.form_context is null then
+            raise exception 'Submission form version not found' using errcode = '23514';
+        end if;
+        if v_version.activity_id is distinct from NEW.activity_id then
+            raise exception 'Submission form version does not belong to activity' using errcode = '23514';
+        end if;
+        if v_version.status <> 'published' then
+            raise exception 'Submissions may only use a published form version' using errcode = '23514';
+        end if;
+        if v_version.form_context is distinct from NEW.record_context then
+            raise exception 'Submission record_context must match form version context' using errcode = '23514';
+        end if;
+
+        return NEW;
+    end if;
+
+    if NEW.submission_id is distinct from OLD.submission_id then
+        raise exception 'Activity Intelligence submission_id is immutable' using errcode = '23514';
+    end if;
+    if NEW.activity_id is distinct from OLD.activity_id then
+        raise exception 'Activity Intelligence submission activity_id is immutable' using errcode = '23514';
+    end if;
+    if NEW.form_version_id is distinct from OLD.form_version_id then
+        raise exception 'Activity Intelligence submission form_version_id is immutable' using errcode = '23514';
+    end if;
+    if NEW.record_context is distinct from OLD.record_context then
+        raise exception 'Activity Intelligence submission record_context is immutable' using errcode = '23514';
+    end if;
+    if NEW.created_by_user_id is distinct from OLD.created_by_user_id
+       or NEW.created_by_display_name is distinct from OLD.created_by_display_name
+       or NEW.created_at is distinct from OLD.created_at then
+        raise exception 'Activity Intelligence submission creation metadata is immutable' using errcode = '23514';
+    end if;
+
+    return NEW;
+end;
+$$;
+
+drop trigger if exists activity_intelligence_guard_form_item_trigger
+    on public.activity_intelligence_form_items;
+create trigger activity_intelligence_guard_form_item_trigger
+    before insert or update or delete on public.activity_intelligence_form_items
+    for each row execute function public.activity_intelligence_guard_form_item();
+
+drop trigger if exists activity_intelligence_guard_form_version_trigger
+    on public.activity_intelligence_form_versions;
+create trigger activity_intelligence_guard_form_version_trigger
+    before insert or update or delete on public.activity_intelligence_form_versions
+    for each row execute function public.activity_intelligence_guard_form_version();
+
+drop trigger if exists activity_intelligence_guard_submission_trigger
+    on public.activity_intelligence_submissions;
+create trigger activity_intelligence_guard_submission_trigger
+    before insert or update or delete on public.activity_intelligence_submissions
+    for each row execute function public.activity_intelligence_guard_submission();
 
 create or replace function public.activity_intelligence_hard_delete_submission(
     p_submission_id uuid
@@ -1031,6 +1308,11 @@ begin
 end;
 $$;
 
+revoke execute on function public.activity_intelligence_private_normalize_context(text) from PUBLIC;
+revoke execute on function public.activity_intelligence_private_normalize_context(text) from anon;
+revoke execute on function public.activity_intelligence_private_normalize_context(text) from authenticated;
+revoke execute on function public.activity_intelligence_private_normalize_context(text) from service_role;
+
 revoke execute on function public.activity_intelligence_private_rekey_options(jsonb) from PUBLIC;
 revoke execute on function public.activity_intelligence_private_rekey_options(jsonb) from anon;
 revoke execute on function public.activity_intelligence_private_rekey_options(jsonb) from authenticated;
@@ -1054,17 +1336,17 @@ revoke execute on function public.activity_intelligence_duplicate_activity(uuid,
 revoke execute on function public.activity_intelligence_duplicate_activity(uuid, jsonb, jsonb) from anon;
 revoke execute on function public.activity_intelligence_duplicate_activity(uuid, jsonb, jsonb) from authenticated;
 
-revoke execute on function public.activity_intelligence_save_draft(uuid, jsonb, jsonb) from PUBLIC;
-revoke execute on function public.activity_intelligence_save_draft(uuid, jsonb, jsonb) from anon;
-revoke execute on function public.activity_intelligence_save_draft(uuid, jsonb, jsonb) from authenticated;
+revoke execute on function public.activity_intelligence_save_draft(uuid, jsonb, jsonb, text) from PUBLIC;
+revoke execute on function public.activity_intelligence_save_draft(uuid, jsonb, jsonb, text) from anon;
+revoke execute on function public.activity_intelligence_save_draft(uuid, jsonb, jsonb, text) from authenticated;
 
-revoke execute on function public.activity_intelligence_discard_draft(uuid, jsonb) from PUBLIC;
-revoke execute on function public.activity_intelligence_discard_draft(uuid, jsonb) from anon;
-revoke execute on function public.activity_intelligence_discard_draft(uuid, jsonb) from authenticated;
+revoke execute on function public.activity_intelligence_discard_draft(uuid, jsonb, text) from PUBLIC;
+revoke execute on function public.activity_intelligence_discard_draft(uuid, jsonb, text) from anon;
+revoke execute on function public.activity_intelligence_discard_draft(uuid, jsonb, text) from authenticated;
 
-revoke execute on function public.activity_intelligence_publish_draft(uuid, jsonb) from PUBLIC;
-revoke execute on function public.activity_intelligence_publish_draft(uuid, jsonb) from anon;
-revoke execute on function public.activity_intelligence_publish_draft(uuid, jsonb) from authenticated;
+revoke execute on function public.activity_intelligence_publish_draft(uuid, jsonb, text) from PUBLIC;
+revoke execute on function public.activity_intelligence_publish_draft(uuid, jsonb, text) from anon;
+revoke execute on function public.activity_intelligence_publish_draft(uuid, jsonb, text) from authenticated;
 
 revoke execute on function public.activity_intelligence_create_submission(jsonb, jsonb, jsonb) from PUBLIC;
 revoke execute on function public.activity_intelligence_create_submission(jsonb, jsonb, jsonb) from anon;
@@ -1084,9 +1366,9 @@ revoke execute on function public.activity_intelligence_hard_delete_activity(uui
 
 grant execute on function public.activity_intelligence_create_activity(jsonb, jsonb, jsonb) to service_role;
 grant execute on function public.activity_intelligence_duplicate_activity(uuid, jsonb, jsonb) to service_role;
-grant execute on function public.activity_intelligence_save_draft(uuid, jsonb, jsonb) to service_role;
-grant execute on function public.activity_intelligence_discard_draft(uuid, jsonb) to service_role;
-grant execute on function public.activity_intelligence_publish_draft(uuid, jsonb) to service_role;
+grant execute on function public.activity_intelligence_save_draft(uuid, jsonb, jsonb, text) to service_role;
+grant execute on function public.activity_intelligence_discard_draft(uuid, jsonb, text) to service_role;
+grant execute on function public.activity_intelligence_publish_draft(uuid, jsonb, text) to service_role;
 grant execute on function public.activity_intelligence_create_submission(jsonb, jsonb, jsonb) to service_role;
 grant execute on function public.activity_intelligence_update_submission(uuid, uuid, jsonb, jsonb) to service_role;
 grant execute on function public.activity_intelligence_hard_delete_submission(uuid) to service_role;
