@@ -111,6 +111,7 @@
   const activityAnalyticsChartIds = new Set();
   let formAssistRequestSeq = 0;
   let formAssistDebounceTimer = null;
+  let mobileFormBreakpointListenerRegistered = false;
   let ui = {
     view: 'overview',
     tab: 'overview',
@@ -179,6 +180,7 @@
 
   async function init() {
     setFormAuthRootState(true);
+    setupMobileFormBreakpointRenderListener();
     currentUser = await resolveFormalCurrentUser();
     if (isGuestUser()) {
       await initGuestFormMode();
@@ -651,6 +653,20 @@
     return typeof window !== 'undefined'
       && typeof window.matchMedia === 'function'
       && window.matchMedia(mobileFormMediaQuery).matches;
+  }
+
+  function setupMobileFormBreakpointRenderListener() {
+    if (mobileFormBreakpointListenerRegistered) return;
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const query = window.matchMedia(mobileFormMediaQuery);
+    const onChange = () => {
+      if (!currentUser || !currentUser.authenticated) return;
+      render();
+    };
+    if (typeof query.addEventListener === 'function') query.addEventListener('change', onChange);
+    else if (typeof query.addListener === 'function') query.addListener(onChange);
+    else return;
+    mobileFormBreakpointListenerRegistered = true;
   }
 
   function isRecorder() {

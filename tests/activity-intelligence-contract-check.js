@@ -539,6 +539,66 @@ function aggregateIot(service, count, args = {}) {
     }, makeRetrieveCompletenessContext(count));
 }
 
+function assertMobileAnalyticsBreakpointRerenderContract(managementSource) {
+    const setupSource = [
+        "const mobileFormMediaQuery = '(max-width: 640px)';",
+        'let mobileFormBreakpointListenerRegistered = false;',
+        'let currentUser = { authenticated: true };',
+        'let renderCount = 0;',
+        'let matchedQuery = "";',
+        'const listeners = [];',
+        'const window = { matchMedia(query) { matchedQuery = query; return { addEventListener(type, handler) { listeners.push({ type, handler }); } }; } };',
+        'function render() { renderCount += 1; }',
+        extractFunctionDeclaration(managementSource, 'setupMobileFormBreakpointRenderListener'),
+        '({ setupMobileFormBreakpointRenderListener, listeners, get matchedQuery() { return matchedQuery; }, get renderCount() { return renderCount; }, setCurrentUser(value) { currentUser = value; } });'
+    ].join('\n');
+    const setupContract = vm.runInNewContext(setupSource, {});
+    setupContract.setupMobileFormBreakpointRenderListener();
+    setupContract.setupMobileFormBreakpointRenderListener();
+    assert.strictEqual(setupContract.matchedQuery, '(max-width: 640px)', 'breakpoint listener must reuse authoritative mobile media query');
+    assert.strictEqual(setupContract.listeners.length, 1, 'breakpoint listener must register once');
+    assert.strictEqual(setupContract.listeners[0].type, 'change', 'breakpoint listener must use media query change events');
+    setupContract.listeners[0].handler();
+    assert.strictEqual(setupContract.renderCount, 1, 'breakpoint change must trigger render for authenticated state');
+    setupContract.setCurrentUser(null);
+    setupContract.listeners[0].handler();
+    assert.strictEqual(setupContract.renderCount, 1, 'breakpoint change must not render before currentUser exists');
+    setupContract.setCurrentUser({ authenticated: false });
+    setupContract.listeners[0].handler();
+    assert.strictEqual(setupContract.renderCount, 1, 'breakpoint change must not render unauthenticated shell');
+
+    const initBody = extractFunctionDeclaration(managementSource, 'init');
+    const renderBody = extractFunctionDeclaration(managementSource, 'render');
+    assert(initBody.includes('setupMobileFormBreakpointRenderListener();'), 'listener setup must run during initialization');
+    assert(!renderBody.includes('setupMobileFormBreakpointRenderListener'), 'listener setup must not run inside render');
+
+    const shortcutSource = [
+        "const mobileFormMediaQuery = '(max-width: 640px)';",
+        'let currentUser = { authenticated: true, role: "super_admin" };',
+        'let ui = { mobileAnalysisMode: false };',
+        'let mobileMatches = false;',
+        'const window = { matchMedia(query) { assert.strictEqual(query, mobileFormMediaQuery); return { matches: mobileMatches }; } };',
+        'function canManageActivities() { return currentUser && ["super_admin", "admin"].includes(currentUser.role); }',
+        extractFunctionDeclaration(managementSource, 'isMobileFormViewport'),
+        extractFunctionDeclaration(managementSource, 'canUseAnalytics'),
+        extractFunctionDeclaration(managementSource, 'renderMobileAnalysisHeaderAction'),
+        'function renderShortcut() { return renderMobileAnalysisHeaderAction(); }',
+        '({ renderShortcut, setMobile(value) { mobileMatches = value; }, setRole(value) { currentUser.role = value; }, setMobileAnalysisMode(value) { ui.mobileAnalysisMode = value; } });'
+    ].join('\n');
+    const shortcutContract = vm.runInNewContext(shortcutSource, { assert });
+    assert(!shortcutContract.renderShortcut().includes('mobile-analysis-enter'), 'desktop predicate must omit mobile Analytics shortcut');
+    shortcutContract.setMobile(true);
+    assert(shortcutContract.renderShortcut().includes('mobile-analysis-enter'), 'desktop-to-mobile rerender must allow eligible shortcut');
+    shortcutContract.setMobile(false);
+    assert(!shortcutContract.renderShortcut().includes('mobile-analysis-enter'), 'mobile-to-desktop rerender must remove shortcut through predicate');
+    shortcutContract.setMobile(true);
+    shortcutContract.setRole('recorder');
+    assert(!shortcutContract.renderShortcut().includes('mobile-analysis-enter'), 'unauthorized role must remain blocked after breakpoint change');
+    shortcutContract.setRole('super_admin');
+    shortcutContract.setMobileAnalysisMode(true);
+    assert(!shortcutContract.renderShortcut().includes('mobile-analysis-enter'), 'mobile Analysis Mode guard must remain respected');
+}
+
 async function main() {
     const { service, calls, publishedItems } = makeHarness();
 
@@ -1166,6 +1226,7 @@ async function main() {
     assertFormAssistCjkContract(managementSource);
     assertVisitorKpiOtherNumericContract(managementSource);
     await assertVisitorKpiCacheHydrationContract(managementSource);
+    assertMobileAnalyticsBreakpointRerenderContract(managementSource);
     assert(managementSource.includes("if (ui.analytics.ai.state === 'loading') return;"));
     assert(managementSource.includes("state === 'loading'"));
     assert(!managementSource.includes('FORM_GEMINI_API_KEY'));
