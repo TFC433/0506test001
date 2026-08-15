@@ -97,6 +97,12 @@
   const visitorCountFieldTitle = '同行人數';
   const recordContextVisitorMode = 'visitor';
   const recordContextActiveMode = 'active-intelligence';
+  const formContextVisitorMode = 'visitor';
+  const formContextFieldIntelligenceMode = 'field_intelligence';
+  const formContextLabels = Object.freeze({
+    [formContextVisitorMode]: '訪客紀錄',
+    [formContextFieldIntelligenceMode]: '主動情報'
+  });
 
   let state = { activities: [], records: [], selectedActivityId: null };
   let currentUser = null;
@@ -121,6 +127,7 @@
     drawer: null,
     toast: '',
     fieldTypePickerOpen: false,
+    formContext: formContextVisitorMode,
     formDesignMode: 'draft',
     formDesignDraft: null,
     formDesignDraftDirty: false,
@@ -352,43 +359,84 @@
   }
 
   async function loadFormForActivity(activityId) {
-    if (!activityId) return null;
-    const cached = formBundles.get(activityId);
-    if (cached && cached.isCompleteBundle && cached.published.versionId && cached.draft.versionId) return cached;
-    const form = await window.ActivityIntelligenceApi.getForm(activityId);
-    return updateActivityFormBundle(activityId, form);
+    return loadFormBundleForActivity(activityId, formContextVisitorMode);
   }
 
-  async function loadPublishedFormForActivity(activityId) {
+  async function loadFormBundleForActivity(activityId, formContext, options) {
     if (!activityId) return null;
-    const existing = formBundles.get(activityId);
-    if (existing && existing.published && existing.published.versionId && existing.published.items.length) {
-      return hydrateActivityFormBundle(activityId, existing);
+    const context = normalizeFormContext(formContext);
+    const cacheKey = formBundleCacheKey(activityId, context);
+    const cached = formBundles.get(cacheKey);
+    if (cached && cached.isCompleteBundle && cached.published.versionId && cached.draft.versionId) return cached;
+    const form = await window.ActivityIntelligenceApi.getForm(activityId, context);
+    const bundle = updateActivityFormBundle(activityId, form, context);
+    if (options && options.initializeMissing && !isCompleteFormBundle(bundle)) {
+      const initialized = await window.ActivityIntelligenceApi.initializeFormContext(activityId, context);
+      return updateActivityFormBundle(activityId, initialized, context);
     }
-    const published = await window.ActivityIntelligenceApi.getPublishedForm(activityId);
+    return bundle;
+  }
+
+  async function loadPublishedFormForActivity(activityId, formContext) {
+    if (!activityId) return null;
+    const context = normalizeFormContext(formContext);
+    const cacheKey = formBundleCacheKey(activityId, context);
+    const existing = formBundles.get(cacheKey);
+    if (existing && existing.published && existing.published.versionId) {
+      return hydrateActivityFormBundle(activityId, existing, context);
+    }
+    const published = await window.ActivityIntelligenceApi.getPublishedForm(activityId, context);
     const merged = {
       ...(existing || normalizeFormBundleDto(null)),
       published: normalizeVersionDto(published),
       isCompleteBundle: Boolean(existing && existing.isCompleteBundle)
     };
-    formBundles.set(activityId, merged);
-    return hydrateActivityFormBundle(activityId, merged);
+    formBundles.set(cacheKey, merged);
+    return hydrateActivityFormBundle(activityId, merged, context);
   }
 
-  function updateActivityFormBundle(activityId, form) {
+  function updateActivityFormBundle(activityId, form, formContext) {
+    const context = normalizeFormContext(formContext || (form && ((form.published && form.published.formContext) || (form.draft && form.draft.formContext))));
     const bundle = normalizeFormBundleDto(form);
-    bundle.isCompleteBundle = true;
-    formBundles.set(activityId, bundle);
-    return hydrateActivityFormBundle(activityId, bundle);
+    bundle.formContext = context;
+    bundle.published.formContext = context;
+    bundle.draft.formContext = context;
+    bundle.isCompleteBundle = isCompleteFormBundle(bundle);
+    formBundles.set(formBundleCacheKey(activityId, context), bundle);
+    return hydrateActivityFormBundle(activityId, bundle, context);
   }
 
-  function hydrateActivityFormBundle(activityId, bundle) {
+  function hydrateActivityFormBundle(activityId, bundle, formContext) {
+    const context = normalizeFormContext(formContext || (bundle && bundle.formContext));
     const activity = state.activities.find(item => item.id === activityId);
     if (activity) {
-      activity.formDesignRuntime = bundle;
-      activity.formFields = Store.clone((bundle.published && bundle.published.items) || []);
+      activity.formDesignRuntimeByContext = {
+        ...(activity.formDesignRuntimeByContext || {}),
+        [context]: bundle
+      };
+      if (context === formContextVisitorMode) {
+        activity.formDesignRuntime = bundle;
+        activity.formFields = Store.clone((bundle.published && bundle.published.items) || []);
+      }
     }
     return bundle;
+  }
+
+  function formBundleCacheKey(activityId, formContext) {
+    return `${activityId}:${normalizeFormContext(formContext)}`;
+  }
+
+  function isCompleteFormBundle(bundle) {
+    return Boolean(bundle && bundle.published && bundle.draft && bundle.published.versionId && bundle.draft.versionId);
+  }
+
+  function normalizeFormContext(value) {
+    return value === formContextFieldIntelligenceMode ? formContextFieldIntelligenceMode : formContextVisitorMode;
+  }
+
+  function currentFormContext() {
+    ui.formContext = normalizeFormContext(ui.formContext);
+    return ui.formContext;
   }
 
   function normalizeFormBundleDto(form) {
@@ -402,6 +450,7 @@
   function normalizeVersionDto(version) {
     return {
       versionId: version && version.versionId,
+      formContext: normalizeFormContext(version && version.formContext),
       versionNumber: version && version.versionNumber,
       publishedAt: version && version.publishedAt,
       publishedByUserId: version && version.publishedByUserId,
@@ -481,6 +530,7 @@
       submissionId: submission.submissionId || submission.id,
       activityId: submission.activityId,
       formVersionId: submission.formVersionId,
+      recordContext: submission.recordContext || 'visitor',
       status: submission.status || 'active',
       cardId: submission.cardId || (card && card.cardId) || null,
       answers: normalizeAnswerValues(rawAnswers, snapshotItems),
@@ -489,6 +539,7 @@
       runtimeCardLink: card ? { linked: true, cardId: card.cardId, card } : (submission.cardId ? { linked: true, cardId: submission.cardId, card: null } : { linked: false, cardId: null, card: null }),
       formRuntimeSnapshot: formSnapshot ? {
         versionId: formSnapshot.versionId,
+        formContext: formSnapshot.formContext || 'visitor',
         versionNumber: formSnapshot.versionNumber,
         publishedAt: formSnapshot.publishedAt || '',
         items: ((formSnapshot.items) || []).map(normalizeDesignerItem)
@@ -2237,13 +2288,24 @@
     return `<img class="aim-raw-card-thumb aim-raw-card-thumb-${Store.escapeHtml(size || 'thumb')}" src="${Store.escapeHtml(normalized.thumbnailUrl)}" alt="${Store.escapeHtml(normalized.driveFilename || normalized.name || 'RAW card')}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'aim-raw-card-placeholder',textContent:'名片'}));">`;
   }
 
-  function formDesign(activity) {
-    if (!activity.formDesignRuntime) {
-      activity.formDesignRuntime = normalizeFormBundleDto(null);
+  function formDesign(activity, formContext) {
+    const context = normalizeFormContext(formContext);
+    if (!activity.formDesignRuntimeByContext) activity.formDesignRuntimeByContext = {};
+    if (context === formContextVisitorMode && activity.formDesignRuntime && !activity.formDesignRuntimeByContext[context]) {
+      activity.formDesignRuntimeByContext[context] = activity.formDesignRuntime;
     }
-    activity.formDesignRuntime.published.items = (activity.formDesignRuntime.published.items || []).map(normalizeDesignerItem);
-    activity.formDesignRuntime.draft.items = (activity.formDesignRuntime.draft.items || []).map(normalizeDesignerItem);
-    return activity.formDesignRuntime;
+    if (!activity.formDesignRuntimeByContext[context]) {
+      activity.formDesignRuntimeByContext[context] = normalizeFormBundleDto(null);
+      activity.formDesignRuntimeByContext[context].formContext = context;
+    }
+    const runtime = activity.formDesignRuntimeByContext[context];
+    runtime.formContext = context;
+    runtime.published.formContext = context;
+    runtime.draft.formContext = context;
+    runtime.published.items = (runtime.published.items || []).map(normalizeDesignerItem);
+    runtime.draft.items = (runtime.draft.items || []).map(normalizeDesignerItem);
+    if (context === formContextVisitorMode) activity.formDesignRuntime = runtime;
+    return runtime;
   }
 
   function normalizeDesignerItem(item) {
@@ -2447,8 +2509,8 @@
     return designerItemSignature(a) === designerItemSignature(b);
   }
 
-  function syncSelectedDraft(activity) {
-    const design = formDesign(activity);
+  function syncSelectedDraft(activity, formContext) {
+    const design = formDesign(activity, formContext);
     if (ui.formDesignMode !== 'draft') {
       ui.formDesignDraft = null;
       ui.formDesignDraftDirty = false;
@@ -2469,8 +2531,8 @@
     return selected;
   }
 
-  function previewItems(activity) {
-    const design = formDesign(activity);
+  function previewItems(activity, formContext) {
+    const design = formDesign(activity, formContext);
     const source = ui.formDesignMode === 'published' ? design.published.items : design.draft.items;
     return source.map(item => {
       if (ui.formDesignMode === 'draft' && ui.formDesignDraft && designerItemKey(ui.formDesignDraft) === designerItemKey(item)) return normalizeDesignerItem(ui.formDesignDraft);
@@ -2484,11 +2546,13 @@
 
   function renderForm(activity) {
     const status = activityStatus(activity);
-    const design = formDesign(activity);
-    const selected = syncSelectedDraft(activity);
+    const formContext = currentFormContext();
+    const design = formDesign(activity, formContext);
+    const selected = syncSelectedDraft(activity, formContext);
     const draftChanged = formDesignChangeSummary(design).total > 0;
     return `
       ${status.key === 'open' ? '<div class="aim-warning">表單目前開放中；本頁僅調整 Designer，不影響既有填寫資料。</div>' : ''}
+      ${renderFormContextTabs(formContext)}
       <div class="aim-form-designer">
         <div class="aim-panel">
           <div class="aim-panel-title-row">
@@ -2502,10 +2566,24 @@
         </div>
         <aside class="aim-panel aim-form-preview-panel">
           <div class="aim-panel-title-row"><h2>${ui.formDesignMode === 'published' ? '正式版本預覽' : '草稿版本預覽'}</h2><span class="aim-pill">${ui.formDesignMode === 'published' ? 'Read-only' : 'Draft'}</span></div>
-          <div class="aim-preview">${renderFormPreview(activity)}</div>
+          <div class="aim-preview">${renderFormPreview(activity, formContext)}</div>
         </aside>
       </div>
       ${!isMobileFormViewport() && canDesignForm() ? renderFormAiAnalyticsSettings() : ''}
+    `;
+  }
+
+  function renderFormContextTabs(activeContext) {
+    const choices = [
+      [formContextVisitorMode, formContextLabels[formContextVisitorMode]],
+      [formContextFieldIntelligenceMode, formContextLabels[formContextFieldIntelligenceMode]]
+    ];
+    return `
+      <div class="aim-form-context-tabs aim-form-mode-tabs" role="tablist" aria-label="表單類型">
+        ${choices.map(([context, label]) => `
+          <button class="aim-mode-tab" role="tab" aria-selected="${activeContext === context}" data-action="form-context" data-context="${context}" type="button">${Store.escapeHtml(label)}</button>
+        `).join('')}
+      </div>
     `;
   }
 
@@ -2533,7 +2611,7 @@
       ${renderDraftChangeSummary(design)}
       ${ui.fieldTypePickerOpen ? renderFieldTypePicker(design) : ''}
       <div class="aim-field-list aim-designer-item-list">
-        ${design.draft.items.map((item, index) => renderDesignerItemCard(item, index, design.draft.items, { mode: 'draft', activity, selected })).join('') || '<div class="aim-empty">尚未建立項目。</div>'}
+        ${design.draft.items.map((item, index) => renderDesignerItemCard(item, index, design.draft.items, { mode: 'draft', activity, selected, formContext: currentFormContext() })).join('') || '<div class="aim-empty">尚未建立項目。</div>'}
       </div>
     `;
   }
@@ -2628,7 +2706,7 @@
     const key = designerItemKey(item);
     const isDraft = context.mode === 'draft';
     const isSelected = isDraft && key === ui.selectedFieldId;
-    const status = isDraft ? draftItemStatus(formDesign(context.activity), item) : { key: 'published', label: '正式使用中' };
+    const status = isDraft ? draftItemStatus(formDesign(context.activity, context.formContext), item) : { key: 'published', label: '正式使用中' };
     const summary = designerItemSummary(item);
     const classes = [
       'aim-form-field-card',
@@ -2788,8 +2866,8 @@
     `;
   }
 
-  function renderFormPreview(activity) {
-    const items = previewItems(activity).filter(item => item.visible !== false && !item.retired && !item.removedInDraft);
+  function renderFormPreview(activity, formContext) {
+    const items = previewItems(activity, formContext).filter(item => item.visible !== false && !item.retired && !item.removedInDraft);
     const parts = items.map(renderPreviewItem);
     return parts.join('') || '<div class="aim-empty">尚未建立可顯示欄位。</div>';
   }
@@ -2847,7 +2925,7 @@
     if (previewChoiceFieldTypes.has(field.type)) return 'badges';
     if (field.type === 'long_text') {
       const activity = selectedActivity();
-      const design = activity && formDesign(activity);
+      const design = activity && formDesign(activity, currentFormContext());
       const firstLongText = design && design.draft && design.draft.items.find(item => item.type === 'long_text');
       return firstLongText && designerItemKey(firstLongText) === designerItemKey(field) ? 'text' : '';
     }
@@ -4684,7 +4762,7 @@
     }
     if (action === 'tab') {
       selectTab(el.dataset.tab);
-      if (ui.tab === 'form') await loadFormForActivity(ui.selectedActivityId);
+      if (ui.tab === 'form') await loadFormBundleForActivity(ui.selectedActivityId, currentFormContext());
       if (ui.tab === 'records' || ui.tab === 'analytics') await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
     }
     if (action === 'sort' && canManageActivities()) sort(el.dataset.key);
@@ -4943,6 +5021,10 @@
       return true;
     }
     if (!canDesignForm()) return false;
+    if (action === 'form-context') {
+      await switchFormDesignContext(el.dataset.context);
+      return true;
+    }
     if (action === 'form-design-mode') {
       if (blockDirtyDesignerAction()) return true;
       ui.formDesignMode = el.dataset.mode === 'published' ? 'published' : 'draft';
@@ -5090,9 +5172,40 @@
     return true;
   }
 
+  async function switchFormDesignContext(formContext) {
+    const context = normalizeFormContext(formContext);
+    const activity = selectedActivity();
+    if (!activity) return;
+    if (currentFormContext() === context) return render();
+    if (blockDirtyDesignerAction()) return;
+    ui.formContext = context;
+    resetFormDesignerEditorState();
+    try {
+      await loadFormBundleForActivity(activity.id, context, {
+        initializeMissing: context === formContextFieldIntelligenceMode
+      });
+    } catch (error) {
+      toast(error.message || 'Form context load failed.');
+    }
+    render();
+  }
+
+  function resetFormDesignerEditorState() {
+    cancelScheduledFormPreviewRefresh();
+    ui.selectedFieldId = null;
+    ui.formDesignDraft = null;
+    ui.formDesignDraftDirty = false;
+    ui.formDesignMessage = '';
+    ui.formDesignConfirm = null;
+    ui.fieldTypePickerOpen = false;
+    ui.formDesignMode = 'draft';
+    ui.formPreviewAnswers = {};
+    ui.formPreviewCardLinked = false;
+  }
+
   function selectDesignerField(fieldId) {
     const activity = selectedActivity();
-    const field = formDesign(activity).draft.items.find(f => designerItemKey(f) === fieldId);
+    const field = formDesign(activity, currentFormContext()).draft.items.find(f => designerItemKey(f) === fieldId);
     if (!field) return;
     ui.selectedFieldId = designerItemKey(field);
     ui.formDesignDraft = Store.clone(field);
@@ -5161,7 +5274,7 @@
   function canUsePreviewPlacement(field, placement) {
     if (placement === 'none') return true;
     const activity = selectedActivity();
-    const design = activity && formDesign(activity);
+    const design = activity && formDesign(activity, currentFormContext());
     const currentKey = designerItemKey(field);
     const items = (design && design.draft && design.draft.items ? design.draft.items : []).filter(item => designerItemKey(item) !== currentKey);
     if (placement === 'primary' && items.some(item => previewPlacementForItem(item) === 'primary')) {
@@ -5193,7 +5306,7 @@
 
   function applyFieldDraft() {
     const activity = selectedActivity();
-    const design = formDesign(activity);
+    const design = formDesign(activity, currentFormContext());
     const draft = normalizeDesignerItem(ui.formDesignDraft || {});
     const title = draft.title.trim();
     if (!title) {
@@ -5232,7 +5345,7 @@
 
   function cancelFieldDraft() {
     const activity = selectedActivity();
-    const field = formDesign(activity).draft.items.find(f => designerItemKey(f) === ui.selectedFieldId);
+    const field = formDesign(activity, currentFormContext()).draft.items.find(f => designerItemKey(f) === ui.selectedFieldId);
     if (!field) return;
     ui.formDesignDraft = Store.clone(field);
     ui.formDesignDraftDirty = false;
@@ -5244,7 +5357,7 @@
     previewRefreshFrame = 0;
     const preview = document.querySelector('.aim-preview');
     if (!preview) return;
-    preview.innerHTML = renderFormPreview(selectedActivity());
+    preview.innerHTML = renderFormPreview(selectedActivity(), currentFormContext());
     bindFormPreviewControls();
   }
 
@@ -5915,6 +6028,7 @@
   }
 
   function selectTab(tabName) {
+    const previousTab = ui.tab;
     if (isRecorder()) {
       ui.tab = 'records';
       if (tabName === 'records') ui.records.scope = 'entry';
@@ -5925,6 +6039,10 @@
     else {
       ui.tab = tabName;
       if (tabName === 'records') ui.records.scope = 'entry';
+    }
+    if (ui.tab === 'form' && previousTab !== 'form') {
+      ui.formContext = formContextVisitorMode;
+      resetFormDesignerEditorState();
     }
   }
 
@@ -6542,13 +6660,13 @@
   }
 
   function openDiscardDraftDialog() {
-    const design = formDesign(selectedActivity());
+    const design = formDesign(selectedActivity(), currentFormContext());
     if (!formDesignChangeSummary(design).total) return toast('草稿沒有尚未發布的變更。');
     ui.formDesignConfirm = { type: 'discard' };
   }
 
   function openPublishFormDialog() {
-    const design = formDesign(selectedActivity());
+    const design = formDesign(selectedActivity(), currentFormContext());
     const invalid = invalidDesignerChoiceItem(design.draft.items);
     if (invalid) {
       ui.selectedFieldId = designerItemKey(invalid);
@@ -6562,11 +6680,12 @@
   async function saveDesignerDraft() {
     const activity = selectedActivity();
     if (!activity || writeInFlight) return;
+    const formContext = currentFormContext();
     writeInFlight = true;
     render();
     try {
-      const form = await window.ActivityIntelligenceApi.saveDraft(activity.id, serializeDraftItems(formDesign(activity).draft.items));
-      const design = updateActivityFormBundle(activity.id, form);
+      const form = await window.ActivityIntelligenceApi.saveDraft(activity.id, serializeDraftItems(formDesign(activity, formContext).draft.items), formContext);
+      const design = updateActivityFormBundle(activity.id, form, formContext);
       ui.formDesignDraftDirty = false;
       ui.formDesignMessage = '';
       ui.selectedFieldId = design.draft.items.find(item => designerItemKey(item) === ui.selectedFieldId)
@@ -6617,11 +6736,12 @@
   async function discardDesignerDraft() {
     const activity = selectedActivity();
     if (!activity || writeInFlight) return;
+    const formContext = currentFormContext();
     writeInFlight = true;
     render();
     try {
-      const form = await window.ActivityIntelligenceApi.discardDraft(activity.id);
-      const design = updateActivityFormBundle(activity.id, form);
+      const form = await window.ActivityIntelligenceApi.discardDraft(activity.id, formContext);
+      const design = updateActivityFormBundle(activity.id, form, formContext);
       ui.formDesignConfirm = null;
       ui.formDesignDraftDirty = false;
       ui.formDesignMessage = '';
@@ -6635,7 +6755,7 @@
       render();
     }
     return;
-    const design = formDesign(activity);
+    const design = formDesign(activity, formContext);
     design.draft.items = Store.clone(design.published.items);
     ui.formDesignConfirm = null;
     ui.formDesignDraftDirty = false;
@@ -6650,12 +6770,13 @@
   async function publishDesignerDraft() {
     const activity = selectedActivity();
     if (!activity || writeInFlight) return;
+    const formContext = currentFormContext();
     writeInFlight = true;
     render();
     try {
-      await window.ActivityIntelligenceApi.saveDraft(activity.id, serializeDraftItems(formDesign(activity).draft.items));
-      const form = await window.ActivityIntelligenceApi.publishDraft(activity.id);
-      const design = updateActivityFormBundle(activity.id, form);
+      await window.ActivityIntelligenceApi.saveDraft(activity.id, serializeDraftItems(formDesign(activity, formContext).draft.items), formContext);
+      const form = await window.ActivityIntelligenceApi.publishDraft(activity.id, formContext);
+      const design = updateActivityFormBundle(activity.id, form, formContext);
       ui.formDesignConfirm = null;
       ui.formDesignDraftDirty = false;
       ui.formDesignMessage = '';
@@ -6670,7 +6791,7 @@
       render();
     }
     return;
-    const design = formDesign(activity);
+    const design = formDesign(activity, formContext);
     const validItems = design.draft.items
       .filter(item => !item.removedInDraft)
       .map(item => ({ ...normalizeDesignerItem(item), removedInDraft: false }));
@@ -6720,7 +6841,7 @@
   function addDesignerItem(type) {
     const activity = selectedActivity();
     const nextType = type || 'short_text';
-    const design = formDesign(activity);
+    const design = formDesign(activity, currentFormContext());
     if (['card_link', 'form_thumbnail'].includes(nextType) && design.draft.items.some(item => item.type === nextType)) {
       toast('此元件已加入表單。');
       return;
@@ -6756,7 +6877,7 @@
 
   function moveField(fieldId, dir) {
     const activity = selectedActivity();
-    const list = formDesign(activity).draft.items;
+    const list = formDesign(activity, currentFormContext()).draft.items;
     const index = list.findIndex(f => designerItemKey(f) === fieldId);
     const next = index + dir;
     if (index < 0 || next < 0 || next >= list.length) return;
@@ -6767,7 +6888,7 @@
   }
 
   function toggleField(fieldId) {
-    const item = formDesign(selectedActivity()).draft.items.find(f => designerItemKey(f) === fieldId);
+    const item = formDesign(selectedActivity(), currentFormContext()).draft.items.find(f => designerItemKey(f) === fieldId);
     if (!item || item.removedInDraft) return;
     item.visible = !item.visible;
     if (ui.formDesignDraft && designerItemKey(ui.formDesignDraft) === fieldId) ui.formDesignDraft.visible = item.visible;
@@ -6777,7 +6898,7 @@
 
   function copyField(fieldId) {
     const activity = selectedActivity();
-    const list = formDesign(activity).draft.items;
+    const list = formDesign(activity, currentFormContext()).draft.items;
     const index = list.findIndex(f => designerItemKey(f) === fieldId);
     if (index < 0) return;
     if (['card_link', 'form_thumbnail'].includes(list[index].type)) return toast('此元件不可複製。');
@@ -6805,7 +6926,7 @@
 
   function deleteField(fieldId) {
     const activity = selectedActivity();
-    const design = formDesign(activity);
+    const design = formDesign(activity, currentFormContext());
     const index = design.draft.items.findIndex(f => designerItemKey(f) === fieldId);
     if (index < 0) return;
     const published = design.published.items.some(item => designerItemKey(item) === fieldId);
@@ -6827,7 +6948,7 @@
   }
 
   function restoreDesignerItem(fieldId) {
-    const item = formDesign(selectedActivity()).draft.items.find(f => designerItemKey(f) === fieldId);
+    const item = formDesign(selectedActivity(), currentFormContext()).draft.items.find(f => designerItemKey(f) === fieldId);
     if (!item) return;
     item.removedInDraft = false;
     item.visible = true;
@@ -7325,7 +7446,9 @@
     await window.ActivityIntelligenceApi.hardDeleteActivity(activityId);
     state.activities = state.activities.filter(activity => activity.id !== activityId);
     state.records = state.records.filter(record => record.activityId !== activityId);
-    formBundles.delete(activityId);
+    [...formBundles.keys()].forEach(key => {
+      if (String(key).startsWith(`${activityId}:`)) formBundles.delete(key);
+    });
     [...recordLoadState.keys()].forEach(key => {
       if (String(key).startsWith(`${activityId}:`)) recordLoadState.delete(key);
     });

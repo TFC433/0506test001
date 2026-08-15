@@ -68,7 +68,7 @@ class ActivityIntelligenceController {
 
     saveDraft = async (req, res) => {
         await this._handle(res, async () => {
-            const data = await this.activityIntelligenceService.saveDraft(req.params.activityId, req.body, req.user);
+            const data = await this.activityIntelligenceService.saveDraft(req.params.activityId, bodyWithFormContext(req), req.user);
             res.json({ success: true, data });
         });
     };
@@ -84,6 +84,13 @@ class ActivityIntelligenceController {
         await this._handle(res, async () => {
             const data = await this.activityIntelligenceService.publishDraft(req.params.activityId, req.user, formContextFromRequest(req));
             res.json({ success: true, data });
+        });
+    };
+
+    initializeFormContext = async (req, res) => {
+        await this._handle(res, async () => {
+            const data = await this.activityIntelligenceService.initializeFormContext(req.params.activityId, req.body, req.user);
+            res.status(201).json({ success: true, data });
         });
     };
 
@@ -282,6 +289,13 @@ function formContextFromRequest(req) {
     const query = req.query || {};
     const body = req.body || {};
     return query.formContext || query.form_context || query.context || body.formContext || body.form_context || body.context;
+}
+
+function bodyWithFormContext(req) {
+    const body = { ...(req.body || {}) };
+    const context = formContextFromRequest(req);
+    if (context && !body.formContext && !body.form_context && !body.context) body.formContext = context;
+    return body;
 }
 
 module.exports = ActivityIntelligenceController;

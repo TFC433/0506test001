@@ -30,6 +30,10 @@ class ActivityIntelligenceSqlWriter {
         return this._rpc('activity_intelligence_create_submission', payload);
     }
 
+    async initializeFormContext(payload) {
+        return this._rpc('activity_intelligence_initialize_form_context', payload);
+    }
+
     async updateSubmission(payload) {
         return this._rpc('activity_intelligence_update_submission', payload);
     }

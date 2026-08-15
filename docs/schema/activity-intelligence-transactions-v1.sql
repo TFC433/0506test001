@@ -864,6 +864,138 @@ begin
 end;
 $$;
 
+create or replace function public.activity_intelligence_initialize_form_context(
+    p_activity_id uuid,
+    p_form_context text,
+    p_actor jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_form_context text := public.activity_intelligence_private_normalize_context(p_form_context);
+    v_activity_exists boolean;
+    v_published_version_id uuid;
+    v_draft_version_id uuid;
+begin
+    select exists (
+        select 1
+        from public.activity_intelligence_activities
+        where activity_id = p_activity_id
+    )
+    into v_activity_exists;
+
+    if not v_activity_exists then
+        raise exception 'Activity not found' using errcode = '23514';
+    end if;
+
+    select form_version_id
+    into v_published_version_id
+    from public.activity_intelligence_form_versions
+    where activity_id = p_activity_id
+      and form_context = v_form_context
+      and status = 'published';
+
+    select form_version_id
+    into v_draft_version_id
+    from public.activity_intelligence_form_versions
+    where activity_id = p_activity_id
+      and form_context = v_form_context
+      and status = 'draft';
+
+    if v_published_version_id is not null and v_draft_version_id is not null then
+        return jsonb_build_object(
+            'activity_id', p_activity_id,
+            'form_context', v_form_context,
+            'published_form_version_id', v_published_version_id,
+            'draft_form_version_id', v_draft_version_id,
+            'created', false
+        );
+    end if;
+
+    if v_published_version_id is not null or v_draft_version_id is not null then
+        raise exception 'Activity form context stream is incomplete' using errcode = '23514';
+    end if;
+
+    v_published_version_id := gen_random_uuid();
+    v_draft_version_id := gen_random_uuid();
+
+    insert into public.activity_intelligence_form_versions (
+        form_version_id,
+        activity_id,
+        form_context,
+        version_number,
+        status,
+        published_at,
+        published_by_user_id,
+        published_by_display_name,
+        created_at,
+        updated_at
+    )
+    values (
+        v_published_version_id,
+        p_activity_id,
+        v_form_context,
+        1,
+        'draft',
+        null,
+        null,
+        null,
+        now(),
+        now()
+    );
+
+    update public.activity_intelligence_form_versions
+    set status = 'published',
+        published_at = now(),
+        published_by_user_id = p_actor->>'userId',
+        published_by_display_name = p_actor->>'displayName',
+        updated_at = now()
+    where form_version_id = v_published_version_id;
+
+    insert into public.activity_intelligence_form_versions (
+        form_version_id,
+        activity_id,
+        form_context,
+        version_number,
+        status,
+        published_at,
+        published_by_user_id,
+        published_by_display_name,
+        created_at,
+        updated_at
+    )
+    values (
+        v_draft_version_id,
+        p_activity_id,
+        v_form_context,
+        2,
+        'draft',
+        null,
+        null,
+        null,
+        now(),
+        now()
+    );
+
+    update public.activity_intelligence_activities
+    set updated_by_user_id = p_actor->>'userId',
+        updated_by_display_name = p_actor->>'displayName',
+        updated_at = now()
+    where activity_id = p_activity_id;
+
+    return jsonb_build_object(
+        'activity_id', p_activity_id,
+        'form_context', v_form_context,
+        'published_form_version_id', v_published_version_id,
+        'draft_form_version_id', v_draft_version_id,
+        'created', true
+    );
+end;
+$$;
+
 create or replace function public.activity_intelligence_private_insert_answers(
     p_submission_id uuid,
     p_form_version_id uuid,
@@ -1352,6 +1484,10 @@ revoke execute on function public.activity_intelligence_create_submission(jsonb,
 revoke execute on function public.activity_intelligence_create_submission(jsonb, jsonb, jsonb) from anon;
 revoke execute on function public.activity_intelligence_create_submission(jsonb, jsonb, jsonb) from authenticated;
 
+revoke execute on function public.activity_intelligence_initialize_form_context(uuid, text, jsonb) from PUBLIC;
+revoke execute on function public.activity_intelligence_initialize_form_context(uuid, text, jsonb) from anon;
+revoke execute on function public.activity_intelligence_initialize_form_context(uuid, text, jsonb) from authenticated;
+
 revoke execute on function public.activity_intelligence_update_submission(uuid, uuid, jsonb, jsonb) from PUBLIC;
 revoke execute on function public.activity_intelligence_update_submission(uuid, uuid, jsonb, jsonb) from anon;
 revoke execute on function public.activity_intelligence_update_submission(uuid, uuid, jsonb, jsonb) from authenticated;
@@ -1370,6 +1506,7 @@ grant execute on function public.activity_intelligence_save_draft(uuid, jsonb, j
 grant execute on function public.activity_intelligence_discard_draft(uuid, jsonb, text) to service_role;
 grant execute on function public.activity_intelligence_publish_draft(uuid, jsonb, text) to service_role;
 grant execute on function public.activity_intelligence_create_submission(jsonb, jsonb, jsonb) to service_role;
+grant execute on function public.activity_intelligence_initialize_form_context(uuid, text, jsonb) to service_role;
 grant execute on function public.activity_intelligence_update_submission(uuid, uuid, jsonb, jsonb) to service_role;
 grant execute on function public.activity_intelligence_hard_delete_submission(uuid) to service_role;
 grant execute on function public.activity_intelligence_hard_delete_activity(uuid) to service_role;

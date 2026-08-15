@@ -106,6 +106,10 @@
       return jsonRequest('POST', `/activities/${encodeURIComponent(activityId)}/form/publish`, formContext ? { formContext } : {});
     },
 
+    initializeFormContext(activityId, formContext) {
+      return jsonRequest('POST', `/activities/${encodeURIComponent(activityId)}/form/initialize`, { formContext });
+    },
+
     uploadMedia(file, metadata) {
       const formData = new FormData();
       formData.append('file', file);

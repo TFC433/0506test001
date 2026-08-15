@@ -229,6 +229,26 @@ class ActivityIntelligenceService {
         return this.getForm(activityId, context);
     }
 
+    async initializeFormContext(activityId, payload = {}, user = {}) {
+        await this._requireActivity(activityId);
+        const actor = this._actorFromUser(user);
+        const formContext = this._normalizeFormContext(payload.formContext || payload.form_context || payload.context);
+
+        const existing = await this.reader.getFormBundle(activityId, formContext);
+        if (existing && existing.published && existing.draft) return this._formBundleDto(existing);
+        if (existing && (existing.published || existing.draft)) {
+            throw new ActivityIntelligenceError(409, 'Form context stream is incomplete.', 'FORM_CONTEXT_STREAM_INCOMPLETE');
+        }
+
+        await this.writer.initializeFormContext({
+            p_activity_id: activityId,
+            p_form_context: formContext,
+            p_actor: actor
+        });
+
+        return this.getForm(activityId, formContext);
+    }
+
     async uploadFormMedia(payload = {}) {
         const folderId = this.config.ACTIVITY_INTELLIGENCE && this.config.ACTIVITY_INTELLIGENCE.FORM_MEDIA_FOLDER_ID;
         if (!folderId) {

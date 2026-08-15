@@ -1388,6 +1388,17 @@ a:focus-visible {
   background: var(--aim-surface-muted);
 }
 
+.aim-form-context-tabs {
+  max-width: 100%;
+  margin: 0 0 12px;
+  overflow-x: auto;
+}
+
+.aim-form-context-tabs .aim-mode-tab {
+  min-width: 112px;
+  white-space: nowrap;
+}
+
 .aim-mode-tab {
   min-height: 30px;
   padding: 5px 10px;

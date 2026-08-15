@@ -170,6 +170,7 @@ router.get('/activities/:activityId/form/published', (req, res, next) => getCont
 router.put('/activities/:activityId/form/draft', requireRole(DESIGNER_ROLES), (req, res, next) => getController(req).saveDraft(req, res, next));
 router.post('/activities/:activityId/form/discard-draft', requireRole(DESIGNER_ROLES), (req, res, next) => getController(req).discardDraft(req, res, next));
 router.post('/activities/:activityId/form/publish', requireRole(DESIGNER_ROLES), (req, res, next) => getController(req).publishDraft(req, res, next));
+router.post('/activities/:activityId/form/initialize', requireRole(DESIGNER_ROLES), (req, res, next) => getController(req).initializeFormContext(req, res, next));
 router.post(
     '/media',
     requireRole(DESIGNER_ROLES),

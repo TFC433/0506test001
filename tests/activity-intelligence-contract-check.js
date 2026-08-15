@@ -96,6 +96,20 @@ const oldItems = [
 function makeHarness(options = {}) {
     const calls = {};
     const submissions = new Map();
+    const missingFormContexts = new Set(options.missingFormContexts || []);
+    const initializedFormContexts = new Set(options.initializedFormContexts || []);
+
+    const itemsForFormContext = formContext => formContext === 'field_intelligence' ? [] : publishedItems;
+    const formBundleForContext = (activityId, formContext = 'visitor') => {
+        if (missingFormContexts.has(formContext) && !initializedFormContexts.has(formContext)) {
+            return { published: null, draft: null };
+        }
+        const items = itemsForFormContext(formContext);
+        return {
+            published: { versionId: IDS.publishedVersion, formContext, versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items },
+            draft: { versionId: IDS.draftVersion, formContext, versionNumber: 2, items: items.map(item => ({ ...item })) }
+        };
+    };
 
     const reader = {
         mapActivityRow: row => ({ ...baseActivity, id: row.activity_id || row.id, name: row.name || baseActivity.name }),
@@ -107,18 +121,15 @@ function makeHarness(options = {}) {
         },
         async getFormBundle(activityId, formContext = 'visitor') {
             calls.getFormBundle = { activityId, formContext };
-            return {
-                published: { versionId: IDS.publishedVersion, formContext, versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems },
-                draft: { versionId: IDS.draftVersion, formContext, versionNumber: 2, items: publishedItems.map(item => ({ ...item })) }
-            };
+            return formBundleForContext(activityId, formContext);
         },
         async getPublishedForm(activityId, formContext = 'visitor') {
             calls.getPublishedForm = { activityId, formContext };
-            return { versionId: IDS.publishedVersion, formContext, versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: publishedItems };
+            return formBundleForContext(activityId, formContext).published;
         },
         async getDraftForm(activityId, formContext = 'visitor') {
             calls.getDraftForm = { activityId, formContext };
-            return { versionId: IDS.draftVersion, formContext, versionNumber: 2, items: publishedItems.map(item => ({ ...item })) };
+            return formBundleForContext(activityId, formContext).draft;
         },
         async getVersionWithItems(versionId) {
             return versionId === IDS.oldVersion
@@ -185,6 +196,17 @@ function makeHarness(options = {}) {
                 updatedAt: '2026-08-02T00:00:00.000Z'
             });
             return { submission_id: IDS.newSubmission };
+        },
+        async initializeFormContext(payload) {
+            calls.initializeFormContext = payload;
+            initializedFormContexts.add(payload.p_form_context);
+            return {
+                activity_id: payload.p_activity_id,
+                form_context: payload.p_form_context,
+                published_form_version_id: IDS.publishedVersion,
+                draft_form_version_id: IDS.draftVersion,
+                created: true
+            };
         },
         async updateSubmission(payload) {
             calls.updateSubmission = payload;
@@ -425,6 +447,8 @@ async function assertVisitorKpiCacheHydrationContract(managementSource) {
         `const visitorCountFieldTitle = String.fromCodePoint(0x540C, 0x884C, 0x4EBA, 0x6578);`,
         'const state = { activities: [] };',
         'const formBundles = new Map();',
+        'const formContextVisitorMode = "visitor";',
+        'const formContextFieldIntelligenceMode = "field_intelligence";',
         'let apiPublished = null;',
         'let publishedFetchCount = 0;',
         'const Store = { clone(value) { return JSON.parse(JSON.stringify(value)); } };',
@@ -432,6 +456,9 @@ async function assertVisitorKpiCacheHydrationContract(managementSource) {
         'function otherAnswersForRecord(record) { return record && record.runtimeOtherAnswers ? record.runtimeOtherAnswers : {}; }',
         'function optionLabel(value) { return value && typeof value === "object" ? (value.label || value.value || "") : value; }',
         'function normalizeDesignerItem(item) { return { ...item, itemKey: item.itemKey || item.fieldId || item.itemId, itemId: item.itemId || item.itemKey || item.fieldId, fieldId: item.fieldId || item.itemKey || item.itemId, visible: item.visible !== false, retired: Boolean(item.retired), removedInDraft: Boolean(item.removedInDraft) }; }',
+        extractFunctionDeclaration(managementSource, 'normalizeFormContext'),
+        extractFunctionDeclaration(managementSource, 'formBundleCacheKey'),
+        extractFunctionDeclaration(managementSource, 'isCompleteFormBundle'),
         extractFunctionDeclaration(managementSource, 'loadPublishedFormForActivity').replace(/^function /, 'async function '),
         extractFunctionDeclaration(managementSource, 'hydrateActivityFormBundle'),
         extractFunctionDeclaration(managementSource, 'normalizeFormBundleDto'),
@@ -623,6 +650,26 @@ function assertContextFoundationSqlContract(sqlSource) {
     assert(sqlSource.includes('Activity Intelligence form_context is immutable'), 'form_context must be immutable');
     assert(sqlSource.includes('Activity Intelligence submission record_context is immutable'), 'record_context must be immutable');
     assert(sqlSource.includes('Submission record_context must match form version context'), 'submission context must match form version context');
+    assert(sqlSource.includes('activity_intelligence_initialize_form_context'), 'missing form contexts must be initializable');
+    assert(sqlSource.includes("'published_form_version_id', v_published_version_id"), 'initializer must create or return a published version');
+    assert(sqlSource.includes("'draft_form_version_id', v_draft_version_id"), 'initializer must create or return a draft version');
+    assert(sqlSource.includes("'created', true"), 'initializer must report newly created streams');
+}
+
+function assertDualStreamFormBuilderSourceContract(managementSource, apiSource, cssSource) {
+    assert(managementSource.includes("const formContextFieldIntelligenceMode = 'field_intelligence';"), 'Form Design must use canonical field_intelligence context');
+    assert(managementSource.includes('function renderFormContextTabs'), 'Form Design must render context tabs');
+    assert(managementSource.includes('data-action="form-context"'), 'Form Design context tabs must be actionable');
+    assert(managementSource.includes('formBundleCacheKey(activityId, context)'), 'form bundle cache must include context');
+    assert(managementSource.includes('activity.formDesignRuntimeByContext'), 'activity form runtime state must be separated by context');
+    assert(managementSource.includes('initializeMissing: context === formContextFieldIntelligenceMode'), 'field_intelligence must lazy-initialize when missing');
+    assert(managementSource.includes('ActivityIntelligenceApi.saveDraft(activity.id, serializeDraftItems(formDesign(activity, formContext).draft.items), formContext)'), 'save draft must route active context');
+    assert(managementSource.includes('ActivityIntelligenceApi.discardDraft(activity.id, formContext)'), 'discard draft must route active context');
+    assert(managementSource.includes('ActivityIntelligenceApi.publishDraft(activity.id, formContext)'), 'publish draft must route active context');
+    assert(managementSource.includes('renderFormPreview(activity, formContext)'), 'preview must use active context');
+    assert(apiSource.includes('initializeFormContext(activityId, formContext)'), 'API client must expose form context initialization');
+    assert(apiSource.includes('formContextSuffix(formContext)'), 'API form reads must accept context');
+    assert(cssSource.includes('.aim-form-context-tabs'), 'context tabs must have dedicated mobile-safe styling');
 }
 
 async function main() {
@@ -769,6 +816,20 @@ async function main() {
     await contextHarness.service.listSubmissions(IDS.activity, { recordContext: 'visitor' });
     assert.strictEqual(contextHarness.calls.listSubmissions.filters.recordContext, 'visitor');
     await assertRejectsCode(() => contextHarness.service.getPublishedForm(IDS.activity, 'invalid'), 'INVALID_FORM_CONTEXT');
+
+    const missingContextHarness = makeHarness({ missingFormContexts: ['field_intelligence'] });
+    const initializedForm = await missingContextHarness.service.initializeFormContext(IDS.activity, {
+        formContext: 'field_intelligence'
+    }, actor());
+    assert.strictEqual(missingContextHarness.calls.initializeFormContext.p_activity_id, IDS.activity);
+    assert.strictEqual(missingContextHarness.calls.initializeFormContext.p_form_context, 'field_intelligence');
+    assert.strictEqual(initializedForm.published.formContext, 'field_intelligence');
+    assert.strictEqual(initializedForm.draft.formContext, 'field_intelligence');
+    assert.strictEqual(initializedForm.published.versionNumber, 1);
+    assert.strictEqual(initializedForm.draft.versionNumber, 2);
+    assert.deepStrictEqual(initializedForm.published.items, []);
+    assert.deepStrictEqual(initializedForm.draft.items, []);
+    assert.notDeepStrictEqual(initializedForm.draft.items, publishedItems);
 
     await service.updateSubmission(IDS.oldSubmission, { cardId: IDS.secondCard }, actor());
     assert.strictEqual(calls.updateSubmission.p_card_id, IDS.secondCard);
@@ -1277,12 +1338,14 @@ async function main() {
 
     const managementSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'scripts', 'activity-intelligence', 'activity-intelligence-management.js'), 'utf8');
     const apiSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'scripts', 'activity-intelligence', 'activity-intelligence-api.js'), 'utf8');
+    const cssSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles', 'activity-intelligence', 'activity-intelligence-management.css'), 'utf8');
     const activityIntelligenceSqlSource = fs.readFileSync(path.join(__dirname, '..', 'docs', 'schema', 'activity-intelligence-transactions-v1.sql'), 'utf8');
     assertFormAssistCjkContract(managementSource);
     assertVisitorKpiOtherNumericContract(managementSource);
     await assertVisitorKpiCacheHydrationContract(managementSource);
     assertMobileAnalyticsBreakpointRerenderContract(managementSource);
     assertContextFoundationSqlContract(activityIntelligenceSqlSource);
+    assertDualStreamFormBuilderSourceContract(managementSource, apiSource, cssSource);
     assert(managementSource.includes("if (ui.analytics.ai.state === 'loading') return;"));
     assert(managementSource.includes("state === 'loading'"));
     assert(!managementSource.includes('FORM_GEMINI_API_KEY'));
