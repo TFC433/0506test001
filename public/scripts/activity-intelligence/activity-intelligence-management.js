@@ -1105,12 +1105,14 @@
     const status = activityStatus(activity);
     const module = activeModule();
     const showSettingsButton = canManageActivities() && ui.tab === 'overview';
+    const mobileAnalysisHeaderAction = renderMobileAnalysisHeaderAction();
+    const formPeriod = `<span class="aim-form-period">表單開放：${Store.escapeHtml(formatHeaderDateRange(activity.formOpenStart, activity.formOpenEnd, true))}</span>`;
     return `
       <header class="aim-page-header aim-activity-page-header">
         <div class="aim-activity-identity">
-          <div class="aim-activity-title-row"><h1>${Store.escapeHtml(activity.name)}</h1>${statusPill(status)}<span class="aim-form-period">表單開放：${Store.escapeHtml(formatHeaderDateRange(activity.formOpenStart, activity.formOpenEnd, true))}</span></div>
+          <div class="aim-activity-title-row"><h1>${Store.escapeHtml(activity.name)}</h1>${statusPill(status)}${mobileAnalysisHeaderAction ? '' : formPeriod}</div>
+          ${mobileAnalysisHeaderAction ? `<div class="aim-activity-meta-action-row">${formPeriod}${mobileAnalysisHeaderAction}</div>` : ''}
           ${headerExhibitionSubtitle(activity) ? `<p class="aim-exhibition-subtitle">${Store.escapeHtml(headerExhibitionSubtitle(activity))}</p>` : ''}
-          ${renderMobileAnalysisHeaderAction()}
         </div>
         ${showSettingsButton ? '<button class="aim-button aim-button-settings aim-header-settings-button" type="button" data-action="settings">活動設定</button>' : ''}
         <div class="aim-module-heading"><span>目前模組</span><h2>${moduleLabel(module)}</h2><p>${moduleDescription(module)}</p></div>
@@ -1429,7 +1431,7 @@
   function renderRecordContextHeaderAction() {
     const active = ui.recordContextMode === recordContextActiveMode;
     const mode = active ? recordContextVisitorMode : recordContextActiveMode;
-    const label = active ? '返回訪客紀錄' : '主動情報';
+    const label = active ? '返回訪客紀錄' : '＋主動情報';
     return `
       <button class="aim-entry-mode-action" type="button" data-action="record-context-mode" data-mode="${mode}">${Store.escapeHtml(label)}</button>
     `;
