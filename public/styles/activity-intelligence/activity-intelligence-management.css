@@ -627,12 +627,32 @@ a:focus-visible {
   gap: 10px;
 }
 
-.aim-activity-meta-action-row {
+.aim-activity-title-row h1 {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.aim-activity-metadata-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
+}
+
+.aim-exhibition-period {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 3px 9px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
 }
 
 .aim-exhibition-subtitle {
@@ -655,6 +675,14 @@ a:focus-visible {
   font-weight: 600;
   line-height: 1.35;
   white-space: nowrap;
+}
+
+.aim-activity-identity .aim-form-period-note {
+  margin: 7px 0 0;
+  color: var(--aim-muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
 }
 
 .aim-header-settings-button {
@@ -1263,7 +1291,7 @@ a:focus-visible {
   padding: 4px 0 4px 10px;
   border: 0;
   background: transparent;
-  color: var(--aim-muted);
+  color: var(--aim-form-primary-hover);
   cursor: pointer;
   font-size: 13px;
   font-weight: 700;
@@ -4944,8 +4972,8 @@ a:focus-visible {
 
   .aim-mobile-analysis-entry,
   .aim-mobile-analysis-exit {
-    min-height: 32px;
-    padding: 5px 10px;
+    min-height: 28px;
+    padding: 3px 8px;
     border-color: rgba(224, 82, 45, 0.28);
     background: rgba(255, 255, 255, 0.78);
     color: var(--aim-form-primary-hover);

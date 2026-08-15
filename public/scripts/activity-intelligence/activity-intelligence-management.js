@@ -1102,21 +1102,30 @@
       return `<header class="aim-page-header"><div><h1>表單紀錄</h1><p>目前沒有可填寫的活動。</p></div></header>`;
     }
     if (!activity) return '';
-    const status = activityStatus(activity);
     const module = activeModule();
     const showSettingsButton = canManageActivities() && ui.tab === 'overview';
-    const mobileAnalysisHeaderAction = renderMobileAnalysisHeaderAction();
-    const formPeriod = `<span class="aim-form-period">表單開放：${Store.escapeHtml(formatHeaderDateRange(activity.formOpenStart, activity.formOpenEnd, true))}</span>`;
     return `
       <header class="aim-page-header aim-activity-page-header">
-        <div class="aim-activity-identity">
-          <div class="aim-activity-title-row"><h1>${Store.escapeHtml(activity.name)}</h1>${statusPill(status)}${mobileAnalysisHeaderAction ? '' : formPeriod}</div>
-          ${mobileAnalysisHeaderAction ? `<div class="aim-activity-meta-action-row">${formPeriod}${mobileAnalysisHeaderAction}</div>` : ''}
-          ${headerExhibitionSubtitle(activity) ? `<p class="aim-exhibition-subtitle">${Store.escapeHtml(headerExhibitionSubtitle(activity))}</p>` : ''}
-        </div>
+        ${renderActivityHeaderIdentity(activity, { includeMobileAnalyticsAction: true })}
         ${showSettingsButton ? '<button class="aim-button aim-button-settings aim-header-settings-button" type="button" data-action="settings">活動設定</button>' : ''}
         <div class="aim-module-heading"><span>目前模組</span><h2>${moduleLabel(module)}</h2><p>${moduleDescription(module)}</p></div>
       </header>
+    `;
+  }
+
+  function renderActivityHeaderIdentity(activity, options = {}) {
+    const status = activityStatus(activity);
+    const mobileAnalysisHeaderAction = options.includeMobileAnalyticsAction ? renderMobileAnalysisHeaderAction() : '';
+    const exhibitionSubtitle = headerExhibitionSubtitle(activity);
+    return `
+      <div class="aim-activity-identity">
+        <div class="aim-activity-title-row"><h1>${Store.escapeHtml(activity.name)}</h1>${mobileAnalysisHeaderAction}</div>
+        <div class="aim-activity-metadata-row">
+          ${exhibitionSubtitle ? `<span class="aim-exhibition-period">${Store.escapeHtml(exhibitionSubtitle)}</span>` : ''}
+          ${statusPill(status)}
+        </div>
+        <p class="aim-form-period-note">表單開放：${Store.escapeHtml(formatHeaderDateRange(activity.formOpenStart, activity.formOpenEnd, true))}</p>
+      </div>
     `;
   }
 
@@ -1497,13 +1506,9 @@
         ${renderGuestUserIdBlock()}
       `;
     }
-    const status = activityStatus(activity);
     return `
       <header class="aim-page-header aim-activity-page-header aim-guest-page-header">
-        <div class="aim-activity-identity">
-          <div class="aim-activity-title-row"><h1>${Store.escapeHtml(activity.name)}</h1>${statusPill(status)}<span class="aim-form-period">表單開放：${Store.escapeHtml(formatHeaderDateRange(activity.formOpenStart, activity.formOpenEnd, true))}</span></div>
-          ${headerExhibitionSubtitle(activity) ? `<p class="aim-exhibition-subtitle">${Store.escapeHtml(headerExhibitionSubtitle(activity))}</p>` : ''}
-        </div>
+        ${renderActivityHeaderIdentity(activity)}
       </header>
       ${renderGuestMobileTabs()}
       ${ui.records.scope === 'mine' ? renderGuestOwnRecords(activity) : renderGuestQuickEntry(activity)}
