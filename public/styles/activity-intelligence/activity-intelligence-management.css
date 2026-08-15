@@ -4982,21 +4982,46 @@ a:focus-visible {
   }
 
   .aim-mobile-analysis-icon-action {
-    width: 34px;
-    min-width: 34px;
-    height: 34px;
-    min-height: 34px;
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    min-height: 36px;
     padding: 0;
+    border-color: transparent;
+    background: transparent;
+    color: var(--aim-form-primary-hover);
+  }
+
+  .aim-mobile-analysis-icon-action:hover,
+  .aim-mobile-analysis-icon-action:focus-visible {
+    border-color: transparent;
+    background: var(--aim-form-primary-soft);
   }
 
   .aim-mobile-analysis-icon {
-    width: 18px;
-    height: 18px;
+    width: 21px;
+    height: 21px;
     stroke: currentColor;
     stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
     fill: none;
+  }
+
+  .aim-mobile-analysis-bar {
+    fill: currentColor;
+    opacity: 0.28;
+    stroke: none;
+  }
+
+  .aim-mobile-analysis-trend {
+    fill: none;
+    stroke: currentColor;
+  }
+
+  .aim-mobile-analysis-node {
+    fill: currentColor;
+    stroke: none;
   }
 
   .aim-mobile-analysis-framework {

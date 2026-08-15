@@ -1135,9 +1135,14 @@
       <div class="aim-mobile-analysis-header-action">
         <button class="aim-button aim-mobile-analysis-entry aim-mobile-analysis-icon-action" data-action="mobile-analysis-enter" type="button" aria-label="數據分析" title="數據分析">
           <svg class="aim-mobile-analysis-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M5 19V11"></path>
-            <path d="M12 19V5"></path>
-            <path d="M19 19V9"></path>
+            <rect class="aim-mobile-analysis-bar" x="4" y="13" width="3" height="6" rx="1"></rect>
+            <rect class="aim-mobile-analysis-bar" x="10.5" y="10" width="3" height="9" rx="1"></rect>
+            <rect class="aim-mobile-analysis-bar" x="17" y="7" width="3" height="12" rx="1"></rect>
+            <path class="aim-mobile-analysis-trend" d="M4.8 10.4 8.8 7.2 13 9.3 19.2 4.8"></path>
+            <circle class="aim-mobile-analysis-node" cx="4.8" cy="10.4" r="1.45"></circle>
+            <circle class="aim-mobile-analysis-node" cx="8.8" cy="7.2" r="1.45"></circle>
+            <circle class="aim-mobile-analysis-node" cx="13" cy="9.3" r="1.45"></circle>
+            <circle class="aim-mobile-analysis-node" cx="19.2" cy="4.8" r="1.45"></circle>
           </svg>
         </button>
       </div>
