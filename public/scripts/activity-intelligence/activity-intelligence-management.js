@@ -95,6 +95,8 @@
   const mobileFormMediaQuery = '(max-width: 640px)';
   const thumbnailFitOptions = new Set(['cover', 'contain']);
   const visitorCountFieldTitle = '同行人數';
+  const recordContextVisitorMode = 'visitor';
+  const recordContextActiveMode = 'active-intelligence';
 
   let state = { activities: [], records: [], selectedActivityId: null };
   let currentUser = null;
@@ -127,6 +129,8 @@
     analyticsChartModal: null,
     formAssistCardImportConfirm: null,
     mobileAnalysisMode: false,
+    recordContextMode: recordContextVisitorMode,
+    analyticsScope: recordContextVisitorMode,
     formPreviewAnswers: {},
     formPreviewCardLinked: false,
     formPreviewCardVariant: 'default',
@@ -1369,12 +1373,13 @@
           <div class="aim-panel-title-row">
             <h2>新增紀錄</h2>
           </div>
+          ${renderRecordContextSelector()}
           <div class="aim-answer-list">
-            ${quickEntryFields(activity).map(field => renderQuickField(field, open)).join('')}
+            ${renderQuickEntryAnswerContent(activity, open)}
           </div>
-          <div class="aim-entry-save-actions">
+          ${ui.recordContextMode === recordContextActiveMode ? '' : `<div class="aim-entry-save-actions">
             <button class="aim-button aim-button-primary" data-action="quick-save-next" ${open ? '' : 'disabled'} type="button">儲存並繼續新增</button>
-          </div>
+          </div>`}
         </div>
         <aside class="aim-panel aim-entry-context aim-personal-records" aria-live="polite">
           <div class="aim-personal-records-head">
@@ -1418,6 +1423,61 @@
         </div>
         ${expanded ? renderInlineRecordDetail(record, activity) : ''}
       </article>
+    `;
+  }
+
+  function renderRecordContextSelector() {
+    return `
+      <div class="aim-form-mode-tabs aim-record-context-tabs" role="tablist" aria-label="紀錄類型">
+        <button class="aim-mode-tab" type="button" data-action="record-context-mode" data-mode="${recordContextVisitorMode}" role="tab" aria-selected="${ui.recordContextMode !== recordContextActiveMode}">訪客紀錄</button>
+        <button class="aim-mode-tab" type="button" data-action="record-context-mode" data-mode="${recordContextActiveMode}" role="tab" aria-selected="${ui.recordContextMode === recordContextActiveMode}">主動情報</button>
+      </div>
+    `;
+  }
+
+  function renderQuickEntryAnswerContent(activity, open) {
+    if (ui.recordContextMode === recordContextActiveMode) return renderActiveIntelligenceEntryPrototype(activity);
+    return quickEntryFields(activity).map(field => renderQuickField(field, open)).join('');
+  }
+
+  function renderEntryActivityBanner(activity) {
+    return quickEntryFields(activity)
+      .filter(field => field.type === 'form_thumbnail')
+      .map(field => renderQuickField(field, true))
+      .join('');
+  }
+
+  function renderActiveIntelligenceEntryPrototype(activity) {
+    return `
+      ${renderEntryActivityBanner(activity)}
+      <section class="aim-active-intelligence-entry" aria-label="主動情報原型">
+        <div class="aim-active-intelligence-entry-head">
+          <h3>主動情報</h3>
+          <p>此區目前僅供版面與互動評估，不會建立表單紀錄。</p>
+        </div>
+        <div class="aim-field">
+          <label for="aim-active-company">公司 / 單位</label>
+          <input class="aim-input aim-active-intelligence-input" id="aim-active-company" placeholder="輸入公司或單位">
+        </div>
+        <div class="aim-field">
+          <span class="aim-field-title">情報類型</span>
+          <div class="aim-runtime-choice-list">
+            ${['產品需求', '技術討論', '展品回饋', '其他'].map((label, index) => `<label class="aim-checkbox"><input type="radio" name="aim-active-intelligence-type" ${index === 0 ? 'checked' : ''}> ${Store.escapeHtml(label)}</label>`).join('')}
+          </div>
+        </div>
+        <div class="aim-field">
+          <label for="aim-active-followup">後續追蹤需求</label>
+          <select class="aim-select aim-active-intelligence-input" id="aim-active-followup">
+            ${option('next', '需要安排後續聯繫', 'next')}
+            ${option('watch', '先保留觀察', 'next')}
+            ${option('none', '暫無後續', 'next')}
+          </select>
+        </div>
+        <div class="aim-field">
+          <label for="aim-active-note">情報紀錄</label>
+          <textarea class="aim-textarea aim-auto-grow aim-active-intelligence-input" id="aim-active-note" rows="2" placeholder="記錄現場觀察、需求線索或待確認事項"></textarea>
+        </div>
+      </section>
     `;
   }
 
@@ -3202,7 +3262,44 @@
 
   function renderRecordResults(activity, scope, rows) {
     const visibleRows = rows || filteredRecords(activity, scope);
-    return `<div class="aim-record-card-list aim-record-card-list-all">${visibleRows.map(record => renderRecordCard(record, activity, 'all')).join('') || '<div class="aim-empty">沒有符合篩選條件的紀錄。</div>'}</div>`;
+    return `<div class="aim-record-card-list aim-record-card-list-all">${renderRecordListCards(activity, scope, visibleRows)}</div>`;
+  }
+
+  function renderRecordListCards(activity, scope, rows) {
+    const cards = (rows || []).map(record => renderRecordCard(record, activity, 'all'));
+    if (scope === 'all') cards.push(renderActiveIntelligencePrototypeRecordCard(activity));
+    return cards.join('') || '<div class="aim-empty">沒有符合篩選條件的紀錄。</div>';
+  }
+
+  function renderActiveIntelligencePrototypeRecordCard(activity) {
+    return `
+      <article class="aim-latest-item aim-record-card aim-record-card-all aim-record-card-active-intelligence-prototype" aria-label="主動情報原型紀錄">
+        <div class="aim-record-card-summary">
+          <div class="aim-record-card-copy">
+            <div class="aim-record-card-meta">
+              <span class="aim-record-card-activity">${Store.escapeHtml(activity.name)}</span>
+              <span class="aim-record-context-label">主動情報</span>
+              <span class="aim-record-card-time">版面示範</span>
+            </div>
+            <div class="aim-record-card-identity-row">
+              <div class="aim-record-card-primary">
+                <strong>智慧製造需求線索</strong>
+                <span class="aim-record-card-company">示範公司</span>
+                <span class="aim-preview-sep" aria-hidden="true">|</span>
+                <span class="aim-record-card-status-group"><span class="aim-record-preview-label">後續追蹤</span><span class="aim-pill aim-pill-medium">待確認</span></span>
+              </div>
+            </div>
+            <div class="aim-record-preview-content">
+              <div class="aim-record-preview-badges">
+                <span class="aim-answer-badge aim-answer-badge-field-2">產品需求</span>
+                <span class="aim-answer-badge aim-answer-badge-field-3">技術討論</span>
+              </div>
+              <p class="aim-record-preview-text"><span>現場對自動化產線資料整合有興趣，待業務確認後續聯繫。</span></p>
+            </div>
+          </div>
+        </div>
+      </article>
+    `;
   }
 
   function renderRecordChoiceFilters(activity) {
@@ -3233,12 +3330,22 @@
 
   function renderAnalytics(activity) {
     const records = analyticsRecords(activity);
+    const assistant = !isMobileFormViewport() ? renderAnalyticsAiPanel(activity, records) : '';
+    const scopeSelector = renderAnalyticsScopeSelector();
+    if (ui.analyticsScope === recordContextActiveMode) {
+      return `
+        ${assistant}
+        ${scopeSelector}
+        ${renderActiveIntelligenceAnalyticsPrototype(false)}
+      `;
+    }
     const metrics = analyticsMetrics(activity, records);
     const visitorKpi = metrics.visitorCount !== null
       ? `<div class="aim-kpi"><span>參觀人數</span><strong>${metrics.visitorCount}</strong></div>`
       : '';
     return `
-      ${!isMobileFormViewport() ? renderAnalyticsAiPanel(activity, records) : ''}
+      ${assistant}
+      ${scopeSelector}
       <div class="aim-kpi-grid aim-analytics-kpi-row"><div class="aim-kpi"><span>有效紀錄</span><strong>${metrics.total}</strong></div>${visitorKpi}<div class="aim-kpi"><span>今日新增</span><strong>${metrics.today}</strong></div><div class="aim-kpi"><span>紀錄者數</span><strong>${metrics.recorders}</strong></div><div class="aim-kpi"><span>完整度</span><strong>${metrics.completeRate}</strong><small>平均填答 ${metrics.avgAnswered} / ${metrics.avgExpected} 欄</small></div></div>
       <div class="aim-chart-grid">${renderActivityTrendChart(records)}${recorderDistributionChart(records)}${choiceCharts(activity, records)}${numberCharts(activity, records)}</div>
     `;
@@ -3246,6 +3353,15 @@
 
   function renderMobileAnalysis(activity) {
     const records = analyticsRecords(activity);
+    if (ui.analyticsScope === recordContextActiveMode) {
+      return `
+        <section class="aim-mobile-analysis" aria-label="行動數據分析">
+          ${renderMobileAnalyticsAiPanel(activity, records)}
+          ${renderAnalyticsScopeSelector()}
+          ${renderActiveIntelligenceAnalyticsPrototype(true)}
+        </section>
+      `;
+    }
     const metrics = analyticsMetrics(activity, records);
     const categorical = analyticFields(activity, records)
       .filter(field => ['yes_no', 'single_choice', 'multiple_choice', 'dropdown'].includes(field.type))
@@ -3254,6 +3370,7 @@
     return `
       <section class="aim-mobile-analysis" aria-label="行動數據分析">
         ${renderMobileAnalyticsAiPanel(activity, records)}
+        ${renderAnalyticsScopeSelector()}
         ${renderMobileAnalyticsKpis(metrics)}
         <div class="aim-mobile-analysis-chart-feed">
           ${renderMobileActivityTrendChart(records)}
@@ -3261,6 +3378,50 @@
           ${categorical}
         </div>
       </section>
+    `;
+  }
+
+  function renderAnalyticsScopeSelector() {
+    return `
+      <div class="aim-form-mode-tabs aim-analytics-scope-tabs" role="tablist" aria-label="分析範圍">
+        <button class="aim-mode-tab" type="button" data-action="analytics-scope" data-mode="${recordContextVisitorMode}" role="tab" aria-selected="${ui.analyticsScope !== recordContextActiveMode}">訪客分析</button>
+        <button class="aim-mode-tab" type="button" data-action="analytics-scope" data-mode="${recordContextActiveMode}" role="tab" aria-selected="${ui.analyticsScope === recordContextActiveMode}">主動情報</button>
+      </div>
+    `;
+  }
+
+  function renderActiveIntelligenceAnalyticsPrototype(mobile) {
+    const chartClass = mobile ? 'aim-mobile-analysis-chart-feed' : 'aim-chart-grid';
+    return `
+      <section class="aim-active-intelligence-analytics" aria-label="主動情報分析原型">
+        <div class="${mobile ? 'aim-mobile-analysis-kpi-grid' : 'aim-kpi-grid aim-analytics-kpi-row'}">
+          <div class="aim-kpi"><span>主動情報</span><strong>--</strong></div>
+          <div class="aim-kpi"><span>待追蹤項目</span><strong>--</strong></div>
+          <div class="aim-kpi"><span>本週新增</span><strong>--</strong></div>
+          <div class="aim-kpi"><span>高優先潛在案</span><strong>--</strong></div>
+        </div>
+        <div class="${chartClass}">
+          ${renderActiveIntelligencePrototypeChart('情報類型', ['產品需求', '技術討論', '展品回饋'])}
+          ${renderActiveIntelligencePrototypeChart('後續追蹤需求', ['需要聯繫', '保留觀察', '暫無後續'])}
+          ${renderActiveIntelligencePrototypeChart('公司 / 單位', ['既有客戶', '新名單', '合作夥伴'])}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderActiveIntelligencePrototypeChart(title, rows) {
+    return `
+      <div class="aim-panel aim-analytics-chart-card aim-active-intelligence-chart-card">
+        <div class="aim-analytics-chart-head">
+          <div class="aim-analytics-chart-title">
+            <h2>${Store.escapeHtml(title)}</h2>
+            <span>暫無正式資料</span>
+          </div>
+        </div>
+        <div class="aim-prototype-chart-bars">
+          ${rows.map((label, index) => `<div class="aim-prototype-chart-row"><span>${Store.escapeHtml(label)}</span><i style="--bar-w:${42 + (index * 18)}%"></i><strong>--</strong></div>`).join('')}
+        </div>
+      </div>
     `;
   }
 
@@ -4537,6 +4698,14 @@
       ui.mobileAnalysisMode = false;
       ui.analyticsChartModal = null;
     }
+    if (action === 'record-context-mode') {
+      ui.recordContextMode = el.dataset.mode === recordContextActiveMode ? recordContextActiveMode : recordContextVisitorMode;
+    }
+    if (action === 'analytics-scope') {
+      disposeActivityAnalyticsCharts();
+      ui.analyticsChartModal = null;
+      ui.analyticsScope = el.dataset.mode === recordContextActiveMode ? recordContextActiveMode : recordContextVisitorMode;
+    }
     if (action === 'add-field' && canDesignForm()) addField();
     if (action === 'select-field' && canDesignForm()) ui.selectedFieldId = el.dataset.id;
     if (action === 'move-field' && canDesignForm()) moveField(el.dataset.id, Number(el.dataset.dir));
@@ -5219,7 +5388,7 @@
     const list = document.querySelector('.aim-entry-form .aim-answer-list');
     if (!activity || !list) return;
     const open = activityStatus(activity).key === 'open';
-    list.innerHTML = quickEntryFields(activity).map(field => renderQuickField(field, open)).join('');
+    list.innerHTML = renderQuickEntryAnswerContent(activity, open);
     bindQuickAnswerControls(list);
     bindAutoGrowingTextareasIn(list);
   }
@@ -5669,7 +5838,7 @@
     const list = document.querySelector('.aim-record-card-list-all');
     if (!list) return;
     const rows = filteredRecords(activity, ui.records.scope);
-    list.innerHTML = rows.map(record => renderRecordCard(record, activity, 'all')).join('') || '<div class="aim-empty">沒有符合篩選條件的紀錄。</div>';
+    list.innerHTML = renderRecordListCards(activity, ui.records.scope, rows);
     fitRecordPreviewBadges();
   }
 
