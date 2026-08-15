@@ -358,6 +358,59 @@ function assertFormAssistCjkContract(managementSource) {
     });
 }
 
+function extractFunctionDeclaration(source, name) {
+    const marker = `function ${name}`;
+    const start = source.indexOf(marker);
+    assert(start >= 0, `${name} must exist`);
+    const bodyStart = source.indexOf('{', start);
+    assert(bodyStart >= 0, `${name} must have a body`);
+    let depth = 0;
+    for (let index = bodyStart; index < source.length; index += 1) {
+        const char = source[index];
+        if (char === '{') depth += 1;
+        if (char === '}') {
+            depth -= 1;
+            if (depth === 0) return source.slice(start, index + 1);
+        }
+    }
+    throw new Error(`${name} body was not closed`);
+}
+
+function assertVisitorKpiOtherNumericContract(managementSource) {
+    const source = [
+        `const otherAnswerValue = ${JSON.stringify(OTHER_CHOICE_VALUE)};`,
+        'function otherAnswersForRecord(record) { return record && record.runtimeOtherAnswers ? record.runtimeOtherAnswers : {}; }',
+        'function optionLabel(value) { return value && typeof value === "object" ? (value.label || value.value || "") : value; }',
+        extractFunctionDeclaration(managementSource, 'analyticsOtherText'),
+        extractFunctionDeclaration(managementSource, 'visitorCountTotal'),
+        extractFunctionDeclaration(managementSource, 'visitorRecordCountValue'),
+        extractFunctionDeclaration(managementSource, 'visitorAnswerIsOther'),
+        extractFunctionDeclaration(managementSource, 'visitorNumberValue'),
+        '({ visitorCountTotal, visitorRecordCountValue, visitorNumberValue });'
+    ].join('\n');
+    const contract = vm.runInNewContext(source, {});
+    const field = { fieldId: 'visitorField', itemKey: 'visitorField', itemId: 'visitorField', type: 'single_choice' };
+    const record = (answer, otherText) => ({
+        answers: { visitorField: answer },
+        runtimeOtherAnswers: otherText === undefined ? {} : { visitorField: otherText }
+    });
+
+    assert.strictEqual(contract.visitorRecordCountValue(record('1'), field), 1);
+    assert.strictEqual(contract.visitorRecordCountValue(record('3'), field), 3);
+    assert.strictEqual(contract.visitorRecordCountValue(record('4'), field), 4);
+    assert.strictEqual(contract.visitorRecordCountValue(record(OTHER_CHOICE_VALUE, '10'), field), 10);
+    assert.strictEqual(contract.visitorRecordCountValue(record(OTHER_CHOICE_VALUE, String.fromCodePoint(0xFF13)), field), 3);
+    assert.strictEqual(contract.visitorRecordCountValue(record(OTHER_CHOICE_VALUE, ''), field), null);
+    assert.strictEqual(contract.visitorRecordCountValue(record(OTHER_CHOICE_VALUE, 'not numeric'), field), null);
+    assert.strictEqual(contract.visitorCountTotal([
+        record('1'),
+        record('3'),
+        record('4'),
+        record(OTHER_CHOICE_VALUE, '10')
+    ], field), 18);
+    assert.strictEqual(contract.visitorRecordCountValue(record('3', '10'), field), 3);
+}
+
 function makeRetrieveCompletenessContext(count) {
     return {
         formVersions: {
@@ -1032,6 +1085,7 @@ async function main() {
     const managementSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'scripts', 'activity-intelligence', 'activity-intelligence-management.js'), 'utf8');
     const apiSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'scripts', 'activity-intelligence', 'activity-intelligence-api.js'), 'utf8');
     assertFormAssistCjkContract(managementSource);
+    assertVisitorKpiOtherNumericContract(managementSource);
     assert(managementSource.includes("if (ui.analytics.ai.state === 'loading') return;"));
     assert(managementSource.includes("state === 'loading'"));
     assert(!managementSource.includes('FORM_GEMINI_API_KEY'));

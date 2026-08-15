@@ -6050,9 +6050,25 @@
 
   function visitorCountTotal(records, field) {
     return records.reduce((sum, record) => {
-      const value = visitorNumberValue(record && record.answers && record.answers[field.fieldId]);
+      const value = visitorRecordCountValue(record, field);
       return value === null ? sum : sum + value;
     }, 0);
+  }
+
+  function visitorRecordCountValue(record, field) {
+    const mainAnswer = record && record.answers && record.answers[field.fieldId];
+    const mainValue = visitorNumberValue(mainAnswer);
+    if (mainValue !== null) return mainValue;
+    if (!visitorAnswerIsOther(mainAnswer, field)) return null;
+    return visitorNumberValue(analyticsOtherText(field, record));
+  }
+
+  function visitorAnswerIsOther(value, field) {
+    const values = Array.isArray(value) ? value : [value];
+    return values.some(entry => {
+      const label = String(optionLabel(entry, field) || '').trim();
+      return label === '__other' || label === otherAnswerValue;
+    });
   }
 
   function visitorNumberValue(value) {
