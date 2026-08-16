@@ -43,9 +43,9 @@
   const fixedPreviewFieldIds = new Set(['fld_customer_name', 'fld_company', 'fld_job_title', 'fld_priority']);
   const cardAssistRoles = new Set(['person_name', 'job_title', 'company_name']);
   const cardAssistRoleLabels = Object.freeze({
-    person_name: '憪?',
-    job_title: '?瑞迂',
-    company_name: '?砍?迂'
+    person_name: '姓名',
+    job_title: '職稱',
+    company_name: '公司名稱'
   });
   const formAssistSourceSettingsKey = 'formAssistSuggestionSourceActivityIds';
   const activityStatusLabels = Object.freeze({
@@ -2952,17 +2952,17 @@
 
   function renderCardAssistDesignerControls(field) {
     if (field.type === 'section_heading') {
-      return `<label class="aim-checkbox aim-form-card-assist-toggle"><input id="aim-field-enable-card-assist" type="checkbox" ${field.enableCardAssist ? 'checked' : ''} ${field.retired ? 'disabled' : ''}> ?冽迨?畾萄??具???撣嗅??</label><span class="aim-small">?敺?隢?砍?畾萇??剜?摮?雿身摰?撣嗅??????</span>`;
+      return `<label class="aim-checkbox aim-form-card-assist-toggle"><input id="aim-field-enable-card-assist" type="checkbox" ${field.enableCardAssist ? 'checked' : ''} ${field.retired ? 'disabled' : ''}> 讓此區段啟用「名片帶入」</label><span class="aim-small">啟用後，請在本區段的文字欄位設定名片帶入的資料。</span>`;
     }
     if (field.type !== 'short_text') return '';
     return `
       <div class="aim-field">
-        <label for="aim-field-card-assist-role">??撣嗅鞈?</label>
+        <label for="aim-field-card-assist-role">名片帶入資料</label>
         <select class="aim-select" id="aim-field-card-assist-role" ${field.retired ? 'disabled' : ''}>
-          ${option('', '銝葆??', field.cardAssistField || '')}
+          ${option('', '不帶入', field.cardAssistField || '')}
           ${Array.from(cardAssistRoles).map(role => option(role, cardAssistRoleLabels[role], field.cardAssistField || '')).join('')}
         </select>
-        <span class="aim-small">?豢?甇斗?雿?敺??葆?亦?鞈???</span>
+        <span class="aim-small">選擇此欄位要從名片帶入的資料。</span>
       </div>
     `;
   }
