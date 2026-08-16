@@ -41,10 +41,11 @@
   const expandedCompactFieldTypes = new Set(['short_text', 'number', 'yes_no', 'single_choice', 'dropdown', 'boolean', 'checkbox', 'toggle']);
   const expandedCompactCategoricalFieldTypes = new Set(['yes_no', 'single_choice', 'dropdown']);
   const fixedPreviewFieldIds = new Set(['fld_customer_name', 'fld_company', 'fld_job_title', 'fld_priority']);
-  const formAssistFixedSemantics = Object.freeze({
-    fld_customer_name: 'customerName',
-    fld_company: 'companyName',
-    fld_job_title: 'jobTitle'
+  const cardAssistRoles = new Set(['person_name', 'job_title', 'company_name']);
+  const cardAssistRoleLabels = Object.freeze({
+    person_name: '姓名',
+    job_title: '職稱',
+    company_name: '公司名稱'
   });
   const formAssistSourceSettingsKey = 'formAssistSuggestionSourceActivityIds';
   const activityStatusLabels = Object.freeze({
@@ -2011,58 +2012,73 @@
     return `<section class="aim-record-detail-text"><h3>${Store.escapeHtml(field.title)}</h3><div>${Store.escapeHtml(Store.answerText(value))}</div></section>`;
   }
 
-  function formAssistSemanticForField(field) {
-    if (!field) return '';
-    const key = String(field.fieldId || field.itemKey || field.itemId || '').trim();
-    if (formAssistFixedSemantics[key]) return formAssistFixedSemantics[key];
-    const title = String(field.title || '').trim().replace(/\s+/g, '');
-    if (/^(客戶姓名|受訪者姓名|訪客姓名|姓名|聯絡人姓名)$/i.test(title)) return 'customerName';
-    if (/^(公司名稱|公司|企業名稱|單位名稱|組織名稱)$/i.test(title)) return 'companyName';
-    if (/^(職稱|職位|頭銜|職務|JobTitle|Title)$/i.test(title)) return 'jobTitle';
-    if (/^(公司類型|客戶產業大類|產業大類|產業別|產業類別|CompanyType|Industry)$/i.test(title)) return 'companyType';
+  function cardAssistFieldRole(item) {
+    const settings = item && item.settings && typeof item.settings === 'object' ? item.settings : {};
+    const role = String(item && (item.cardAssistField || settings.cardAssistField) || '').trim();
+    return item && item.type === 'short_text' && cardAssistRoles.has(role) ? role : '';
+  }
+
+  function sectionHasCardAssist(item) {
+    const settings = item && item.settings && typeof item.settings === 'object' ? item.settings : {};
+    return Boolean(item && item.type === 'section_heading' && (item.enableCardAssist || settings.enableCardAssist));
+  }
+
+  function cardAssistTargetsForSection(sectionId) {
+    const fields = quickEntryFields(selectedActivity());
+    const start = fields.findIndex(field => field.type === 'section_heading' && field.fieldId === sectionId);
+    if (start < 0 || !sectionHasCardAssist(fields[start])) return [];
+    const targets = [];
+    for (let index = start + 1; index < fields.length; index += 1) {
+      const field = fields[index];
+      if (field.type === 'section_heading') break;
+      const role = cardAssistFieldRole(field);
+      if (role) targets.push({ role, field });
+    }
+    return targets;
+  }
+
+  function cardAssistSectionForField(fieldId) {
+    const fields = quickEntryFields(selectedActivity());
+    let currentSectionId = '';
+    let currentSectionEnabled = false;
+    for (const field of fields) {
+      if (field.type === 'section_heading') {
+        currentSectionId = field.fieldId;
+        currentSectionEnabled = sectionHasCardAssist(field);
+        continue;
+      }
+      if (field.fieldId === fieldId) return currentSectionEnabled ? currentSectionId : '';
+    }
     return '';
   }
 
-  function quickFormAssistFieldMap() {
-    const result = {};
-    quickEntryFields(selectedActivity()).forEach(field => {
-      const semantic = formAssistSemanticForField(field);
-      if (semantic && !result[semantic]) result[semantic] = field;
-    });
-    return result;
-  }
-
-  function canUseQuickFormAssist() {
+  function canUseQuickFormAssist(sectionId) {
     if (!currentUser || !currentUser.authenticated || isGuestUser()) return false;
-    if (activeRecordFormContext() === formContextFieldIntelligenceMode) return false;
-    const fields = quickFormAssistFieldMap();
-    return Boolean(fields.customerName || fields.companyName);
+    if (sectionId) return cardAssistTargetsForSection(sectionId).length > 0;
+    return quickEntryFields(selectedActivity()).some(field => field.type === 'section_heading' && cardAssistTargetsForSection(field.fieldId).length > 0);
   }
 
   function configuredFormAssistSourceActivityIds(activity) {
     return normalizeActivityIdList(activity && activity.settings && activity.settings[formAssistSourceSettingsKey]);
   }
 
-  function canUseHistoricalFormAssistSuggestions() {
-    return canUseQuickFormAssist() && configuredFormAssistSourceActivityIds(selectedActivity()).length > 0;
-  }
-
-  function isFormAssistIdentitySection(field) {
-    const title = String(field && field.title || '').trim();
-    return /客戶訪談資訊|基本資訊|訪談資訊/.test(title);
+  function canUseHistoricalFormAssistSuggestions(field) {
+    if (!currentUser || !currentUser.authenticated || isGuestUser()) return false;
+    if (!field || !cardAssistSectionForField(field.fieldId)) return false;
+    return configuredFormAssistSourceActivityIds(selectedActivity()).length > 0;
   }
 
   function renderFormAssistSectionAction(field) {
-    if (!canUseQuickFormAssist() || !isFormAssistIdentitySection(field)) return '';
-    return `<button class="aim-button aim-button-soft aim-form-assist-card-action" data-action="form-assist-card" type="button">${Store.escapeHtml(FORM_ASSIST_COPY.formActionLabel)}</button>`;
+    if (!canUseQuickFormAssist(field && field.fieldId)) return '';
+    return `<button class="aim-button aim-button-soft aim-form-assist-card-action" data-action="form-assist-card" data-section="${Store.escapeHtml(field.fieldId)}" type="button">${Store.escapeHtml(FORM_ASSIST_COPY.formActionLabel)}</button>`;
   }
 
   function renderQuickTextInputField(field, enabled, multiline) {
     const value = ui.quickAnswers[field.fieldId];
     const label = `<label>${Store.escapeHtml(field.title)}</label>${field.helperText ? `<span class="aim-small">${Store.escapeHtml(field.helperText)}</span>` : ''}`;
-    const semantic = formAssistSemanticForField(field);
-    const assistKind = canUseHistoricalFormAssistSuggestions()
-      ? (semantic === 'customerName' ? 'person' : (semantic === 'companyName' ? 'company' : ''))
+    const semantic = cardAssistFieldRole(field);
+    const assistKind = canUseHistoricalFormAssistSuggestions(field)
+      ? (semantic === 'person_name' ? 'person' : (semantic === 'company_name' ? 'company' : ''))
       : '';
     const assistAttrs = assistKind ? ` data-assist-kind="${assistKind}" autocomplete="off"` : '';
     const control = multiline
@@ -2358,6 +2374,15 @@
     const allowOptionNotes = type === 'multiple_choice' && Boolean(sourceAllowOptionNotes);
     if (allowOptionNotes) settings.allowOptionNotes = true;
     else delete settings.allowOptionNotes;
+    const enableCardAssist = type === 'section_heading' && Boolean(item.enableCardAssist || sourceSettings.enableCardAssist);
+    if (enableCardAssist) settings.enableCardAssist = true;
+    else delete settings.enableCardAssist;
+    const suppliedCardAssistField = item.cardAssistField !== undefined ? item.cardAssistField : sourceSettings.cardAssistField;
+    const cardAssistField = type === 'short_text' && cardAssistRoles.has(String(suppliedCardAssistField || '').trim())
+      ? String(suppliedCardAssistField || '').trim()
+      : '';
+    if (cardAssistField) settings.cardAssistField = cardAssistField;
+    else delete settings.cardAssistField;
     return {
       formItemId: item.formItemId || item.form_item_id || '',
       itemKey,
@@ -2372,6 +2397,8 @@
       optionEntries: entries,
       allowOther: Boolean(item.allowOther || (item.settings && item.settings.allowOther)),
       allowOptionNotes,
+      enableCardAssist,
+      cardAssistField,
       required: Boolean(item.required || item.isRequired || item.is_required || sourceSettings.required || sourceSettings.isRequired),
       settings,
       previewPlacement,
@@ -2811,6 +2838,7 @@
           ${choiceFieldTypes.includes(field.type) ? renderOptionEditor(field) : ''}
           ${choiceFieldTypes.includes(field.type) ? `<label class="aim-checkbox aim-form-other-toggle"><input id="aim-field-allow-other" type="checkbox" ${field.allowOther ? 'checked' : ''} ${field.retired ? 'disabled' : ''}> 允許填寫「其他」補充答案</label>` : ''}
           ${field.type === 'multiple_choice' ? `<label class="aim-checkbox aim-form-option-notes-toggle"><input id="aim-field-allow-option-notes" type="checkbox" ${field.allowOptionNotes ? 'checked' : ''} ${field.retired ? 'disabled' : ''}> 允許選項備註</label>` : ''}
+          ${renderCardAssistDesignerControls(field)}
           ${renderPreviewPlacementEditor(field)}
         </div>
         <div class="aim-field-editor-actions">
@@ -2916,6 +2944,22 @@
       <section class="aim-form-thumbnail-preview" aria-label="${Store.escapeHtml(item.altText || item.thumbnailTitle || '表單頁首橫幅')}">
         ${renderFormThumbnailVisual(item)}
       </section>
+    `;
+  }
+
+  function renderCardAssistDesignerControls(field) {
+    if (field.type === 'section_heading') {
+      return `<label class="aim-checkbox aim-form-card-assist-toggle"><input id="aim-field-enable-card-assist" type="checkbox" ${field.enableCardAssist ? 'checked' : ''} ${field.retired ? 'disabled' : ''}> 啟用名片資料帶入</label>`;
+    }
+    if (field.type !== 'short_text') return '';
+    return `
+      <div class="aim-field">
+        <label for="aim-field-card-assist-role">名片資料欄位</label>
+        <select class="aim-select" id="aim-field-card-assist-role" ${field.retired ? 'disabled' : ''}>
+          ${option('', '不帶入', field.cardAssistField || '')}
+          ${Array.from(cardAssistRoles).map(role => option(role, cardAssistRoleLabels[role], field.cardAssistField || '')).join('')}
+        </select>
+      </div>
     `;
   }
 
@@ -3423,9 +3467,10 @@
 
   function renderRecordContextFilters() {
     const active = ui.records.recordContext === formContextFieldIntelligenceMode;
+    const label = active ? '返回全部紀錄' : '主動情報';
     return `
       <div class="aim-record-context-filter-group" role="group" aria-label="紀錄類型篩選">
-        <button data-action="record-context-filter" data-context="${formContextFieldIntelligenceMode}" aria-pressed="${active}" type="button">主動情報</button>
+        <button data-action="record-context-filter" data-context="${formContextFieldIntelligenceMode}" aria-pressed="${active}" type="button">${Store.escapeHtml(label)}</button>
       </div>
     `;
   }
@@ -4960,7 +5005,7 @@
       return true;
     }
     if (action === 'form-assist-card') {
-      await openQuickFormAssistCardPicker();
+      await openQuickFormAssistCardPicker(el.dataset.section || '');
       render();
       return true;
     }
@@ -5336,6 +5381,14 @@
     }
     const index = design.draft.items.findIndex(f => designerItemKey(f) === designerItemKey(draft));
     if (index < 0) return;
+    const nextItems = design.draft.items.slice();
+    nextItems[index] = draft;
+    const duplicate = duplicateCardAssistRoleItem(nextItems);
+    if (duplicate) {
+      ui.formDesignMessage = '同一段落內同一個名片資料欄位只能指定一次。';
+      render();
+      return;
+    }
     design.draft.items[index] = draft;
     ui.formDesignDraft = Store.clone(draft);
     ui.formDesignDraftDirty = false;
@@ -5361,6 +5414,22 @@
     if (!preview) return;
     preview.innerHTML = renderFormPreview(selectedActivity(), currentFormContext());
     bindFormPreviewControls();
+  }
+
+  function duplicateCardAssistRoleItem(items) {
+    let sectionRoles = new Set();
+    for (const rawItem of items || []) {
+      const item = normalizeDesignerItem(rawItem);
+      if (item.type === 'section_heading') {
+        sectionRoles = new Set();
+        continue;
+      }
+      const role = cardAssistFieldRole(item);
+      if (!role) continue;
+      if (sectionRoles.has(role)) return item;
+      sectionRoles.add(role);
+    }
+    return null;
   }
 
   function scheduleFormPreviewRefresh() {
@@ -5624,6 +5693,23 @@
       if (allowOptionNotes.checked) settings.allowOptionNotes = true;
       else delete settings.allowOptionNotes;
       updateFormDesignDraft({ allowOptionNotes: allowOptionNotes.checked, settings });
+      scheduleFormPreviewRefresh();
+    });
+    const enableCardAssist = document.getElementById('aim-field-enable-card-assist');
+    if (enableCardAssist) enableCardAssist.addEventListener('change', () => {
+      const settings = { ...((ui.formDesignDraft && ui.formDesignDraft.settings) || {}) };
+      if (enableCardAssist.checked) settings.enableCardAssist = true;
+      else delete settings.enableCardAssist;
+      updateFormDesignDraft({ enableCardAssist: enableCardAssist.checked, settings });
+      scheduleFormPreviewRefresh();
+    });
+    const cardAssistRole = document.getElementById('aim-field-card-assist-role');
+    if (cardAssistRole) cardAssistRole.addEventListener('change', () => {
+      const role = cardAssistRoles.has(cardAssistRole.value) ? cardAssistRole.value : '';
+      const settings = { ...((ui.formDesignDraft && ui.formDesignDraft.settings) || {}) };
+      if (role) settings.cardAssistField = role;
+      else delete settings.cardAssistField;
+      updateFormDesignDraft({ cardAssistField: role, settings });
       scheduleFormPreviewRefresh();
     });
     const previewEnabled = document.getElementById('aim-field-preview-enabled');
@@ -6683,6 +6769,13 @@
       ui.formDesignMessage = '請先移除空白選項，才能發布表單。';
       return;
     }
+    const duplicate = duplicateCardAssistRoleItem(design.draft.items);
+    if (duplicate) {
+      ui.selectedFieldId = designerItemKey(duplicate);
+      ui.formDesignDraft = Store.clone(duplicate);
+      ui.formDesignMessage = '同一段落內同一個名片資料欄位只能指定一次。';
+      return;
+    }
     ui.formDesignConfirm = { type: 'publish', summary: formDesignChangeSummary(design) };
   }
 
@@ -7017,20 +7110,22 @@
     return !(Array.isArray(value) ? value.length : String(value || '').trim());
   }
 
+  function cardAssistSourceValue(source, role) {
+    if (role === 'person_name') return source.personName || source.customerName || source.name;
+    if (role === 'job_title') return source.jobTitle || source.position || source.title;
+    if (role === 'company_name') return source.companyName || source.company;
+    return '';
+  }
+
   function fillQuickFormAssistFields(source = {}, options = {}) {
-    const fields = quickFormAssistFieldMap();
+    const targets = cardAssistTargetsForSection(options.sectionId || '');
     const replacements = new Set(options.replaceFields || []);
-    const pairs = [
-      ['customerName', source.personName || source.customerName || source.name],
-      ['jobTitle', source.jobTitle || source.position || source.title],
-      ['companyName', source.companyName || source.company]
-    ];
     let changed = false;
-    pairs.forEach(([semantic, value]) => {
-      const field = fields[semantic];
+    targets.forEach(({ role, field }) => {
+      const value = cardAssistSourceValue(source, role);
       const text = String(value || '').trim();
       if (!field || !text) return;
-      if (!replacements.has(semantic) && !quickAnswerIsBlank(field.fieldId)) return;
+      if (!replacements.has(role) && !quickAnswerIsBlank(field.fieldId)) return;
       setQuickAnswer(field.fieldId, text);
       changed = true;
     });
@@ -7047,31 +7142,31 @@
     };
   }
 
-  function quickFormAssistTargetFieldIds() {
-    const fields = quickFormAssistFieldMap();
-    return ['customerName', 'jobTitle', 'companyName'].map(semantic => fields[semantic] && fields[semantic].fieldId).filter(Boolean);
+  function quickFormAssistTargetFieldIds(sectionId) {
+    return cardAssistTargetsForSection(sectionId).map(target => target.field.fieldId).filter(Boolean);
   }
 
-  function hasExistingQuickFormAssistTargetValue() {
-    return quickFormAssistTargetFieldIds().some(fieldId => !quickAnswerIsBlank(fieldId));
+  function hasExistingQuickFormAssistTargetValue(sectionId) {
+    return quickFormAssistTargetFieldIds(sectionId).some(fieldId => !quickAnswerIsBlank(fieldId));
   }
 
-  function importQuickAssistCard(card) {
+  function importQuickAssistCard(card, sectionId) {
     const normalized = normalizeRawCard(card);
     if (!normalized) return false;
-    if (hasExistingQuickFormAssistTargetValue()) {
-      ui.formAssistCardImportConfirm = { card: normalized };
+    if (!canUseQuickFormAssist(sectionId)) return false;
+    if (hasExistingQuickFormAssistTargetValue(sectionId)) {
+      ui.formAssistCardImportConfirm = { card: normalized, sectionId };
       return false;
     }
-    fillQuickFormAssistFields(cardAssistSourceValues(normalized));
+    fillQuickFormAssistFields(cardAssistSourceValues(normalized), { sectionId });
     return linkQuickAssistCard(normalized);
   }
 
   function applyPendingFormAssistCardImport(mode) {
     const pending = ui.formAssistCardImportConfirm;
     if (!pending) return;
-    const replaceFields = mode === 'overwrite' ? ['customerName', 'jobTitle', 'companyName'] : [];
-    fillQuickFormAssistFields(cardAssistSourceValues(pending.card), { replaceFields });
+    const replaceFields = mode === 'overwrite' ? Array.from(cardAssistRoles) : [];
+    fillQuickFormAssistFields(cardAssistSourceValues(pending.card), { sectionId: pending.sectionId, replaceFields });
     if (!linkQuickAssistCard(pending.card)) return;
     ui.formAssistCardImportConfirm = null;
     resetFormAssistState();
@@ -7085,11 +7180,11 @@
     return true;
   }
 
-  async function openQuickFormAssistCardPicker() {
-    if (!canUseQuickFormAssist()) return;
+  async function openQuickFormAssistCardPicker(sectionId) {
+    if (!canUseQuickFormAssist(sectionId)) return;
     try {
       await loadRawCards({ force: true });
-      ui.cardPicker = { context: 'quick-assist', q: '', page: 1 };
+      ui.cardPicker = { context: 'quick-assist', sectionId, q: '', page: 1 };
     } catch (error) {
       toast(error.message || 'RAW card load failed.');
     }
@@ -7098,23 +7193,21 @@
   function selectFormAssistPerson(submissionId) {
     const suggestion = (ui.formAssist && ui.formAssist.suggestions || []).find(item => item.submissionId === submissionId);
     if (!suggestion) return;
-    fillQuickFormAssistFields(suggestion);
+    fillQuickFormAssistFields(suggestion, { sectionId: cardAssistSectionForField(ui.formAssist.activeFieldId) });
     resetFormAssistState();
     refreshQuickAnswerList();
   }
 
   function selectFormAssistCompany(companyName) {
-    const fields = quickFormAssistFieldMap();
-    if (fields.companyName && String(companyName || '').trim()) {
-      setQuickAnswer(fields.companyName.fieldId, String(companyName || '').trim());
-    }
+    fillQuickFormAssistFields({ companyName }, { sectionId: cardAssistSectionForField(ui.formAssist.activeFieldId) });
     resetFormAssistState();
     refreshQuickAnswerList();
   }
 
   function handleQuickFormAssistInput(fieldId, kind, value) {
     const q = String(value || '').trim();
-    if (!kind || !q || isGuestUser() || !canUseHistoricalFormAssistSuggestions()) {
+    const field = runtimeFieldById(fieldId, 'quick');
+    if (!kind || !q || isGuestUser() || !canUseHistoricalFormAssistSuggestions(field)) {
       resetFormAssistState();
       refreshFormAssistSuggestions(fieldId);
       return;
@@ -7225,7 +7318,7 @@
     if (!card) return toast('找不到選擇的 RAW 名片。');
     const context = ui.cardPicker && ui.cardPicker.context;
     if (context === 'quick-assist') {
-      importQuickAssistCard(card);
+      importQuickAssistCard(card, ui.cardPicker && ui.cardPicker.sectionId);
       ui.cardPicker = null;
       resetFormAssistState();
       return;

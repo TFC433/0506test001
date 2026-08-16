@@ -617,8 +617,25 @@ class ActivityIntelligenceService {
         const thumbnails = normalized.filter(item => item.item_type === 'form_thumbnail').length;
         if (cardLinks > 1) throw new ActivityIntelligenceError(400, 'Only one card_link item is allowed.', 'DUPLICATE_CARD_LINK');
         if (thumbnails > 1) throw new ActivityIntelligenceError(400, 'Only one form_thumbnail item is allowed.', 'DUPLICATE_FORM_THUMBNAIL');
+        this._assertCardAssistRoleUniqueness(normalized);
 
         return normalized;
+    }
+
+    _assertCardAssistRoleUniqueness(items) {
+        let roles = new Set();
+        for (const item of items || []) {
+            if (item.item_type === 'section_heading') {
+                roles = new Set();
+                continue;
+            }
+            const role = item.settings && item.settings.cardAssistField;
+            if (!role) continue;
+            if (roles.has(role)) {
+                throw new ActivityIntelligenceError(400, 'Card Assist field roles must be unique within a section.', 'DUPLICATE_CARD_ASSIST_FIELD');
+            }
+            roles.add(role);
+        }
     }
 
     _normalizeFormContext(value) {
@@ -678,6 +695,24 @@ class ActivityIntelligenceService {
             const enabled = Boolean(supplied);
             if (type === 'multiple_choice' && enabled) settings.allowOptionNotes = true;
             else delete settings.allowOptionNotes;
+        }
+
+        if (type === 'section_heading') {
+            if (item.enableCardAssist !== undefined || sourceSettings.enableCardAssist !== undefined) {
+                if (Boolean(item.enableCardAssist || sourceSettings.enableCardAssist)) settings.enableCardAssist = true;
+                else delete settings.enableCardAssist;
+            }
+        } else {
+            delete settings.enableCardAssist;
+        }
+
+        if (type === 'short_text') {
+            const supplied = item.cardAssistField !== undefined ? item.cardAssistField : sourceSettings.cardAssistField;
+            const role = String(supplied || '').trim();
+            if (['person_name', 'job_title', 'company_name'].includes(role)) settings.cardAssistField = role;
+            else delete settings.cardAssistField;
+        } else {
+            delete settings.cardAssistField;
         }
 
         ['thumbnailTitle', 'altText', 'thumbnailVariant'].forEach(key => {

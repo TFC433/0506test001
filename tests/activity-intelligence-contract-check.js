@@ -699,7 +699,18 @@ function assertRealActiveIntelligenceRuntimeSourceContract(managementSource, css
     assert(managementSource.includes('data-action="record-context-filter"'), 'desktop records must expose an active intelligence quick filter');
     assert(managementSource.includes('ui.records.recordContext === formContextFieldIntelligenceMode && !recordIsFieldIntelligence(r)'), 'active intelligence quick filter must use authoritative recordContext');
     assert(managementSource.includes("ui.records.recordContext = ui.records.recordContext === next ? 'all' : next;"), 'active intelligence quick filter must compose with existing filters by toggling only context state');
-    assert(managementSource.includes('function canUseQuickFormAssist()') && managementSource.includes('if (activeRecordFormContext() === formContextFieldIntelligenceMode) return false;'), 'Visitor Form Assist must not automatically appear in active runtime');
+    assert(managementSource.includes('const label = active ?'), 'selected active filter action must return to all records');
+    assert(managementSource.includes('const cardAssistRoles = new Set([\'person_name\', \'job_title\', \'company_name\']);'), 'Card Assist roles must be limited to the approved schema values');
+    assert(managementSource.includes('settings.enableCardAssist = true'), 'section_heading must persist enableCardAssist');
+    assert(managementSource.includes('settings.cardAssistField = cardAssistField'), 'short_text must persist cardAssistField');
+    assert(managementSource.includes("if (field.type !== 'short_text') return '';"), 'non-short-text fields must not expose Card Assist mapping');
+    assert(!managementSource.includes('formAssistFixedSemantics'), 'Card Assist must not use fixed field ids');
+    assert(!managementSource.includes('formAssistSemanticForField'), 'Card Assist must not use visible title matching');
+    assert(managementSource.includes('function cardAssistTargetsForSection(sectionId)'), 'Card Assist targets must be section-scoped');
+    assert(managementSource.includes("if (field.type === 'section_heading') break;"), 'Card Assist section scan must stop at the next section heading');
+    assert(managementSource.includes('data-section="${Store.escapeHtml(field.fieldId)}"'), 'Card Assist button must carry the triggering section id');
+    assert(managementSource.includes('importQuickAssistCard(card, ui.cardPicker && ui.cardPicker.sectionId)'), 'existing card picker must import only into the triggering section');
+    assert(managementSource.includes('duplicateCardAssistRoleItem'), 'duplicate Card Assist roles must be rejected');
     assert(managementSource.includes('if (recordIsFieldIntelligence(r)) return false;'), 'Visitor analytics must ignore active records');
     assert(managementSource.includes('const activeBadge = recordIsFieldIntelligence(record);'), 'real active record cards must use recordContext for visible identity');
     assert(cssSource.includes('.aim-record-card-field-intelligence'), 'real active record cards must receive dedicated light-purple styling');
@@ -845,6 +856,28 @@ async function main() {
     }, actor());
     assert.strictEqual(contextHarness.calls.saveDraft.p_form_context, 'field_intelligence');
     assert.strictEqual(contextHarness.calls.getFormBundle.formContext, 'field_intelligence');
+    await contextHarness.service.saveDraft(IDS.activity, {
+        formContext: 'field_intelligence',
+        items: [
+            { itemKey: IDS.textKey, type: 'section_heading', title: 'A', settings: { enableCardAssist: true } },
+            { itemKey: IDS.numberKey, type: 'short_text', title: 'Display A', settings: { cardAssistField: 'person_name' } },
+            { itemKey: IDS.boolKey, type: 'section_heading', title: 'B', settings: { enableCardAssist: true } },
+            { itemKey: IDS.choiceKey, type: 'short_text', title: 'Display B', settings: { cardAssistField: 'person_name' } },
+            { itemKey: IDS.longKey, type: 'long_text', title: 'No mapping', settings: { cardAssistField: 'company_name' } }
+        ]
+    }, actor());
+    assert.strictEqual(contextHarness.calls.saveDraft.p_items[0].settings.enableCardAssist, true);
+    assert.strictEqual(contextHarness.calls.saveDraft.p_items[1].settings.cardAssistField, 'person_name');
+    assert.strictEqual(contextHarness.calls.saveDraft.p_items[3].settings.cardAssistField, 'person_name');
+    assert(!contextHarness.calls.saveDraft.p_items[4].settings.cardAssistField);
+    await assertRejectsCode(() => contextHarness.service.saveDraft(IDS.activity, {
+        formContext: 'field_intelligence',
+        items: [
+            { itemKey: IDS.textKey, type: 'section_heading', title: 'Dup', settings: { enableCardAssist: true } },
+            { itemKey: IDS.numberKey, type: 'short_text', title: 'One', settings: { cardAssistField: 'person_name' } },
+            { itemKey: IDS.boolKey, type: 'short_text', title: 'Two', settings: { cardAssistField: 'person_name' } }
+        ]
+    }, actor()), 'DUPLICATE_CARD_ASSIST_FIELD');
     await contextHarness.service.publishDraft(IDS.activity, actor(), 'field_intelligence');
     assert.strictEqual(contextHarness.calls.publishDraft.p_form_context, 'field_intelligence');
     await contextHarness.service.createSubmission(IDS.activity, {
