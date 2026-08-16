@@ -391,7 +391,7 @@ function assertFormAssistCjkContract(managementSource) {
 }
 
 function extractFunctionDeclaration(source, name) {
-    const marker = `function ${name}`;
+    const marker = `function ${name}(`;
     const start = source.indexOf(marker);
     assert(start >= 0, `${name} must exist`);
     const bodyStart = source.indexOf('{', start);
@@ -731,18 +731,33 @@ function assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource
     assert(managementSource.includes('return activeAnalytics ? recordIsFieldIntelligence(r) : !recordIsFieldIntelligence(r);'), 'analyticsRecords must use recordContext as the authoritative dataset split');
     assert(managementSource.includes('analyticsMetrics(activity, records, { includeVisitorCount: !activeAnalytics })'), 'analytics metrics must receive context-specific Visitor Count behavior');
     assert(managementSource.includes('const visitorField = options.includeVisitorCount === false ? null : currentVisitorCountField(activity);'), 'Visitor Count KPI must be suppressible for Active Analytics');
-    assert(managementSource.includes('const assistant = !activeAnalytics && !isMobileFormViewport() ? renderAnalyticsAiPanel(activity, records) :'), 'AI panel must remain Visitor-only in Analytics v1');
-    assert(managementSource.includes("activeAnalytics ? '' : renderMobileAnalyticsAiPanel(activity, records)"), 'mobile AI panel must remain Visitor-only in Analytics v1');
+    assert(managementSource.includes('const assistantRecords = analyticsRecords(activity, recordContextVisitorMode);'), 'shared Analytics AI shell must keep the deferred visitor data scope explicit');
+    assert(managementSource.includes('const assistant = !isMobileFormViewport() ? renderAnalyticsAiPanel(activity, assistantRecords) :'), 'desktop shared AI panel must remain visible outside the Active/Visitor body scope');
+    assert(managementSource.includes('${renderMobileAnalyticsAiPanel(activity, assistantRecords)}'), 'mobile shared AI panel must remain visible outside the Active/Visitor body scope');
+    assert(!managementSource.includes('!activeAnalytics && !isMobileFormViewport() ? renderAnalyticsAiPanel'), 'Active Analytics must not hide the shared desktop AI panel');
+    assert(!managementSource.includes("activeAnalytics ? '' : renderMobileAnalyticsAiPanel"), 'Active Analytics must not hide the shared mobile AI panel');
+    assert(managementSource.includes('function analyticsRecords(activity, scope)'), 'analyticsRecords must support an explicit scope for the shared AI shell');
     assert(managementSource.includes('publishedRecordItems(activity, context)'), 'Active Analytics schema seed must use the active form context');
+    const renderAnalyticsSource = extractFunctionDeclaration(managementSource, 'renderAnalytics');
+    const renderMobileAnalysisSource = extractFunctionDeclaration(managementSource, 'renderMobileAnalysis');
+    assert((renderAnalyticsSource.match(/renderAnalyticsAiPanel/g) || []).length === 1, 'desktop Analytics must render exactly one shared AI panel call');
+    assert(renderAnalyticsSource.indexOf('renderAnalyticsAiPanel') < renderAnalyticsSource.indexOf('renderAnalyticsScopeSelector()'), 'desktop Analytics selector must remain below the shared AI panel');
+    assert((renderMobileAnalysisSource.match(/renderMobileAnalyticsAiPanel/g) || []).length === 1, 'mobile Analytics must render exactly one shared AI panel call');
+    assert(renderMobileAnalysisSource.indexOf('renderMobileAnalyticsAiPanel') < renderMobileAnalysisSource.indexOf('renderAnalyticsScopeSelector()'), 'mobile Analytics selector must remain below the shared AI panel');
+    assert(!renderAnalyticsSource.includes('aim-analytics-active-kpi-row'), 'Active Analytics must reuse the shared KPI row component');
+    assert(!renderAnalyticsSource.includes('aim-analytics-active-chart-grid'), 'Active Analytics must reuse the shared chart grid component');
+    assert(!renderMobileAnalysisSource.includes('aim-mobile-analysis-active-context'), 'Mobile Active Analytics must reuse the shared mobile analysis shell');
     const activeAnalyticsSource = [
-        extractFunctionDeclaration(managementSource, 'renderAnalytics'),
-        extractFunctionDeclaration(managementSource, 'renderMobileAnalysis'),
+        renderAnalyticsSource,
+        renderMobileAnalysisSource,
         extractFunctionDeclaration(managementSource, 'analyticFields')
     ].join('\n');
     assert(!/competitor|information type|cooperation|follow-up|product|technology/i.test(activeAnalyticsSource), 'Active Analytics must not hardcode business question titles');
-    assert(cssSource.includes('.aim-analytics-active-kpi-row'), 'Active Analytics must have a purple KPI context treatment');
-    assert(cssSource.includes('.aim-analytics-active-chart-grid'), 'Active Analytics must have a purple chart context treatment');
-    assert(cssSource.includes('.aim-mobile-analysis-active-context'), 'Mobile Active Analytics must have a purple control context treatment');
+    assert(!cssSource.includes('.aim-analytics-active-kpi-row'), 'Active Analytics must not add purple KPI card styling');
+    assert(!cssSource.includes('.aim-analytics-active-chart-grid'), 'Active Analytics must not add purple chart card styling');
+    assert(!cssSource.includes('.aim-mobile-analysis-active-context'), 'Active Analytics must not add purple chart control styling');
+    assert(cssSource.includes('.aim-mode-tab[aria-selected="true"]'), 'Visitor selector selected state must preserve the existing mode-tab styling');
+    assert(cssSource.includes('.aim-analytics-scope-tabs .aim-mode-tab[data-mode="active-intelligence"][aria-selected="true"]'), 'Active selector selected state must keep only a subtle purple cue');
 
     const source = [
         'const formContextVisitorMode = "visitor";',
@@ -849,6 +864,8 @@ function assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource
     contract.ui.analyticsScope = 'active-intelligence';
     const activeRecords = contract.analyticsRecords(activity);
     assert.deepStrictEqual(activeRecords.map(record => record.id), ['active-1', 'active-2'], 'Active Analytics dataset must contain only field_intelligence records');
+    assert.deepStrictEqual(contract.analyticsRecords(activity, 'visitor').map(record => record.id), ['visitor-1', 'visitor-2'], 'shared AI shell must be able to keep visitor-scoped behavior while Active Analytics is selected');
+    assert.deepStrictEqual(contract.analyticsRecords(activity, 'field_intelligence').map(record => record.id), ['active-1', 'active-2'], 'explicit field_intelligence scope must keep returning Active records');
     const activeMetrics = contract.analyticsMetrics(activity, activeRecords, { includeVisitorCount: false });
     assert.strictEqual(activeMetrics.total, 2, 'Active total KPI must use Active submissions only');
     assert.strictEqual(activeMetrics.today, 1, 'Active today KPI must use Active submissions only');

@@ -3509,7 +3509,8 @@
     const records = analyticsRecords(activity);
     const activeAnalytics = analyticsScopeIsActive();
     const formContext = analyticsFormContext();
-    const assistant = !activeAnalytics && !isMobileFormViewport() ? renderAnalyticsAiPanel(activity, records) : '';
+    const assistantRecords = analyticsRecords(activity, recordContextVisitorMode);
+    const assistant = !isMobileFormViewport() ? renderAnalyticsAiPanel(activity, assistantRecords) : '';
     const scopeSelector = renderAnalyticsScopeSelector();
     const metrics = analyticsMetrics(activity, records, { includeVisitorCount: !activeAnalytics });
     const visitorKpi = metrics.visitorCount !== null
@@ -3518,14 +3519,15 @@
     return `
       ${assistant}
       ${scopeSelector}
-      <div class="aim-kpi-grid aim-analytics-kpi-row ${activeAnalytics ? 'aim-analytics-active-kpi-row' : ''}"><div class="aim-kpi"><span>有效紀錄</span><strong>${metrics.total}</strong></div>${visitorKpi}<div class="aim-kpi"><span>今日新增</span><strong>${metrics.today}</strong></div><div class="aim-kpi"><span>紀錄者數</span><strong>${metrics.recorders}</strong></div><div class="aim-kpi"><span>完整度</span><strong>${metrics.completeRate}</strong><small>平均填答 ${metrics.avgAnswered} / ${metrics.avgExpected} 欄</small></div></div>
-      <div class="aim-chart-grid ${activeAnalytics ? 'aim-analytics-active-chart-grid' : ''}">${renderActivityTrendChart(records)}${recorderDistributionChart(records)}${choiceCharts(activity, records, formContext)}${numberCharts(activity, records, formContext)}</div>
+      <div class="aim-kpi-grid aim-analytics-kpi-row"><div class="aim-kpi"><span>有效紀錄</span><strong>${metrics.total}</strong></div>${visitorKpi}<div class="aim-kpi"><span>今日新增</span><strong>${metrics.today}</strong></div><div class="aim-kpi"><span>紀錄者數</span><strong>${metrics.recorders}</strong></div><div class="aim-kpi"><span>完整度</span><strong>${metrics.completeRate}</strong><small>平均填答 ${metrics.avgAnswered} / ${metrics.avgExpected} 欄</small></div></div>
+      <div class="aim-chart-grid">${renderActivityTrendChart(records)}${recorderDistributionChart(records)}${choiceCharts(activity, records, formContext)}${numberCharts(activity, records, formContext)}</div>
     `;
   }
 
   function renderMobileAnalysis(activity) {
     const records = analyticsRecords(activity);
     const activeAnalytics = analyticsScopeIsActive();
+    const assistantRecords = analyticsRecords(activity, recordContextVisitorMode);
     const formContext = analyticsFormContext();
     const metrics = analyticsMetrics(activity, records, { includeVisitorCount: !activeAnalytics });
     const categorical = analyticFields(activity, records, formContext)
@@ -3533,8 +3535,8 @@
       .map(field => renderMobileCategoricalAnalyticsChart(categoricalFieldChartData(field, records)))
       .join('');
     return `
-      <section class="aim-mobile-analysis ${activeAnalytics ? 'aim-mobile-analysis-active-context' : ''}" aria-label="行動數據分析">
-        ${activeAnalytics ? '' : renderMobileAnalyticsAiPanel(activity, records)}
+      <section class="aim-mobile-analysis" aria-label="行動數據分析">
+        ${renderMobileAnalyticsAiPanel(activity, assistantRecords)}
         ${renderAnalyticsScopeSelector()}
         ${renderMobileAnalyticsKpis(metrics, { includeVisitorCount: !activeAnalytics })}
         <div class="aim-mobile-analysis-chart-feed">
@@ -6409,8 +6411,9 @@
     }).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }
 
-  function analyticsRecords(activity) {
-    const activeAnalytics = analyticsScopeIsActive();
+  function analyticsRecords(activity, scope) {
+    const resolvedScope = scope || ui.analyticsScope;
+    const activeAnalytics = resolvedScope === recordContextActiveMode || resolvedScope === formContextFieldIntelligenceMode;
     return recordsFor(activity.id).filter(r => {
       if (r.status === 'void') return false;
       return activeAnalytics ? recordIsFieldIntelligence(r) : !recordIsFieldIntelligence(r);

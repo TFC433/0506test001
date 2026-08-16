@@ -881,21 +881,6 @@ a:focus-visible {
   font-size: 22px;
 }
 
-.aim-analytics-active-kpi-row .aim-kpi {
-  border-color: #dac7f5;
-  box-shadow: inset 3px 0 0 #8b5cf6;
-}
-
-.aim-analytics-active-chart-grid .aim-analytics-chart-card {
-  border-color: #e8ddfb;
-}
-
-.aim-analytics-active-chart-grid .aim-chart-segment button[aria-pressed="true"],
-.aim-mobile-analysis-active-context .aim-chart-segment button[aria-pressed="true"] {
-  background: #f1e9ff;
-  color: #6d28d9;
-}
-
 .aim-analytics-scope-tabs {
   margin: 12px 0;
 }
@@ -1440,6 +1425,12 @@ a:focus-visible {
 .aim-analytics-scope-tabs .aim-mode-tab {
   min-width: 96px;
   white-space: nowrap;
+}
+
+.aim-analytics-scope-tabs .aim-mode-tab[data-mode="active-intelligence"][aria-selected="true"] {
+  background: #f5f3ff;
+  color: #6d28d9;
+  box-shadow: inset 0 0 0 1px #d8b4fe, 0 1px 2px rgba(15, 23, 42, 0.08);
 }
 
 .aim-draft-actions {
