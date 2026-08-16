@@ -735,7 +735,7 @@ function assertCardAssistShortTextMappingBuilderContract(managementSource) {
         "const previewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'multiple_choice', 'dropdown']);",
         "const compactPreviewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'dropdown']);",
         "const cardAssistRoles = new Set(['person_name', 'job_title', 'company_name']);",
-        "const cardAssistRoleLabels = Object.freeze({ person_name: 'Person', job_title: 'Job', company_name: 'Company' });",
+        "const cardAssistRoleLabels = Object.freeze({ person_name: '憪?', job_title: '?瑞迂', company_name: '?砍?迂' });",
         "const cardLinkHelperCopy = 'Card link';",
         "const thumbnailDefaults = Object.freeze({ driveFileId: '', fit: 'cover', focalX: 50, focalY: 50, zoom: 1 });",
         "const thumbnailFitOptions = new Set(['cover', 'contain']);",
@@ -759,7 +759,9 @@ function assertCardAssistShortTextMappingBuilderContract(managementSource) {
     ].join('\n');
     const contract = vm.runInNewContext(source, {});
     const roles = ['', 'person_name', 'job_title', 'company_name'];
+    const visibleLabels = ['銝葆??', '憪?', '?瑞迂', '?砍?迂'];
     const optionValues = html => Array.from(html.matchAll(/<option value="([^"]*)"/g)).map(match => match[1]);
+    const optionLabels = html => Array.from(html.matchAll(/<option value="[^"]*"[^>]*>([^<]*)<\/option>/g)).map(match => match[1]);
     const shortItem = {
         item_key: IDS.textKey,
         field_id: IDS.textKey,
@@ -772,7 +774,10 @@ function assertCardAssistShortTextMappingBuilderContract(managementSource) {
     assert.strictEqual(normalizedShort.itemKey, IDS.textKey);
     const shortHtml = contract.renderCardAssistDesignerControls(normalizedShort);
     assert(shortHtml.includes('id="aim-field-card-assist-role"'), 'short_text settings UI must expose the Card Assist mapping select');
+    assert(shortHtml.includes('??撣嗅鞈?'), 'short_text setting label must use final Card Assist copy');
+    assert(shortHtml.includes('?豢?甇斗?雿?敺??葆?亦?鞈???'), 'short_text mapping helper must use final Card Assist copy');
     assert.deepStrictEqual(optionValues(shortHtml), roles, 'Card Assist mapping options must use only canonical role values plus unset');
+    assert.deepStrictEqual(optionLabels(shortHtml), visibleLabels, 'Card Assist visible option labels must use final copy');
     assert.deepStrictEqual(optionValues(contract.renderCardAssistDesignerControls(contract.normalizeDesignerItem({
         ...shortItem,
         item_key: IDS.numberKey,
@@ -799,6 +804,8 @@ function assertCardAssistShortTextMappingBuilderContract(managementSource) {
         settings: { enableCardAssist: true }
     }));
     assert(sectionHtml.includes('aim-field-enable-card-assist'), 'section_heading must keep its enableCardAssist control');
+    assert(sectionHtml.includes('?冽迨?畾萄??具???撣嗅??'), 'section_heading checkbox must use final Card Assist copy');
+    assert(sectionHtml.includes('?敺?隢?砍?畾萇??剜?摮?雿身摰?撣嗅??????'), 'section_heading helper must use final Card Assist copy');
     assert(!sectionHtml.includes('aim-field-card-assist-role'), 'section_heading must not expose cardAssistField');
     const baseDraft = contract.normalizeDesignerItem(shortItem);
     const setMapping = (draft, value) => {
