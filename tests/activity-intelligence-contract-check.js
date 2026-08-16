@@ -723,6 +723,109 @@ function assertRealActiveIntelligenceRuntimeSourceContract(managementSource, css
     assert(managementSource.includes('正式分析尚未啟用'), 'active analytics must be a neutral empty state');
     assert(!cssSource.includes('aim-record-card-active-intelligence-prototype'), 'prototype active record styling must be removed');
     assert(!cssSource.includes('aim-prototype-chart'), 'prototype analytics chart styling must be removed');
+    assertCardAssistShortTextMappingBuilderContract(managementSource);
+}
+
+function assertCardAssistShortTextMappingBuilderContract(managementSource) {
+    const source = [
+        "const fieldTypes = [['section_heading', 'Section'], ['information_text', 'Info'], ['short_text', 'Short'], ['long_text', 'Long'], ['number', 'Number'], ['yes_no', 'Yes No'], ['single_choice', 'Single'], ['multiple_choice', 'Multiple'], ['dropdown', 'Dropdown']];",
+        "const specialDesignerTypes = [['form_thumbnail', 'Thumbnail'], ['card_link', 'Card Link']];",
+        "const choiceFieldTypes = ['single_choice', 'multiple_choice', 'dropdown'];",
+        "const previewPlacementValues = new Set(['none', 'primary', 'badges', 'text']);",
+        "const previewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'multiple_choice', 'dropdown']);",
+        "const compactPreviewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'dropdown']);",
+        "const cardAssistRoles = new Set(['person_name', 'job_title', 'company_name']);",
+        "const cardAssistRoleLabels = Object.freeze({ person_name: 'Person', job_title: 'Job', company_name: 'Company' });",
+        "const cardLinkHelperCopy = 'Card link';",
+        "const thumbnailDefaults = Object.freeze({ driveFileId: '', fit: 'cover', focalX: 50, focalY: 50, zoom: 1 });",
+        "const thumbnailFitOptions = new Set(['cover', 'contain']);",
+        "const Store = { clone(value) { return JSON.parse(JSON.stringify(value)); }, escapeHtml(value) { return String(value == null ? '' : value).replace(/[&<>\"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[char])); } };",
+        "function newUuid() { return '99999999-9999-4999-8999-999999999999'; }",
+        extractFunctionDeclaration(managementSource, 'fieldTypeLabel'),
+        "function option(value, label, selected) { return `<option value=\"${Store.escapeHtml(value)}\" ${String(value) === String(selected) ? 'selected' : ''}>${Store.escapeHtml(label)}</option>`; }",
+        extractFunctionDeclaration(managementSource, 'clampNumber'),
+        extractFunctionDeclaration(managementSource, 'normalizeThumbnailSettings'),
+        extractFunctionDeclaration(managementSource, 'thumbnailSettingsForItem'),
+        extractFunctionDeclaration(managementSource, 'normalizeOptionEntries'),
+        extractFunctionDeclaration(managementSource, 'normalizePreviewPlacement'),
+        extractFunctionDeclaration(managementSource, 'makeCardLinkItem'),
+        extractFunctionDeclaration(managementSource, 'makeFormThumbnailItem'),
+        extractFunctionDeclaration(managementSource, 'normalizeDesignerItem'),
+        extractFunctionDeclaration(managementSource, 'designerItemSignature'),
+        extractFunctionDeclaration(managementSource, 'designerItemsEqual'),
+        extractFunctionDeclaration(managementSource, 'renderCardAssistDesignerControls'),
+        extractFunctionDeclaration(managementSource, 'serializeDraftItems'),
+        '({ normalizeDesignerItem, designerItemsEqual, renderCardAssistDesignerControls, serializeDraftItems });'
+    ].join('\n');
+    const contract = vm.runInNewContext(source, {});
+    const roles = ['', 'person_name', 'job_title', 'company_name'];
+    const optionValues = html => Array.from(html.matchAll(/<option value="([^"]*)"/g)).map(match => match[1]);
+    const shortItem = {
+        item_key: IDS.textKey,
+        field_id: IDS.textKey,
+        item_type: 'short_text',
+        title: 'Unrelated visible title',
+        settings: {}
+    };
+    const normalizedShort = contract.normalizeDesignerItem(shortItem);
+    assert.strictEqual(normalizedShort.type, 'short_text');
+    assert.strictEqual(normalizedShort.itemKey, IDS.textKey);
+    const shortHtml = contract.renderCardAssistDesignerControls(normalizedShort);
+    assert(shortHtml.includes('id="aim-field-card-assist-role"'), 'short_text settings UI must expose the Card Assist mapping select');
+    assert.deepStrictEqual(optionValues(shortHtml), roles, 'Card Assist mapping options must use only canonical role values plus unset');
+    assert.deepStrictEqual(optionValues(contract.renderCardAssistDesignerControls(contract.normalizeDesignerItem({
+        ...shortItem,
+        item_key: IDS.numberKey,
+        title: 'Another unrelated title',
+        settings: { enableCardAssist: false }
+    }))), roles, 'short_text mapping UI must not depend on title or section enable state');
+    ['visitor', 'field_intelligence'].forEach(formContext => {
+        const item = contract.normalizeDesignerItem({ ...shortItem, item_key: `${formContext}-field`, field_id: `${formContext}-field` });
+        assert(contract.renderCardAssistDesignerControls(item).includes('aim-field-card-assist-role'), `${formContext} short_text must use the shared mapping UI`);
+    });
+    ['section_heading', 'information_text', 'long_text', 'number', 'yes_no', 'single_choice', 'multiple_choice', 'dropdown'].forEach(type => {
+        const html = contract.renderCardAssistDesignerControls(contract.normalizeDesignerItem({
+            itemKey: `${type}-field`,
+            type,
+            title: type,
+            settings: { cardAssistField: 'person_name' }
+        }));
+        assert(!html.includes('aim-field-card-assist-role'), `${type} must not expose cardAssistField mapping`);
+    });
+    const sectionHtml = contract.renderCardAssistDesignerControls(contract.normalizeDesignerItem({
+        itemKey: 'section-field',
+        type: 'section_heading',
+        title: 'Section',
+        settings: { enableCardAssist: true }
+    }));
+    assert(sectionHtml.includes('aim-field-enable-card-assist'), 'section_heading must keep its enableCardAssist control');
+    assert(!sectionHtml.includes('aim-field-card-assist-role'), 'section_heading must not expose cardAssistField');
+    const baseDraft = contract.normalizeDesignerItem(shortItem);
+    const setMapping = (draft, value) => {
+        const role = ['person_name', 'job_title', 'company_name'].includes(value) ? value : '';
+        const settings = { ...(draft.settings || {}) };
+        if (role) settings.cardAssistField = role;
+        else delete settings.cardAssistField;
+        return contract.normalizeDesignerItem({ ...draft, cardAssistField: role, settings });
+    };
+    const personDraft = setMapping(baseDraft, 'person_name');
+    assert.strictEqual(personDraft.settings.cardAssistField, 'person_name', 'mapping changes must update the current field draft settings');
+    assert.strictEqual(personDraft.cardAssistField, 'person_name');
+    assert(!contract.designerItemsEqual(baseDraft, personDraft), 'mapping-only changes must be detected as real item changes');
+    assert(contract.renderCardAssistDesignerControls(personDraft).includes('value="person_name" selected'), 'reselect hydration must render the saved mapping selected');
+    roles.slice(1).forEach(role => {
+        const mapped = setMapping(baseDraft, role);
+        const serialized = contract.serializeDraftItems([mapped])[0];
+        assert.strictEqual(serialized.settings.cardAssistField, role, `${role} must survive field apply and draft serialization`);
+    });
+    const cleared = setMapping(personDraft, '');
+    assert.strictEqual(cleared.cardAssistField, '');
+    assert(!Object.prototype.hasOwnProperty.call(cleared.settings, 'cardAssistField'), 'clearing the mapping must remove the persisted setting');
+    assert(!Object.prototype.hasOwnProperty.call(contract.serializeDraftItems([cleared])[0].settings, 'cardAssistField'), 'cleared mapping must stay removed during serialization');
+    assert(managementSource.includes('updateFormDesignDraft({ cardAssistField: role, settings });'), 'Card Assist select must update the actual field draft');
+    assert(managementSource.includes('cardAssistField: normalized.cardAssistField ||'), 'designer dirty-state signature must include cardAssistField');
+    assert(managementSource.includes('item.type || item.itemType || item.item_type'), 'browser item normalization must accept backend item_type shape');
+    assert(!managementSource.includes('title.includes'), 'Card Assist mapping must not infer roles from visible titles');
 }
 
 async function main() {

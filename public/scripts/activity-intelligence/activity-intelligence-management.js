@@ -2357,10 +2357,11 @@
   }
 
   function normalizeDesignerItem(item) {
-    if (!item || item.type === 'card_link') return makeCardLinkItem(item || {});
-    if (item.type === 'form_thumbnail') return makeFormThumbnailItem(item || {});
-    const type = item.type || 'short_text';
-    const itemKey = item.itemKey || item.item_key || item.fieldId || item.itemId || newUuid();
+    const sourceType = item && (item.type || item.itemType || item.item_type);
+    if (!item || sourceType === 'card_link') return makeCardLinkItem(item || {});
+    if (sourceType === 'form_thumbnail') return makeFormThumbnailItem(item || {});
+    const type = sourceType || 'short_text';
+    const itemKey = item.itemKey || item.item_key || item.fieldId || item.field_id || item.itemId || item.item_id || newUuid();
     const entries = normalizeOptionEntries(item);
     const sourceSettings = item.settings && typeof item.settings === 'object' ? Store.clone(item.settings) : {};
     const previewPlacement = normalizePreviewPlacement(
@@ -2554,6 +2555,8 @@
       options: normalized.options || [],
       allowOther: Boolean(normalized.allowOther),
       allowOptionNotes: Boolean(normalized.allowOptionNotes),
+      cardAssistField: normalized.cardAssistField || '',
+      enableCardAssist: Boolean(normalized.enableCardAssist),
       visible: normalized.visible !== false,
       retired: Boolean(normalized.retired),
       removedInDraft: Boolean(normalized.removedInDraft),
