@@ -3509,8 +3509,7 @@
     const records = analyticsRecords(activity);
     const activeAnalytics = analyticsScopeIsActive();
     const formContext = analyticsFormContext();
-    const assistantRecords = analyticsRecords(activity, recordContextVisitorMode);
-    const assistant = !isMobileFormViewport() ? renderAnalyticsAiPanel(activity, assistantRecords) : '';
+    const assistant = !isMobileFormViewport() ? renderAnalyticsAiPanel(activity, records) : '';
     const scopeSelector = renderAnalyticsScopeSelector();
     const metrics = analyticsMetrics(activity, records, { includeVisitorCount: !activeAnalytics });
     const visitorKpi = metrics.visitorCount !== null
@@ -3527,7 +3526,6 @@
   function renderMobileAnalysis(activity) {
     const records = analyticsRecords(activity);
     const activeAnalytics = analyticsScopeIsActive();
-    const assistantRecords = analyticsRecords(activity, recordContextVisitorMode);
     const formContext = analyticsFormContext();
     const metrics = analyticsMetrics(activity, records, { includeVisitorCount: !activeAnalytics });
     const categorical = analyticFields(activity, records, formContext)
@@ -3536,7 +3534,7 @@
       .join('');
     return `
       <section class="aim-mobile-analysis" aria-label="行動數據分析">
-        ${renderMobileAnalyticsAiPanel(activity, assistantRecords)}
+        ${renderMobileAnalyticsAiPanel(activity, records)}
         ${renderAnalyticsScopeSelector()}
         ${renderMobileAnalyticsKpis(metrics, { includeVisitorCount: !activeAnalytics })}
         <div class="aim-mobile-analysis-chart-feed">
@@ -3892,7 +3890,8 @@
     render();
     try {
       const result = await window.ActivityIntelligenceApi.analyzeActivity(activity.id, {
-        question: value
+        question: value,
+        analysisContext: analyticsFormContext()
       });
       if (!result || result.completed !== true || !String(result.answer || '').trim()) {
         throw new Error('分析服務沒有回傳有效內容。');

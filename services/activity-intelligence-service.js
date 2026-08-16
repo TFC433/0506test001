@@ -417,14 +417,23 @@ class ActivityIntelligenceService {
 
         const activity = await this._requireActivity(activityId);
         const question = this._normalizeAiQuestion(payload.question);
+        const analysisContext = this._normalizeAiAnalysisContext(payload);
         const scope = this._normalizeAiScope(activity, payload.filters || payload);
+        scope.analysisContext = analysisContext;
         const submissions = await this.listSubmissions(activity.id, {
+            recordContext: analysisContext,
             recorderDisplayName: scope.recorderDisplayName,
             includeVoid: false
         });
 
         const activeSubmissions = submissions.filter(submission => submission.status !== 'void');
         if (!activeSubmissions.length) {
+            if (analysisContext === 'field_intelligence') {
+                return {
+                    completed: true,
+                    answer: '目前選取的分析範圍沒有可分析的有效表單紀錄。'
+                };
+            }
             throw new ActivityIntelligenceError(400, '目前範圍沒有可分析的有效表單紀錄。', 'FORM_AI_NO_DATA');
         }
 
@@ -1071,6 +1080,18 @@ class ActivityIntelligenceService {
         return question;
     }
 
+    _normalizeAiAnalysisContext(payload = {}) {
+        const value = payload.analysisContext
+            || payload.analysis_context
+            || payload.recordContext
+            || payload.record_context
+            || payload.formContext
+            || payload.form_context
+            || payload.context
+            || DEFAULT_FORM_CONTEXT;
+        return this._normalizeFormContext(value);
+    }
+
     _normalizeAiScope(activity, filters = {}) {
         const formOpenStart = this._normalizeDate(activity.formOpenStart);
         const formOpenEnd = this._normalizeDate(activity.formOpenEnd);
@@ -1089,7 +1110,8 @@ class ActivityIntelligenceService {
             requestedDateStart: filterStart,
             requestedDateEnd: filterEnd,
             activityFormOpenStart: formOpenStart,
-            activityFormOpenEnd: formOpenEnd
+            activityFormOpenEnd: formOpenEnd,
+            analysisContext: DEFAULT_FORM_CONTEXT
         };
     }
 
@@ -1107,7 +1129,7 @@ class ActivityIntelligenceService {
         const toolDurationMs = Date.now() - toolStartedAt;
 
         const finalSystemInstruction = this._formAiFinalizerSystemInstruction();
-        const finalUserPrompt = this._formAiFinalizerPrompt(question, toolResults);
+        const finalUserPrompt = this._formAiFinalizerPrompt(question, toolResults, context);
         this._assertFormAiContextSize(finalSystemInstruction, finalUserPrompt);
 
         const finalStartedAt = Date.now();
@@ -1144,6 +1166,7 @@ class ActivityIntelligenceService {
             activity: context.activity,
             effectiveScope: context.effectiveScope,
             dataset: {
+                analysisContext: context.analysisContext,
                 nonVoidSubmissionCount: context.submissions.length,
                 createdAtDateRange: this._formAiDateRange(context.submissions),
                 recorders: [...new Set(context.submissions.map(submission => submission.createdByDisplayName).filter(Boolean))].sort()
@@ -1164,6 +1187,12 @@ class ActivityIntelligenceService {
                 }
             ])),
             domainContext: plannerDomainContext(),
+            governance: {
+                selectedAnalysisContext: context.analysisContext,
+                allowedAnalysisContexts: [DEFAULT_FORM_CONTEXT, 'field_intelligence'],
+                selectedContextIsAuthoritative: true,
+                toolsCannotOverrideAnalysisContext: true
+            },
             strategies: {
                 tool_query: 'Use for any Activity data, count, evidence, matching-record, summary, comparison, prioritization, or mixed data/domain question.',
                 direct_domain_answer: 'Use only for pure terminology, glossary, or general professional/domain questions that do not need Activity submission evidence.'
@@ -1234,7 +1263,8 @@ class ActivityIntelligenceService {
             '數字、排名、分布、日期統計、紀錄者統計必須使用 aggregate_submissions。',
             '需要文字內容、原因、建議、痛點、需求、摘要或混合分析時，使用 retrieve_submissions 取得實際紀錄證據。',
             'For pure terminology, glossary, abbreviation, or general professional/domain questions that do not require Activity submission evidence, use strategy direct_domain_answer and omit toolCalls.',
-            'If the user asks about this Activity, customers, companies, people, submissions, interests, needs, trends, opportunities, signals, follow-up priority, PoC, competitors, recorded comments, Option Notes, or collected FORM data, use strategy tool_query.',
+            'The selected analysisContext supplied in planner input is authoritative. Do not add, infer, request, or simulate another record context.',
+            'If the user asks about this Activity, customers, companies, people, submissions, interests, needs, trends, opportunities, signals, follow-up priority, PoC, competitors, recorded comments, Option Notes, or collected FORM data, use strategy tool_query within the selected analysisContext only.',
             'For mixed questions that combine Activity records with domain judgment, use strategy tool_query and retrieve/aggregate FORM evidence before interpretation.',
             'For exact count questions, use aggregate_submissions and treat aggregate totals as authoritative; do not count retrieved rows as the total.',
             'For complete enumeration requests such as list all, show all, which records, or enumerate every matching record, use retrieve_submissions without a limit.',
@@ -1624,7 +1654,7 @@ class ActivityIntelligenceService {
     _executeFormAiFullTextScanTool(args, context) {
         const filters = args.filters || {};
         this._validateFormAiFilters(filters);
-        const records = this._filterFormAiSubmissionsForFullTextScan(context.submissions, filters);
+        const records = this._filterFormAiSubmissionsForFullTextScan(context.submissions, filters, context);
         const evidenceRecords = [];
         let longTextAnswerCount = 0;
         let longTextRecordCount = 0;
@@ -1641,6 +1671,7 @@ class ActivityIntelligenceService {
                 createdAt: record.createdAt,
                 createdDate: String(record.createdAt || '').slice(0, 10),
                 createdByDisplayName: record.createdByDisplayName,
+                recordContext: record.recordContext,
                 customer: this._formAiPublicIdentityValue(record, context, '客戶姓名'),
                 company: this._formAiPublicIdentityValue(record, context, '公司名稱') || (record.rawCard && record.rawCard.company) || '',
                 contextAnswers: this._formAiPublicContextAnswers(record, context),
@@ -1660,7 +1691,7 @@ class ActivityIntelligenceService {
             retrievedLongTextAnswers: longTextAnswerCount,
             totalOptionNoteAnswers: optionNoteAnswerCount,
             retrievedOptionNoteAnswers: optionNoteAnswerCount,
-            filtersApplied: this._publicFormAiFullTextScanFilters(filters),
+            filtersApplied: this._publicFormAiFullTextScanFilters(filters, context),
             records: evidenceRecords
         };
     }
@@ -1749,6 +1780,7 @@ class ActivityIntelligenceService {
         this._validateFormAiFilters(filters);
         return (submissions || []).filter(record => {
             if (record.status === 'void') return false;
+            if (!this._formAiRecordMatchesAnalysisContext(record, context)) return false;
             const createdDate = String(record.createdAt || '').slice(0, 10);
             if (filters.dateStart && createdDate < filters.dateStart) return false;
             if (filters.dateEnd && createdDate > filters.dateEnd) return false;
@@ -1770,15 +1802,30 @@ class ActivityIntelligenceService {
         });
     }
 
-    _filterFormAiSubmissionsForFullTextScan(submissions, filters) {
+    _filterFormAiSubmissionsForFullTextScan(submissions, filters, context) {
         return (submissions || []).filter(record => {
             if (record.status === 'void') return false;
+            if (!this._formAiRecordMatchesAnalysisContext(record, context)) return false;
             const createdDate = String(record.createdAt || '').slice(0, 10);
             if (filters.dateStart && createdDate < filters.dateStart) return false;
             if (filters.dateEnd && createdDate > filters.dateEnd) return false;
             if (filters.recorderDisplayName && record.createdByDisplayName !== filters.recorderDisplayName) return false;
             return true;
         });
+    }
+
+    _formAiRecordMatchesAnalysisContext(record, context) {
+        const analysisContext = this._formAiContextAnalysisContext(context);
+        if (!analysisContext) return true;
+        return this._normalizeFormContext(record.recordContext || DEFAULT_FORM_CONTEXT) === analysisContext;
+    }
+
+    _formAiContextAnalysisContext(context) {
+        const value = context && (
+            context.analysisContext
+            || (context.effectiveScope && context.effectiveScope.analysisContext)
+        );
+        return value ? this._normalizeFormContext(value) : null;
     }
 
     _validateFormAiFilters(filters) {
@@ -1799,6 +1846,8 @@ class ActivityIntelligenceService {
 
     _publicFormAiFilters(filters, context) {
         const result = {};
+        const analysisContext = this._formAiContextAnalysisContext(context);
+        if (analysisContext) result.analysisContext = analysisContext;
         if (filters.dateStart) result.dateStart = filters.dateStart;
         if (filters.dateEnd) result.dateEnd = filters.dateEnd;
         if (filters.recorderDisplayName) result.recorderDisplayName = filters.recorderDisplayName;
@@ -1814,8 +1863,10 @@ class ActivityIntelligenceService {
         return result;
     }
 
-    _publicFormAiFullTextScanFilters(filters) {
+    _publicFormAiFullTextScanFilters(filters, context) {
         const result = {};
+        const analysisContext = this._formAiContextAnalysisContext(context);
+        if (analysisContext) result.analysisContext = analysisContext;
         if (filters.dateStart) result.dateStart = filters.dateStart;
         if (filters.dateEnd) result.dateEnd = filters.dateEnd;
         if (filters.recorderDisplayName) result.recorderDisplayName = filters.recorderDisplayName;
@@ -1897,6 +1948,7 @@ class ActivityIntelligenceService {
             createdAt: record.createdAt,
             createdDate: String(record.createdAt || '').slice(0, 10),
             createdByDisplayName: record.createdByDisplayName,
+            recordContext: record.recordContext,
             answers: (record.answers || [])
                 .filter(answer => !fieldKeys || fieldKeys.has(answer.itemKey))
                 .map(answer => {
@@ -2058,20 +2110,26 @@ class ActivityIntelligenceService {
         ].join('\n');
     }
 
-    _formAiFinalizerPrompt(question, toolResults) {
+    _formAiFinalizerPrompt(question, toolResults, context) {
         return [
             `使用者原始問題：${question}`,
             '以下 JSON 先提供 evidence，再提供次要 domainContext。請先以 evidence 建立答案；domainContext 只能在 evidence 支持時補充專業解讀。請不要暴露內部工具或識別碼。',
-            JSON.stringify({ evidence: toolResults, domainContext: finalizerDomainContext() })
+            JSON.stringify({
+                analysisContext: this._formAiContextAnalysisContext(context) || DEFAULT_FORM_CONTEXT,
+                evidence: toolResults,
+                domainContext: finalizerDomainContext()
+            })
         ].join('\n\n');
     }
 
     async _buildFormAiContext(activity, scope, submissions) {
-        const publishedForm = await this.reader.getPublishedForm(activity.id);
+        const analysisContext = this._normalizeFormContext(scope && scope.analysisContext);
+        const publishedForm = await this.reader.getPublishedForm(activity.id, analysisContext);
         const formVersions = this._formAiCanonicalFormVersions(submissions, publishedForm);
         return {
             product: 'FANUC forms AI 分析助手',
             dataBoundary: 'current_activity_form_data_only',
+            analysisContext,
             activity: {
                 activityId: activity.id,
                 name: activity.name,
@@ -2086,6 +2144,7 @@ class ActivityIntelligenceService {
                 dateEnd: scope.dateEnd,
                 dateField: 'submission.createdAt',
                 recorderDisplayName: scope.recorderDisplayName,
+                analysisContext,
                 activeSubmissionsOnly: true,
                 formOpenPeriodUsedAsFilter: false,
                 exhibitionPeriodUsedAsFilter: false,
@@ -2138,6 +2197,7 @@ class ActivityIntelligenceService {
         const snapshotItems = (submission.formSnapshot && submission.formSnapshot.items) || [];
         return {
             submissionId: submission.id,
+            recordContext: this._normalizeFormContext(submission.recordContext || (submission.formSnapshot && submission.formSnapshot.formContext) || DEFAULT_FORM_CONTEXT),
             status: submission.status,
             createdAt: submission.createdAt,
             createdByDisplayName: submission.createdByDisplayName,

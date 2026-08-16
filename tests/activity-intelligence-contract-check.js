@@ -13,6 +13,8 @@ const IDS = {
     publishedVersion: '22222222-2222-4222-8222-222222222221',
     draftVersion: '22222222-2222-4222-8222-222222222222',
     oldVersion: '22222222-2222-4222-8222-222222222223',
+    activePublishedVersion: '22222222-2222-4222-8222-222222222224',
+    activeDraftVersion: '22222222-2222-4222-8222-222222222225',
     textKey: '33333333-3333-4333-8333-333333333331',
     numberKey: '33333333-3333-4333-8333-333333333332',
     boolKey: '33333333-3333-4333-8333-333333333333',
@@ -20,6 +22,7 @@ const IDS = {
     cardKey: '33333333-3333-4333-8333-333333333335',
     oldTextKey: '33333333-3333-4333-8333-333333333336',
     longKey: '33333333-3333-4333-8333-333333333337',
+    activeLongKey: '33333333-3333-4333-8333-333333333338',
     textItem: '44444444-4444-4444-8444-444444444441',
     numberItem: '44444444-4444-4444-8444-444444444442',
     boolItem: '44444444-4444-4444-8444-444444444443',
@@ -27,6 +30,7 @@ const IDS = {
     cardItem: '44444444-4444-4444-8444-444444444445',
     oldTextItem: '44444444-4444-4444-8444-444444444446',
     longItem: '44444444-4444-4444-8444-444444444447',
+    activeLongItem: '44444444-4444-4444-8444-444444444448',
     optionAlpha: '55555555-5555-4555-8555-555555555551',
     card: '66666666-6666-4666-8666-666666666661',
     secondCard: '66666666-6666-4666-8666-666666666663',
@@ -35,6 +39,7 @@ const IDS = {
     oldSubmission: '77777777-7777-4777-8777-777777777772',
     aiSubmission: '77777777-7777-4777-8777-777777777773',
     voidSubmission: '77777777-7777-4777-8777-777777777774',
+    activeAiSubmission: '77777777-7777-4777-8777-777777777775',
     otherActivity: '11111111-1111-4111-8111-111111111114'
 };
 const OTHER_CHOICE_VALUE = Buffer.from('5YW25LuW', 'base64').toString('utf8');
@@ -93,6 +98,10 @@ const oldItems = [
     { formItemId: IDS.oldTextItem, itemKey: IDS.oldTextKey, fieldId: IDS.oldTextKey, type: 'short_text', title: 'Old Text', options: [], optionEntries: [] }
 ];
 
+const activeItems = [
+    { formItemId: IDS.activeLongItem, itemKey: IDS.activeLongKey, fieldId: IDS.activeLongKey, type: 'long_text', title: 'Active Long Signal', options: [], optionEntries: [], visible: true, removedInDraft: false }
+];
+
 function makeHarness(options = {}) {
     const calls = {};
     const submissions = new Map();
@@ -100,7 +109,13 @@ function makeHarness(options = {}) {
     const initializedFormContexts = new Set(options.initializedFormContexts || []);
     const draftItemsByContext = options.draftItemsByContext || {};
 
-    const itemsForFormContext = formContext => formContext === 'field_intelligence' ? [] : publishedItems;
+    const itemsForFormContext = formContext => {
+        if (formContext !== 'field_intelligence') return publishedItems;
+        if (missingFormContexts.has(formContext) && initializedFormContexts.has(formContext)) return [];
+        return activeItems;
+    };
+    const versionIdForFormContext = formContext => formContext === 'field_intelligence' ? IDS.activePublishedVersion : IDS.publishedVersion;
+    const draftVersionIdForFormContext = formContext => formContext === 'field_intelligence' ? IDS.activeDraftVersion : IDS.draftVersion;
     const formBundleForContext = (activityId, formContext = 'visitor') => {
         if (missingFormContexts.has(formContext) && !initializedFormContexts.has(formContext)) {
             return { published: null, draft: null };
@@ -108,8 +123,8 @@ function makeHarness(options = {}) {
         const items = itemsForFormContext(formContext);
         const draftItems = draftItemsByContext[formContext] || items;
         return {
-            published: { versionId: IDS.publishedVersion, formContext, versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items },
-            draft: { versionId: IDS.draftVersion, formContext, versionNumber: 2, items: draftItems.map(item => ({ ...item })) }
+            published: { versionId: versionIdForFormContext(formContext), formContext, versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items },
+            draft: { versionId: draftVersionIdForFormContext(formContext), formContext, versionNumber: 2, items: draftItems.map(item => ({ ...item })) }
         };
     };
 
@@ -275,7 +290,7 @@ function makeHarness(options = {}) {
         recordContext: 'visitor',
         status: 'active',
         answers: {
-            [IDS.textKey]: 'Structured short text',
+            [IDS.textKey]: 'Structured short text UNIQUE_VISITOR_SIGNAL',
             [IDS.longKey]: '完整長文字需求：客戶正在評估自動化產線，要求九月前安排後續拜訪。',
             [IDS.numberKey]: 88,
             [IDS.boolKey]: true,
@@ -295,6 +310,29 @@ function makeHarness(options = {}) {
         updatedByDisplayName: 'Analyst',
         updatedAt: '2026-09-05T10:00:00.000Z'
     });
+
+    if (options.includeActiveAiSubmission !== false) {
+        submissions.set(IDS.activeAiSubmission, {
+            id: IDS.activeAiSubmission,
+            activityId: IDS.activity,
+            formVersionId: IDS.activePublishedVersion,
+            recordContext: 'field_intelligence',
+            status: 'active',
+            answers: {
+                [IDS.activeLongKey]: 'UNIQUE_ACTIVE_SIGNAL'
+            },
+            otherAnswers: {},
+            cardId: null,
+            card: null,
+            formSnapshot: { versionId: IDS.activePublishedVersion, formContext: 'field_intelligence', versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items: activeItems },
+            createdByUserId: 'active-analyst',
+            createdByDisplayName: 'Active Analyst',
+            createdAt: '2026-08-17T10:00:00.000Z',
+            updatedByUserId: 'active-analyst',
+            updatedByDisplayName: 'Active Analyst',
+            updatedAt: '2026-08-17T10:00:00.000Z'
+        });
+    }
 
     submissions.set(IDS.voidSubmission, {
         id: IDS.voidSubmission,
@@ -731,12 +769,12 @@ function assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource
     assert(managementSource.includes('return activeAnalytics ? recordIsFieldIntelligence(r) : !recordIsFieldIntelligence(r);'), 'analyticsRecords must use recordContext as the authoritative dataset split');
     assert(managementSource.includes('analyticsMetrics(activity, records, { includeVisitorCount: !activeAnalytics })'), 'analytics metrics must receive context-specific Visitor Count behavior');
     assert(managementSource.includes('const visitorField = options.includeVisitorCount === false ? null : currentVisitorCountField(activity);'), 'Visitor Count KPI must be suppressible for Active Analytics');
-    assert(managementSource.includes('const assistantRecords = analyticsRecords(activity, recordContextVisitorMode);'), 'shared Analytics AI shell must keep the deferred visitor data scope explicit');
-    assert(managementSource.includes('const assistant = !isMobileFormViewport() ? renderAnalyticsAiPanel(activity, assistantRecords) :'), 'desktop shared AI panel must remain visible outside the Active/Visitor body scope');
-    assert(managementSource.includes('${renderMobileAnalyticsAiPanel(activity, assistantRecords)}'), 'mobile shared AI panel must remain visible outside the Active/Visitor body scope');
+    assert(managementSource.includes('analysisContext: analyticsFormContext()'), 'Assistant request must carry the selected Analytics context');
+    assert(managementSource.includes('const assistant = !isMobileFormViewport() ? renderAnalyticsAiPanel(activity, records) :'), 'desktop shared AI panel must remain visible and use the current Analytics context');
+    assert(managementSource.includes('${renderMobileAnalyticsAiPanel(activity, records)}'), 'mobile shared AI panel must remain visible and use the current Analytics context');
     assert(!managementSource.includes('!activeAnalytics && !isMobileFormViewport() ? renderAnalyticsAiPanel'), 'Active Analytics must not hide the shared desktop AI panel');
     assert(!managementSource.includes("activeAnalytics ? '' : renderMobileAnalyticsAiPanel"), 'Active Analytics must not hide the shared mobile AI panel');
-    assert(managementSource.includes('function analyticsRecords(activity, scope)'), 'analyticsRecords must support an explicit scope for the shared AI shell');
+    assert(managementSource.includes('function analyticsRecords(activity, scope)'), 'analyticsRecords must support explicit Analytics scopes');
     assert(managementSource.includes('publishedRecordItems(activity, context)'), 'Active Analytics schema seed must use the active form context');
     const renderAnalyticsSource = extractFunctionDeclaration(managementSource, 'renderAnalytics');
     const renderMobileAnalysisSource = extractFunctionDeclaration(managementSource, 'renderMobileAnalysis');
@@ -1249,16 +1287,16 @@ async function main() {
         formAiTextGenerator: async payload => {
             aiCalls.push(payload);
             if (aiCalls.length % 2 === 1) {
+                const activePlan = payload.userPrompt.includes('"analysisContext":"field_intelligence"');
                 return JSON.stringify({
                     strategy: 'tool_query',
                     intent: 'contract test',
                     toolCalls: [
                         {
                             tool: 'retrieve_submissions',
-                            arguments: {
-                                fields: [IDS.longKey],
-                                limit: 10
-                            }
+                            arguments: activePlan
+                                ? { fields: [IDS.activeLongKey], limit: 10 }
+                                : { limit: 10 }
                         }
                     ]
                 });
@@ -1272,6 +1310,10 @@ async function main() {
     assert.strictEqual(aiHarness.calls.listSubmissions.filters.dateStart, null);
     assert.strictEqual(aiHarness.calls.listSubmissions.filters.dateEnd, null);
     assert.strictEqual(aiHarness.calls.listSubmissions.filters.includeVoid, false);
+    assert.strictEqual(aiHarness.calls.listSubmissions.filters.recordContext, 'visitor');
+    assert.strictEqual(aiHarness.calls.getPublishedForm.formContext, 'visitor');
+    assert(aiCalls[0].userPrompt.includes('"analysisContext":"visitor"'));
+    assert(aiCalls[1].userPrompt.includes('"analysisContext":"visitor"'));
     assert(aiCalls[0].systemInstruction.includes('資料查詢規劃器'));
     assert(aiCalls[0].systemInstruction.includes('domainContext'));
     assert(aiCalls[0].systemInstruction.includes('FORM 工具證據'));
@@ -1289,9 +1331,21 @@ async function main() {
     assert(aiCalls[1].userPrompt.includes('完整長文字需求：客戶正在評估自動化產線'));
     assert(aiCalls[1].userPrompt.includes('Card Co'));
     assert(aiCalls[1].userPrompt.includes('RAW note'));
+    assert(aiCalls[1].userPrompt.includes('UNIQUE_VISITOR_SIGNAL'));
+    assert(!aiCalls[1].userPrompt.includes('UNIQUE_ACTIVE_SIGNAL'));
     assert(!aiCalls[1].userPrompt.includes('This void answer must not reach Gemini context.'));
     assert(!aiCalls[1].userPrompt.includes('optionKey'));
     assert(!Object.prototype.hasOwnProperty.call(aiResult, 'model'));
+
+    const activeAiResult = await aiHarness.service.analyzeActivity(IDS.activity, { question: 'active signal', analysisContext: 'field_intelligence' }, actor());
+    assert.strictEqual(activeAiResult.completed, true);
+    assert(String(activeAiResult.answer || '').trim());
+    assert.strictEqual(aiHarness.calls.listSubmissions.filters.recordContext, 'field_intelligence');
+    assert.strictEqual(aiHarness.calls.getPublishedForm.formContext, 'field_intelligence');
+    assert(aiCalls[2].userPrompt.includes('"analysisContext":"field_intelligence"'));
+    assert(aiCalls[3].userPrompt.includes('"analysisContext":"field_intelligence"'));
+    assert(aiCalls[3].userPrompt.includes('UNIQUE_ACTIVE_SIGNAL'));
+    assert(!aiCalls[3].userPrompt.includes('UNIQUE_VISITOR_SIGNAL'));
 
     const harmlessMetadataPlan = aiHarness.service._validateFormAiPlan({
         strategy: 'tool_query',
@@ -1610,6 +1664,73 @@ async function main() {
         }]
     })), 'FORM_AI_UNSUPPORTED_TOOL_ARGUMENT');
 
+    const mixedIsolationContext = {
+        analysisContext: 'visitor',
+        effectiveScope: { analysisContext: 'visitor' },
+        formVersions: {
+            version1: {
+                fields: [
+                    { itemKey: 'signalField', type: 'long_text', title: 'Signal' },
+                    { itemKey: 'choiceSignal', type: 'single_choice', title: 'Choice Signal', options: [{ label: 'Visitor', value: 'Visitor' }, { label: 'Active', value: 'Active' }] }
+                ]
+            }
+        },
+        submissions: [
+            {
+                recordContext: 'visitor',
+                status: 'active',
+                createdAt: '2026-08-01T00:00:00.000Z',
+                createdByDisplayName: 'Visitor Analyst',
+                formVersionId: 'version1',
+                answers: [
+                    { itemKey: 'signalField', value: 'UNIQUE_VISITOR_SIGNAL', otherText: '' },
+                    { itemKey: 'choiceSignal', value: 'Visitor', otherText: '' }
+                ],
+                rawCard: null
+            },
+            {
+                recordContext: 'field_intelligence',
+                status: 'active',
+                createdAt: '2026-08-02T00:00:00.000Z',
+                createdByDisplayName: 'Active Analyst',
+                formVersionId: 'version1',
+                answers: [
+                    { itemKey: 'signalField', value: 'UNIQUE_ACTIVE_SIGNAL', otherText: '' },
+                    { itemKey: 'choiceSignal', value: 'Active', otherText: '' }
+                ],
+                rawCard: null
+            }
+        ]
+    };
+    const visitorRetrieveIsolation = aiHarness.service._executeFormAiRetrieveTool({}, mixedIsolationContext);
+    assert.strictEqual(visitorRetrieveIsolation.totalMatching, 1);
+    assert.strictEqual(visitorRetrieveIsolation.filtersApplied.analysisContext, 'visitor');
+    assert(JSON.stringify(visitorRetrieveIsolation).includes('UNIQUE_VISITOR_SIGNAL'));
+    assert(!JSON.stringify(visitorRetrieveIsolation).includes('UNIQUE_ACTIVE_SIGNAL'));
+    const visitorAggregateIsolation = aiHarness.service._executeFormAiAggregateTool({ aggregate: 'count', groupBy: 'none' }, mixedIsolationContext);
+    assert.strictEqual(visitorAggregateIsolation.total, 1);
+    assert.strictEqual(visitorAggregateIsolation.filtersApplied.analysisContext, 'visitor');
+    const visitorFullTextIsolation = aiHarness.service._executeFormAiRetrieveTool({ fullTextScan: true }, mixedIsolationContext);
+    assert.strictEqual(visitorFullTextIsolation.totalMatchingRecords, 1);
+    assert.strictEqual(visitorFullTextIsolation.filtersApplied.analysisContext, 'visitor');
+    assert(JSON.stringify(visitorFullTextIsolation).includes('UNIQUE_VISITOR_SIGNAL'));
+    assert(!JSON.stringify(visitorFullTextIsolation).includes('UNIQUE_ACTIVE_SIGNAL'));
+    mixedIsolationContext.analysisContext = 'field_intelligence';
+    mixedIsolationContext.effectiveScope.analysisContext = 'field_intelligence';
+    const activeRetrieveIsolation = aiHarness.service._executeFormAiRetrieveTool({}, mixedIsolationContext);
+    assert.strictEqual(activeRetrieveIsolation.totalMatching, 1);
+    assert.strictEqual(activeRetrieveIsolation.filtersApplied.analysisContext, 'field_intelligence');
+    assert(JSON.stringify(activeRetrieveIsolation).includes('UNIQUE_ACTIVE_SIGNAL'));
+    assert(!JSON.stringify(activeRetrieveIsolation).includes('UNIQUE_VISITOR_SIGNAL'));
+    const activeAggregateIsolation = aiHarness.service._executeFormAiAggregateTool({ aggregate: 'count', groupBy: 'none' }, mixedIsolationContext);
+    assert.strictEqual(activeAggregateIsolation.total, 1);
+    assert.strictEqual(activeAggregateIsolation.filtersApplied.analysisContext, 'field_intelligence');
+    const activeFullTextIsolation = aiHarness.service._executeFormAiRetrieveTool({ fullTextScan: true }, mixedIsolationContext);
+    assert.strictEqual(activeFullTextIsolation.totalMatchingRecords, 1);
+    assert.strictEqual(activeFullTextIsolation.filtersApplied.analysisContext, 'field_intelligence');
+    assert(JSON.stringify(activeFullTextIsolation).includes('UNIQUE_ACTIVE_SIGNAL'));
+    assert(!JSON.stringify(activeFullTextIsolation).includes('UNIQUE_VISITOR_SIGNAL'));
+
     const fullTextContext = {
         formVersions: {
             version1: {
@@ -1700,10 +1821,24 @@ async function main() {
     assert.strictEqual(aiHarness.calls.listSubmissions.filters.dateStart, null);
     assert.strictEqual(aiHarness.calls.listSubmissions.filters.dateEnd, null);
     assert.strictEqual(aiHarness.calls.listSubmissions.filters.recorderDisplayName, 'Analyst');
-    assert(!aiCalls[2].userPrompt.includes('第一個完整分析結果'));
+    assert.strictEqual(aiHarness.calls.listSubmissions.filters.recordContext, 'visitor');
+    assert(!aiCalls[4].userPrompt.includes('第一個完整分析結果'));
 
     await assertRejectsCode(() => aiHarness.service.analyzeActivity(IDS.activity, { question: '' }, actor()), 'FORM_AI_EMPTY_QUESTION');
     await assertRejectsCode(() => aiHarness.service.analyzeActivity(IDS.activity, { question: 'no data', filters: { recorder: 'Nobody' } }, actor()), 'FORM_AI_NO_DATA');
+    await assertRejectsCode(() => aiHarness.service.analyzeActivity(IDS.activity, { question: 'bad context', analysisContext: 'all' }, actor()), 'INVALID_FORM_CONTEXT');
+    const emptyActiveHarness = makeHarness({
+        includeActiveAiSubmission: false,
+        formAiTextGenerator: async () => {
+            throw new Error('zero active records must not call the AI provider');
+        }
+    });
+    const emptyActiveResult = await emptyActiveHarness.service.analyzeActivity(IDS.activity, { question: 'active no data', analysisContext: 'field_intelligence' }, actor());
+    assert.strictEqual(emptyActiveHarness.calls.listSubmissions.filters.recordContext, 'field_intelligence');
+    assert.deepStrictEqual(emptyActiveResult, {
+        completed: true,
+        answer: '目前選取的分析範圍沒有可分析的有效表單紀錄。'
+    });
     await assertRejectsCode(() => aiHarness.service.analyzeActivity(IDS.activity, { question: 'role' }, { ...actor(), role: 'recorder' }), 'FORM_AI_FORBIDDEN');
 
     const failingAiHarness = makeHarness({
