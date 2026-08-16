@@ -2795,28 +2795,6 @@ a:focus-visible {
   gap: 10px;
 }
 
-.aim-active-intelligence-entry-head {
-  padding: 10px 12px;
-  border: 1px solid #d9c8f2;
-  border-radius: 8px;
-  background: #faf7ff;
-}
-
-.aim-active-intelligence-entry-head h3 {
-  margin: 0 0 4px;
-  color: #4d337d;
-  font-size: 15px;
-  font-weight: 650;
-  line-height: 1.35;
-}
-
-.aim-active-intelligence-entry-head p {
-  margin: 0;
-  color: #5b6a7a;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
 .aim-personal-records {
   display: flex;
   flex-direction: column;
@@ -2903,6 +2881,10 @@ a:focus-visible {
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
+}
+
+.aim-record-context-label-mobile {
+  display: none;
 }
 
 .aim-record-card-meta {
@@ -3533,7 +3515,7 @@ a:focus-visible {
 
 .aim-record-filter-bar {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) auto auto;
+  grid-template-columns: minmax(240px, 1fr) auto auto auto;
   gap: 16px;
   align-items: center;
   margin-bottom: 12px;
@@ -3545,7 +3527,8 @@ a:focus-visible {
   min-width: 0;
 }
 
-.aim-period-group {
+.aim-period-group,
+.aim-record-context-filter-group {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: stretch;
@@ -3554,7 +3537,8 @@ a:focus-visible {
   overflow: hidden;
 }
 
-.aim-period-group button {
+.aim-period-group button,
+.aim-record-context-filter-group button {
   min-height: 34px;
   padding: 7px 10px;
   border: 0;
@@ -3567,15 +3551,18 @@ a:focus-visible {
   white-space: nowrap;
 }
 
-.aim-period-group button:last-child {
+.aim-period-group button:last-child,
+.aim-record-context-filter-group button:last-child {
   border-right: 0;
 }
 
-.aim-period-group button:hover {
+.aim-period-group button:hover,
+.aim-record-context-filter-group button:hover {
   background: var(--aim-surface-muted);
 }
 
-.aim-period-group button[aria-pressed="true"] {
+.aim-period-group button[aria-pressed="true"],
+.aim-record-context-filter-group button[aria-pressed="true"] {
   background: var(--aim-form-primary-soft);
   color: var(--aim-form-primary-hover);
   font-weight: 600;
@@ -5403,6 +5390,20 @@ a:focus-visible {
   .aim-record-card-completeness {
     grid-column: 1 / -1;
     margin-top: 1px;
+  }
+
+  .aim-record-context-label-desktop {
+    display: none;
+  }
+
+  .aim-record-context-label-mobile {
+    display: inline-flex;
+    min-height: 16px;
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.1;
   }
 
   .aim-record-card-completeness-label {

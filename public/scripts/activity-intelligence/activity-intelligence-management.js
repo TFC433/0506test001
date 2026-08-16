@@ -184,6 +184,7 @@
       state: 'normal',
       showVoidRecords: false,
       low: false,
+      recordContext: 'all',
       period: 'all',
       start: '',
       end: '',
@@ -1593,9 +1594,6 @@
   function renderActiveIntelligenceRuntimeForm(fields, open) {
     return `
       <section class="aim-active-intelligence-entry" aria-label="主動情報">
-        <div class="aim-active-intelligence-entry-head">
-          <h3>主動情報</h3>
-        </div>
         ${fields.length ? fields.map(field => renderQuickField(field, open)).join('') : '<div class="aim-empty">尚未發布可填寫欄位。</div>'}
       </section>
     `;
@@ -1701,10 +1699,11 @@
     const barWidth = total > 0 ? Math.round(answered / total * 36) : 0;
     const pct = coverage.percent;
     const barColor = pct >= 70 ? '#15803d' : pct >= 40 ? '#b45309' : '#b42318';
-    const completenessHtml = `<span class="aim-record-card-completeness" title="欄位完整度 ${answered}/${total}"><span class="aim-record-card-completeness-label">完整度</span><span class="aim-record-card-completeness-count">${answered}/${total}</span><span class="aim-record-card-completeness-bar" style="--bar-w:${barWidth}px;--bar-color:${barColor}" aria-hidden="true"></span></span>`;
+    const activeBadge = recordIsFieldIntelligence(record);
+    const completenessHtml = `<span class="aim-record-card-completeness" title="欄位完整度 ${answered}/${total}"><span class="aim-record-card-completeness-label">完整度</span><span class="aim-record-card-completeness-count">${answered}/${total}</span><span class="aim-record-card-completeness-bar" style="--bar-w:${barWidth}px;--bar-color:${barColor}" aria-hidden="true"></span>${activeBadge ? '<span class="aim-record-context-label aim-record-context-label-mobile">主動</span>' : ''}</span>`;
     return `<div class="aim-record-card-meta">
       <span class="aim-record-card-activity">${Store.escapeHtml(activity.name)}</span>
-      ${recordIsFieldIntelligence(record) ? '<span class="aim-record-context-label">主動情報</span>' : ''}
+      ${activeBadge ? '<span class="aim-record-context-label aim-record-context-label-desktop">主動情報</span>' : ''}
       <span class="aim-record-card-recorder">${Store.escapeHtml(record.createdByDisplayName)}</span>
       <span class="aim-record-card-time">${Store.formatDateTime(record.createdAt)}</span>
       ${record.status === 'void' ? '<span class="aim-pill aim-pill-void">已作廢</span>' : ''}
@@ -3356,6 +3355,7 @@
     const recorders = unique(recordsFor(activity.id).map(r => r.createdByDisplayName));
     const advancedCount = activeAdvancedFilterCount();
     const periodButtons = recordPeriodOptions(activity).map(([period, label]) => periodButton(period, label)).join('');
+    const contextFilters = renderRecordContextFilters();
     const choiceFilters = renderRecordChoiceFilters(activity);
     const title = scope === 'mine' ? '我的紀錄' : '全部紀錄';
     return `
@@ -3381,6 +3381,7 @@
           <div class="aim-period-group" role="group" aria-label="快速期間篩選">
             ${periodButtons}
           </div>
+          ${contextFilters}
           <button class="aim-button aim-more-filter-button" data-action="toggle-more-filters" aria-expanded="${ui.records.moreOpen}" type="button">更多篩選${advancedCount ? `（${advancedCount}）` : ''}</button>
         </div>
         ${ui.records.customOpen ? `
@@ -3418,6 +3419,15 @@
   function renderRecordListCards(activity, scope, rows) {
     const cards = (rows || []).map(record => renderRecordCard(record, activity, 'all'));
     return cards.join('') || '<div class="aim-empty">沒有符合篩選條件的紀錄。</div>';
+  }
+
+  function renderRecordContextFilters() {
+    const active = ui.records.recordContext === formContextFieldIntelligenceMode;
+    return `
+      <div class="aim-record-context-filter-group" role="group" aria-label="紀錄類型篩選">
+        <button data-action="record-context-filter" data-context="${formContextFieldIntelligenceMode}" aria-pressed="${active}" type="button">主動情報</button>
+      </div>
+    `;
   }
 
   function renderRecordChoiceFilters(activity) {
@@ -4819,6 +4829,7 @@
       if (allowed.includes(el.dataset.scope)) ui.records.scope = el.dataset.scope;
     }
     if (action === 'record-period') setRecordPeriod(el.dataset.period);
+    if (action === 'record-context-filter') toggleRecordContextFilter(el.dataset.context);
     if (action === 'toggle-more-filters') ui.records.moreOpen = !ui.records.moreOpen;
     if (action === 'apply-custom-period' && !applyCustomPeriod()) return;
     if (action === 'clear-custom-period') clearCustomPeriod();
@@ -6054,6 +6065,11 @@
     ui.records.customOpen = false;
   }
 
+  function toggleRecordContextFilter(context) {
+    const next = normalizeFormContext(context);
+    ui.records.recordContext = ui.records.recordContext === next ? 'all' : next;
+  }
+
   function recordPeriodOptions(activity) {
     const days = activityFormOpenDays(activity);
     return [['all', '全部'], ...days.map((date, index) => [`day:${date}`, `Day ${index + 1}`]), ['custom', customPeriodLabel()]];
@@ -6318,6 +6334,7 @@
     const [dateStart, dateEnd] = recordDateRange(activity);
     return recordsFor(activity.id).filter(r => {
       if (scope === 'mine' && r.createdByUserId !== currentUser.userId) return false;
+      if (ui.records.recordContext === formContextFieldIntelligenceMode && !recordIsFieldIntelligence(r)) return false;
       if (!ui.records.showVoidRecords && r.status === 'void') return false;
       if (ui.records.state !== 'all' && (ui.records.state === 'void') !== (r.status === 'void')) return false;
       if (ui.records.recorder !== 'all' && r.createdByDisplayName !== ui.records.recorder) return false;

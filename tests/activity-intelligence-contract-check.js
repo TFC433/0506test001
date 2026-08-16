@@ -682,6 +682,8 @@ function assertRealActiveIntelligenceRuntimeSourceContract(managementSource, css
     assert(managementSource.includes('resetQuickState(formContext)'), 'successful save must clear only the submitted context state');
     assert(managementSource.includes('renderActiveIntelligenceRuntimeForm(fields, open)'), 'active runtime must use the real field list');
     assert(managementSource.includes('fields.map(field => renderQuickField(field, open)).join'), 'active runtime must reuse the generic quick field renderer');
+    assert(managementSource.includes("if (field.type === 'section_heading')"), 'user-defined section_heading items must still render through the generic renderer');
+    assert(!managementSource.includes('aim-active-intelligence-entry-head'), 'system-generated active runtime heading block must be removed');
     assert(!managementSource.includes('renderActiveIntelligenceEntryPrototype'), 'hardcoded active entry prototype renderer must be removed');
     assert(!managementSource.includes('renderActiveIntelligencePrototypeRecordCard'), 'mock active record card renderer must be removed');
     assert(!managementSource.includes('renderActiveIntelligencePrototypeChart'), 'fake active analytics charts must be removed');
@@ -694,11 +696,17 @@ function assertRealActiveIntelligenceRuntimeSourceContract(managementSource, css
     assert(managementSource.includes('firstMissingRequiredAnswer(items, ui.quickAnswers || {}, ui.quickOtherAnswers || {})'), 'required validation must be schema-driven before submission');
     assert(managementSource.includes('itemIsRequired(item)'), 'required validation must read normalized item metadata');
     assert(managementSource.includes('recordContext: formContext'), 'submission payload must explicitly route the selected record context');
+    assert(managementSource.includes('data-action="record-context-filter"'), 'desktop records must expose an active intelligence quick filter');
+    assert(managementSource.includes('ui.records.recordContext === formContextFieldIntelligenceMode && !recordIsFieldIntelligence(r)'), 'active intelligence quick filter must use authoritative recordContext');
+    assert(managementSource.includes("ui.records.recordContext = ui.records.recordContext === next ? 'all' : next;"), 'active intelligence quick filter must compose with existing filters by toggling only context state');
     assert(managementSource.includes('function canUseQuickFormAssist()') && managementSource.includes('if (activeRecordFormContext() === formContextFieldIntelligenceMode) return false;'), 'Visitor Form Assist must not automatically appear in active runtime');
     assert(managementSource.includes('if (recordIsFieldIntelligence(r)) return false;'), 'Visitor analytics must ignore active records');
-    assert(managementSource.includes('recordIsFieldIntelligence(record) ? \'<span class="aim-record-context-label">'), 'real active record cards must use recordContext for visible identity');
+    assert(managementSource.includes('const activeBadge = recordIsFieldIntelligence(record);'), 'real active record cards must use recordContext for visible identity');
     assert(cssSource.includes('.aim-record-card-field-intelligence'), 'real active record cards must receive dedicated light-purple styling');
     assert(cssSource.includes('.aim-record-context-label'), 'active record cards must include a visible context badge');
+    assert(managementSource.includes('aim-record-context-label-mobile">主動</span>'), 'mobile active badge must use short label');
+    assert(cssSource.includes('.aim-record-context-label-desktop') && cssSource.includes('display: none;'), 'mobile layout must hide the desktop active badge');
+    assert(cssSource.includes('.aim-record-context-label-mobile') && cssSource.includes('border-radius: 4px'), 'mobile active badge must use compact rectangular styling');
     assert(managementSource.includes('正式分析尚未啟用'), 'active analytics must be a neutral empty state');
     assert(!cssSource.includes('aim-record-card-active-intelligence-prototype'), 'prototype active record styling must be removed');
     assert(!cssSource.includes('aim-prototype-chart'), 'prototype analytics chart styling must be removed');
