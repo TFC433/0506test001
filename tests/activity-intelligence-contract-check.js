@@ -672,6 +672,38 @@ function assertDualStreamFormBuilderSourceContract(managementSource, apiSource, 
     assert(cssSource.includes('.aim-form-context-tabs'), 'context tabs must have dedicated mobile-safe styling');
 }
 
+function assertRealActiveIntelligenceRuntimeSourceContract(managementSource, cssSource) {
+    assert(managementSource.includes('async function switchRecordContextMode'), 'record-context mode switch must load runtime form context');
+    assert(managementSource.includes('await loadPublishedFormForActivity(activity.id, formContext);'), 'active runtime entry must load the published context bundle');
+    assert(managementSource.includes('const formContext = activeRecordFormContext();'), 'runtime record form context must be derived explicitly');
+    assert(managementSource.includes('return ui.recordContextMode === recordContextActiveMode ? formContextFieldIntelligenceMode : formContextVisitorMode;'), 'active UI mode must map to field_intelligence form context');
+    assert(managementSource.includes('quickStateByContext'), 'quick answers must be isolated by form context');
+    assert(managementSource.includes('syncQuickStateForContext(formContext)'), 'mode switching must point renderer state at the selected context');
+    assert(managementSource.includes('resetQuickState(formContext)'), 'successful save must clear only the submitted context state');
+    assert(managementSource.includes('renderActiveIntelligenceRuntimeForm(fields, open)'), 'active runtime must use the real field list');
+    assert(managementSource.includes('fields.map(field => renderQuickField(field, open)).join'), 'active runtime must reuse the generic quick field renderer');
+    assert(!managementSource.includes('renderActiveIntelligenceEntryPrototype'), 'hardcoded active entry prototype renderer must be removed');
+    assert(!managementSource.includes('renderActiveIntelligencePrototypeRecordCard'), 'mock active record card renderer must be removed');
+    assert(!managementSource.includes('renderActiveIntelligencePrototypeChart'), 'fake active analytics charts must be removed');
+    assert(!managementSource.includes('aim-active-company'), 'hardcoded active company field must be removed');
+    assert(!managementSource.includes('aim-active-followup'), 'hardcoded active follow-up field must be removed');
+    assert(!managementSource.includes('aim-active-note'), 'hardcoded active note field must be removed');
+    assert(!managementSource.includes('產品需求'), 'active runtime must not hardcode business schema options');
+    assert(!managementSource.includes('技術討論'), 'active runtime must not hardcode business schema options');
+    assert(!managementSource.includes('展品回饋'), 'active runtime must not hardcode business schema options');
+    assert(managementSource.includes('firstMissingRequiredAnswer(items, ui.quickAnswers || {}, ui.quickOtherAnswers || {})'), 'required validation must be schema-driven before submission');
+    assert(managementSource.includes('itemIsRequired(item)'), 'required validation must read normalized item metadata');
+    assert(managementSource.includes('recordContext: formContext'), 'submission payload must explicitly route the selected record context');
+    assert(managementSource.includes('function canUseQuickFormAssist()') && managementSource.includes('if (activeRecordFormContext() === formContextFieldIntelligenceMode) return false;'), 'Visitor Form Assist must not automatically appear in active runtime');
+    assert(managementSource.includes('if (recordIsFieldIntelligence(r)) return false;'), 'Visitor analytics must ignore active records');
+    assert(managementSource.includes('recordIsFieldIntelligence(record) ? \'<span class="aim-record-context-label">'), 'real active record cards must use recordContext for visible identity');
+    assert(cssSource.includes('.aim-record-card-field-intelligence'), 'real active record cards must receive dedicated light-purple styling');
+    assert(cssSource.includes('.aim-record-context-label'), 'active record cards must include a visible context badge');
+    assert(managementSource.includes('正式分析尚未啟用'), 'active analytics must be a neutral empty state');
+    assert(!cssSource.includes('aim-record-card-active-intelligence-prototype'), 'prototype active record styling must be removed');
+    assert(!cssSource.includes('aim-prototype-chart'), 'prototype analytics chart styling must be removed');
+}
+
 async function main() {
     const { service, calls, publishedItems } = makeHarness();
 
@@ -1346,6 +1378,7 @@ async function main() {
     assertMobileAnalyticsBreakpointRerenderContract(managementSource);
     assertContextFoundationSqlContract(activityIntelligenceSqlSource);
     assertDualStreamFormBuilderSourceContract(managementSource, apiSource, cssSource);
+    assertRealActiveIntelligenceRuntimeSourceContract(managementSource, cssSource);
     assert(managementSource.includes("if (ui.analytics.ai.state === 'loading') return;"));
     assert(managementSource.includes("state === 'loading'"));
     assert(!managementSource.includes('FORM_GEMINI_API_KEY'));

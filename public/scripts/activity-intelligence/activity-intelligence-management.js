@@ -104,6 +104,16 @@
     [formContextFieldIntelligenceMode]: '主動情報'
   });
 
+  function defaultQuickEntryState() {
+    return {
+      answers: {},
+      otherAnswers: {},
+      optionNotes: {},
+      optionNoteExpanded: {},
+      cardLink: { linked: false, cardId: null, card: null }
+    };
+  }
+
   let state = { activities: [], records: [], selectedActivityId: null };
   let currentUser = null;
   const formBundles = new Map();
@@ -139,6 +149,10 @@
     mobileAnalysisMode: false,
     recordContextMode: recordContextVisitorMode,
     analyticsScope: recordContextVisitorMode,
+    quickStateByContext: {
+      [formContextVisitorMode]: defaultQuickEntryState(),
+      [formContextFieldIntelligenceMode]: defaultQuickEntryState()
+    },
     formPreviewAnswers: {},
     formPreviewCardLinked: false,
     formPreviewCardVariant: 'default',
@@ -182,6 +196,7 @@
     analyticsAiPresetDrafts: [...analyticsAiDefaultPresets],
     analyticsAiPresetDraftActivityId: ''
   };
+  syncQuickStateForContext(formContextVisitorMode);
 
   init();
 
@@ -271,11 +286,8 @@
     ui.view = isMobileFormViewport() ? 'guestWorkspace' : 'guestDesktopBlocked';
     ui.tab = 'records';
     ui.records.scope = 'entry';
-    ui.quickAnswers = {};
-    ui.quickOtherAnswers = {};
-    ui.quickOptionNotes = {};
-    ui.quickOptionNoteExpanded = {};
-    ui.quickCardLink = { linked: false, cardId: null, card: null };
+    ui.recordContextMode = recordContextVisitorMode;
+    resetAllQuickStates();
     state.records = [];
     recordLoadState.clear();
 
@@ -437,6 +449,54 @@
   function currentFormContext() {
     ui.formContext = normalizeFormContext(ui.formContext);
     return ui.formContext;
+  }
+
+  function activeRecordFormContext() {
+    return ui.recordContextMode === recordContextActiveMode ? formContextFieldIntelligenceMode : formContextVisitorMode;
+  }
+
+  function recordIsFieldIntelligence(record) {
+    return normalizeFormContext(record && record.recordContext) === formContextFieldIntelligenceMode;
+  }
+
+  function quickStateForContext(formContext) {
+    const context = normalizeFormContext(formContext);
+    if (!ui.quickStateByContext) ui.quickStateByContext = {};
+    if (!ui.quickStateByContext[context]) ui.quickStateByContext[context] = defaultQuickEntryState();
+    return ui.quickStateByContext[context];
+  }
+
+  function syncQuickStateForContext(formContext) {
+    const stateForContext = quickStateForContext(formContext);
+    ui.quickAnswers = stateForContext.answers;
+    ui.quickOtherAnswers = stateForContext.otherAnswers;
+    ui.quickOptionNotes = stateForContext.optionNotes;
+    ui.quickOptionNoteExpanded = stateForContext.optionNoteExpanded;
+    ui.quickCardLink = stateForContext.cardLink;
+    return stateForContext;
+  }
+
+  function resetQuickState(formContext) {
+    const context = normalizeFormContext(formContext);
+    ui.quickStateByContext = {
+      ...(ui.quickStateByContext || {}),
+      [context]: defaultQuickEntryState()
+    };
+    return syncQuickStateForContext(context);
+  }
+
+  function resetAllQuickStates() {
+    ui.quickStateByContext = {
+      [formContextVisitorMode]: defaultQuickEntryState(),
+      [formContextFieldIntelligenceMode]: defaultQuickEntryState()
+    };
+    return syncQuickStateForContext(activeRecordFormContext());
+  }
+
+  function setQuickCardLinkState(cardLink) {
+    const stateForContext = quickStateForContext(activeRecordFormContext());
+    stateForContext.cardLink = cleanCardLink(cardLink);
+    syncQuickStateForContext(activeRecordFormContext());
   }
 
   function normalizeFormBundleDto(form) {
@@ -639,9 +699,8 @@
       const open = openActivities();
       ui.tab = 'records';
       ui.records.scope = 'entry';
-      ui.quickAnswers = {};
-      ui.quickOptionNotes = {};
-      ui.quickOptionNoteExpanded = {};
+      ui.recordContextMode = recordContextVisitorMode;
+      resetAllQuickStates();
       if (open.length === 1) {
         ui.selectedActivityId = open[0].id;
         ui.view = 'workspace';
@@ -658,9 +717,8 @@
       const open = openActivities();
       ui.tab = 'records';
       ui.records.scope = 'entry';
-      ui.quickAnswers = {};
-      ui.quickOptionNotes = {};
-      ui.quickOptionNoteExpanded = {};
+      ui.recordContextMode = recordContextVisitorMode;
+      resetAllQuickStates();
       if (open.length === 1) {
         ui.selectedActivityId = open[0].id;
         ui.view = 'workspace';
@@ -682,11 +740,8 @@
     const open = openActivities();
     ui.tab = 'records';
     ui.records.scope = 'entry';
-    ui.quickAnswers = {};
-    ui.quickOtherAnswers = {};
-    ui.quickOptionNotes = {};
-    ui.quickOptionNoteExpanded = {};
-    ui.quickCardLink = { linked: false, cardId: null, card: null };
+    ui.recordContextMode = recordContextVisitorMode;
+    resetAllQuickStates();
     if (open.length === 1) {
       ui.selectedActivityId = open[0].id;
       ui.view = 'guestWorkspace';
@@ -1470,9 +1525,9 @@
           <div class="aim-answer-list">
             ${renderQuickEntryAnswerContent(activity, open)}
           </div>
-          ${ui.recordContextMode === recordContextActiveMode ? '' : `<div class="aim-entry-save-actions">
-            <button class="aim-button aim-button-primary" data-action="quick-save-next" ${open ? '' : 'disabled'} type="button">儲存並繼續新增</button>
-          </div>`}
+          <div class="aim-entry-save-actions">
+            <button class="aim-button aim-button-primary" data-action="quick-save-next" ${open ? '' : 'disabled'} type="button">${ui.recordContextMode === recordContextActiveMode ? '儲存主動情報' : '儲存並繼續新增'}</button>
+          </div>
         </div>
         <aside class="aim-panel aim-entry-context aim-personal-records" aria-live="polite">
           <div class="aim-personal-records-head">
@@ -1492,8 +1547,9 @@
     const expanded = ui.expandedRecords[context].has(record.id) && canViewRecord(record, activity);
     const preview = recordPreview(record, activity);
     const coverage = recordCoverage(record, activity);
+    const contextClass = recordIsFieldIntelligence(record) ? 'aim-record-card-field-intelligence' : '';
     return `
-      <article class="aim-latest-item aim-record-card aim-record-card-${context} ${record.status === 'void' ? 'aim-record-card-void' : ''}">
+      <article class="aim-latest-item aim-record-card aim-record-card-${context} ${contextClass} ${record.status === 'void' ? 'aim-record-card-void' : ''}">
         <div class="aim-record-card-summary">
           <div class="aim-record-card-copy">
             ${renderRecordCardMeta(record, activity, coverage)}
@@ -1529,47 +1585,18 @@
   }
 
   function renderQuickEntryAnswerContent(activity, open) {
-    if (ui.recordContextMode === recordContextActiveMode) return renderActiveIntelligenceEntryPrototype(activity);
-    return quickEntryFields(activity).map(field => renderQuickField(field, open)).join('');
+    const fields = quickEntryFields(activity, activeRecordFormContext());
+    if (ui.recordContextMode === recordContextActiveMode) return renderActiveIntelligenceRuntimeForm(fields, open);
+    return fields.map(field => renderQuickField(field, open)).join('');
   }
 
-  function renderEntryActivityBanner(activity) {
-    return quickEntryFields(activity)
-      .filter(field => field.type === 'form_thumbnail')
-      .map(field => renderQuickField(field, true))
-      .join('');
-  }
-
-  function renderActiveIntelligenceEntryPrototype(activity) {
+  function renderActiveIntelligenceRuntimeForm(fields, open) {
     return `
-      ${renderEntryActivityBanner(activity)}
-      <section class="aim-active-intelligence-entry" aria-label="主動情報原型">
+      <section class="aim-active-intelligence-entry" aria-label="主動情報">
         <div class="aim-active-intelligence-entry-head">
           <h3>主動情報</h3>
-          <p>此區目前僅供版面與互動評估，不會建立表單紀錄。</p>
         </div>
-        <div class="aim-field">
-          <label for="aim-active-company">公司 / 單位</label>
-          <input class="aim-input aim-active-intelligence-input" id="aim-active-company" placeholder="輸入公司或單位">
-        </div>
-        <div class="aim-field">
-          <span class="aim-field-title">情報類型</span>
-          <div class="aim-runtime-choice-list">
-            ${['產品需求', '技術討論', '展品回饋', '其他'].map((label, index) => `<label class="aim-checkbox"><input type="radio" name="aim-active-intelligence-type" ${index === 0 ? 'checked' : ''}> ${Store.escapeHtml(label)}</label>`).join('')}
-          </div>
-        </div>
-        <div class="aim-field">
-          <label for="aim-active-followup">後續追蹤需求</label>
-          <select class="aim-select aim-active-intelligence-input" id="aim-active-followup">
-            ${option('next', '需要安排後續聯繫', 'next')}
-            ${option('watch', '先保留觀察', 'next')}
-            ${option('none', '暫無後續', 'next')}
-          </select>
-        </div>
-        <div class="aim-field">
-          <label for="aim-active-note">情報紀錄</label>
-          <textarea class="aim-textarea aim-auto-grow aim-active-intelligence-input" id="aim-active-note" rows="2" placeholder="記錄現場觀察、需求線索或待確認事項"></textarea>
-        </div>
+        ${fields.length ? fields.map(field => renderQuickField(field, open)).join('') : '<div class="aim-empty">尚未發布可填寫欄位。</div>'}
       </section>
     `;
   }
@@ -1677,6 +1704,7 @@
     const completenessHtml = `<span class="aim-record-card-completeness" title="欄位完整度 ${answered}/${total}"><span class="aim-record-card-completeness-label">完整度</span><span class="aim-record-card-completeness-count">${answered}/${total}</span><span class="aim-record-card-completeness-bar" style="--bar-w:${barWidth}px;--bar-color:${barColor}" aria-hidden="true"></span></span>`;
     return `<div class="aim-record-card-meta">
       <span class="aim-record-card-activity">${Store.escapeHtml(activity.name)}</span>
+      ${recordIsFieldIntelligence(record) ? '<span class="aim-record-context-label">主動情報</span>' : ''}
       <span class="aim-record-card-recorder">${Store.escapeHtml(record.createdByDisplayName)}</span>
       <span class="aim-record-card-time">${Store.formatDateTime(record.createdAt)}</span>
       ${record.status === 'void' ? '<span class="aim-pill aim-pill-void">已作廢</span>' : ''}
@@ -1777,8 +1805,8 @@
     return ['yes_no', 'single_choice', 'multiple_choice', 'dropdown', 'boolean', 'checkbox', 'toggle'].includes(field.type);
   }
 
-  function quickEntryFields(activity) {
-    return publishedRecordItems(activity);
+  function quickEntryFields(activity, formContext) {
+    return publishedRecordItems(activity, formContext || activeRecordFormContext());
   }
 
   function legacyQuickEntryFields(activity) {
@@ -1787,14 +1815,18 @@
     return fields;
   }
 
-  function recordEditFields(activity) {
-    const fields = activity.formFields.filter(field => field.visible || field.retired);
+  function recordEditFields(activity, formContext) {
+    const context = normalizeFormContext(formContext);
+    const source = context === formContextVisitorMode
+      ? (activity.formFields || [])
+      : ((formDesign(activity, context).published && formDesign(activity, context).published.items) || []);
+    const fields = source.filter(field => field.visible || field.retired);
     if (fields[0] && fields[0].type === 'section_heading' && fields[0].title === '基本資訊') return fields.slice(1);
     return fields;
   }
 
-  function publishedRecordItems(activity) {
-    const design = formDesign(activity);
+  function publishedRecordItems(activity, formContext) {
+    const design = formDesign(activity, formContext || formContextVisitorMode);
     return Store.clone(design.published.items || []).map(normalizeDesignerItem).filter(item => item.visible !== false && !item.retired && !item.removedInDraft);
   }
 
@@ -1806,7 +1838,7 @@
     if (record && record.formRuntimeSnapshot && Array.isArray(record.formRuntimeSnapshot.items)) {
       return record.formRuntimeSnapshot.items.map(normalizeDesignerItem);
     }
-    return recordEditFields(activity);
+    return recordEditFields(activity, record && record.recordContext);
   }
 
   function otherAnswersForRecord(record) {
@@ -2003,6 +2035,7 @@
 
   function canUseQuickFormAssist() {
     if (!currentUser || !currentUser.authenticated || isGuestUser()) return false;
+    if (activeRecordFormContext() === formContextFieldIntelligenceMode) return false;
     const fields = quickFormAssistFieldMap();
     return Boolean(fields.customerName || fields.companyName);
   }
@@ -2340,6 +2373,7 @@
       optionEntries: entries,
       allowOther: Boolean(item.allowOther || (item.settings && item.settings.allowOther)),
       allowOptionNotes,
+      required: Boolean(item.required || item.isRequired || item.is_required || sourceSettings.required || sourceSettings.isRequired),
       settings,
       previewPlacement,
       visible: item.visible !== false,
@@ -3383,39 +3417,7 @@
 
   function renderRecordListCards(activity, scope, rows) {
     const cards = (rows || []).map(record => renderRecordCard(record, activity, 'all'));
-    if (scope === 'all') cards.push(renderActiveIntelligencePrototypeRecordCard(activity));
     return cards.join('') || '<div class="aim-empty">沒有符合篩選條件的紀錄。</div>';
-  }
-
-  function renderActiveIntelligencePrototypeRecordCard(activity) {
-    return `
-      <article class="aim-latest-item aim-record-card aim-record-card-all aim-record-card-active-intelligence-prototype" aria-label="主動情報原型紀錄">
-        <div class="aim-record-card-summary">
-          <div class="aim-record-card-copy">
-            <div class="aim-record-card-meta">
-              <span class="aim-record-card-activity">${Store.escapeHtml(activity.name)}</span>
-              <span class="aim-record-context-label">主動情報</span>
-              <span class="aim-record-card-time">版面示範</span>
-            </div>
-            <div class="aim-record-card-identity-row">
-              <div class="aim-record-card-primary">
-                <strong>智慧製造需求線索</strong>
-                <span class="aim-record-card-company">示範公司</span>
-                <span class="aim-preview-sep" aria-hidden="true">|</span>
-                <span class="aim-record-card-status-group"><span class="aim-record-preview-label">後續追蹤</span><span class="aim-pill aim-pill-medium">待確認</span></span>
-              </div>
-            </div>
-            <div class="aim-record-preview-content">
-              <div class="aim-record-preview-badges">
-                <span class="aim-answer-badge aim-answer-badge-field-2">產品需求</span>
-                <span class="aim-answer-badge aim-answer-badge-field-3">技術討論</span>
-              </div>
-              <p class="aim-record-preview-text"><span>現場對自動化產線資料整合有興趣，待業務確認後續聯繫。</span></p>
-            </div>
-          </div>
-        </div>
-      </article>
-    `;
   }
 
   function renderRecordChoiceFilters(activity) {
@@ -3450,9 +3452,8 @@
     const scopeSelector = renderAnalyticsScopeSelector();
     if (ui.analyticsScope === recordContextActiveMode) {
       return `
-        ${assistant}
         ${scopeSelector}
-        ${renderActiveIntelligenceAnalyticsPrototype(false)}
+        ${renderActiveIntelligenceAnalyticsEmptyState(false)}
       `;
     }
     const metrics = analyticsMetrics(activity, records);
@@ -3472,9 +3473,8 @@
     if (ui.analyticsScope === recordContextActiveMode) {
       return `
         <section class="aim-mobile-analysis" aria-label="行動數據分析">
-          ${renderMobileAnalyticsAiPanel(activity, records)}
           ${renderAnalyticsScopeSelector()}
-          ${renderActiveIntelligenceAnalyticsPrototype(true)}
+          ${renderActiveIntelligenceAnalyticsEmptyState(true)}
         </section>
       `;
     }
@@ -3506,38 +3506,14 @@
     `;
   }
 
-  function renderActiveIntelligenceAnalyticsPrototype(mobile) {
-    const chartClass = mobile ? 'aim-mobile-analysis-chart-feed' : 'aim-chart-grid';
+  function renderActiveIntelligenceAnalyticsEmptyState(mobile) {
     return `
-      <section class="aim-active-intelligence-analytics" aria-label="主動情報分析原型">
-        <div class="${mobile ? 'aim-mobile-analysis-kpi-grid' : 'aim-kpi-grid aim-analytics-kpi-row'}">
-          <div class="aim-kpi"><span>主動情報</span><strong>--</strong></div>
-          <div class="aim-kpi"><span>待追蹤項目</span><strong>--</strong></div>
-          <div class="aim-kpi"><span>本週新增</span><strong>--</strong></div>
-          <div class="aim-kpi"><span>高優先潛在案</span><strong>--</strong></div>
-        </div>
-        <div class="${chartClass}">
-          ${renderActiveIntelligencePrototypeChart('情報類型', ['產品需求', '技術討論', '展品回饋'])}
-          ${renderActiveIntelligencePrototypeChart('後續追蹤需求', ['需要聯繫', '保留觀察', '暫無後續'])}
-          ${renderActiveIntelligencePrototypeChart('公司 / 單位', ['既有客戶', '新名單', '合作夥伴'])}
+      <section class="aim-active-intelligence-analytics" aria-label="主動情報分析">
+        <div class="aim-panel aim-active-intelligence-analytics-empty ${mobile ? 'aim-mobile-active-intelligence-analytics-empty' : ''}">
+          <h2>主動情報分析</h2>
+          <p>正式分析尚未啟用。</p>
         </div>
       </section>
-    `;
-  }
-
-  function renderActiveIntelligencePrototypeChart(title, rows) {
-    return `
-      <div class="aim-panel aim-analytics-chart-card aim-active-intelligence-chart-card">
-        <div class="aim-analytics-chart-head">
-          <div class="aim-analytics-chart-title">
-            <h2>${Store.escapeHtml(title)}</h2>
-            <span>暫無正式資料</span>
-          </div>
-        </div>
-        <div class="aim-prototype-chart-bars">
-          ${rows.map((label, index) => `<div class="aim-prototype-chart-row"><span>${Store.escapeHtml(label)}</span><i style="--bar-w:${42 + (index * 18)}%"></i><strong>--</strong></div>`).join('')}
-        </div>
-      </div>
     `;
   }
 
@@ -4815,7 +4791,7 @@
       ui.analyticsChartModal = null;
     }
     if (action === 'record-context-mode') {
-      ui.recordContextMode = el.dataset.mode === recordContextActiveMode ? recordContextActiveMode : recordContextVisitorMode;
+      await switchRecordContextMode(el.dataset.mode);
     }
     if (action === 'analytics-scope') {
       disposeActivityAnalyticsCharts();
@@ -5170,6 +5146,21 @@
     toast('請先套用至草稿或取消目前修改。');
     render();
     return true;
+  }
+
+  async function switchRecordContextMode(mode) {
+    const nextMode = mode === recordContextActiveMode ? recordContextActiveMode : recordContextVisitorMode;
+    ui.recordContextMode = nextMode;
+    const formContext = activeRecordFormContext();
+    syncQuickStateForContext(formContext);
+    resetFormAssistState();
+    const activity = selectedActivity();
+    if (!activity) return;
+    try {
+      await loadPublishedFormForActivity(activity.id, formContext);
+    } catch (error) {
+      toast(error.message || 'Published form load failed.');
+    }
   }
 
   async function switchFormDesignContext(formContext) {
@@ -6342,6 +6333,7 @@
   function analyticsRecords(activity) {
     return recordsFor(activity.id).filter(r => {
       if (r.status === 'void') return false;
+      if (recordIsFieldIntelligence(r)) return false;
       return true;
     });
   }
@@ -6725,6 +6717,7 @@
         settings: {
           ...(normalized.settings || {}),
           ...(normalized.previewPlacement ? { previewPlacement: normalized.previewPlacement } : {}),
+          ...(normalized.required ? { required: true } : {}),
           ...(normalized.thumbnailTitle !== undefined ? { thumbnailTitle: normalized.thumbnailTitle } : {}),
           ...(normalized.altText !== undefined ? { altText: normalized.altText } : {}),
           ...(normalized.thumbnailVariant !== undefined ? { thumbnailVariant: normalized.thumbnailVariant } : {})
@@ -7071,7 +7064,7 @@
   function linkQuickAssistCard(card) {
     const normalized = normalizeRawCard(card);
     if (!normalized || !normalized.cardId) return false;
-    ui.quickCardLink = { linked: true, cardId: normalized.cardId, card: normalized };
+    setQuickCardLinkState({ linked: true, cardId: normalized.cardId, card: normalized });
     return true;
   }
 
@@ -7186,7 +7179,7 @@
     if (!linked) {
       const next = { linked: false, cardId: null, card: null };
       if (context === 'drawer' && ui.drawer) ui.drawer.workingCardLink = next;
-      else if (context === 'quick') ui.quickCardLink = next;
+      else if (context === 'quick') setQuickCardLinkState(next);
       return;
     }
     try {
@@ -7222,7 +7215,7 @@
     }
     const next = { linked: true, cardId: card.cardId, card };
     if (context === 'drawer' && ui.drawer) ui.drawer.workingCardLink = next;
-    else if (context === 'quick') ui.quickCardLink = next;
+    else if (context === 'quick') setQuickCardLinkState(next);
     ui.cardPicker = null;
   }
 
@@ -7266,23 +7259,23 @@
     const activity = selectedActivity();
     if (!canCreateRecord(activity)) return toast('表單目前未開放，無法新增紀錄。');
     if (writeInFlight) return;
-    const items = publishedRecordItems(activity);
+    const formContext = activeRecordFormContext();
+    const items = publishedRecordItems(activity, formContext);
+    const requiredError = firstMissingRequiredAnswer(items, ui.quickAnswers || {}, ui.quickOtherAnswers || {});
+    if (requiredError) return toast(`請填寫必填欄位：${requiredError.title}`);
     writeInFlight = true;
     try {
       const answers = cleanAnswersForItems(ui.quickAnswers || {}, items);
       const cardLink = cleanCardLink(ui.quickCardLink);
       const submission = await window.ActivityIntelligenceApi.createSubmission(activity.id, {
+        recordContext: formContext,
         answers: payloadAnswersForItems(answers, items, ui.quickOptionNotes || {}),
         otherAnswers: cleanOtherAnswers(ui.quickOtherAnswers || {}, ui.quickAnswers || {}, items),
         cardId: isGuestUser() ? null : (cardLink.cardId || null)
       });
       if (!isGuestUser()) replaceRecord(submission);
       else recordLoadState.delete(`guest-own:${activity.id}`);
-      ui.quickAnswers = {};
-      ui.quickOtherAnswers = {};
-      ui.quickOptionNotes = {};
-      ui.quickOptionNoteExpanded = {};
-      ui.quickCardLink = { linked: false, cardId: null, card: null };
+      resetQuickState(formContext);
       resetFormAssistState();
       ui.focusQuickFirst = true;
       ui.tab = 'records';
@@ -7317,6 +7310,31 @@
     } finally {
       writeInFlight = false;
     }
+  }
+
+  function firstMissingRequiredAnswer(items, answers, otherAnswers) {
+    return answerProducingItems(items).find(item => itemIsRequired(item) && !answerSatisfiesRequired(item, answers, otherAnswers)) || null;
+  }
+
+  function itemIsRequired(item) {
+    const settings = item && item.settings && typeof item.settings === 'object' ? item.settings : {};
+    return Boolean(item && (item.required || item.isRequired || item.is_required || settings.required || settings.isRequired || settings.is_required));
+  }
+
+  function answerSatisfiesRequired(item, answers, otherAnswers) {
+    const value = answers && answers[item.fieldId];
+    if (Array.isArray(value)) {
+      const selected = value.filter(entry => String(entry || '').trim());
+      if (!selected.length) return false;
+      if (selected.length === 1 && selected[0] === otherAnswerValue && item.allowOther) {
+        return Boolean(String((otherAnswers && otherAnswers[item.fieldId]) || '').trim());
+      }
+      return true;
+    }
+    if (typeof value === 'boolean') return true;
+    if (!String(value || '').trim()) return false;
+    if (value === otherAnswerValue && item.allowOther) return Boolean(String((otherAnswers && otherAnswers[item.fieldId]) || '').trim());
+    return true;
   }
 
   function payloadAnswersForItems(answers, items, optionNotes) {
