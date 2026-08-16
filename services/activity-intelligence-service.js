@@ -219,6 +219,9 @@ class ActivityIntelligenceService {
         await this._requireActivity(activityId);
         const actor = this._actorFromUser(user);
         const context = this._normalizeFormContext(formContext);
+        const draft = await this.reader.getDraftForm(activityId, context);
+        if (!draft) throw new ActivityIntelligenceError(404, 'Draft form not found.', 'DRAFT_NOT_FOUND');
+        this._assertCardAssistRoleUniqueness((draft.items || []).map(item => this._normalizeFormItemForValidation(item)));
 
         await this.writer.publishDraft({
             p_activity_id: activityId,
@@ -617,9 +620,15 @@ class ActivityIntelligenceService {
         const thumbnails = normalized.filter(item => item.item_type === 'form_thumbnail').length;
         if (cardLinks > 1) throw new ActivityIntelligenceError(400, 'Only one card_link item is allowed.', 'DUPLICATE_CARD_LINK');
         if (thumbnails > 1) throw new ActivityIntelligenceError(400, 'Only one form_thumbnail item is allowed.', 'DUPLICATE_FORM_THUMBNAIL');
-        this._assertCardAssistRoleUniqueness(normalized);
 
         return normalized;
+    }
+
+    _normalizeFormItemForValidation(item = {}) {
+        return {
+            item_type: item.item_type || item.itemType || item.type,
+            settings: item.settings && typeof item.settings === 'object' ? item.settings : {}
+        };
     }
 
     _assertCardAssistRoleUniqueness(items) {

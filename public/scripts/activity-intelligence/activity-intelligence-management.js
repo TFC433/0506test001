@@ -5381,14 +5381,6 @@
     }
     const index = design.draft.items.findIndex(f => designerItemKey(f) === designerItemKey(draft));
     if (index < 0) return;
-    const nextItems = design.draft.items.slice();
-    nextItems[index] = draft;
-    const duplicate = duplicateCardAssistRoleItem(nextItems);
-    if (duplicate) {
-      ui.formDesignMessage = '同一段落內同一個名片資料欄位只能指定一次。';
-      render();
-      return;
-    }
     design.draft.items[index] = draft;
     ui.formDesignDraft = Store.clone(draft);
     ui.formDesignDraftDirty = false;

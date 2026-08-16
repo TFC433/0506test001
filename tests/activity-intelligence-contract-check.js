@@ -98,6 +98,7 @@ function makeHarness(options = {}) {
     const submissions = new Map();
     const missingFormContexts = new Set(options.missingFormContexts || []);
     const initializedFormContexts = new Set(options.initializedFormContexts || []);
+    const draftItemsByContext = options.draftItemsByContext || {};
 
     const itemsForFormContext = formContext => formContext === 'field_intelligence' ? [] : publishedItems;
     const formBundleForContext = (activityId, formContext = 'visitor') => {
@@ -105,9 +106,10 @@ function makeHarness(options = {}) {
             return { published: null, draft: null };
         }
         const items = itemsForFormContext(formContext);
+        const draftItems = draftItemsByContext[formContext] || items;
         return {
             published: { versionId: IDS.publishedVersion, formContext, versionNumber: 1, publishedAt: '2026-08-01T00:00:00.000Z', items },
-            draft: { versionId: IDS.draftVersion, formContext, versionNumber: 2, items: items.map(item => ({ ...item })) }
+            draft: { versionId: IDS.draftVersion, formContext, versionNumber: 2, items: draftItems.map(item => ({ ...item })) }
         };
     };
 
@@ -710,7 +712,7 @@ function assertRealActiveIntelligenceRuntimeSourceContract(managementSource, css
     assert(managementSource.includes("if (field.type === 'section_heading') break;"), 'Card Assist section scan must stop at the next section heading');
     assert(managementSource.includes('data-section="${Store.escapeHtml(field.fieldId)}"'), 'Card Assist button must carry the triggering section id');
     assert(managementSource.includes('importQuickAssistCard(card, ui.cardPicker && ui.cardPicker.sectionId)'), 'existing card picker must import only into the triggering section');
-    assert(managementSource.includes('duplicateCardAssistRoleItem'), 'duplicate Card Assist roles must be rejected');
+    assert(managementSource.includes('duplicateCardAssistRoleItem'), 'duplicate Card Assist roles must be caught before publish');
     assert(managementSource.includes('if (recordIsFieldIntelligence(r)) return false;'), 'Visitor analytics must ignore active records');
     assert(managementSource.includes('const activeBadge = recordIsFieldIntelligence(record);'), 'real active record cards must use recordContext for visible identity');
     assert(cssSource.includes('.aim-record-card-field-intelligence'), 'real active record cards must receive dedicated light-purple styling');
@@ -870,14 +872,60 @@ async function main() {
     assert.strictEqual(contextHarness.calls.saveDraft.p_items[1].settings.cardAssistField, 'person_name');
     assert.strictEqual(contextHarness.calls.saveDraft.p_items[3].settings.cardAssistField, 'person_name');
     assert(!contextHarness.calls.saveDraft.p_items[4].settings.cardAssistField);
-    await assertRejectsCode(() => contextHarness.service.saveDraft(IDS.activity, {
+    await contextHarness.service.saveDraft(IDS.activity, {
         formContext: 'field_intelligence',
         items: [
             { itemKey: IDS.textKey, type: 'section_heading', title: 'Dup', settings: { enableCardAssist: true } },
             { itemKey: IDS.numberKey, type: 'short_text', title: 'One', settings: { cardAssistField: 'person_name' } },
             { itemKey: IDS.boolKey, type: 'short_text', title: 'Two', settings: { cardAssistField: 'person_name' } }
         ]
-    }, actor()), 'DUPLICATE_CARD_ASSIST_FIELD');
+    }, actor());
+    assert.strictEqual(contextHarness.calls.saveDraft.p_items[1].settings.cardAssistField, 'person_name');
+    assert.strictEqual(contextHarness.calls.saveDraft.p_items[2].settings.cardAssistField, 'person_name');
+    const cardAssistDraftVariants = {
+        none: [
+            { itemKey: IDS.textKey, type: 'section_heading', title: 'Off', settings: { enableCardAssist: false } }
+        ],
+        zero: [
+            { itemKey: IDS.textKey, type: 'section_heading', title: 'Empty', settings: { enableCardAssist: true } }
+        ],
+        one: [
+            { itemKey: IDS.textKey, type: 'section_heading', title: 'One', settings: { enableCardAssist: true } },
+            { itemKey: IDS.numberKey, type: 'short_text', title: 'A', settings: { cardAssistField: 'person_name' } }
+        ],
+        two: [
+            { itemKey: IDS.textKey, type: 'section_heading', title: 'Two', settings: { enableCardAssist: true } },
+            { itemKey: IDS.numberKey, type: 'short_text', title: 'A', settings: { cardAssistField: 'person_name' } },
+            { itemKey: IDS.boolKey, type: 'short_text', title: 'B', settings: { cardAssistField: 'company_name' } }
+        ],
+        three: [
+            { itemKey: IDS.textKey, type: 'section_heading', title: 'Three', settings: { enableCardAssist: true } },
+            { itemKey: IDS.numberKey, type: 'short_text', title: 'A', settings: { cardAssistField: 'person_name' } },
+            { itemKey: IDS.boolKey, type: 'short_text', title: 'B', settings: { cardAssistField: 'job_title' } },
+            { itemKey: IDS.choiceKey, type: 'short_text', title: 'C', settings: { cardAssistField: 'company_name' } }
+        ],
+        reused: [
+            { itemKey: IDS.textKey, type: 'section_heading', title: 'A', settings: { enableCardAssist: true } },
+            { itemKey: IDS.numberKey, type: 'short_text', title: 'A1', settings: { cardAssistField: 'person_name' } },
+            { itemKey: IDS.boolKey, type: 'section_heading', title: 'B', settings: { enableCardAssist: true } },
+            { itemKey: IDS.choiceKey, type: 'short_text', title: 'B1', settings: { cardAssistField: 'person_name' } }
+        ]
+    };
+    for (const draftItems of Object.values(cardAssistDraftVariants)) {
+        const publishHarness = makeHarness({ draftItemsByContext: { field_intelligence: draftItems } });
+        await publishHarness.service.publishDraft(IDS.activity, actor(), 'field_intelligence');
+        assert.strictEqual(publishHarness.calls.publishDraft.p_form_context, 'field_intelligence');
+    }
+    const duplicatePublishHarness = makeHarness({
+        draftItemsByContext: {
+            field_intelligence: [
+                { itemKey: IDS.textKey, type: 'section_heading', title: 'Dup', settings: { enableCardAssist: true } },
+                { itemKey: IDS.numberKey, type: 'short_text', title: 'One', settings: { cardAssistField: 'person_name' } },
+                { itemKey: IDS.boolKey, type: 'short_text', title: 'Two', settings: { cardAssistField: 'person_name' } }
+            ]
+        }
+    });
+    await assertRejectsCode(() => duplicatePublishHarness.service.publishDraft(IDS.activity, actor(), 'field_intelligence'), 'DUPLICATE_CARD_ASSIST_FIELD');
     await contextHarness.service.publishDraft(IDS.activity, actor(), 'field_intelligence');
     assert.strictEqual(contextHarness.calls.publishDraft.p_form_context, 'field_intelligence');
     await contextHarness.service.createSubmission(IDS.activity, {
