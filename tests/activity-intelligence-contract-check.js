@@ -713,17 +713,161 @@ function assertRealActiveIntelligenceRuntimeSourceContract(managementSource, css
     assert(managementSource.includes('data-section="${Store.escapeHtml(field.fieldId)}"'), 'Card Assist button must carry the triggering section id');
     assert(managementSource.includes('importQuickAssistCard(card, ui.cardPicker && ui.cardPicker.sectionId)'), 'existing card picker must import only into the triggering section');
     assert(managementSource.includes('duplicateCardAssistRoleItem'), 'duplicate Card Assist roles must be caught before publish');
-    assert(managementSource.includes('if (recordIsFieldIntelligence(r)) return false;'), 'Visitor analytics must ignore active records');
     assert(managementSource.includes('const activeBadge = recordIsFieldIntelligence(record);'), 'real active record cards must use recordContext for visible identity');
     assert(cssSource.includes('.aim-record-card-field-intelligence'), 'real active record cards must receive dedicated light-purple styling');
     assert(cssSource.includes('.aim-record-context-label'), 'active record cards must include a visible context badge');
     assert(managementSource.includes('aim-record-context-label-mobile">主動</span>'), 'mobile active badge must use short label');
     assert(cssSource.includes('.aim-record-context-label-desktop') && cssSource.includes('display: none;'), 'mobile layout must hide the desktop active badge');
     assert(cssSource.includes('.aim-record-context-label-mobile') && cssSource.includes('border-radius: 4px'), 'mobile active badge must use compact rectangular styling');
-    assert(managementSource.includes('正式分析尚未啟用'), 'active analytics must be a neutral empty state');
     assert(!cssSource.includes('aim-record-card-active-intelligence-prototype'), 'prototype active record styling must be removed');
     assert(!cssSource.includes('aim-prototype-chart'), 'prototype analytics chart styling must be removed');
     assertCardAssistShortTextMappingBuilderContract(managementSource);
+    assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource);
+}
+
+function assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource) {
+    assert(!managementSource.includes('function renderActiveIntelligenceAnalyticsEmptyState'), 'active analytics placeholder renderer must be removed');
+    assert(!managementSource.includes('正式分析尚未啟用'), 'active analytics must not render the neutral placeholder copy');
+    assert(managementSource.includes('return activeAnalytics ? recordIsFieldIntelligence(r) : !recordIsFieldIntelligence(r);'), 'analyticsRecords must use recordContext as the authoritative dataset split');
+    assert(managementSource.includes('analyticsMetrics(activity, records, { includeVisitorCount: !activeAnalytics })'), 'analytics metrics must receive context-specific Visitor Count behavior');
+    assert(managementSource.includes('const visitorField = options.includeVisitorCount === false ? null : currentVisitorCountField(activity);'), 'Visitor Count KPI must be suppressible for Active Analytics');
+    assert(managementSource.includes('const assistant = !activeAnalytics && !isMobileFormViewport() ? renderAnalyticsAiPanel(activity, records) :'), 'AI panel must remain Visitor-only in Analytics v1');
+    assert(managementSource.includes("activeAnalytics ? '' : renderMobileAnalyticsAiPanel(activity, records)"), 'mobile AI panel must remain Visitor-only in Analytics v1');
+    assert(managementSource.includes('publishedRecordItems(activity, context)'), 'Active Analytics schema seed must use the active form context');
+    const activeAnalyticsSource = [
+        extractFunctionDeclaration(managementSource, 'renderAnalytics'),
+        extractFunctionDeclaration(managementSource, 'renderMobileAnalysis'),
+        extractFunctionDeclaration(managementSource, 'analyticFields')
+    ].join('\n');
+    assert(!/competitor|information type|cooperation|follow-up|product|technology/i.test(activeAnalyticsSource), 'Active Analytics must not hardcode business question titles');
+    assert(cssSource.includes('.aim-analytics-active-kpi-row'), 'Active Analytics must have a purple KPI context treatment');
+    assert(cssSource.includes('.aim-analytics-active-chart-grid'), 'Active Analytics must have a purple chart context treatment');
+    assert(cssSource.includes('.aim-mobile-analysis-active-context'), 'Mobile Active Analytics must have a purple control context treatment');
+
+    const source = [
+        'const formContextVisitorMode = "visitor";',
+        'const formContextFieldIntelligenceMode = "field_intelligence";',
+        'const recordContextVisitorMode = "visitor";',
+        'const recordContextActiveMode = "active-intelligence";',
+        'const visitorCountFieldTitle = "同行人數";',
+        'const yesNoOptions = ["是", "否"];',
+        'const otherAnswerValue = "其他";',
+        'const Store = { CURRENT_DATE: "2026-08-16", clone(value) { return JSON.parse(JSON.stringify(value)); } };',
+        'let ui = { analyticsScope: recordContextVisitorMode };',
+        'let selectedAnalyticsActivity = null;',
+        'const state = { records: [] };',
+        'function selectedActivity() { return selectedAnalyticsActivity; }',
+        'function isIsoDateOnly(value) { return /^\\d{4}-\\d{2}-\\d{2}$/.test(String(value || "").slice(0, 10)); }',
+        'function shiftLocalDate(value, amount) { const date = new Date(`${value}T00:00:00.000Z`); date.setUTCDate(date.getUTCDate() + amount); return date.toISOString().slice(0, 10); }',
+        'function normalizeFormContext(value) { return value === formContextFieldIntelligenceMode ? formContextFieldIntelligenceMode : formContextVisitorMode; }',
+        'function normalizeDesignerItem(item) { const key = item.itemKey || item.fieldId || item.itemId || item.title; return { ...item, itemKey: item.itemKey || key, itemId: item.itemId || key, fieldId: item.fieldId || key, options: item.options || [], optionEntries: item.optionEntries || [], visible: item.visible !== false, retired: Boolean(item.retired), removedInDraft: Boolean(item.removedInDraft) }; }',
+        'function designerItemKey(item) { return item && (item.itemKey || item.itemId || item.fieldId); }',
+        'function formDesign(activity, context) { return activity.formDesignRuntimeByContext[context]; }',
+        'function recordsFor(activityId) { return state.records.filter(record => record.activityId === activityId); }',
+        'function recordIsFieldIntelligence(record) { return record && record.recordContext === formContextFieldIntelligenceMode; }',
+        'function otherAnswersForRecord(record) { return record && record.runtimeOtherAnswers ? record.runtimeOtherAnswers : {}; }',
+        'function optionLabel(value) { return value && typeof value === "object" ? (value.label || value.value || "") : value; }',
+        'function formatAnalyticsPercent(value) { return `${Number(value || 0).toFixed(1)}%`; }',
+        extractFunctionDeclaration(managementSource, 'publishedRecordItems'),
+        extractFunctionDeclaration(managementSource, 'answerProducingItems'),
+        extractFunctionDeclaration(managementSource, 'snapshotRecordItems'),
+        extractFunctionDeclaration(managementSource, 'hasValue'),
+        extractFunctionDeclaration(managementSource, 'recordCoverage'),
+        extractFunctionDeclaration(managementSource, 'analyticsRecords'),
+        extractFunctionDeclaration(managementSource, 'unique'),
+        extractFunctionDeclaration(managementSource, 'analyticsMetrics'),
+        extractFunctionDeclaration(managementSource, 'analyticsScopeIsActive'),
+        extractFunctionDeclaration(managementSource, 'analyticsFormContext'),
+        extractFunctionDeclaration(managementSource, 'analyticsCompletenessStats'),
+        extractFunctionDeclaration(managementSource, 'currentVisitorCountField'),
+        extractFunctionDeclaration(managementSource, 'visitorCountTotal'),
+        extractFunctionDeclaration(managementSource, 'visitorRecordCountValue'),
+        extractFunctionDeclaration(managementSource, 'visitorAnswerIsOther'),
+        extractFunctionDeclaration(managementSource, 'visitorNumberValue'),
+        extractFunctionDeclaration(managementSource, 'analyticsOtherText'),
+        extractFunctionDeclaration(managementSource, 'analyticFields'),
+        extractFunctionDeclaration(managementSource, 'analyticsFieldOptionLabels'),
+        extractFunctionDeclaration(managementSource, 'analyticsAnswerLabels'),
+        'function analyticsAnswerLabel(value, field, otherText = "") { if (value === undefined || value === null || value === "") return ""; if (field.type === "yes_no") { if (value === true) return yesNoOptions[0]; if (value === false) return yesNoOptions[1]; } const label = String(optionLabel(value, field) || "").trim(); if (!label) return ""; if (label === "__other" || label === otherAnswerValue) return otherText || otherAnswerValue; return label; }',
+        extractFunctionDeclaration(managementSource, 'categoricalChartRow'),
+        extractFunctionDeclaration(managementSource, 'analyticsDateBuckets'),
+        extractFunctionDeclaration(managementSource, 'categoricalTrendData'),
+        extractFunctionDeclaration(managementSource, 'categoricalFieldChartData'),
+        extractFunctionDeclaration(managementSource, 'count'),
+        extractFunctionDeclaration(managementSource, 'activityTrendChartData'),
+        extractFunctionDeclaration(managementSource, 'recorderDistributionChartData'),
+        '({ state, ui, setSelectedActivity(activity) { selectedAnalyticsActivity = activity; }, analyticsRecords, analyticsMetrics, analyticsFormContext, analyticFields, categoricalFieldChartData, activityTrendChartData, recorderDistributionChartData });'
+    ].join('\n');
+    const contract = vm.runInNewContext(source, {});
+    const activity = {
+        id: 'analytics-activity',
+        formFields: [
+            { itemKey: 'visitor-count', fieldId: 'visitor-count', type: 'single_choice', title: '同行人數', options: ['1', '2', '3'] },
+            { itemKey: 'visitor-topic', fieldId: 'visitor-topic', type: 'single_choice', title: 'Visitor Topic', options: ['V1', 'V2'] }
+        ],
+        formDesignRuntimeByContext: {
+            visitor: { published: { items: [
+                { itemKey: 'visitor-count', fieldId: 'visitor-count', type: 'single_choice', title: '同行人數', options: ['1', '2', '3'] },
+                { itemKey: 'visitor-topic', fieldId: 'visitor-topic', type: 'single_choice', title: 'Visitor Topic', options: ['V1', 'V2'] }
+            ] } },
+            field_intelligence: {
+                published: {
+                    items: [
+                        { itemKey: 'active-topic', fieldId: 'active-topic', type: 'single_choice', title: 'Active Topic', options: ['Hot', 'Cold'] }
+                    ]
+                }
+            }
+        }
+    };
+    const visitorSnapshot = { items: activity.formFields };
+    const activeCurrentSnapshot = { items: activity.formDesignRuntimeByContext.field_intelligence.published.items };
+    const activeHistoricalSnapshot = {
+        items: [
+            { itemKey: 'old-active-topic', fieldId: 'old-active-topic', type: 'single_choice', title: 'Old Active Topic', options: ['Old', 'Other'] },
+            { itemKey: 'old-active-missing', fieldId: 'old-active-missing', type: 'short_text', title: 'Old Missing' }
+        ]
+    };
+    contract.setSelectedActivity(activity);
+    contract.state.records = [
+        { id: 'visitor-1', activityId: activity.id, recordContext: 'visitor', status: 'active', createdAt: '2026-08-16T01:00:00.000Z', createdByUserId: 'visitor-a', createdByDisplayName: 'Visitor A', answers: { 'visitor-count': '3', 'visitor-topic': 'V1' }, formRuntimeSnapshot: visitorSnapshot },
+        { id: 'visitor-2', activityId: activity.id, recordContext: 'visitor', status: 'active', createdAt: '2026-08-15T01:00:00.000Z', createdByUserId: 'visitor-b', createdByDisplayName: 'Visitor B', answers: { 'visitor-count': '2' }, formRuntimeSnapshot: visitorSnapshot },
+        { id: 'active-1', activityId: activity.id, recordContext: 'field_intelligence', status: 'active', createdAt: '2026-08-16T02:00:00.000Z', createdByUserId: 'active-a', createdByDisplayName: 'Active A', answers: { 'active-topic': 'Hot' }, formRuntimeSnapshot: activeCurrentSnapshot },
+        { id: 'active-2', activityId: activity.id, recordContext: 'field_intelligence', status: 'active', createdAt: '2026-08-14T02:00:00.000Z', createdByUserId: 'active-b', createdByDisplayName: 'Active B', answers: { 'old-active-topic': 'Old' }, formRuntimeSnapshot: activeHistoricalSnapshot },
+        { id: 'active-void', activityId: activity.id, recordContext: 'field_intelligence', status: 'void', createdAt: '2026-08-16T03:00:00.000Z', createdByUserId: 'active-c', createdByDisplayName: 'Active C', answers: { 'active-topic': 'Cold' }, formRuntimeSnapshot: activeCurrentSnapshot }
+    ];
+
+    contract.ui.analyticsScope = 'visitor';
+    const visitorRecords = contract.analyticsRecords(activity);
+    assert.deepStrictEqual(visitorRecords.map(record => record.id), ['visitor-1', 'visitor-2'], 'Visitor Analytics dataset must contain only visitor records');
+    const visitorMetrics = contract.analyticsMetrics(activity, visitorRecords, { includeVisitorCount: true });
+    assert.strictEqual(visitorMetrics.total, 2);
+    assert.strictEqual(visitorMetrics.today, 1);
+    assert.strictEqual(visitorMetrics.recorders, 2);
+    assert.strictEqual(visitorMetrics.visitorCount, 5, 'Visitor Count KPI must remain available in Visitor Analytics');
+    assert.strictEqual(contract.analyticsFormContext(), 'visitor');
+
+    contract.ui.analyticsScope = 'active-intelligence';
+    const activeRecords = contract.analyticsRecords(activity);
+    assert.deepStrictEqual(activeRecords.map(record => record.id), ['active-1', 'active-2'], 'Active Analytics dataset must contain only field_intelligence records');
+    const activeMetrics = contract.analyticsMetrics(activity, activeRecords, { includeVisitorCount: false });
+    assert.strictEqual(activeMetrics.total, 2, 'Active total KPI must use Active submissions only');
+    assert.strictEqual(activeMetrics.today, 1, 'Active today KPI must use Active submissions only');
+    assert.strictEqual(activeMetrics.recorders, 2, 'Active recorder KPI must use Active submissions only');
+    assert.strictEqual(activeMetrics.visitorCount, null, 'Visitor Count KPI must be absent from Active Analytics');
+    assert.strictEqual(activeMetrics.completeness.totalAnswered, 2, 'Active completeness must use each record historical schema');
+    assert.strictEqual(activeMetrics.completeness.totalExpected, 3, 'Active completeness expected slots must be historical-schema safe');
+    assert.strictEqual(contract.analyticsFormContext(), 'field_intelligence');
+    const activeFields = contract.analyticFields(activity, activeRecords, contract.analyticsFormContext());
+    assert(activeFields.some(field => field.fieldId === 'active-topic'), 'Active current schema fields must generate Analytics cards');
+    assert(activeFields.some(field => field.fieldId === 'old-active-topic'), 'Historical Active schema fields must remain analyzable');
+    assert(!activeFields.some(field => field.fieldId === 'visitor-count'), 'Visitor schema fields must not leak into Active Analytics');
+    const activeTopicChart = contract.categoricalFieldChartData(activeFields.find(field => field.fieldId === 'active-topic'), activeRecords);
+    assert.strictEqual(activeTopicChart.denominator, 1, 'Active schema question chart must count Active answers only');
+    assert.strictEqual(contract.activityTrendChartData(activeRecords).dailyCounts.reduce((sum, value) => sum + value, 0), 2, 'Active trend must use Active records only');
+    assert.strictEqual(JSON.stringify(contract.recorderDistributionChartData(activeRecords).rows.map(row => row.label).sort()), JSON.stringify(['Active A', 'Active B']), 'Active recorder distribution must use Active records only');
+
+    contract.ui.analyticsScope = 'visitor';
+    assert.deepStrictEqual(contract.analyticsRecords(activity).map(record => record.id), ['visitor-1', 'visitor-2'], 'Switching back to Visitor must restore the visitor dataset');
 }
 
 function assertCardAssistShortTextMappingBuilderContract(managementSource) {
