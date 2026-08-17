@@ -877,7 +877,13 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(cssSource.includes('.aim-contributor-note-section'));
     assert(cssSource.includes('.aim-supplemental-add-action'));
     assert(cssSource.includes('.aim-supplemental-entry-text-action'));
+    assert(cssSource.includes('.aim-supplemental-entry-card'));
+    assert(cssSource.includes('.aim-supplemental-visitor-title-line'));
+    assert(cssSource.includes('.aim-supplemental-visitor-job'));
+    assert(cssSource.includes('.aim-supplemental-visitor-company'));
     assert(cssSource.includes('color: var(--aim-blue-dark);'));
+    assert(cssSource.includes('.aim-supplemental-entry {\n  gap: 10px;\n  padding: 10px 12px 12px;\n  border: 1px solid var(--aim-border);\n  border-radius: 6px;\n  background: #fbfcfe;\n}'));
+    assert(cssSource.includes('.aim-supplemental-entry-card {\n  gap: 8px;\n  padding: 9px 10px;\n  border: 1px solid var(--aim-border);\n  border-radius: 6px;\n  background: #fff;\n}'));
     assert(cssSource.includes('.aim-supplemental-add-action {\n  flex: 0 0 auto;\n  min-height: 30px;\n  padding: 5px 10px;'));
     assert(cssSource.includes('border-color: #bfdbfe;\n  background: #f8fbff;\n  color: var(--aim-blue);'));
     assert(managementSource.includes('class="aim-supplemental-detail"'));
@@ -886,6 +892,11 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(managementSource.includes('有同行訪客時，可補充其名片與個別關注重點。'));
     assert(managementSource.includes('aim-button aim-button-small aim-supplemental-add-action'));
     assert(managementSource.includes('aim-supplemental-text-action aim-supplemental-entry-text-action'));
+    assert(managementSource.includes('class="aim-supplemental-visitor-row aim-supplemental-entry-card"'));
+    assert(managementSource.includes('class="aim-supplemental-visitor-title-line"'));
+    assert(managementSource.includes('class="aim-supplemental-visitor-name"'));
+    assert(managementSource.includes('class="aim-supplemental-visitor-job"'));
+    assert(managementSource.includes('class="aim-supplemental-visitor-company"'));
     assert(managementSource.includes('class="aim-supplemental-interest-label">個人關注</span><span class="aim-small">請填寫追加訪客的關注議題</span>'));
     assert(managementSource.includes('aim-textarea aim-auto-grow aim-supplemental-interest-input'));
     assert(managementSource.includes('aim-textarea aim-auto-grow aim-additional-interest-edit'));
@@ -904,6 +915,7 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(cssSource.indexOf('.aim-button {') < cssSource.indexOf('.aim-supplemental-add-action'));
     assert(cssSource.indexOf('.aim-record-context-label {') < cssSource.indexOf('.aim-record-context-label-supplemental'));
     assert(cssSource.indexOf('.aim-inline-record-meta-card {') < cssSource.indexOf('.aim-supplemental-detail {'));
+    assert(cssSource.indexOf('.aim-supplemental-visitor-main span,') < cssSource.indexOf('.aim-supplemental-visitor-company'));
     const supplementalCssBlock = cssSource.slice(cssSource.indexOf('.aim-supplemental-entry,'), cssSource.indexOf('.aim-answer-badges'));
     assert(!supplementalCssBlock.includes('!important'));
     assert(!cssSource.includes('.aim-supplemental-detail-row textarea,\n.aim-supplemental-interest-input'));
@@ -981,9 +993,17 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
         card: { cardId: 'c1', name: 'A', jobTitle: 'Title', company: 'Co' },
         personalInterest: 'Need A'
     }, 0, true);
-    assert(quickHtml.includes('class="aim-supplemental-visitor-row"'));
+    assert(quickHtml.includes('class="aim-supplemental-visitor-row aim-supplemental-entry-card"'));
     assert(!quickHtml.includes('aim-card'));
+    assert(!quickHtml.includes('thumb'));
     assert(!quickHtml.includes('儲存'));
+    assert(!quickHtml.includes('Title / Co'));
+    assert(quickHtml.includes('class="aim-supplemental-visitor-name">A</strong>'));
+    assert(quickHtml.includes('class="aim-supplemental-visitor-job">Title</span>'));
+    assert(quickHtml.includes('class="aim-supplemental-visitor-company">Co</span>'));
+    assert(quickHtml.includes('>查看</button>'));
+    assert(!quickHtml.includes('>查看名片</button>'));
+    assert(quickHtml.includes('>移除</button>'));
     assert(!quickHtml.includes('個人關注（選填）'));
     assert(quickHtml.includes('class="aim-supplemental-interest-label">個人關注</span>'));
     assert(quickHtml.includes('<span class="aim-small">請填寫追加訪客的關注議題</span>'));

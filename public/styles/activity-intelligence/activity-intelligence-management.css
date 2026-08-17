@@ -3243,6 +3243,14 @@ a:focus-visible {
   margin-top: 10px;
 }
 
+.aim-supplemental-entry {
+  gap: 10px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--aim-border);
+  border-radius: 6px;
+  background: #fbfcfe;
+}
+
 .aim-supplemental-entry-head,
 .aim-supplemental-detail-head,
 .aim-supplemental-detail-actions,
@@ -3262,8 +3270,8 @@ a:focus-visible {
 }
 
 .aim-supplemental-entry-head {
-  padding-top: 10px;
-  border-top: 1px solid var(--aim-border);
+  padding: 0;
+  border-top: 0;
 }
 
 .aim-supplemental-entry-head>div {
@@ -3316,7 +3324,7 @@ a:focus-visible {
 
 .aim-supplemental-visitor-list {
   display: grid;
-  gap: 6px;
+  gap: 8px;
 }
 
 .aim-supplemental-visitor-row,
@@ -3333,6 +3341,14 @@ a:focus-visible {
   border-bottom: 0;
 }
 
+.aim-supplemental-entry-card {
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--aim-border);
+  border-radius: 6px;
+  background: #fff;
+}
+
 .aim-supplemental-visitor-line {
   display: flex;
   align-items: flex-start;
@@ -3347,6 +3363,14 @@ a:focus-visible {
   min-width: 0;
 }
 
+.aim-supplemental-visitor-title-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
 .aim-supplemental-visitor-main strong,
 .aim-contribution-meta strong {
   color: var(--aim-text);
@@ -3358,6 +3382,19 @@ a:focus-visible {
 .aim-supplemental-visitor-main span,
 .aim-contribution-meta span {
   color: var(--aim-muted);
+}
+
+.aim-supplemental-visitor-job,
+.aim-supplemental-visitor-company {
+  color: var(--aim-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.aim-supplemental-visitor-company {
+  color: var(--aim-muted-2);
 }
 
 .aim-supplemental-interest-text {
@@ -3390,8 +3427,10 @@ a:focus-visible {
 
 .aim-supplemental-entry-text-action {
   min-height: 30px;
-  padding: 4px 2px;
+  padding: 4px 4px;
   color: var(--aim-blue-dark);
+  font-size: 12px;
+  line-height: 1.25;
 }
 
 .aim-supplemental-entry-text-action:hover {

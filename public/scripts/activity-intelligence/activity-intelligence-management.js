@@ -1773,16 +1773,20 @@
   function renderQuickAdditionalVisitorRow(entry, index, open) {
     const card = entry.card || {};
     const title = card.name || '未命名名片';
-    const subtitle = [card.position || card.jobTitle, card.company].filter(Boolean).join(' / ');
+    const jobTitle = card.position || card.jobTitle || '';
+    const company = card.company || '';
     return `
-      <article class="aim-supplemental-visitor-row" data-index="${index}">
+      <article class="aim-supplemental-visitor-row aim-supplemental-entry-card" data-index="${index}">
         <div class="aim-supplemental-visitor-line">
           <div class="aim-supplemental-visitor-main">
-            <strong>${Store.escapeHtml(title)}</strong>
-            ${subtitle ? `<span>${Store.escapeHtml(subtitle)}</span>` : ''}
+            <div class="aim-supplemental-visitor-title-line">
+              <strong class="aim-supplemental-visitor-name">${Store.escapeHtml(title)}</strong>
+              ${jobTitle ? `<span class="aim-supplemental-visitor-job">${Store.escapeHtml(jobTitle)}</span>` : ''}
+            </div>
+            ${company ? `<span class="aim-supplemental-visitor-company">${Store.escapeHtml(company)}</span>` : ''}
           </div>
           <div class="aim-supplemental-visitor-actions">
-            ${card.cardId ? `<button class="aim-button aim-button-small aim-supplemental-text-action aim-supplemental-entry-text-action" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
+            ${card.cardId ? `<button class="aim-button aim-button-small aim-supplemental-text-action aim-supplemental-entry-text-action" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看</button>` : ''}
             <button class="aim-button aim-button-small aim-supplemental-text-action aim-supplemental-entry-text-action" type="button" data-action="remove-quick-additional-visitor" data-index="${index}" ${open ? '' : 'disabled'}>移除</button>
           </div>
         </div>
