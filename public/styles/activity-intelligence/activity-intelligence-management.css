@@ -75,10 +75,14 @@
 }
 
 .aim-supplemental-visitor-main span,
-.aim-supplemental-visitor-main small,
 .aim-contribution-meta span {
   color: var(--aim-muted);
-  font-size: 12px;
+}
+
+.aim-supplemental-interest-text {
+  color: var(--aim-text);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .aim-supplemental-detail-row textarea,
@@ -90,9 +94,11 @@
 
 .aim-supplemental-interest-field {
   display: grid;
-  gap: 4px;
-  color: var(--aim-muted);
-  font-size: 12px;
+  gap: 5px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
 }
 
 .aim-contribution-row p {

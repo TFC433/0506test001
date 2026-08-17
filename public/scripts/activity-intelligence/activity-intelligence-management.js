@@ -1991,7 +1991,7 @@
     const canContribute = canContributeToRecord(record, activity);
     if (!additionalVisitors.length && !contributions.length) return '';
     return `
-      <section class="aim-supplemental-detail" aria-label="附加資訊">
+      <section class="aim-inline-record-meta-card aim-supplemental-detail" aria-label="附加資訊">
         <div class="aim-supplemental-detail-head">
           <h3>附加資訊</h3>
           <div class="aim-supplemental-detail-actions">
@@ -2021,7 +2021,7 @@
           <div class="aim-supplemental-visitor-main">
             <strong>${Store.escapeHtml(title)}</strong>
             ${subtitle ? `<span>${Store.escapeHtml(subtitle)}</span>` : ''}
-            ${entry.personalInterest ? `<small>關注：${Store.escapeHtml(entry.personalInterest)}</small>` : ''}
+            ${entry.personalInterest ? `<span class="aim-supplemental-interest-text">關注：${Store.escapeHtml(entry.personalInterest)}</span>` : ''}
           </div>
           ${!canEditSupplement && card.cardId ? `<button class="aim-button aim-button-small" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
         </div>

@@ -47,33 +47,7 @@ class ActivityIntelligenceSqlWriter {
     }
 
     async saveAdditionalVisitor(payload) {
-        console.log('[ActivityIntelligenceSupplementTrace] rpc.invoke', {
-            rpcName: 'activity_intelligence_save_additional_visitor',
-            submissionId: payload && payload.p_submission_id,
-            supplementId: payload && payload.p_supplement_id,
-            cardId: payload && payload.p_card_id,
-            snapshotCardId: payload && payload.p_card_snapshot && payload.p_card_snapshot.cardId
-        });
-        try {
-            const result = await this._rpc('activity_intelligence_save_additional_visitor', payload);
-            console.log('[ActivityIntelligenceSupplementTrace] rpc.success', {
-                rpcName: 'activity_intelligence_save_additional_visitor',
-                submissionId: payload && payload.p_submission_id,
-                supplementId: payload && payload.p_supplement_id
-            });
-            return result;
-        } catch (error) {
-            console.error('[ActivityIntelligenceSupplementTrace] rpc.error', {
-                rpcName: 'activity_intelligence_save_additional_visitor',
-                submissionId: payload && payload.p_submission_id,
-                supplementId: payload && payload.p_supplement_id,
-                code: error && error.code,
-                message: error && error.message,
-                details: error && error.details,
-                hint: error && error.hint
-            });
-            throw error;
-        }
+        return this._rpc('activity_intelligence_save_additional_visitor', payload);
     }
 
     async deleteAdditionalVisitor(payload) {

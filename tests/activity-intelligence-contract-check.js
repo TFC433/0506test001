@@ -871,6 +871,8 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(cssSource.includes('.aim-supplemental-detail'));
     assert(cssSource.includes('.aim-supplemental-visitor-line'));
     assert(cssSource.includes('.aim-contributor-note-section'));
+    assert(managementSource.includes('class="aim-inline-record-meta-card aim-supplemental-detail"'));
+    assert(managementSource.includes('class="aim-supplemental-interest-text"'));
     assert(sqlSource.includes('activity_intelligence_submission_supplements'));
     assert(sqlSource.includes('activity_intelligence_save_additional_visitor'));
     assert(sqlSource.includes('activity_intelligence_delete_additional_visitor'));
@@ -2088,7 +2090,7 @@ async function main() {
     assert.strictEqual(supplementalHarness.calls.saveAdditionalVisitor.p_card_snapshot.name, 'Card Name');
     assert.strictEqual(supplementalHarness.calls.saveAdditionalVisitor.p_card_snapshot.company, 'Card Co');
     assert.strictEqual(supplementalHarness.calls.saveAdditionalVisitor.p_card_snapshot.cardId, IDS.secondCard);
-    assert.strictEqual(supplementalHarness.calls.saveAdditionalVisitor.p_card_snapshot.card_id, IDS.secondCard);
+    assert.strictEqual(supplementalHarness.calls.saveAdditionalVisitor.p_card_snapshot.card_id, undefined);
     assert(!JSON.stringify(supplementalHarness.calls.saveAdditionalVisitor.p_card_snapshot).includes('Browser Must Not Win'));
     assert.strictEqual(supplementalHarness.calls.createSubmissionCount || 0, 0);
     const supplementalDetail = await supplementalHarness.service.getSubmission(IDS.oldSubmission, actor());
