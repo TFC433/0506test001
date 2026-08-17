@@ -715,6 +715,14 @@ class ActivityIntelligenceService {
             else delete settings.allowOptionNotes;
         }
 
+        if (item.enableOtherHistorySuggestions !== undefined || sourceSettings.enableOtherHistorySuggestions !== undefined) {
+            const supplied = item.enableOtherHistorySuggestions !== undefined
+                ? item.enableOtherHistorySuggestions
+                : sourceSettings.enableOtherHistorySuggestions;
+            if (['single_choice', 'multiple_choice'].includes(type) && settings.allowOther && Boolean(supplied)) settings.enableOtherHistorySuggestions = true;
+            else delete settings.enableOtherHistorySuggestions;
+        }
+
         if (type === 'section_heading') {
             if (item.enableCardAssist !== undefined || sourceSettings.enableCardAssist !== undefined) {
                 if (Boolean(item.enableCardAssist || sourceSettings.enableCardAssist)) settings.enableCardAssist = true;

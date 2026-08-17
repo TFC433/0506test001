@@ -712,7 +712,7 @@ function assertDualStreamFormBuilderSourceContract(managementSource, apiSource, 
     assert(cssSource.includes('.aim-form-context-tabs'), 'context tabs must have dedicated mobile-safe styling');
 }
 
-function assertRealActiveIntelligenceRuntimeSourceContract(managementSource, cssSource) {
+function assertRealActiveIntelligenceRuntimeSourceContract(managementSource, cssSource, service) {
     assert(managementSource.includes('async function switchRecordContextMode'), 'record-context mode switch must load runtime form context');
     assert(managementSource.includes('await loadPublishedFormForActivity(activity.id, formContext);'), 'active runtime entry must load the published context bundle');
     assert(managementSource.includes('const formContext = activeRecordFormContext();'), 'runtime record form context must be derived explicitly');
@@ -761,6 +761,7 @@ function assertRealActiveIntelligenceRuntimeSourceContract(managementSource, css
     assert(!cssSource.includes('aim-prototype-chart'), 'prototype analytics chart styling must be removed');
     assertCardAssistShortTextMappingBuilderContract(managementSource);
     assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource);
+    assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, service);
 }
 
 function assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource) {
@@ -923,6 +924,125 @@ function assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource
 
     contract.ui.analyticsScope = 'visitor';
     assert.deepStrictEqual(contract.analyticsRecords(activity).map(record => record.id), ['visitor-1', 'visitor-2'], 'Switching back to Visitor must restore the visitor dataset');
+}
+
+function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, service) {
+    assert(managementSource.includes('enableOtherHistorySuggestions'), 'Other history suggestions setting must exist in the frontend source');
+    assert(managementSource.includes('啟用「其他」歷史值建議'), 'Builder must expose the approved Other history suggestion label');
+    assert(managementSource.includes('從此活動同一題目的過往「其他」內容提供建議，仍可輸入新內容。'), 'Builder must expose the approved Other history suggestion helper');
+    assert(managementSource.includes('data-action="other-history-suggestion"'), 'Runtime suggestions must be clickable without a second choice system');
+    assert(managementSource.includes('setQuickOtherAnswer(fieldId, value)') && managementSource.includes('setWorkingOther(fieldId, value)'), 'Clicking a suggestion must write only other_text state');
+    assert(!managementSource.includes('ActivityIntelligenceApi.otherHistory'), 'Other history suggestions must not add a new frontend API path');
+    assert(cssSource.includes('.aim-other-history-suggestion'), 'Other history suggestions must have compact badge styling');
+    assert(cssSource.includes('.aim-runtime-other-control:not(:focus-within) .aim-other-history-suggestions'), 'Other history suggestions must remain focus-scoped');
+
+    const normalizedRows = service._normalizeFormItems([
+        { itemKey: IDS.choiceKey, type: 'single_choice', title: 'Topic', options: ['A'], allowOther: true, settings: { enableOtherHistorySuggestions: true } },
+        { itemKey: IDS.numberKey, type: 'single_choice', title: 'No Other', options: ['A'], allowOther: false, settings: { enableOtherHistorySuggestions: true } },
+        { itemKey: IDS.boolKey, type: 'dropdown', title: 'Dropdown', options: ['A'], allowOther: true, settings: { enableOtherHistorySuggestions: true } },
+        { itemKey: IDS.longKey, type: 'multiple_choice', title: 'Multi', options: ['A'], allowOther: true, settings: { enableOtherHistorySuggestions: true } }
+    ]);
+    assert.strictEqual(normalizedRows[0].settings.enableOtherHistorySuggestions, true, 'server normalization must persist eligible single_choice setting');
+    assert(!Object.prototype.hasOwnProperty.call(normalizedRows[1].settings, 'enableOtherHistorySuggestions'), 'server normalization must strip setting without Other flow');
+    assert(!Object.prototype.hasOwnProperty.call(normalizedRows[2].settings, 'enableOtherHistorySuggestions'), 'server normalization must strip setting from dropdown fields');
+    assert.strictEqual(normalizedRows[3].settings.enableOtherHistorySuggestions, true, 'server normalization must persist eligible multiple_choice setting');
+
+    const source = [
+        'const otherAnswerValue = "其他";',
+        "const choiceFieldTypes = ['single_choice', 'multiple_choice', 'dropdown'];",
+        "const previewPlacementValues = new Set(['none', 'primary', 'badges', 'text']);",
+        "const compactPreviewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'dropdown']);",
+        "const previewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'multiple_choice', 'dropdown']);",
+        "const cardAssistRoles = new Set(['person_name', 'job_title', 'company_name']);",
+        'function newUuid() { return "99999999-9999-4999-8999-999999999999"; }',
+        'function fieldTypeLabel(type) { return type; }',
+        'function makeCardLinkItem(item) { return { ...item, type: "card_link", itemKey: item.itemKey || "card", fieldId: item.fieldId || item.itemKey || "card", options: [], optionEntries: [], settings: item.settings || {}, allowOther: false }; }',
+        'function makeFormThumbnailItem(item) { return { ...item, type: "form_thumbnail", itemKey: item.itemKey || "thumb", fieldId: item.fieldId || item.itemKey || "thumb", options: [], optionEntries: [], settings: item.settings || {}, allowOther: false }; }',
+        'const Store = { clone(value) { return JSON.parse(JSON.stringify(value)); }, escapeHtml(value) { return String(value == null ? "" : value).replace(/[&<>"\']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\\"": "&quot;", "\'": "&#39;" }[char])); } };',
+        'let selected = { id: "activity-a" };',
+        'const state = { records: [] };',
+        'function selectedActivity() { return selected; }',
+        'function recordsFor(activityId) { return state.records.filter(record => record.activityId === activityId); }',
+        'function otherAnswersForRecord(record) { return record.runtimeOtherAnswers || {}; }',
+        extractFunctionDeclaration(managementSource, 'normalizeOptionEntries'),
+        extractFunctionDeclaration(managementSource, 'normalizePreviewPlacement'),
+        extractFunctionDeclaration(managementSource, 'designerItemKey'),
+        extractFunctionDeclaration(managementSource, 'normalizeDesignerItem'),
+        extractFunctionDeclaration(managementSource, 'answerHasOther'),
+        extractFunctionDeclaration(managementSource, 'fieldAllowsOtherHistorySuggestions'),
+        extractFunctionDeclaration(managementSource, 'fieldHasOtherHistorySuggestionsEnabled'),
+        extractFunctionDeclaration(managementSource, 'renderOtherHistorySuggestions'),
+        extractFunctionDeclaration(managementSource, 'otherHistorySuggestionsForField'),
+        extractFunctionDeclaration(managementSource, 'otherHistoryFieldKey'),
+        extractFunctionDeclaration(managementSource, 'otherHistorySnapshotField'),
+        extractFunctionDeclaration(managementSource, 'otherHistorySuggestionKey'),
+        extractFunctionDeclaration(managementSource, 'serializeDraftItems'),
+        '({ state, setSelected(value) { selected = value; }, normalizeDesignerItem, fieldAllowsOtherHistorySuggestions, fieldHasOtherHistorySuggestionsEnabled, otherHistorySuggestionsForField, renderOtherHistorySuggestions, serializeDraftItems, answerHasOther });'
+    ].join('\n');
+    const contract = vm.runInNewContext(source, {});
+    const field = contract.normalizeDesignerItem({ itemKey: 'field-a', fieldId: 'field-a', type: 'single_choice', title: 'Same Title', options: ['Alpha'], allowOther: true, settings: { enableOtherHistorySuggestions: true } });
+    const sameTitleOtherField = contract.normalizeDesignerItem({ itemKey: 'field-b', fieldId: 'field-b', type: 'single_choice', title: 'Same Title', options: ['Alpha'], allowOther: true, settings: { enableOtherHistorySuggestions: true } });
+    const multiField = contract.normalizeDesignerItem({ itemKey: 'field-m', fieldId: 'field-m', type: 'multiple_choice', title: 'Multi', options: ['Alpha'], allowOther: true, settings: { enableOtherHistorySuggestions: true } });
+    const noOtherField = contract.normalizeDesignerItem({ itemKey: 'field-c', fieldId: 'field-c', type: 'single_choice', title: 'No Other', options: ['Alpha'], allowOther: false, settings: { enableOtherHistorySuggestions: true } });
+    const dropdownField = contract.normalizeDesignerItem({ itemKey: 'field-d', fieldId: 'field-d', type: 'dropdown', title: 'Dropdown', options: ['Alpha'], allowOther: true, settings: { enableOtherHistorySuggestions: true } });
+    assert.strictEqual(contract.fieldAllowsOtherHistorySuggestions(field), true);
+    assert.strictEqual(contract.fieldAllowsOtherHistorySuggestions(multiField), true);
+    assert.strictEqual(contract.fieldAllowsOtherHistorySuggestions(noOtherField), false);
+    assert.strictEqual(contract.fieldAllowsOtherHistorySuggestions(dropdownField), false);
+    assert.strictEqual(contract.fieldHasOtherHistorySuggestionsEnabled(field), true);
+    assert.strictEqual(contract.fieldHasOtherHistorySuggestionsEnabled(noOtherField), false);
+    assert(!Object.prototype.hasOwnProperty.call(noOtherField.settings, 'enableOtherHistorySuggestions'), 'normalizeDesignerItem must strip ineligible setting');
+    assert.strictEqual(contract.serializeDraftItems([field])[0].settings.enableOtherHistorySuggestions, true, 'serializeDraftItems must persist eligible setting through item settings');
+    assert(!Object.prototype.hasOwnProperty.call(contract.serializeDraftItems([dropdownField])[0].settings, 'enableOtherHistorySuggestions'), 'serializeDraftItems must not persist dropdown setting');
+
+    const record = (id, activityId, item, answer, otherText, createdAt, status = 'active') => ({
+        id,
+        activityId,
+        status,
+        createdAt,
+        updatedAt: createdAt,
+        answers: { [item.fieldId]: answer },
+        runtimeOtherAnswers: otherText === undefined ? {} : { [item.fieldId]: otherText },
+        formRuntimeSnapshot: { items: [item] }
+    });
+    contract.state.records = [
+        record('r1', 'activity-a', field, '其他', 'Digital Twin', '2026-08-01T01:00:00.000Z'),
+        record('r2', 'activity-a', field, '其他', 'digital twin', '2026-08-03T01:00:00.000Z'),
+        record('r3', 'activity-a', field, '其他', 'Digital Twin', '2026-08-02T01:00:00.000Z'),
+        record('r4', 'activity-a', field, '其他', 'AI Agent', '2026-08-04T01:00:00.000Z'),
+        record('r5', 'activity-a', field, '其他', 'AI Agent', '2026-08-02T02:00:00.000Z'),
+        record('r6', 'activity-a', field, '其他', 'Edge AI', '2026-08-05T01:00:00.000Z'),
+        record('r7', 'activity-a', field, 'Alpha', 'Official must not count', '2026-08-06T01:00:00.000Z'),
+        record('r8', 'activity-a', field, '其他', '   ', '2026-08-07T01:00:00.000Z'),
+        record('r9', 'activity-a', field, '其他', 'Void must not count', '2026-08-08T01:00:00.000Z', 'void'),
+        record('r10', 'activity-b', field, '其他', 'Other Activity', '2026-08-09T01:00:00.000Z'),
+        record('r11', 'activity-a', sameTitleOtherField, '其他', 'Other Field', '2026-08-10T01:00:00.000Z'),
+        record('r12', 'activity-a', multiField, ['Alpha', '其他'], 'Multi Other', '2026-08-11T01:00:00.000Z')
+    ];
+    ['Topic 1', 'Topic 2', 'Topic 3', 'Topic 4'].forEach((value, index) => {
+        contract.state.records.push(record(`extra-${index}`, 'activity-a', field, '其他', value, `2026-08-${12 + index}T01:00:00.000Z`));
+    });
+    const suggestions = contract.otherHistorySuggestionsForField(field, '', 6);
+    assert.strictEqual(suggestions.length, 6, 'initial focus must return at most six suggestions');
+    assert.strictEqual(suggestions[0].count, 3, 'suggestions must sort by usage count first');
+    assert.strictEqual(suggestions[1].value, 'AI Agent', 'recency must break usage-count ties');
+    const suggestionJson = JSON.stringify(suggestions);
+    assert(!suggestionJson.includes('Official must not count'), 'official option selections must not contribute');
+    assert(!suggestionJson.includes('Other Activity'), 'other activities must not contribute');
+    assert(!suggestionJson.includes('Other Field'), 'same title on another stable field must not contribute');
+    assert(!suggestionJson.includes('Void must not count'), 'void submissions must not contribute');
+    assert.strictEqual(contract.otherHistorySuggestionsForField(field, 'agent', 6)[0].value, 'AI Agent', 'typing filter must be case-insensitive for Latin text');
+    assert.strictEqual(contract.otherHistorySuggestionsForField(field, 'DIGITAL', 6)[0].count, 3, 'typing filter must preserve duplicate grouping');
+    assert.strictEqual(contract.otherHistorySuggestionsForField(multiField, '', 6)[0].value, 'Multi Other', 'multiple_choice must use the shared history implementation');
+    assert.strictEqual(contract.answerHasOther(['Alpha', '其他']), true, 'multiple_choice Other selection semantics must remain intact');
+    const beforeNewValue = contract.otherHistorySuggestionsForField(field, 'physical', 6);
+    assert.strictEqual(beforeNewValue.length, 0, 'free-text new values must remain allowed without preexisting history');
+    contract.state.records.push(record('new-value', 'activity-a', field, '其他', 'Physical AI', '2026-08-20T01:00:00.000Z'));
+    assert.strictEqual(contract.otherHistorySuggestionsForField(field, 'physical', 6)[0].value, 'Physical AI', 'new submitted other_text can become a future suggestion');
+    const html = contract.renderOtherHistorySuggestions(field, 'quick', 'digital');
+    assert(html.includes('· 3次'), 'badge must display usage count');
+    assert(html.includes('data-value="digital twin"') || html.includes('data-value="Digital Twin"'), 'badge value must be only the canonical historical string');
+    assert(!html.includes('data-value="Digital Twin · 3次"'), 'badge must not store the count suffix as other_text');
 }
 
 function assertCardAssistShortTextMappingBuilderContract(managementSource) {
@@ -1873,7 +1993,7 @@ async function main() {
     assertMobileAnalyticsBreakpointRerenderContract(managementSource);
     assertContextFoundationSqlContract(activityIntelligenceSqlSource);
     assertDualStreamFormBuilderSourceContract(managementSource, apiSource, cssSource);
-    assertRealActiveIntelligenceRuntimeSourceContract(managementSource, cssSource);
+    assertRealActiveIntelligenceRuntimeSourceContract(managementSource, cssSource, service);
     assert(managementSource.includes("if (ui.analytics.ai.state === 'loading') return;"));
     assert(managementSource.includes("state === 'loading'"));
     assert(!managementSource.includes('FORM_GEMINI_API_KEY'));

@@ -2148,7 +2148,76 @@
 
   function renderOtherInput(field, context, value, enabled) {
     const klass = context === 'quick' ? 'aim-quick-other-input' : 'aim-record-other-input';
-    return `<input class="aim-input aim-runtime-other-input ${klass}" data-field="${Store.escapeHtml(field.fieldId)}" value="${Store.escapeHtml(value || '')}" placeholder="請輸入其他內容" ${enabled ? '' : 'disabled'}>`;
+    const suggestions = enabled ? renderOtherHistorySuggestions(field, context, value || '') : '';
+    return `<div class="aim-runtime-other-control" data-other-history-field="${Store.escapeHtml(field.fieldId)}" data-other-history-context="${Store.escapeHtml(context)}"><input class="aim-input aim-runtime-other-input ${klass}" data-field="${Store.escapeHtml(field.fieldId)}" value="${Store.escapeHtml(value || '')}" placeholder="請輸入其他內容" autocomplete="off" ${enabled ? '' : 'disabled'}>${suggestions}</div>`;
+  }
+
+  function fieldAllowsOtherHistorySuggestions(field) {
+    return Boolean(field && ['single_choice', 'multiple_choice'].includes(field.type) && field.allowOther);
+  }
+
+  function fieldHasOtherHistorySuggestionsEnabled(field) {
+    const settings = field && field.settings && typeof field.settings === 'object' ? field.settings : {};
+    return Boolean(fieldAllowsOtherHistorySuggestions(field) && (field.enableOtherHistorySuggestions || settings.enableOtherHistorySuggestions));
+  }
+
+  function renderOtherHistorySuggestions(field, context, query) {
+    if (!fieldHasOtherHistorySuggestionsEnabled(field)) return '';
+    const suggestions = otherHistorySuggestionsForField(field, query, 6);
+    if (!suggestions.length) return '';
+    return `
+      <div class="aim-other-history-suggestions" data-other-history-suggestions="${Store.escapeHtml(field.fieldId)}" data-other-history-context="${Store.escapeHtml(context)}">
+        ${suggestions.map(item => `<button class="aim-other-history-suggestion" type="button" data-action="other-history-suggestion" data-context="${Store.escapeHtml(context)}" data-field="${Store.escapeHtml(field.fieldId)}" data-value="${Store.escapeHtml(item.value)}">${Store.escapeHtml(item.value)} · ${Number(item.count) || 0}次</button>`).join('')}
+      </div>
+    `;
+  }
+
+  function otherHistorySuggestionsForField(field, query, limit) {
+    if (!fieldHasOtherHistorySuggestionsEnabled(field)) return [];
+    const activity = selectedActivity();
+    if (!activity) return [];
+    const fieldKey = otherHistoryFieldKey(field);
+    const groups = new Map();
+    recordsFor(activity.id).forEach(record => {
+      if (!record || record.status === 'void') return;
+      const item = otherHistorySnapshotField(record, fieldKey);
+      if (!item) return;
+      const answer = record.answers && (record.answers[item.fieldId] !== undefined ? record.answers[item.fieldId] : record.answers[item.itemKey]);
+      if (!answerHasOther(answer)) return;
+      const otherAnswers = otherAnswersForRecord(record);
+      const value = String((otherAnswers && (otherAnswers[item.fieldId] || otherAnswers[item.itemKey])) || '').trim();
+      if (!value) return;
+      const key = otherHistorySuggestionKey(value);
+      if (!key) return;
+      const current = groups.get(key) || { value, count: 0, latest: '' };
+      current.count += 1;
+      const createdAt = String(record.createdAt || record.updatedAt || '');
+      if (!current.latest || createdAt > current.latest) {
+        current.latest = createdAt;
+        current.value = value;
+      }
+      groups.set(key, current);
+    });
+    const needle = otherHistorySuggestionKey(query || '');
+    return Array.from(groups.values())
+      .filter(item => !needle || otherHistorySuggestionKey(item.value).includes(needle))
+      .sort((a, b) => b.count - a.count || String(b.latest || '').localeCompare(String(a.latest || '')))
+      .slice(0, limit || 6);
+  }
+
+  function otherHistoryFieldKey(field) {
+    return designerItemKey(field);
+  }
+
+  function otherHistorySnapshotField(record, fieldKey) {
+    const items = record && record.formRuntimeSnapshot && Array.isArray(record.formRuntimeSnapshot.items)
+      ? record.formRuntimeSnapshot.items
+      : [];
+    return items.map(normalizeDesignerItem).find(item => otherHistoryFieldKey(item) === fieldKey) || null;
+  }
+
+  function otherHistorySuggestionKey(value) {
+    return String(value || '').trim().toLocaleLowerCase();
   }
 
   function renderMultipleChoiceOptions(field, values, enabled, context) {
@@ -2371,10 +2440,14 @@
     const settings = { ...sourceSettings };
     if (previewPlacement) settings.previewPlacement = previewPlacement;
     else delete settings.previewPlacement;
+    const allowOther = Boolean(item.allowOther || sourceSettings.allowOther);
     const sourceAllowOptionNotes = item.allowOptionNotes !== undefined ? item.allowOptionNotes : sourceSettings.allowOptionNotes;
     const allowOptionNotes = type === 'multiple_choice' && Boolean(sourceAllowOptionNotes);
     if (allowOptionNotes) settings.allowOptionNotes = true;
     else delete settings.allowOptionNotes;
+    const enableOtherHistorySuggestions = ['single_choice', 'multiple_choice'].includes(type) && allowOther && Boolean(item.enableOtherHistorySuggestions || sourceSettings.enableOtherHistorySuggestions);
+    if (enableOtherHistorySuggestions) settings.enableOtherHistorySuggestions = true;
+    else delete settings.enableOtherHistorySuggestions;
     const enableCardAssist = type === 'section_heading' && Boolean(item.enableCardAssist || sourceSettings.enableCardAssist);
     if (enableCardAssist) settings.enableCardAssist = true;
     else delete settings.enableCardAssist;
@@ -2396,8 +2469,9 @@
       placeholder: item.placeholder || '',
       options: entries.map(option => option.label),
       optionEntries: entries,
-      allowOther: Boolean(item.allowOther || (item.settings && item.settings.allowOther)),
+      allowOther,
       allowOptionNotes,
+      enableOtherHistorySuggestions,
       enableCardAssist,
       cardAssistField,
       required: Boolean(item.required || item.isRequired || item.is_required || sourceSettings.required || sourceSettings.isRequired),
@@ -2840,6 +2914,7 @@
           ${canHavePlaceholder ? `<div class="aim-field"><label for="aim-field-placeholder">提示文字</label><input class="aim-input aim-field-design-input" id="aim-field-placeholder" data-design-field="placeholder" value="${Store.escapeHtml(field.placeholder || '')}" ${field.retired ? 'disabled' : ''}></div>` : ''}
           ${choiceFieldTypes.includes(field.type) ? renderOptionEditor(field) : ''}
           ${choiceFieldTypes.includes(field.type) ? `<label class="aim-checkbox aim-form-other-toggle"><input id="aim-field-allow-other" type="checkbox" ${field.allowOther ? 'checked' : ''} ${field.retired ? 'disabled' : ''}> 允許填寫「其他」補充答案</label>` : ''}
+          ${fieldAllowsOtherHistorySuggestions(field) ? `<label class="aim-checkbox aim-form-other-history-toggle"><input id="aim-field-enable-other-history-suggestions" type="checkbox" ${field.enableOtherHistorySuggestions ? 'checked' : ''} ${field.retired ? 'disabled' : ''}> 啟用「其他」歷史值建議</label><span class="aim-small">從此活動同一題目的過往「其他」內容提供建議，仍可輸入新內容。</span>` : ''}
           ${field.type === 'multiple_choice' ? `<label class="aim-checkbox aim-form-option-notes-toggle"><input id="aim-field-allow-option-notes" type="checkbox" ${field.allowOptionNotes ? 'checked' : ''} ${field.retired ? 'disabled' : ''}> 允許選項備註</label>` : ''}
           ${renderCardAssistDesignerControls(field)}
           ${renderPreviewPlacementEditor(field)}
@@ -4750,6 +4825,10 @@
     if (!el) return;
     const action = el.dataset.action;
     if (await handleFormDesignAction(action, el, event)) return;
+    if (action === 'other-history-suggestion') {
+      applyOtherHistorySuggestion(el);
+      return;
+    }
     if (action === 'home') {
       goHome();
       if (ui.view === 'overview' && canManageActivities()) await loadOverviewData({ refreshActivities: true, force: true });
@@ -5531,7 +5610,13 @@
       if (fieldAllowsOptionNotes(field)) refreshQuickAnswerList();
       else refreshQuickAnswerListIfOtherChanged(before, ui.quickAnswers[node.dataset.field]);
     }));
-    rootNode.querySelectorAll('.aim-quick-other-input').forEach(node => node.addEventListener('input', () => setQuickOtherAnswer(node.dataset.field, node.value)));
+    rootNode.querySelectorAll('.aim-quick-other-input').forEach(node => {
+      node.addEventListener('focus', () => refreshOtherHistorySuggestions(node));
+      node.addEventListener('input', () => {
+        setQuickOtherAnswer(node.dataset.field, node.value);
+        refreshOtherHistorySuggestions(node);
+      });
+    });
     rootNode.querySelectorAll('.aim-option-note-input[data-context="quick"]').forEach(node => node.addEventListener('input', () => setOptionNote('quick', node.dataset.field, node.dataset.optionKey, node.value)));
   }
 
@@ -5566,7 +5651,13 @@
       if (fieldAllowsOptionNotes(field)) refreshRecordDrawerAnswerList();
       else refreshRecordDrawerAnswerListIfOtherChanged(before, ui.drawer.working[node.dataset.field]);
     }));
-    rootNode.querySelectorAll('.aim-record-other-input').forEach(node => node.addEventListener('input', () => setWorkingOther(node.dataset.field, node.value)));
+    rootNode.querySelectorAll('.aim-record-other-input').forEach(node => {
+      node.addEventListener('focus', () => refreshOtherHistorySuggestions(node));
+      node.addEventListener('input', () => {
+        setWorkingOther(node.dataset.field, node.value);
+        refreshOtherHistorySuggestions(node);
+      });
+    });
     rootNode.querySelectorAll('.aim-option-note-input[data-context="record"]').forEach(node => node.addEventListener('input', () => setOptionNote('record', node.dataset.field, node.dataset.optionKey, node.value)));
   }
 
@@ -5580,6 +5671,35 @@
 
   function refreshRecordDrawerAnswerListIfOtherChanged(before, value) {
     if (before !== answerHasOther(value)) refreshRecordDrawerAnswerList();
+  }
+
+  function applyOtherHistorySuggestion(button) {
+    const fieldId = button && button.dataset ? button.dataset.field : '';
+    const context = button && button.dataset ? button.dataset.context : '';
+    const value = button && button.dataset ? String(button.dataset.value || '') : '';
+    if (!fieldId || !value) return;
+    if (context === 'record') setWorkingOther(fieldId, value);
+    else setQuickOtherAnswer(fieldId, value);
+    const inputClass = context === 'record' ? 'aim-record-other-input' : 'aim-quick-other-input';
+    const input = document.querySelector(`.${inputClass}[data-field="${cssEscape(fieldId)}"]`);
+    if (input) {
+      input.value = value;
+      input.focus();
+      refreshOtherHistorySuggestions(input);
+    }
+  }
+
+  function refreshOtherHistorySuggestions(input) {
+    if (!input) return;
+    const fieldId = input.dataset.field;
+    const context = input.classList.contains('aim-record-other-input') ? 'record' : 'quick';
+    const field = runtimeFieldById(fieldId, context);
+    const host = input.closest('.aim-runtime-other-control');
+    if (!host || !field) return;
+    const existing = host.querySelector('.aim-other-history-suggestions');
+    if (existing) existing.remove();
+    const html = renderOtherHistorySuggestions(field, context, input.value || '');
+    if (html) host.insertAdjacentHTML('beforeend', html);
   }
 
   function refreshQuickAnswerList() {
@@ -5662,6 +5782,14 @@
     const allowOther = document.getElementById('aim-field-allow-other');
     if (allowOther) allowOther.addEventListener('change', () => {
       updateFormDesignDraft({ allowOther: allowOther.checked });
+      scheduleFormPreviewRefresh();
+    });
+    const enableOtherHistorySuggestions = document.getElementById('aim-field-enable-other-history-suggestions');
+    if (enableOtherHistorySuggestions) enableOtherHistorySuggestions.addEventListener('change', () => {
+      const settings = { ...((ui.formDesignDraft && ui.formDesignDraft.settings) || {}) };
+      if (enableOtherHistorySuggestions.checked) settings.enableOtherHistorySuggestions = true;
+      else delete settings.enableOtherHistorySuggestions;
+      updateFormDesignDraft({ enableOtherHistorySuggestions: enableOtherHistorySuggestions.checked, settings });
       scheduleFormPreviewRefresh();
     });
     const allowOptionNotes = document.getElementById('aim-field-allow-option-notes');

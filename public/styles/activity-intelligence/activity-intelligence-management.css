@@ -4109,6 +4109,40 @@ a:focus-visible {
   margin-top: 8px;
 }
 
+.aim-runtime-other-control {
+  display: grid;
+  gap: 6px;
+}
+
+.aim-other-history-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.aim-runtime-other-control:not(:focus-within) .aim-other-history-suggestions {
+  display: none;
+}
+
+.aim-other-history-suggestion {
+  min-height: 26px;
+  padding: 4px 8px;
+  border: 1px solid var(--aim-border);
+  border-radius: 5px;
+  background: var(--aim-surface-muted);
+  color: var(--aim-text);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.25;
+  cursor: pointer;
+}
+
+.aim-other-history-suggestion:hover,
+.aim-other-history-suggestion:focus-visible {
+  border-color: var(--aim-accent);
+  background: var(--aim-surface);
+}
+
 .aim-record-detail-section {
   min-width: 0;
   padding: 5px 0 3px;
