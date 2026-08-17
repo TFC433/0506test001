@@ -1755,14 +1755,14 @@
     return `
       <section class="aim-supplemental-entry" aria-label="附加資訊">
         <div class="aim-supplemental-entry-head">
-          <h3>同行訪客</h3>
-          <button class="aim-button aim-button-small" type="button" data-action="quick-add-additional-visitor" ${open ? '' : 'disabled'}>新增同行訪客</button>
+          <h3>同行訪客（選填）</h3>
+          <button class="aim-button aim-button-small" type="button" data-action="quick-add-additional-visitor" ${open ? '' : 'disabled'}>＋ 新增同行訪客</button>
         </div>
         ${rows.length ? `
           <div class="aim-supplemental-visitor-list">
             ${rows.map((entry, index) => renderQuickAdditionalVisitorRow(entry, index, open)).join('')}
           </div>
-        ` : '<div class="aim-empty aim-supplemental-empty">尚未加入同行訪客。</div>'}
+        ` : ''}
       </section>
     `;
   }
@@ -1773,15 +1773,17 @@
     const subtitle = [card.position || card.jobTitle, card.company].filter(Boolean).join(' / ');
     return `
       <article class="aim-supplemental-visitor-row" data-index="${index}">
-        <div class="aim-supplemental-visitor-main">
-          <strong>${Store.escapeHtml(title)}</strong>
-          ${subtitle ? `<span>${Store.escapeHtml(subtitle)}</span>` : ''}
+        <div class="aim-supplemental-visitor-line">
+          <div class="aim-supplemental-visitor-main">
+            <strong>${Store.escapeHtml(title)}</strong>
+            ${subtitle ? `<span>${Store.escapeHtml(subtitle)}</span>` : ''}
+          </div>
+          <div class="aim-supplemental-visitor-actions">
+            ${card.cardId ? `<button class="aim-button aim-button-small" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
+            <button class="aim-button aim-button-small" type="button" data-action="remove-quick-additional-visitor" data-index="${index}" ${open ? '' : 'disabled'}>移除</button>
+          </div>
         </div>
-        <textarea class="aim-input aim-supplemental-interest-input" data-index="${index}" rows="2" placeholder="個人興趣或補充備註" ${open ? '' : 'disabled'}>${Store.escapeHtml(entry.personalInterest || '')}</textarea>
-        <div class="aim-supplemental-visitor-actions">
-          ${card.cardId ? `<button class="aim-button aim-button-small" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
-          <button class="aim-button aim-button-small" type="button" data-action="remove-quick-additional-visitor" data-index="${index}" ${open ? '' : 'disabled'}>移除</button>
-        </div>
+        <label class="aim-supplemental-interest-field"><span>個人關注（選填）</span><textarea class="aim-input aim-supplemental-interest-input" data-index="${index}" rows="1" placeholder="個人關注（選填）" ${open ? '' : 'disabled'}>${Store.escapeHtml(entry.personalInterest || '')}</textarea></label>
       </article>
     `;
   }
@@ -1898,11 +1900,13 @@
     const activeBadge = recordIsFieldIntelligence(record);
     const completenessHtml = `<span class="aim-record-card-completeness" title="欄位完整度 ${answered}/${total}"><span class="aim-record-card-completeness-label">完整度</span><span class="aim-record-card-completeness-count">${answered}/${total}</span><span class="aim-record-card-completeness-bar" style="--bar-w:${barWidth}px;--bar-color:${barColor}" aria-hidden="true"></span>${activeBadge ? '<span class="aim-record-context-label aim-record-context-label-mobile">主動</span>' : ''}</span>`;
     const supplementalSummary = record.supplementalSummary || {};
-    const supplementalHtml = [
-      supplementalSummary.additionalVisitorCount ? `<span class="aim-record-context-label">同行 ${supplementalSummary.additionalVisitorCount}</span>` : '',
-      supplementalSummary.contributionCount ? `<span class="aim-record-context-label">補充 ${supplementalSummary.contributionCount}</span>` : '',
-      recordIsContributorOnly(record) ? '<span class="aim-record-context-label">我的補充</span>' : ''
-    ].join('');
+    const contributorOnly = recordIsContributorOnly(record);
+    const supplementalHtml = contributorOnly
+      ? '<span class="aim-record-context-label">我有補充</span>'
+      : [
+        supplementalSummary.additionalVisitorCount ? `<span class="aim-record-context-label">同行 ${supplementalSummary.additionalVisitorCount}</span>` : '',
+        supplementalSummary.contributionCount ? `<span class="aim-record-context-label">補充 ${supplementalSummary.contributionCount}</span>` : ''
+      ].join('');
     return `<div class="aim-record-card-meta">
       <span class="aim-record-card-activity">${Store.escapeHtml(activity.name)}</span>
       ${activeBadge ? '<span class="aim-record-context-label aim-record-context-label-desktop">主動情報</span>' : ''}
@@ -1955,16 +1959,24 @@
     const contribution = (record.supplements && record.supplements.myContribution) || (record.supplementalSummary && record.supplementalSummary.myContribution);
     return `
       <div class="aim-inline-record-detail aim-contributor-focused-detail">
-        <section class="aim-supplemental-detail" aria-label="我的補充紀錄">
+        <section class="aim-inline-record-meta-card" aria-label="紀錄資訊">
+          <dl class="aim-inline-record-meta">
+            <div><dt>活動</dt><dd>${Store.escapeHtml(activity.name)}</dd></div>
+            <div><dt>紀錄者</dt><dd>${Store.escapeHtml(record.createdByDisplayName)}</dd></div>
+            <div><dt>建立時間</dt><dd>${Store.formatDateTime(record.createdAt)}</dd></div>
+            <div><dt>狀態</dt><dd><span class="aim-record-context-label">我有補充</span></dd></div>
+          </dl>
+        </section>
+        <section class="aim-contributor-note-section" aria-label="我的補充紀錄">
           <div class="aim-supplemental-detail-head">
             <h3>我的補充紀錄</h3>
-            <button class="aim-button aim-button-small" type="button" data-action="view-full-record" data-id="${Store.escapeHtml(record.id)}">查看完整訪談紀錄</button>
+            ${canContributeToRecord(record, activity) ? `<button class="aim-button aim-button-small" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">編輯我的紀錄</button>` : ''}
           </div>
-          <article class="aim-contribution-row">
+          <article class="aim-contribution-row aim-contribution-row-inline">
             <p>${Store.escapeHtml(contribution && contribution.note ? contribution.note : '尚未填寫補充紀錄。')}</p>
             ${contribution && contribution.updatedAt ? `<span>${Store.formatDateTime(contribution.updatedAt)}</span>` : ''}
           </article>
-          ${canContributeToRecord(record, activity) ? `<button class="aim-button aim-button-small" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">${contribution ? '編輯我的補充紀錄' : '新增我的補充紀錄'}</button>` : ''}
+          <div class="aim-contributor-full-record-action"><button class="aim-button aim-button-small" type="button" data-action="view-full-record" data-id="${Store.escapeHtml(record.id)}">查看完整訪談紀錄</button></div>
         </section>
       </div>
     `;
@@ -1977,24 +1989,24 @@
     const contributions = supplements.contributions || [];
     const canEditSupplement = canEditRecord(record, activity);
     const canContribute = canContributeToRecord(record, activity);
-    if (!additionalVisitors.length && !contributions.length && !canEditSupplement && !canContribute) return '';
+    if (!additionalVisitors.length && !contributions.length) return '';
     return `
       <section class="aim-supplemental-detail" aria-label="附加資訊">
         <div class="aim-supplemental-detail-head">
           <h3>附加資訊</h3>
           <div class="aim-supplemental-detail-actions">
-            ${canEditSupplement ? `<button class="aim-button aim-button-small" type="button" data-action="record-add-additional-visitor" data-id="${Store.escapeHtml(record.id)}">新增同行訪客</button>` : ''}
-            ${canContribute ? `<button class="aim-button aim-button-small" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">${supplements.myContribution ? '編輯我的補充紀錄' : '新增我的補充紀錄'}</button>` : ''}
+            ${canEditSupplement ? `<button class="aim-button aim-button-small" type="button" data-action="record-add-additional-visitor" data-id="${Store.escapeHtml(record.id)}">＋ 新增同行訪客</button>` : ''}
+            ${canContribute ? `<button class="aim-button aim-button-small" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">${supplements.myContribution ? '編輯我的紀錄' : '＋ 補充我的紀錄'}</button>` : ''}
           </div>
         </div>
-        <div class="aim-supplemental-section">
+        ${additionalVisitors.length ? `<div class="aim-supplemental-section">
           <h4>同行訪客</h4>
-          ${additionalVisitors.length ? additionalVisitors.map(entry => renderAdditionalVisitorDetailRow(record, entry, canEditSupplement)).join('') : '<div class="aim-empty aim-supplemental-empty">尚無同行訪客。</div>'}
-        </div>
-        <div class="aim-supplemental-section">
+          ${additionalVisitors.map(entry => renderAdditionalVisitorDetailRow(record, entry, canEditSupplement)).join('')}
+        </div>` : ''}
+        ${contributions.length ? `<div class="aim-supplemental-section">
           <h4>補充紀錄</h4>
-          ${contributions.length ? contributions.map(entry => renderContributionDetailRow(record, entry)).join('') : '<div class="aim-empty aim-supplemental-empty">尚無補充紀錄。</div>'}
-        </div>
+          ${contributions.map(entry => renderContributionDetailRow(record, entry)).join('')}
+        </div>` : ''}
       </section>
     `;
   }
@@ -2005,23 +2017,23 @@
     const subtitle = [card.position, card.company].filter(Boolean).join(' / ');
     return `
       <article class="aim-supplemental-visitor-row aim-supplemental-detail-row">
-        <div class="aim-supplemental-visitor-main">
-          <strong>${Store.escapeHtml(title)}</strong>
-          ${subtitle ? `<span>${Store.escapeHtml(subtitle)}</span>` : ''}
-          ${entry.actorDisplayName ? `<small>${Store.escapeHtml(entry.actorDisplayName)} · ${Store.formatDateTime(entry.updatedAt || entry.createdAt)}</small>` : ''}
+        <div class="aim-supplemental-visitor-line">
+          <div class="aim-supplemental-visitor-main">
+            <strong>${Store.escapeHtml(title)}</strong>
+            ${subtitle ? `<span>${Store.escapeHtml(subtitle)}</span>` : ''}
+            ${entry.personalInterest ? `<small>關注：${Store.escapeHtml(entry.personalInterest)}</small>` : ''}
+          </div>
+          ${!canEditSupplement && card.cardId ? `<button class="aim-button aim-button-small" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
         </div>
         ${canEditSupplement ? `
-          <textarea class="aim-input aim-additional-interest-edit" data-supplement-id="${Store.escapeHtml(entry.supplementId)}" rows="2" placeholder="個人興趣或補充備註">${Store.escapeHtml(entry.personalInterest || '')}</textarea>
+          <label class="aim-supplemental-interest-field"><span>個人關注（選填）</span><textarea class="aim-input aim-additional-interest-edit" data-supplement-id="${Store.escapeHtml(entry.supplementId)}" rows="1" placeholder="個人關注（選填）">${Store.escapeHtml(entry.personalInterest || '')}</textarea></label>
           <div class="aim-supplemental-visitor-actions">
             ${card.cardId ? `<button class="aim-button aim-button-small" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
             <button class="aim-button aim-button-small" type="button" data-action="record-change-additional-visitor-card" data-id="${Store.escapeHtml(record.id)}" data-supplement-id="${Store.escapeHtml(entry.supplementId)}" data-personal-interest="${Store.escapeHtml(entry.personalInterest || '')}">更換名片</button>
             <button class="aim-button aim-button-small" type="button" data-action="save-additional-visitor-interest" data-id="${Store.escapeHtml(record.id)}" data-supplement-id="${Store.escapeHtml(entry.supplementId)}">儲存</button>
             <button class="aim-button aim-button-small" type="button" data-action="delete-additional-visitor" data-id="${Store.escapeHtml(record.id)}" data-supplement-id="${Store.escapeHtml(entry.supplementId)}">移除</button>
           </div>
-        ` : `
-          ${entry.personalInterest ? `<p>${Store.escapeHtml(entry.personalInterest)}</p>` : ''}
-          ${card.cardId ? `<button class="aim-button aim-button-small" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
-        `}
+        ` : ''}
       </article>
     `;
   }
@@ -2035,7 +2047,7 @@
           <span>${Store.formatDateTime(entry.updatedAt || entry.createdAt)}</span>
         </div>
         <p>${Store.escapeHtml(entry.note || '')}</p>
-        ${mine && canContributeToRecord(record, selectedActivity()) ? `<button class="aim-button aim-button-small" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">編輯</button>` : ''}
+        ${mine && canContributeToRecord(record, selectedActivity()) ? `<button class="aim-button aim-button-small" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">編輯我的紀錄</button>` : ''}
       </article>
     `;
   }
@@ -5198,6 +5210,7 @@
         <div class="aim-drawer-body">
           <dl class="aim-definition-list aim-record-edit-meta" style="margin-bottom:14px"><dt>建立者</dt><dd>${Store.escapeHtml(record.createdByDisplayName)}</dd><dt>建立時間</dt><dd>${Store.formatDateTime(record.createdAt)}</dd><dt>最近更新者</dt><dd>${Store.escapeHtml(record.updatedByDisplayName)}</dd><dt>最近更新</dt><dd>${Store.formatDateTime(record.updatedAt)}</dd>${editing ? '' : '<dt>狀態</dt><dd><span class="aim-pill aim-pill-void">已作廢</span></dd>'}</dl>
           <div class="aim-answer-list">${items.map(field => renderAnswer(field, working, editing, workingOther, workingCardLink, workingOptionNotes, record.recordContext)).join('')}</div>
+          ${editing && !recordIsFieldIntelligence(record) && canEditRecord(record, activity) ? `<div class="aim-record-drawer-supplement-action"><button class="aim-button aim-button-small" data-action="record-add-additional-visitor" data-id="${Store.escapeHtml(record.id)}" type="button">＋ 新增同行訪客</button></div>` : ''}
         </div>
         <div class="aim-drawer-foot aim-record-drawer-foot">
           ${editing && canVoidRecord(record, activity) ? `<button class="aim-button aim-button-danger" data-action="void-record" data-id="${record.id}" type="button">作廢紀錄</button>` : ''}

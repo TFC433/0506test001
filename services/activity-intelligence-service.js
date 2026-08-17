@@ -1175,12 +1175,16 @@ class ActivityIntelligenceService {
     _rawCardSnapshot(card) {
         return {
             cardId: card.cardId,
+            card_id: card.cardId,
             name: card.name || '',
             position: card.position || card.jobTitle || '',
             company: card.company || '',
             driveFileId: card.driveFileId || '',
+            drive_file_id: card.driveFileId || '',
             driveLink: card.driveLink || '',
-            driveFilename: card.driveFilename || ''
+            drive_link: card.driveLink || '',
+            driveFilename: card.driveFilename || '',
+            drive_filename: card.driveFilename || ''
         };
     }
 

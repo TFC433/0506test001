@@ -215,6 +215,7 @@ function makeHarness(options = {}) {
             return { activity_id: payload.p_activity_id };
         },
         async createSubmission(payload) {
+            calls.createSubmissionCount = (calls.createSubmissionCount || 0) + 1;
             calls.createSubmission = payload;
             submissions.set(IDS.newSubmission, {
                 id: IDS.newSubmission,
@@ -838,20 +839,92 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(managementSource.includes("context: 'quick-additional-visitor'"));
     assert(managementSource.includes("context: 'record-additional-visitor'"));
     assert(managementSource.includes('renderSupplementalDetail(record, activity)'));
-    assert(managementSource.includes('我的補充紀錄'));
-    assert(managementSource.includes('查看完整訪談紀錄'));
+    [
+        '同行訪客（選填）',
+        '＋ 新增同行訪客',
+        '個人關注（選填）',
+        '查看名片',
+        '移除',
+        '我的補充紀錄',
+        '編輯我的紀錄',
+        '查看完整訪談紀錄',
+        '我有補充'
+    ].forEach(copy => assert(managementSource.includes(copy), `missing approved supplemental copy: ${copy}`));
+    assert(!managementSource.includes('個人興趣或補充備註'));
+    assert(!managementSource.includes('編輯我的補充紀錄'));
+    assert(!managementSource.includes('新增我的補充紀錄'));
+    assert(!managementSource.includes('尚無同行訪客。'));
+    assert(!managementSource.includes('尚無補充紀錄。'));
     assert(managementSource.includes('recordBelongsToCurrentUser'));
     assert(managementSource.includes('record.createdByUserId === currentUser.userId || recordHasMyContribution(record)'));
+    assert(managementSource.includes('if (!additionalVisitors.length && !contributions.length) return \'\';'));
+    assert(managementSource.includes('const contributorOnly = recordIsContributorOnly(record);'));
+    assert(managementSource.includes("contributorOnly\n      ? '<span class=\"aim-record-context-label\">我有補充</span>'"));
+    assert(managementSource.includes('submission = await window.ActivityIntelligenceApi.saveAdditionalVisitor(submission.id || submission.submissionId, {'));
+    assert(managementSource.indexOf('let submission = await window.ActivityIntelligenceApi.createSubmission') < managementSource.indexOf('submission = await window.ActivityIntelligenceApi.saveAdditionalVisitor'));
+    assert(managementSource.includes('cardId: entry.cardId,\n            personalInterest: entry.personalInterest || \'\''));
+    assert(!managementSource.includes('p_actor: ui.'));
     assert(!/payloadAnswersForItems\([^)]*additional/i.test(managementSource));
     assert(!/submission_answers/i.test(managementSource));
     assert(apiSource.includes('/additional-visitors'));
     assert(apiSource.includes('/my-contribution'));
     assert(cssSource.includes('.aim-supplemental-detail'));
+    assert(cssSource.includes('.aim-supplemental-visitor-line'));
+    assert(cssSource.includes('.aim-contributor-note-section'));
     assert(sqlSource.includes('activity_intelligence_submission_supplements'));
     assert(sqlSource.includes('activity_intelligence_save_additional_visitor'));
     assert(sqlSource.includes('activity_intelligence_delete_additional_visitor'));
     assert(sqlSource.includes('activity_intelligence_upsert_my_contribution'));
     assert(sqlSource.includes('activity_intelligence_delete_my_contribution'));
+
+    const renderSource = [
+        'const Store = { escapeHtml: value => String(value || ""), formatDateTime: value => String(value || "") };',
+        'function recordIsFieldIntelligence() { return false; }',
+        'function canEditRecord() { return false; }',
+        'function canContributeToRecord() { return false; }',
+        'function isMyContribution() { return false; }',
+        'function selectedActivity() { return {}; }',
+        extractFunctionDeclaration(managementSource, 'renderAdditionalVisitorDetailRow'),
+        extractFunctionDeclaration(managementSource, 'renderContributionDetailRow'),
+        extractFunctionDeclaration(managementSource, 'renderSupplementalDetail'),
+        '({ renderSupplementalDetail })'
+    ].join('\n');
+    const contract = vm.runInNewContext(renderSource, {});
+    const baseRecord = { id: 'record-1', recordContext: 'visitor', supplements: { additionalVisitors: [], contributions: [], myContribution: null } };
+    const zeroHtml = contract.renderSupplementalDetail(baseRecord, {});
+    assert.strictEqual(zeroHtml, '');
+    const additionalOnlyHtml = contract.renderSupplementalDetail({
+        ...baseRecord,
+        supplements: {
+            additionalVisitors: [{ supplementId: 's1', cardSnapshot: { cardId: 'c1', name: 'A', company: 'Co' }, personalInterest: 'Need A' }],
+            contributions: [],
+            myContribution: null
+        }
+    }, {});
+    assert(additionalOnlyHtml.includes('附加資訊'));
+    assert(additionalOnlyHtml.includes('同行訪客'));
+    assert(!additionalOnlyHtml.includes('補充紀錄'));
+    const contributionOnlyHtml = contract.renderSupplementalDetail({
+        ...baseRecord,
+        supplements: {
+            additionalVisitors: [],
+            contributions: [{ supplementId: 's2', note: 'Note', actorDisplayName: 'User', updatedAt: '2026-08-17' }],
+            myContribution: null
+        }
+    }, {});
+    assert(contributionOnlyHtml.includes('附加資訊'));
+    assert(!contributionOnlyHtml.includes('同行訪客'));
+    assert(contributionOnlyHtml.includes('補充紀錄'));
+    const bothHtml = contract.renderSupplementalDetail({
+        ...baseRecord,
+        supplements: {
+            additionalVisitors: [{ supplementId: 's1', cardSnapshot: { cardId: 'c1', name: 'A', company: 'Co' }, personalInterest: 'Need A' }],
+            contributions: [{ supplementId: 's2', note: 'Note', actorDisplayName: 'User', updatedAt: '2026-08-17' }],
+            myContribution: null
+        }
+    }, {});
+    assert(bothHtml.includes('同行訪客'));
+    assert(bothHtml.includes('補充紀錄'));
 }
 
 function assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource) {
@@ -2006,13 +2079,18 @@ async function main() {
         supplementId: IDS.additionalVisitorSupplement,
         cardId: IDS.secondCard,
         personalInterest: 'Robotics procurement',
-        cardSnapshot: { name: 'Browser Must Not Win' }
+        actor: { userId: 'browser-must-not-win' },
+        cardSnapshot: { name: 'Browser Must Not Win', card_id: IDS.card }
     }, actor());
     assert.strictEqual(supplementalHarness.calls.saveAdditionalVisitor.p_supplement_id, IDS.additionalVisitorSupplement);
     assert.strictEqual(supplementalHarness.calls.saveAdditionalVisitor.p_card_id, IDS.secondCard);
+    assert.strictEqual(supplementalHarness.calls.saveAdditionalVisitor.p_actor.userId, 'real-user');
     assert.strictEqual(supplementalHarness.calls.saveAdditionalVisitor.p_card_snapshot.name, 'Card Name');
     assert.strictEqual(supplementalHarness.calls.saveAdditionalVisitor.p_card_snapshot.company, 'Card Co');
+    assert.strictEqual(supplementalHarness.calls.saveAdditionalVisitor.p_card_snapshot.cardId, IDS.secondCard);
+    assert.strictEqual(supplementalHarness.calls.saveAdditionalVisitor.p_card_snapshot.card_id, IDS.secondCard);
     assert(!JSON.stringify(supplementalHarness.calls.saveAdditionalVisitor.p_card_snapshot).includes('Browser Must Not Win'));
+    assert.strictEqual(supplementalHarness.calls.createSubmissionCount || 0, 0);
     const supplementalDetail = await supplementalHarness.service.getSubmission(IDS.oldSubmission, actor());
     assert.strictEqual(supplementalDetail.supplementalSummary.additionalVisitorCount, 1);
     assert.strictEqual(supplementalDetail.supplements.additionalVisitors[0].personalInterest, 'Robotics procurement');
