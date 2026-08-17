@@ -703,7 +703,7 @@ function assertDualStreamFormBuilderSourceContract(managementSource, apiSource, 
     assert(managementSource.includes('formBundleCacheKey(activityId, context)'), 'form bundle cache must include context');
     assert(managementSource.includes('activity.formDesignRuntimeByContext'), 'activity form runtime state must be separated by context');
     assert(managementSource.includes('initializeMissing: context === formContextFieldIntelligenceMode'), 'field_intelligence must lazy-initialize when missing');
-    assert(managementSource.includes('ActivityIntelligenceApi.saveDraft(activity.id, serializeDraftItems(formDesign(activity, formContext).draft.items), formContext)'), 'save draft must route active context');
+    assert(managementSource.includes('ActivityIntelligenceApi.saveDraft(activity.id, serializeDraftItems(formDesign(activity, formContext).draft.items, formContext), formContext)'), 'save draft must route active context');
     assert(managementSource.includes('ActivityIntelligenceApi.discardDraft(activity.id, formContext)'), 'discard draft must route active context');
     assert(managementSource.includes('ActivityIntelligenceApi.publishDraft(activity.id, formContext)'), 'publish draft must route active context');
     assert(managementSource.includes('renderFormPreview(activity, formContext)'), 'preview must use active context');
@@ -762,6 +762,7 @@ function assertRealActiveIntelligenceRuntimeSourceContract(managementSource, css
     assertCardAssistShortTextMappingBuilderContract(managementSource);
     assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource);
     assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, service);
+    assertStableVisualAssetsAndActiveBannerSharingContract(managementSource, service);
 }
 
 function assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource) {
@@ -1061,6 +1062,150 @@ function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, se
     assert(html.includes('· 3次'), 'badge must display usage count');
     assert(html.includes('data-value="digital twin"') || html.includes('data-value="Digital Twin"'), 'badge value must be only the canonical historical string');
     assert(!html.includes('data-value="Digital Twin · 3次"'), 'badge must not store the count suffix as other_text');
+}
+
+function assertStableVisualAssetsAndActiveBannerSharingContract(managementSource, service) {
+    assert(managementSource.includes('data-stable-image-key="logo:form"'), 'stable logo image identity must be present in rendered logo markup');
+    assert(managementSource.includes('replaceHtmlPreservingStableImages(root,'), 'full render must preserve stable image nodes across root HTML replacement');
+    assert(managementSource.includes('replaceHtmlPreservingStableImages(preview,'), 'preview refresh must preserve stable form thumbnail image nodes');
+    assert(managementSource.includes('settings.thumbnailSource'), 'thumbnailSource must be stored on form_thumbnail settings');
+    assert(managementSource.includes('縮圖來源'), 'Active thumbnail editor must expose the approved source label');
+    assert(managementSource.includes('與訪客紀錄共用'), 'Active thumbnail editor must expose the approved shared label');
+    assert(managementSource.includes('自訂'), 'Active thumbnail editor must expose the approved custom label');
+    assert(!managementSource.includes('AssetManager'), 'stable visual assets must not introduce a generic asset framework');
+
+    const source = [
+        "const formContextVisitorMode = 'visitor';",
+        "const formContextFieldIntelligenceMode = 'field_intelligence';",
+        "const thumbnailSourceSharedVisitor = 'shared_visitor';",
+        "const thumbnailSourceCustom = 'custom';",
+        "const thumbnailSourceValues = new Set([thumbnailSourceSharedVisitor, thumbnailSourceCustom]);",
+        "const thumbnailDefaults = Object.freeze({ driveFileId: '', fit: 'cover', focalX: 50, focalY: 50, zoom: 1 });",
+        "const thumbnailFitOptions = new Set(['cover', 'contain']);",
+        "const choiceFieldTypes = ['single_choice', 'multiple_choice', 'dropdown'];",
+        "const previewPlacementValues = new Set(['none', 'primary', 'badges', 'text']);",
+        "const compactPreviewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'dropdown']);",
+        "const previewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'multiple_choice', 'dropdown']);",
+        "const cardAssistRoles = new Set(['person_name', 'job_title', 'company_name']);",
+        "let selected = null;",
+        "let activeContext = formContextVisitorMode;",
+        "const ui = { formDesignDraftDirty: false, formDesignMessage: '' };",
+        "const Store = { clone(value) { return JSON.parse(JSON.stringify(value)); }, escapeHtml(value) { return String(value == null ? '' : value).replace(/[&<>\"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[char])); } };",
+        "function newUuid() { return '99999999-9999-4999-8999-999999999999'; }",
+        "function fieldTypeLabel(type) { return type; }",
+        "function normalizeFormContext(value) { return value === formContextFieldIntelligenceMode ? formContextFieldIntelligenceMode : formContextVisitorMode; }",
+        "function currentFormContext() { return activeContext; }",
+        "function selectedActivity() { return selected; }",
+        "function formDesign(activity, formContext) { return activity.formDesignRuntimeByContext[normalizeFormContext(formContext)]; }",
+        "function option(value, label, selectedValue) { return `<option value=\"${Store.escapeHtml(value)}\" ${String(value) === String(selectedValue) ? 'selected' : ''}>${Store.escapeHtml(label)}</option>`; }",
+        "function makeCardLinkItem(item) { return { ...item, type: 'card_link', itemKey: item && item.itemKey || 'card', fieldId: item && item.fieldId || 'card', options: [], optionEntries: [], settings: item && item.settings || {}, allowOther: false }; }",
+        extractFunctionDeclaration(managementSource, 'clampNumber'),
+        extractFunctionDeclaration(managementSource, 'normalizeThumbnailSource'),
+        extractFunctionDeclaration(managementSource, 'normalizeThumbnailSettings'),
+        extractFunctionDeclaration(managementSource, 'thumbnailSettingsForItem'),
+        extractFunctionDeclaration(managementSource, 'thumbnailSourceForItem'),
+        extractFunctionDeclaration(managementSource, 'normalizeOptionEntries'),
+        extractFunctionDeclaration(managementSource, 'normalizePreviewPlacement'),
+        extractFunctionDeclaration(managementSource, 'makeFormThumbnailItem'),
+        extractFunctionDeclaration(managementSource, 'normalizeDesignerItem'),
+        extractFunctionDeclaration(managementSource, 'visitorPublishedThumbnailItem'),
+        extractFunctionDeclaration(managementSource, 'resolvedFormThumbnailItem'),
+        extractFunctionDeclaration(managementSource, 'designerItemSignature'),
+        extractFunctionDeclaration(managementSource, 'designerItemsEqual'),
+        extractFunctionDeclaration(managementSource, 'designerItemKey'),
+        extractFunctionDeclaration(managementSource, 'serializeDraftItems'),
+        extractFunctionDeclaration(managementSource, 'driveThumbnailUrl'),
+        extractFunctionDeclaration(managementSource, 'thumbnailImageStyle'),
+        extractFunctionDeclaration(managementSource, 'renderFormThumbnailVisual'),
+        extractFunctionDeclaration(managementSource, 'renderFormThumbnailEditor'),
+        extractFunctionDeclaration(managementSource, 'syncStableImageAttributes'),
+        extractFunctionDeclaration(managementSource, 'restoreStableImages'),
+        '({ setActivity(value) { selected = value; }, setContext(value) { activeContext = value; }, normalizeDesignerItem, makeFormThumbnailItem, thumbnailSourceForItem, renderFormThumbnailEditor, designerItemSignature, designerItemsEqual, serializeDraftItems, resolvedFormThumbnailItem, thumbnailSettingsForItem, syncStableImageAttributes, restoreStableImages });'
+    ].join('\n');
+    const contract = vm.runInNewContext(source, {});
+    const thumbnail = (itemKey, driveFileId, sourceMode) => contract.normalizeDesignerItem({
+        itemKey,
+        fieldId: itemKey,
+        type: 'form_thumbnail',
+        title: 'Thumbnail',
+        settings: {
+            thumbnail: { driveFileId, fit: 'cover', focalX: 40, focalY: 60, zoom: 1.25 },
+            ...(sourceMode ? { thumbnailSource: sourceMode } : {})
+        }
+    });
+    const visitorA = thumbnail('visitor-thumb', 'drive-a', null);
+    const visitorB = thumbnail('visitor-thumb', 'drive-b', null);
+    const activeCustom = thumbnail('active-thumb', 'drive-custom', 'custom');
+    const activeShared = thumbnail('active-thumb', 'drive-dormant', 'shared_visitor');
+    const activeEmpty = thumbnail('active-empty', '', null);
+    const activity = {
+        formDesignRuntimeByContext: {
+            visitor: { published: { formContext: 'visitor', items: [visitorA] }, draft: { formContext: 'visitor', items: [visitorB, { itemKey: 'visitor-field', fieldId: 'visitor-field', type: 'short_text', title: 'Visitor Field', settings: {} }] } },
+            field_intelligence: { published: { formContext: 'field_intelligence', items: [activeShared, { itemKey: 'active-field', fieldId: 'active-field', type: 'short_text', title: 'Active Field', settings: {} }] }, draft: { formContext: 'field_intelligence', items: [activeShared] } }
+        }
+    };
+    contract.setActivity(activity);
+
+    contract.setContext('visitor');
+    const visitorHtml = contract.renderFormThumbnailEditor(visitorA);
+    assert(!visitorHtml.includes('aim-field-thumbnail-source'), 'Visitor form_thumbnail must not expose Active sharing controls');
+    contract.setContext('field_intelligence');
+    const activeHtml = contract.renderFormThumbnailEditor(activeShared);
+    assert(activeHtml.includes('id="aim-field-thumbnail-source"'), 'Active form_thumbnail must expose thumbnailSource');
+    const sourceValues = Array.from(activeHtml.matchAll(/<option value="([^"]*)"/g)).map(match => match[1]);
+    assert.deepStrictEqual(sourceValues, ['shared_visitor', 'custom'], 'thumbnailSource allowed values must be exact and ordered');
+    assert.strictEqual(contract.thumbnailSourceForItem(activeCustom, 'field_intelligence'), 'custom', 'existing Active custom image without source must remain custom when image exists');
+    assert.strictEqual(contract.thumbnailSourceForItem(contract.normalizeDesignerItem({ ...activeCustom, settings: { thumbnail: { driveFileId: 'legacy-drive' } } }), 'field_intelligence'), 'custom');
+    assert.strictEqual(contract.thumbnailSourceForItem(activeEmpty, 'field_intelligence'), 'shared_visitor', 'empty Active thumbnail without source must default to shared Visitor');
+    assert.strictEqual(contract.makeFormThumbnailItem({ settings: { thumbnailSource: 'shared_visitor' } }).settings.thumbnailSource, 'shared_visitor', 'new Active thumbnail can be initialized as shared Visitor');
+    assert(managementSource.includes('updateFormDesignDraft({ thumbnailSource: source, settings });'), 'source selector must update the actual field draft');
+    assert(!contract.designerItemsEqual(activeCustom, activeShared, 'field_intelligence'), 'custom to shared_visitor must be a real designer item change');
+    assert(!contract.designerItemsEqual(activeShared, activeCustom, 'field_intelligence'), 'shared_visitor to custom must be a real designer item change');
+    assert(contract.designerItemSignature(activeShared, 'field_intelligence').includes('"thumbnailSource":"shared_visitor"'), 'designer item signature must include thumbnailSource');
+    assert.strictEqual(contract.serializeDraftItems([activeShared], 'field_intelligence')[0].settings.thumbnailSource, 'shared_visitor', 'draft serialization must preserve Active thumbnailSource');
+    assert.strictEqual(contract.serializeDraftItems([activeShared], 'field_intelligence')[0].settings.thumbnail.driveFileId, 'drive-dormant', 'shared mode must not delete dormant Active custom thumbnail metadata');
+    assert.strictEqual(contract.normalizeDesignerItem(contract.serializeDraftItems([activeShared], 'field_intelligence')[0]).settings.thumbnailSource, 'shared_visitor', 'reload hydration must preserve thumbnailSource');
+    assert.strictEqual(service._normalizeFormItems([{
+        itemKey: IDS.thumbKey || IDS.textKey,
+        type: 'form_thumbnail',
+        title: 'Thumbnail',
+        settings: { thumbnailSource: 'shared_visitor', thumbnail: { driveFileId: 'drive-dormant' } }
+    }])[0].settings.thumbnailSource, 'shared_visitor', 'service normalization must preserve thumbnailSource on form_thumbnail');
+
+    assert.strictEqual(contract.thumbnailSettingsForItem(contract.resolvedFormThumbnailItem(activity, 'visitor', visitorA)).driveFileId, 'drive-a', 'Visitor must resolve its own thumbnail');
+    assert.strictEqual(contract.thumbnailSettingsForItem(contract.resolvedFormThumbnailItem(activity, 'field_intelligence', activeCustom)).driveFileId, 'drive-custom', 'Active custom must resolve its own thumbnail');
+    assert.strictEqual(contract.thumbnailSettingsForItem(contract.resolvedFormThumbnailItem(activity, 'field_intelligence', activeShared)).driveFileId, 'drive-a', 'Active shared must resolve Visitor published thumbnail');
+    assert.strictEqual(activeShared.settings.thumbnail.driveFileId, 'drive-dormant', 'shared resolution must not copy Visitor thumbnail into Active settings');
+    activity.formDesignRuntimeByContext.visitor.published.items = [visitorB];
+    assert.strictEqual(contract.thumbnailSettingsForItem(contract.resolvedFormThumbnailItem(activity, 'field_intelligence', activeShared)).driveFileId, 'drive-b', 'Visitor publish A to B must update shared Active resolution');
+    activity.formDesignRuntimeByContext.visitor.published.items = [visitorA];
+    activity.formDesignRuntimeByContext.visitor.draft.items = [visitorB];
+    assert.strictEqual(contract.thumbnailSettingsForItem(contract.resolvedFormThumbnailItem(activity, 'field_intelligence', activeShared)).driveFileId, 'drive-a', 'Visitor unpublished draft must not alter Active published runtime resolution');
+    activity.formDesignRuntimeByContext.visitor.published.items = [];
+    assert.strictEqual(contract.thumbnailSettingsForItem(contract.resolvedFormThumbnailItem(activity, 'field_intelligence', activeShared)).driveFileId, '', 'missing Visitor published thumbnail must produce a valid empty shared result');
+    assert(activity.formDesignRuntimeByContext.field_intelligence.published.items.some(item => item.itemKey === 'active-field'), 'Active fields must remain context-isolated during thumbnail resolution');
+    assert(!activity.formDesignRuntimeByContext.field_intelligence.published.items.some(item => item.itemKey === 'visitor-field'), 'Visitor fields must not copy into Active during thumbnail resolution');
+
+    const fakeImage = attrs => ({
+        attrs: { ...attrs },
+        replacement: null,
+        getAttribute(name) { return this.attrs[name] || null; },
+        setAttribute(name, value) { this.attrs[name] = String(value); },
+        removeAttribute(name) { delete this.attrs[name]; },
+        getAttributeNames() { return Object.keys(this.attrs); },
+        replaceWith(node) { this.replacement = node; }
+    });
+    const previous = fakeImage({ src: '/api/drive/thumbnail?fileId=drive-a', style: 'old', 'data-stable-image-key': 'form-thumbnail:/api/drive/thumbnail?fileId=drive-a' });
+    const next = fakeImage({ src: '/api/drive/thumbnail?fileId=drive-a', style: 'new', alt: 'updated', 'data-stable-image-key': 'form-thumbnail:/api/drive/thumbnail?fileId=drive-a' });
+    contract.restoreStableImages({ querySelectorAll: () => [next] }, new Map([[next.getAttribute('data-stable-image-key'), [previous]]]));
+    assert.strictEqual(next.replacement, previous, 'same resolved thumbnail asset can reuse the existing image node');
+    assert.strictEqual(previous.attrs.src, '/api/drive/thumbnail?fileId=drive-a', 'same asset crop changes must not require changing src');
+    assert.strictEqual(previous.attrs.style, 'new', 'same asset presentation changes must update style only');
+    assert.strictEqual(previous.attrs.alt, 'updated', 'same asset reuse must keep presentation attributes fresh');
+    const differentPrevious = fakeImage({ src: '/api/drive/thumbnail?fileId=drive-a', 'data-stable-image-key': 'form-thumbnail:/api/drive/thumbnail?fileId=drive-a' });
+    const differentNext = fakeImage({ src: '/api/drive/thumbnail?fileId=drive-b', 'data-stable-image-key': 'form-thumbnail:/api/drive/thumbnail?fileId=drive-b' });
+    contract.restoreStableImages({ querySelectorAll: () => [differentNext] }, new Map([[differentPrevious.getAttribute('data-stable-image-key'), [differentPrevious]]]));
+    assert.strictEqual(differentNext.replacement, null, 'different resolved asset identity must trigger a real image update');
 }
 
 function assertCardAssistShortTextMappingBuilderContract(managementSource) {

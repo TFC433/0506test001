@@ -81,6 +81,9 @@
     focalY: 50,
     zoom: 1
   });
+  const thumbnailSourceSharedVisitor = 'shared_visitor';
+  const thumbnailSourceCustom = 'custom';
+  const thumbnailSourceValues = new Set([thumbnailSourceSharedVisitor, thumbnailSourceCustom]);
   const preAuthCopy = Object.freeze({
     product: '活動情報管理',
     message: '請先使用 LINE 登入後繼續',
@@ -864,20 +867,20 @@
     analyticsChartRenderToken += 1;
     if (!currentUser) {
       setFormAuthRootState(true);
-      root.innerHTML = renderPreAuthGate({ state: 'verifying' });
+      replaceHtmlPreservingStableImages(root, renderPreAuthGate({ state: 'verifying' }));
       return;
     }
 
     if (!currentUser.authenticated) {
       setFormAuthRootState(true);
-      root.innerHTML = renderAuthState();
+      replaceHtmlPreservingStableImages(root, renderAuthState());
       bindInputs();
       return;
     }
 
     if (isGuestUser()) {
       setFormAuthRootState(false);
-      root.innerHTML = guestShell();
+      replaceHtmlPreservingStableImages(root, guestShell());
       bindInputs();
       if (ui.focusQuickFirst) {
         ui.focusQuickFirst = false;
@@ -897,7 +900,7 @@
       content = ui.view === 'workspace' ? renderWorkspace() : renderOverview();
     }
 
-    root.innerHTML = shell(content);
+    replaceHtmlPreservingStableImages(root, shell(content));
     bindInputs();
     renderActivityAnalyticsCharts();
     if (ui.focusQuickFirst) {
@@ -966,7 +969,7 @@
   function renderMobileBrand() {
     return `
       <button class="aim-mobile-brand" data-action="home" type="button" aria-label="回到活動情報管理首頁">
-        <img src="/images/portal/form.png" alt="FANUC forms">
+        <img src="/images/portal/form.png" alt="FANUC forms" data-stable-image-key="logo:form">
       </button>
     `;
   }
@@ -1032,7 +1035,7 @@
       <div class="aim-preauth aim-preauth-${Store.escapeHtml(state)}">
         <main class="aim-preauth-panel" aria-live="${isVerifying ? 'polite' : 'off'}">
           <div class="aim-preauth-main">
-            <img src="/images/portal/form.png" alt="FANUC forms" class="aim-preauth-logo">
+            <img src="/images/portal/form.png" alt="FANUC forms" class="aim-preauth-logo" data-stable-image-key="logo:form">
             <h1>${Store.escapeHtml(preAuthCopy.product)}</h1>
             ${showMessage ? `<p>${Store.escapeHtml(message)}</p>` : ''}
             ${isVerifying ? '<div class="aim-preauth-status" role="status">驗證中</div>' : ''}
@@ -1095,7 +1098,7 @@
     return `
       <aside class="aim-sidebar" aria-label="主要導覽">
         <button class="aim-product-brand" data-action="home" type="button" aria-label="回到活動情報管理首頁">
-          <img class="aim-brand-logo" src="/images/portal/form.png" alt="FANUC forms">
+          <img class="aim-brand-logo" src="/images/portal/form.png" alt="FANUC forms" data-stable-image-key="logo:form">
           <strong class="aim-product-title">活動情報管理</strong>
         </button>
         <nav class="aim-sidebar-nav">
@@ -2128,7 +2131,7 @@
   function renderQuickField(field, enabled) {
     if (field.type === 'section_heading') return `<section class="aim-runtime-section aim-runtime-section-form-assist"><div class="aim-runtime-section-title-row"><div><h3>${Store.escapeHtml(field.title)}</h3>${field.helperText ? `<p>${Store.escapeHtml(field.helperText)}</p>` : ''}</div>${renderFormAssistSectionAction(field)}</div></section>`;
     if (field.type === 'information_text') return `<section class="aim-runtime-info"><h3>${Store.escapeHtml(field.title)}</h3>${field.helperText ? `<p>${Store.escapeHtml(field.helperText)}</p>` : ''}</section>`;
-    if (field.type === 'form_thumbnail') return `<section class="aim-runtime-component">${renderFormThumbnailPreview(field)}</section>`;
+    if (field.type === 'form_thumbnail') return `<section class="aim-runtime-component">${renderFormThumbnailPreview(field, activeRecordFormContext())}</section>`;
     if (field.type === 'card_link') return renderRuntimeCardLink(field, enabled, ui.quickCardLink, 'quick');
     const value = ui.quickAnswers[field.fieldId];
     const otherValue = ui.quickOtherAnswers[field.fieldId] || '';
@@ -2527,10 +2530,13 @@
     const source = extra || {};
     const itemKey = source.itemKey || source.item_key || source.fieldId || source.itemId || newUuid();
     const sourceSettings = source.settings && typeof source.settings === 'object' ? Store.clone(source.settings) : {};
+    const suppliedSource = normalizeThumbnailSource(source.thumbnailSource || sourceSettings.thumbnailSource);
     const settings = {
       ...sourceSettings,
       thumbnail: normalizeThumbnailSettings(source)
     };
+    if (suppliedSource) settings.thumbnailSource = suppliedSource;
+    else delete settings.thumbnailSource;
     return {
       formItemId: source.formItemId || source.form_item_id || '',
       itemKey,
@@ -2551,8 +2557,21 @@
       altText: source.altText || sourceSettings.altText || '活動表單示意縮圖',
       thumbnailVariant: source.thumbnailVariant || sourceSettings.thumbnailVariant || 'line',
       ...source,
+      thumbnailSource: suppliedSource,
       settings
     };
+  }
+
+  function normalizeThumbnailSource(value) {
+    const source = String(value || '').trim();
+    return thumbnailSourceValues.has(source) ? source : '';
+  }
+
+  function thumbnailSourceForItem(item, formContext) {
+    if (normalizeFormContext(formContext) !== formContextFieldIntelligenceMode) return thumbnailSourceCustom;
+    const explicit = normalizeThumbnailSource(item && (item.thumbnailSource || (item.settings && item.settings.thumbnailSource)));
+    if (explicit) return explicit;
+    return thumbnailSettingsForItem(item || {}).driveFileId ? thumbnailSourceCustom : thumbnailSourceSharedVisitor;
   }
 
   function normalizeThumbnailSettings(source) {
@@ -2572,6 +2591,27 @@
 
   function thumbnailSettingsForItem(item) {
     return normalizeThumbnailSettings(item || {});
+  }
+
+  function visitorPublishedThumbnailItem(activity) {
+    const design = activity && formDesign(activity, formContextVisitorMode);
+    const items = design && design.published && Array.isArray(design.published.items) ? design.published.items : [];
+    return items.find(item => item.type === 'form_thumbnail' && item.visible !== false && !item.retired && !item.removedInDraft) || null;
+  }
+
+  function resolvedFormThumbnailItem(activity, formContext, item) {
+    const normalized = normalizeDesignerItem(item || {});
+    if (normalized.type !== 'form_thumbnail') return normalized;
+    if (thumbnailSourceForItem(normalized, formContext) !== thumbnailSourceSharedVisitor) return normalized;
+    const visitorThumbnail = visitorPublishedThumbnailItem(activity);
+    return visitorThumbnail ? normalizeDesignerItem(visitorThumbnail) : normalizeDesignerItem({
+      ...normalized,
+      settings: {
+        ...(normalized.settings || {}),
+        thumbnail: thumbnailDefaults
+      },
+      thumbnailVariant: normalized.thumbnailVariant || 'line'
+    });
   }
 
   function clampNumber(value, min, max, fallback) {
@@ -2618,7 +2658,7 @@
     throw new Error('A browser with crypto.randomUUID is required for Activity Intelligence form identities.');
   }
 
-  function designerItemSignature(item) {
+  function designerItemSignature(item, formContext) {
     const normalized = normalizeDesignerItem(item || {});
     return JSON.stringify({
       category: normalized.category,
@@ -2639,12 +2679,13 @@
       thumbnailTitle: normalized.thumbnailTitle || '',
       altText: normalized.altText || '',
       thumbnailVariant: normalized.thumbnailVariant || '',
+      thumbnailSource: normalized.type === 'form_thumbnail' ? thumbnailSourceForItem(normalized, formContext) : '',
       thumbnail: thumbnailSettingsForItem(normalized)
     });
   }
 
-  function designerItemsEqual(a, b) {
-    return designerItemSignature(a) === designerItemSignature(b);
+  function designerItemsEqual(a, b, formContext) {
+    return designerItemSignature(a, formContext) === designerItemSignature(b, formContext);
   }
 
   function syncSelectedDraft(activity, formContext) {
@@ -2949,6 +2990,10 @@
   }
 
   function renderFormThumbnailEditor(field) {
+    const formContext = currentFormContext();
+    const thumbnailSource = thumbnailSourceForItem(field, formContext);
+    const activeThumbnail = formContext === formContextFieldIntelligenceMode;
+    const sharedThumbnail = activeThumbnail && thumbnailSource === thumbnailSourceSharedVisitor;
     const thumbnail = thumbnailSettingsForItem(field);
     const hasImage = Boolean(thumbnail.driveFileId);
     return `
@@ -2959,7 +3004,16 @@
         </div>
         <div class="aim-field-editor-body">
           ${ui.formDesignMessage ? `<div class="aim-field-editor-message" role="alert">${Store.escapeHtml(ui.formDesignMessage)}</div>` : ''}
-          <div class="aim-editor-grid">
+          ${activeThumbnail ? `
+            <div class="aim-field">
+              <label for="aim-field-thumbnail-source">縮圖來源</label>
+              <select class="aim-select" id="aim-field-thumbnail-source">
+                ${option(thumbnailSourceSharedVisitor, '與訪客紀錄共用', thumbnailSource)}
+                ${option(thumbnailSourceCustom, '自訂', thumbnailSource)}
+              </select>
+            </div>
+          ` : ''}
+          ${sharedThumbnail ? '' : `<div class="aim-editor-grid">
             <div class="aim-field"><label for="aim-field-thumbnail-title">縮圖標題（選填）</label><input class="aim-input aim-field-design-input" id="aim-field-thumbnail-title" data-design-field="thumbnailTitle" value="${Store.escapeHtml(field.thumbnailTitle || '')}"></div>
             <div class="aim-field"><label for="aim-field-thumbnail-alt">替代文字（選填）</label><input class="aim-input aim-field-design-input" id="aim-field-thumbnail-alt" data-design-field="altText" value="${Store.escapeHtml(field.altText || '')}"></div>
           </div>
@@ -2974,11 +3028,11 @@
               <input id="aim-thumbnail-zoom" class="aim-thumbnail-range" data-thumbnail-control="zoom" type="range" min="1" max="3" step="0.05" value="${Store.escapeHtml(thumbnail.zoom)}">
               <button class="aim-button aim-button-soft" data-action="reset-thumbnail-media" type="button">重設</button>
             </div>
-          </div>
-          ${renderFormThumbnailVisual(field)}
+          </div>`}
+          ${renderFormThumbnailVisual(field, formContext)}
         </div>
         <div class="aim-field-editor-actions">
-          <button class="aim-button aim-button-soft" data-action="cycle-thumbnail" type="button" ${hasImage ? 'disabled' : ''}>更換範例圖</button>
+          ${sharedThumbnail ? '' : `<button class="aim-button aim-button-soft" data-action="cycle-thumbnail" type="button" ${hasImage ? 'disabled' : ''}>更換範例圖</button>`}
           <button class="aim-button aim-button-danger-soft" data-action="delete-field" data-id="${Store.escapeHtml(designerItemKey(field))}" type="button">移除縮圖</button>
           <button class="aim-button" data-action="cancel-field-draft" type="button" ${!ui.formDesignDraftDirty ? 'disabled' : ''}>取消修改</button>
           <button class="aim-button aim-button-primary" data-action="apply-field-draft" type="button">套用至草稿</button>
@@ -3008,20 +3062,21 @@
 
   function renderFormPreview(activity, formContext) {
     const items = previewItems(activity, formContext).filter(item => item.visible !== false && !item.retired && !item.removedInDraft);
-    const parts = items.map(renderPreviewItem);
+    const parts = items.map(item => renderPreviewItem(item, formContext));
     return parts.join('') || '<div class="aim-empty">尚未建立可顯示欄位。</div>';
   }
 
-  function renderPreviewItem(item) {
+  function renderPreviewItem(item, formContext) {
     if (item.type === 'card_link') return renderFormCardLinkPreview(item);
-    if (item.type === 'form_thumbnail') return renderFormThumbnailPreview(item);
+    if (item.type === 'form_thumbnail') return renderFormThumbnailPreview(item, formContext);
     return renderPreviewField(item);
   }
 
-  function renderFormThumbnailPreview(item) {
+  function renderFormThumbnailPreview(item, formContext) {
+    const resolved = resolvedFormThumbnailItem(selectedActivity(), formContext, item);
     return `
-      <section class="aim-form-thumbnail-preview" aria-label="${Store.escapeHtml(item.altText || item.thumbnailTitle || '表單頁首橫幅')}">
-        ${renderFormThumbnailVisual(item)}
+      <section class="aim-form-thumbnail-preview" aria-label="${Store.escapeHtml(resolved.altText || resolved.thumbnailTitle || '表單頁首橫幅')}">
+        ${renderFormThumbnailVisual(item, formContext)}
       </section>
     `;
   }
@@ -3089,16 +3144,18 @@
     return '';
   }
 
-  function renderFormThumbnailVisual(item) {
-    const thumbnail = thumbnailSettingsForItem(item);
+  function renderFormThumbnailVisual(item, formContext) {
+    const resolved = resolvedFormThumbnailItem(selectedActivity(), formContext, item);
+    const thumbnail = thumbnailSettingsForItem(resolved);
     if (thumbnail.driveFileId) {
+      const src = driveThumbnailUrl(thumbnail.driveFileId);
       return `
         <div class="aim-form-thumbnail-visual aim-form-thumbnail-image aim-thumbnail-position-target" data-thumbnail-drag="true">
-          <img src="${Store.escapeHtml(driveThumbnailUrl(thumbnail.driveFileId))}" alt="${Store.escapeHtml(item.altText || item.thumbnailTitle || '表單頁首橫幅')}" style="${Store.escapeHtml(thumbnailImageStyle(thumbnail))}" loading="lazy" onerror="this.style.display='none'; this.parentElement.classList.add('aim-form-thumbnail-fallback');">
+          <img src="${Store.escapeHtml(src)}" alt="${Store.escapeHtml(resolved.altText || resolved.thumbnailTitle || '表單頁首橫幅')}" style="${Store.escapeHtml(thumbnailImageStyle(thumbnail))}" loading="lazy" data-stable-image-key="form-thumbnail:${Store.escapeHtml(src)}" onerror="this.style.display='none'; this.parentElement.classList.add('aim-form-thumbnail-fallback');">
         </div>
       `;
     }
-    const variant = item.thumbnailVariant || 'line';
+    const variant = resolved.thumbnailVariant || 'line';
     return `
       <div class="aim-form-thumbnail-visual aim-form-thumbnail-${Store.escapeHtml(variant)}" aria-hidden="true">
         <span></span><span></span><span></span><span></span>
@@ -3981,6 +4038,51 @@
     }
   }
 
+  function replaceHtmlPreservingStableImages(container, html) {
+    if (!container) return;
+    const stableImages = collectStableImages(container);
+    container.innerHTML = html;
+    restoreStableImages(container, stableImages);
+  }
+
+  function collectStableImages(container) {
+    const images = new Map();
+    if (!container || typeof container.querySelectorAll !== 'function') return images;
+    container.querySelectorAll('img[data-stable-image-key]').forEach(img => {
+      const key = img.getAttribute('data-stable-image-key') || '';
+      if (!key) return;
+      const list = images.get(key) || [];
+      list.push(img);
+      images.set(key, list);
+    });
+    return images;
+  }
+
+  function restoreStableImages(container, stableImages) {
+    if (!container || !stableImages || typeof container.querySelectorAll !== 'function') return;
+    container.querySelectorAll('img[data-stable-image-key]').forEach(next => {
+      const key = next.getAttribute('data-stable-image-key') || '';
+      const list = stableImages.get(key);
+      const previous = list && list.shift();
+      if (!previous || previous === next) return;
+      if ((previous.getAttribute('src') || '') !== (next.getAttribute('src') || '')) return;
+      syncStableImageAttributes(previous, next);
+      next.replaceWith(previous);
+    });
+  }
+
+  function syncStableImageAttributes(target, source) {
+    const nextNames = new Set(source.getAttributeNames());
+    target.getAttributeNames().forEach(name => {
+      if (!nextNames.has(name)) target.removeAttribute(name);
+    });
+    source.getAttributeNames().forEach(name => {
+      const value = source.getAttribute(name);
+      if (name === 'src' && target.getAttribute(name) === value) return;
+      if (target.getAttribute(name) !== value) target.setAttribute(name, value);
+    });
+  }
+
   function renderActivityTrendChart(records) {
     const chart = activityTrendChartData(records);
     const view = analyticsActivityTrendView(chart.chartKey);
@@ -4761,7 +4863,7 @@
         <div class="aim-drawer-head"><div><h2>編輯紀錄</h2>${editing ? '' : '<span class="aim-pill aim-pill-void">已作廢</span>'}</div><button class="aim-button aim-icon-button" data-action="close-drawer" type="button" aria-label="關閉紀錄">x</button></div>
         <div class="aim-drawer-body">
           <dl class="aim-definition-list aim-record-edit-meta" style="margin-bottom:14px"><dt>建立者</dt><dd>${Store.escapeHtml(record.createdByDisplayName)}</dd><dt>建立時間</dt><dd>${Store.formatDateTime(record.createdAt)}</dd><dt>最近更新者</dt><dd>${Store.escapeHtml(record.updatedByDisplayName)}</dd><dt>最近更新</dt><dd>${Store.formatDateTime(record.updatedAt)}</dd>${editing ? '' : '<dt>狀態</dt><dd><span class="aim-pill aim-pill-void">已作廢</span></dd>'}</dl>
-          <div class="aim-answer-list">${items.map(field => renderAnswer(field, working, editing, workingOther, workingCardLink, workingOptionNotes)).join('')}</div>
+          <div class="aim-answer-list">${items.map(field => renderAnswer(field, working, editing, workingOther, workingCardLink, workingOptionNotes, record.recordContext)).join('')}</div>
         </div>
         <div class="aim-drawer-foot aim-record-drawer-foot">
           ${editing && canVoidRecord(record, activity) ? `<button class="aim-button aim-button-danger" data-action="void-record" data-id="${record.id}" type="button">作廢紀錄</button>` : ''}
@@ -4772,10 +4874,10 @@
     `;
   }
 
-  function renderAnswer(field, answers, editable, otherAnswers, cardLink, optionNotes) {
+  function renderAnswer(field, answers, editable, otherAnswers, cardLink, optionNotes, formContext) {
     if (field.type === 'section_heading') return `<section class="aim-runtime-section"><h3>${Store.escapeHtml(field.title)}</h3>${field.helperText ? `<p>${Store.escapeHtml(field.helperText)}</p>` : ''}</section>`;
     if (field.type === 'information_text') return `<section class="aim-runtime-info"><h3>${Store.escapeHtml(field.title)}</h3>${field.helperText ? `<p>${Store.escapeHtml(field.helperText)}</p>` : ''}</section>`;
-    if (field.type === 'form_thumbnail') return editable ? `<section class="aim-runtime-component">${renderFormThumbnailPreview(field)}</section>` : '';
+    if (field.type === 'form_thumbnail') return editable ? `<section class="aim-runtime-component">${renderFormThumbnailPreview(field, formContext)}</section>` : '';
     if (field.type === 'card_link') return renderRuntimeCardLink(field, editable, cardLink, 'drawer');
     const value = answers[field.fieldId];
     const otherValue = otherAnswers && otherAnswers[field.fieldId] ? otherAnswers[field.fieldId] : '';
@@ -5469,7 +5571,7 @@
     previewRefreshFrame = 0;
     const preview = document.querySelector('.aim-preview');
     if (!preview) return;
-    preview.innerHTML = renderFormPreview(selectedActivity(), currentFormContext());
+    replaceHtmlPreservingStableImages(preview, renderFormPreview(selectedActivity(), currentFormContext()));
     bindFormPreviewControls();
   }
 
@@ -5778,6 +5880,14 @@
     const type = document.getElementById('aim-field-type');
     if (type) type.addEventListener('change', () => {
       updateFormDesignDraft({ type: type.value });
+      render();
+    });
+    const thumbnailSource = document.getElementById('aim-field-thumbnail-source');
+    if (thumbnailSource) thumbnailSource.addEventListener('change', () => {
+      const source = normalizeThumbnailSource(thumbnailSource.value) || thumbnailSourceSharedVisitor;
+      const settings = { ...((ui.formDesignDraft && ui.formDesignDraft.settings) || {}), thumbnailSource: source };
+      updateFormDesignDraft({ thumbnailSource: source, settings });
+      scheduleFormPreviewRefresh();
       render();
     });
     const allowOther = document.getElementById('aim-field-allow-other');
@@ -6801,6 +6911,7 @@
   }
 
   function formDesignChangeSummary(design) {
+    const formContext = normalizeFormContext(design && (design.formContext || (design.draft && design.draft.formContext) || (design.published && design.published.formContext)));
     const publishedMap = new Map(design.published.items.map(item => [designerItemKey(item), item]));
     let added = 0;
     let modified = 0;
@@ -6817,7 +6928,7 @@
       } else if (!published) {
         added += 1;
         addedItems.push(item);
-      } else if (!designerItemsEqual(item, published)) {
+      } else if (!designerItemsEqual(item, published, formContext)) {
         modified += 1;
         modifiedItems.push(item);
       }
@@ -6851,11 +6962,12 @@
   }
 
   function draftItemStatus(design, item) {
+    const formContext = normalizeFormContext(design && (design.formContext || (design.draft && design.draft.formContext) || (design.published && design.published.formContext)));
     const published = design.published.items.find(entry => designerItemKey(entry) === designerItemKey(item));
     if (item.removedInDraft && published) return { key: 'removed', label: '草稿中移除' };
     if (item.visible === false) return { key: 'hidden', label: '已隱藏' };
     if (!published) return { key: 'new', label: '新增未發布' };
-    if (!designerItemsEqual(item, published)) return { key: 'modified', label: '有未發布變更' };
+    if (!designerItemsEqual(item, published, formContext)) return { key: 'modified', label: '有未發布變更' };
     return { key: 'active', label: '正式使用中' };
   }
 
@@ -6902,7 +7014,7 @@
     writeInFlight = true;
     render();
     try {
-      const form = await window.ActivityIntelligenceApi.saveDraft(activity.id, serializeDraftItems(formDesign(activity, formContext).draft.items), formContext);
+      const form = await window.ActivityIntelligenceApi.saveDraft(activity.id, serializeDraftItems(formDesign(activity, formContext).draft.items, formContext), formContext);
       const design = updateActivityFormBundle(activity.id, form, formContext);
       ui.formDesignDraftDirty = false;
       ui.formDesignMessage = '';
@@ -6920,9 +7032,20 @@
     }
   }
 
-  function serializeDraftItems(items) {
+  function serializeDraftItems(items, formContext) {
     return (items || []).map((item, index) => {
       const normalized = normalizeDesignerItem(item);
+      const settings = {
+        ...(normalized.settings || {}),
+        ...(normalized.previewPlacement ? { previewPlacement: normalized.previewPlacement } : {}),
+        ...(normalized.required ? { required: true } : {}),
+        ...(normalized.thumbnailTitle !== undefined ? { thumbnailTitle: normalized.thumbnailTitle } : {}),
+        ...(normalized.altText !== undefined ? { altText: normalized.altText } : {}),
+        ...(normalized.thumbnailVariant !== undefined ? { thumbnailVariant: normalized.thumbnailVariant } : {})
+      };
+      if (normalized.type === 'form_thumbnail' && normalizeFormContext(formContext) === formContextFieldIntelligenceMode) {
+        settings.thumbnailSource = thumbnailSourceForItem(normalized, formContext);
+      }
       return {
         formItemId: normalized.formItemId || undefined,
         itemKey: normalized.itemKey,
@@ -6940,14 +7063,7 @@
         visible: normalized.visible !== false,
         removedInDraft: Boolean(normalized.removedInDraft),
         sortOrder: index + 1,
-        settings: {
-          ...(normalized.settings || {}),
-          ...(normalized.previewPlacement ? { previewPlacement: normalized.previewPlacement } : {}),
-          ...(normalized.required ? { required: true } : {}),
-          ...(normalized.thumbnailTitle !== undefined ? { thumbnailTitle: normalized.thumbnailTitle } : {}),
-          ...(normalized.altText !== undefined ? { altText: normalized.altText } : {}),
-          ...(normalized.thumbnailVariant !== undefined ? { thumbnailVariant: normalized.thumbnailVariant } : {})
-        }
+        settings
       };
     });
   }
@@ -6993,7 +7109,7 @@
     writeInFlight = true;
     render();
     try {
-      await window.ActivityIntelligenceApi.saveDraft(activity.id, serializeDraftItems(formDesign(activity, formContext).draft.items), formContext);
+      await window.ActivityIntelligenceApi.saveDraft(activity.id, serializeDraftItems(formDesign(activity, formContext).draft.items, formContext), formContext);
       const form = await window.ActivityIntelligenceApi.publishDraft(activity.id, formContext);
       const design = updateActivityFormBundle(activity.id, form, formContext);
       ui.formDesignConfirm = null;
@@ -7067,7 +7183,9 @@
     }
     let item;
     if (nextType === 'card_link') item = makeCardLinkItem();
-    else if (nextType === 'form_thumbnail') item = makeFormThumbnailItem();
+    else if (nextType === 'form_thumbnail') item = makeFormThumbnailItem({
+      ...(currentFormContext() === formContextFieldIntelligenceMode ? { settings: { thumbnailSource: thumbnailSourceSharedVisitor } } : {})
+    });
     else item = normalizeDesignerItem({
       itemKey: newUuid(),
       type: nextType,

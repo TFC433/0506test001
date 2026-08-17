@@ -13,6 +13,7 @@ const ANSWER_ITEM_TYPES = new Set([
 ]);
 
 const CHOICE_ITEM_TYPES = new Set(['single_choice', 'multiple_choice', 'dropdown']);
+const THUMBNAIL_SOURCE_VALUES = new Set(['shared_visitor', 'custom']);
 
 const ALLOWED_ITEM_TYPES = new Set([
     'section_heading',
@@ -745,6 +746,14 @@ class ActivityIntelligenceService {
             if (item[key] !== undefined) settings[key] = item[key];
             else if (sourceSettings[key] !== undefined) settings[key] = sourceSettings[key];
         });
+
+        if (type === 'form_thumbnail') {
+            const thumbnailSource = String(item.thumbnailSource || sourceSettings.thumbnailSource || '').trim();
+            if (THUMBNAIL_SOURCE_VALUES.has(thumbnailSource)) settings.thumbnailSource = thumbnailSource;
+            else delete settings.thumbnailSource;
+        } else {
+            delete settings.thumbnailSource;
+        }
 
         return settings;
     }
