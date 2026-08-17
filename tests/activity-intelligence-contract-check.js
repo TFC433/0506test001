@@ -846,15 +846,24 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     [
         '同行訪客（選填）',
         '＋ 新增同行訪客',
-        '個人關注（選填）',
-        '查看名片',
+        '個人關注',
+        '請填寫追加訪客的關注議題',
+        '查看',
+        '更換',
         '移除',
-        '我的補充紀錄',
+        '＋ 補充我的紀錄',
+        '補充我的紀錄',
+        '刪除我的補充',
+        '確定刪除這筆補充紀錄？原始訪談紀錄不會受到影響。',
         '編輯',
         '我的補充',
         '我有補充'
     ].forEach(copy => assert(managementSource.includes(copy), `missing approved supplemental copy: ${copy}`));
     assert(!managementSource.includes('查看完整訪談紀錄'));
+    assert(!managementSource.includes('data-action="save-additional-visitor-interest"'));
+    assert(!managementSource.includes('查看名片'));
+    assert(!managementSource.includes('更換名片'));
+    assert(!managementSource.includes('個人關注（選填）'));
     assert(!managementSource.includes('data-action="view-full-record"'));
     assert(!managementSource.includes('function renderContributorFocusedDetail'));
     assert(!managementSource.includes('personalFullRecordIds'));
@@ -868,6 +877,14 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(managementSource.includes('if (!additionalVisitors.length && !contributions.length) return \'\';'));
     assert(managementSource.includes('const contributorOnly = recordIsContributorOnly(record);'));
     assert(managementSource.includes("contributorOnly\n      ? '<span class=\"aim-record-context-label aim-record-context-label-supplemental\">我有補充</span>'"));
+    assert(managementSource.includes('if (record && !record.supplementalDetailsLoaded) record = await fetchRecordDetails(record.id);'), 'canonical edit must hydrate supplements before opening the drawer');
+    assert(managementSource.includes('workingAdditionalVisitors: editableAdditionalVisitorRows(record)'), 'canonical edit drawer must hydrate persisted Additional Visitors');
+    assert(managementSource.includes('renderRecordDrawerAdditionalVisitors(record, activity, editing)'), 'canonical edit drawer must render Additional Visitors in the same edit session');
+    assert(managementSource.includes('recordDrawerAdditionalVisitorsCanAdd(activity)'), 'record edit add affordance must use current Visitor Count');
+    assert(managementSource.includes('persistRecordAdditionalVisitorChanges(updated, pendingAdditionalVisitors)'), 'record save must persist supplemental visitor changes after canonical update');
+    assert(managementSource.includes('if (entry.supplementId) payload.supplementId = entry.supplementId;'), 'existing Additional Visitor save must retain supplementId for UPDATE semantics');
+    assert(managementSource.includes('if (entry.supplementId) updated = await window.ActivityIntelligenceApi.deleteAdditionalVisitor(submissionId, entry.supplementId);'), 'removing persisted Additional Visitors must call the existing delete path');
+    assert(managementSource.includes('toast(supplementalResult.supplementalError ? \'已儲存紀錄，但部分附加資訊未儲存。\' : \'已儲存紀錄。\');'), 'canonical save must surface partial supplemental failures');
     assert(managementSource.includes('submission = await window.ActivityIntelligenceApi.saveAdditionalVisitor(submission.id || submission.submissionId, {'));
     assert(managementSource.indexOf('let submission = await window.ActivityIntelligenceApi.createSubmission') < managementSource.indexOf('submission = await window.ActivityIntelligenceApi.saveAdditionalVisitor'));
     assert(managementSource.includes('cardId: entry.cardId,\n            personalInterest: entry.personalInterest || \'\''));
@@ -889,6 +906,9 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(cssSource.includes('.aim-contribution-author-line'));
     assert(cssSource.includes('.aim-contribution-row-actions'));
     assert(cssSource.includes('.aim-contribution-mine-cue'));
+    assert(cssSource.includes('.aim-record-drawer-supplemental-editor'));
+    assert(cssSource.includes('.aim-record-contribution-create'));
+    assert(cssSource.includes('.aim-contribution-delete-action'));
     assert(cssSource.includes('color: var(--aim-blue-dark);'));
     assert(cssSource.includes('.aim-supplemental-entry {\n  gap: 10px;\n  padding: 10px 12px 12px;\n  border: 1px solid var(--aim-border);\n  border-radius: 6px;\n  background: #fbfcfe;\n}'));
     assert(cssSource.includes('.aim-supplemental-entry-card {\n  gap: 8px;\n  padding: 9px 10px;\n  border: 1px solid var(--aim-border);\n  border-radius: 6px;\n  background: #fff;\n}'));
@@ -929,6 +949,7 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(cssSource.indexOf('.aim-record-context-label {') < cssSource.indexOf('.aim-record-context-label-supplemental'));
     assert(cssSource.indexOf('.aim-inline-record-meta-card {') < cssSource.indexOf('.aim-supplemental-detail {'));
     assert(cssSource.indexOf('.aim-supplemental-visitor-main span,') < cssSource.indexOf('.aim-supplemental-visitor-company'));
+    assert(!cssSource.includes('.aim-record-drawer-supplement-action'));
     const supplementalCssBlock = cssSource.slice(cssSource.indexOf('.aim-supplemental-entry,'), cssSource.indexOf('.aim-answer-badges'));
     assert(!supplementalCssBlock.includes('!important'));
     assert(!cssSource.includes('.aim-supplemental-detail-row textarea,\n.aim-supplemental-interest-input'));
@@ -948,7 +969,7 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
         extractFunctionDeclaration(managementSource, 'renderAdditionalVisitorDetailRow'),
         extractFunctionDeclaration(managementSource, 'renderContributionDetailRow'),
         extractFunctionDeclaration(managementSource, 'renderSupplementalDetail'),
-        '({ renderSupplementalDetail })'
+        '({ renderAdditionalVisitorDetailRow, renderSupplementalDetail })'
     ].join('\n');
     const contract = vm.runInNewContext(renderSource, {});
     const baseRecord = { id: 'record-1', recordContext: 'visitor', supplements: { additionalVisitors: [], contributions: [], myContribution: null } };
@@ -976,6 +997,21 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(additionalOnlyHtml.includes('>查看</button>'));
     assert(additionalOnlyHtml.includes('class="aim-supplemental-visitor-company">Co</span>'));
     assert(additionalOnlyHtml.includes('aim-supplemental-text-action'));
+    const editRowHtml = contract.renderAdditionalVisitorDetailRow(baseRecord, {
+        rowIndex: 0,
+        supplementId: 's1',
+        cardSnapshot: { cardId: 'c1', name: 'A', company: 'Co', jobTitle: 'Title' },
+        personalInterest: 'Need A'
+    }, true);
+    assert(editRowHtml.includes('class="aim-supplemental-visitor-row aim-supplemental-detail-row aim-supplemental-entry-card"'));
+    assert(editRowHtml.includes('data-index="0"'));
+    assert(editRowHtml.includes('>查看</button>'));
+    assert(editRowHtml.includes('>更換</button>'));
+    assert(editRowHtml.includes('>移除</button>'));
+    assert(editRowHtml.includes('class="aim-supplemental-interest-label">個人關注</span><span class="aim-small">請填寫追加訪客的關注議題</span>'));
+    assert(!editRowHtml.includes('儲存'));
+    assert(!editRowHtml.includes('查看名片'));
+    assert(!editRowHtml.includes('更換名片'));
     const contributionOnlyHtml = contract.renderSupplementalDetail({
         ...baseRecord,
         supplements: {
@@ -1020,6 +1056,25 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(mineContributionHtml.includes('>編輯</button>'));
     assert(!mineContributionHtml.includes('編輯我的紀錄'));
 
+    const contributionCreateSource = [
+        'const Store = { escapeHtml: value => String(value || "") };',
+        'let allowContribution = true;',
+        'let hasContribution = false;',
+        'function canContributeToRecord() { return allowContribution; }',
+        'function recordHasMyContribution() { return hasContribution; }',
+        extractFunctionDeclaration(managementSource, 'renderContributionCreateAction'),
+        '({ renderContributionCreateAction, setAllow: value => { allowContribution = value; }, setHas: value => { hasContribution = value; } })'
+    ].join('\n');
+    const contributionCreateContract = vm.runInNewContext(contributionCreateSource, {});
+    const createContributionHtml = contributionCreateContract.renderContributionCreateAction(baseRecord, {});
+    assert(createContributionHtml.includes('＋ 補充我的紀錄'));
+    assert(createContributionHtml.includes('data-action="open-my-contribution"'));
+    contributionCreateContract.setAllow(false);
+    assert.strictEqual(contributionCreateContract.renderContributionCreateAction(baseRecord, {}), '');
+    contributionCreateContract.setAllow(true);
+    contributionCreateContract.setHas(true);
+    assert.strictEqual(contributionCreateContract.renderContributionCreateAction(baseRecord, {}), '');
+
     const quickRowSource = [
         'const Store = { escapeHtml: value => String(value || "") };',
         extractFunctionDeclaration(managementSource, 'renderQuickAdditionalVisitorRow'),
@@ -1047,6 +1102,69 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(quickHtml.includes('placeholder="請填寫追加訪客的關注議題"'));
     assert(quickHtml.includes('aim-supplemental-entry-text-action'));
     assert(quickHtml.includes('aim-textarea aim-auto-grow aim-supplemental-interest-input'));
+
+    const drawerAdditionalSource = [
+        'const Store = { escapeHtml: value => String(value || "") };',
+        'let rows = [];',
+        'let canAdd = false;',
+        'function recordIsFieldIntelligence() { return false; }',
+        'function canEditRecord() { return true; }',
+        'function activeRecordDrawerAdditionalVisitors() { return rows; }',
+        'function recordDrawerAdditionalVisitorsCanAdd() { return canAdd; }',
+        extractFunctionDeclaration(managementSource, 'renderAdditionalVisitorDetailRow'),
+        extractFunctionDeclaration(managementSource, 'renderRecordDrawerAdditionalVisitors'),
+        '({ renderRecordDrawerAdditionalVisitors, setRows: value => { rows = value; }, setCanAdd: value => { canAdd = value; } })'
+    ].join('\n');
+    const drawerAdditionalContract = vm.runInNewContext(drawerAdditionalSource, {});
+    drawerAdditionalContract.setRows([{
+        supplementId: 's1',
+        cardId: 'c1',
+        card: { cardId: 'c1', name: 'A', company: 'Co' },
+        personalInterest: 'Need A',
+        removed: false
+    }]);
+    drawerAdditionalContract.setCanAdd(false);
+    const existingCountOneHtml = drawerAdditionalContract.renderRecordDrawerAdditionalVisitors(baseRecord, {}, true);
+    assert(existingCountOneHtml.includes('同行訪客（選填）'));
+    assert(existingCountOneHtml.includes('data-index="0"'));
+    assert(!existingCountOneHtml.includes('record-add-additional-visitor'), 'Visitor Count <=1 must hide only the new-add affordance');
+    drawerAdditionalContract.setRows([]);
+    drawerAdditionalContract.setCanAdd(true);
+    const canAddHtml = drawerAdditionalContract.renderRecordDrawerAdditionalVisitors(baseRecord, {}, true);
+    assert(canAddHtml.includes('＋ 新增同行訪客'));
+    assert(canAddHtml.includes('record-add-additional-visitor'));
+
+    const supplementalCrudStateSource = [
+        'let uuidCounter = 0;',
+        'function newUuid() { uuidCounter += 1; return `client-${uuidCounter}`; }',
+        'function normalizeRawCard(card) { return card && { cardId: card.cardId || card.card_id || "", name: card.name || "", company: card.company || "", position: card.position || card.jobTitle || "" }; }',
+        'let ui = { drawer: { type: "record", id: "record-1", working: { vc: "2" }, workingOther: {}, workingAdditionalVisitors: [] } };',
+        extractFunctionDeclaration(managementSource, 'editableAdditionalVisitorRows'),
+        extractFunctionDeclaration(managementSource, 'activeRecordDrawerAdditionalVisitors'),
+        extractFunctionDeclaration(managementSource, 'applyRecordAdditionalVisitorCard'),
+        extractFunctionDeclaration(managementSource, 'updateRecordAdditionalVisitorInterest'),
+        extractFunctionDeclaration(managementSource, 'removeRecordAdditionalVisitor'),
+        '({ ui, editableAdditionalVisitorRows, applyRecordAdditionalVisitorCard, updateRecordAdditionalVisitorInterest, removeRecordAdditionalVisitor })'
+    ].join('\n');
+    const supplementalCrudState = vm.runInNewContext(supplementalCrudStateSource, {});
+    supplementalCrudState.ui.drawer.workingAdditionalVisitors = supplementalCrudState.editableAdditionalVisitorRows({
+        supplements: {
+            additionalVisitors: [{ supplementId: 's1', cardId: 'c1', cardSnapshot: { cardId: 'c1', name: 'A', company: 'Co' }, personalInterest: 'Need A' }]
+        }
+    });
+    assert.strictEqual(supplementalCrudState.ui.drawer.workingAdditionalVisitors[0].supplementId, 's1');
+    supplementalCrudState.updateRecordAdditionalVisitorInterest(0, 'Need B');
+    assert.strictEqual(supplementalCrudState.ui.drawer.workingAdditionalVisitors[0].personalInterest, 'Need B');
+    assert.strictEqual(supplementalCrudState.ui.drawer.workingAdditionalVisitors[0].dirty, true);
+    supplementalCrudState.applyRecordAdditionalVisitorCard({ cardId: 'c2', name: 'B' }, { submissionId: 'record-1', index: '0' });
+    assert.strictEqual(supplementalCrudState.ui.drawer.workingAdditionalVisitors[0].supplementId, 's1');
+    assert.strictEqual(supplementalCrudState.ui.drawer.workingAdditionalVisitors[0].cardId, 'c2');
+    supplementalCrudState.applyRecordAdditionalVisitorCard({ cardId: 'c3', name: 'C' }, { submissionId: 'record-1', index: '' });
+    assert.strictEqual(supplementalCrudState.ui.drawer.workingAdditionalVisitors[1].supplementId, '');
+    supplementalCrudState.removeRecordAdditionalVisitor(0);
+    assert.strictEqual(supplementalCrudState.ui.drawer.workingAdditionalVisitors[0].removed, true);
+    supplementalCrudState.removeRecordAdditionalVisitor(1);
+    assert.strictEqual(supplementalCrudState.ui.drawer.workingAdditionalVisitors.length, 1);
 }
 
 function assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource) {

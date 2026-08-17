@@ -1954,6 +1954,7 @@
           ${detail.cardRailHtml ? `<aside class="aim-record-detail-card-rail" aria-label="名片">${detail.cardRailHtml}</aside>` : ''}
         </div>
         ${renderSupplementalDetail(record, activity)}
+        ${renderContributionCreateAction(record, activity)}
       </div>
     `;
   }
@@ -1982,12 +1983,14 @@
   }
 
   function renderAdditionalVisitorDetailRow(record, entry, canEditSupplement) {
-    const card = entry.cardSnapshot || {};
+    const card = entry.card || entry.cardSnapshot || {};
     const title = card.name || '未命名名片';
     const jobTitle = card.position || card.jobTitle || '';
     const company = card.company || '';
+    const cardId = entry.cardId || card.cardId || '';
+    const rowIndex = Number.isInteger(entry.rowIndex) ? entry.rowIndex : -1;
     return `
-      <article class="aim-supplemental-visitor-row aim-supplemental-detail-row">
+      <article class="aim-supplemental-visitor-row aim-supplemental-detail-row ${canEditSupplement ? 'aim-supplemental-entry-card' : ''}">
         <div class="aim-supplemental-visitor-line">
           <div class="aim-supplemental-visitor-main">
             <div class="aim-supplemental-visitor-title-line">
@@ -1997,18 +2000,47 @@
             ${company ? `<span class="aim-supplemental-visitor-company">${Store.escapeHtml(company)}</span>` : ''}
             ${entry.personalInterest ? `<span class="aim-supplemental-interest-text"><span class="aim-supplemental-interest-prefix">關注：</span>${Store.escapeHtml(entry.personalInterest)}</span>` : ''}
           </div>
-          ${!canEditSupplement && card.cardId ? `<button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看</button>` : ''}
+          ${!canEditSupplement && cardId ? `<button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(cardId)}" data-viewer-context="linked">查看</button>` : ''}
         </div>
         ${canEditSupplement ? `
-          <label class="aim-field aim-supplemental-interest-field"><span>個人關注（選填）</span><textarea class="aim-textarea aim-auto-grow aim-additional-interest-edit" data-supplement-id="${Store.escapeHtml(entry.supplementId)}" rows="1" placeholder="個人關注（選填）">${Store.escapeHtml(entry.personalInterest || '')}</textarea></label>
+          <label class="aim-field aim-supplemental-interest-field"><span class="aim-supplemental-interest-label">個人關注</span><span class="aim-small">請填寫追加訪客的關注議題</span><textarea class="aim-textarea aim-auto-grow aim-additional-interest-edit" data-index="${rowIndex}" rows="1" placeholder="請填寫追加訪客的關注議題">${Store.escapeHtml(entry.personalInterest || '')}</textarea></label>
           <div class="aim-supplemental-visitor-actions">
-            ${card.cardId ? `<button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
-            <button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="record-change-additional-visitor-card" data-id="${Store.escapeHtml(record.id)}" data-supplement-id="${Store.escapeHtml(entry.supplementId)}" data-personal-interest="${Store.escapeHtml(entry.personalInterest || '')}">更換名片</button>
-            <button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="save-additional-visitor-interest" data-id="${Store.escapeHtml(record.id)}" data-supplement-id="${Store.escapeHtml(entry.supplementId)}">儲存</button>
-            <button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="delete-additional-visitor" data-id="${Store.escapeHtml(record.id)}" data-supplement-id="${Store.escapeHtml(entry.supplementId)}">移除</button>
+            ${cardId ? `<button class="aim-button aim-button-small aim-supplemental-text-action aim-supplemental-entry-text-action" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(cardId)}" data-viewer-context="linked">查看</button>` : ''}
+            <button class="aim-button aim-button-small aim-supplemental-text-action aim-supplemental-entry-text-action" type="button" data-action="record-change-additional-visitor-card" data-id="${Store.escapeHtml(record.id)}" data-index="${rowIndex}">更換</button>
+            <button class="aim-button aim-button-small aim-supplemental-text-action aim-supplemental-entry-text-action" type="button" data-action="remove-record-additional-visitor" data-index="${rowIndex}">移除</button>
           </div>
         ` : ''}
       </article>
+    `;
+  }
+
+  function renderRecordDrawerAdditionalVisitors(record, activity, editing) {
+    if (!editing || recordIsFieldIntelligence(record) || !canEditRecord(record, activity)) return '';
+    const rows = activeRecordDrawerAdditionalVisitors()
+      .map((entry, index) => ({ ...entry, rowIndex: index }))
+      .filter(entry => !entry.removed);
+    const canAdd = recordDrawerAdditionalVisitorsCanAdd(activity);
+    if (!rows.length && !canAdd) return '';
+    return `
+      <section class="aim-supplemental-entry aim-record-drawer-supplemental-editor" aria-label="同行訪客">
+        <div class="aim-supplemental-entry-head">
+          <div>
+            <h3>同行訪客（選填）</h3>
+            <span class="aim-small">有同行訪客時，可補充其名片與個別關注重點。</span>
+          </div>
+          ${canAdd ? `<button class="aim-button aim-button-small aim-supplemental-add-action" data-action="record-add-additional-visitor" data-id="${Store.escapeHtml(record.id)}" type="button">＋ 新增同行訪客</button>` : ''}
+        </div>
+        ${rows.length ? `<div class="aim-supplemental-visitor-list">${rows.map(entry => renderAdditionalVisitorDetailRow(record, entry, true)).join('')}</div>` : ''}
+      </section>
+    `;
+  }
+
+  function renderContributionCreateAction(record, activity) {
+    if (!canContributeToRecord(record, activity) || recordHasMyContribution(record)) return '';
+    return `
+      <div class="aim-record-contribution-create">
+        <button class="aim-button aim-button-small aim-supplemental-add-action" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">＋ 補充我的紀錄</button>
+      </div>
     `;
   }
 
@@ -3620,6 +3652,7 @@
       ui.quickCardLink && ui.quickCardLink.card,
       ui.drawer && ui.drawer.workingCardLink && ui.drawer.workingCardLink.card,
       ...(ui.quickAdditionalVisitors || []).map(entry => entry && entry.card),
+      ...((ui.drawer && ui.drawer.workingAdditionalVisitors) || []).map(entry => entry && entry.card),
       ...(state.records || []).map(record => cardLinkForRecord(record).card),
       ...(state.records || []).flatMap(record => ((record.supplements && record.supplements.additionalVisitors) || []).map(entry => supplementSnapshotAsRawCard(entry.cardSnapshot)))
     ];
@@ -5102,15 +5135,15 @@
     return `
       <div class="aim-drawer-backdrop" data-action="close-drawer"></div>
       <aside class="aim-drawer aim-record-edit-drawer" role="dialog" aria-modal="true">
-        <div class="aim-drawer-head"><div><h2>我的補充紀錄</h2></div><button class="aim-button aim-icon-button" data-action="close-drawer" type="button" aria-label="關閉補充紀錄">x</button></div>
+        <div class="aim-drawer-head"><div><h2>補充我的紀錄</h2></div><button class="aim-button aim-icon-button" data-action="close-drawer" type="button" aria-label="關閉補充紀錄">x</button></div>
         <div class="aim-drawer-body">
           <div class="aim-field">
-            <label>補充紀錄</label>
+            <label>補充我的紀錄</label>
             <textarea class="aim-textarea aim-auto-grow aim-record-supplemental-interest-input" rows="5" placeholder="補充這筆訪談的觀察、後續或個人紀錄">${Store.escapeHtml(ui.drawer.note || '')}</textarea>
           </div>
         </div>
         <div class="aim-drawer-foot aim-record-drawer-foot">
-          ${contribution ? `<button class="aim-button aim-button-danger-soft" data-action="delete-my-contribution" data-id="${Store.escapeHtml(record.id)}" type="button">刪除補充紀錄</button>` : ''}
+          ${contribution ? `<button class="aim-button aim-button-danger-soft aim-contribution-delete-action" data-action="delete-my-contribution" data-id="${Store.escapeHtml(record.id)}" type="button">刪除我的補充</button>` : ''}
           <div class="aim-drawer-actions"><button class="aim-button" data-action="close-drawer" type="button">關閉</button><button class="aim-button aim-button-primary" data-action="save-my-contribution" type="button">儲存補充紀錄</button></div>
         </div>
       </aside>
@@ -5189,7 +5222,7 @@
         <div class="aim-drawer-body">
           <dl class="aim-definition-list aim-record-edit-meta" style="margin-bottom:14px"><dt>建立者</dt><dd>${Store.escapeHtml(record.createdByDisplayName)}</dd><dt>建立時間</dt><dd>${Store.formatDateTime(record.createdAt)}</dd><dt>最近更新者</dt><dd>${Store.escapeHtml(record.updatedByDisplayName)}</dd><dt>最近更新</dt><dd>${Store.formatDateTime(record.updatedAt)}</dd>${editing ? '' : '<dt>狀態</dt><dd><span class="aim-pill aim-pill-void">已作廢</span></dd>'}</dl>
           <div class="aim-answer-list">${items.map(field => renderAnswer(field, working, editing, workingOther, workingCardLink, workingOptionNotes, record.recordContext)).join('')}</div>
-          ${editing && !recordIsFieldIntelligence(record) && canEditRecord(record, activity) ? `<div class="aim-record-drawer-supplement-action"><button class="aim-button aim-button-small" data-action="record-add-additional-visitor" data-id="${Store.escapeHtml(record.id)}" type="button">＋ 新增同行訪客</button></div>` : ''}
+          ${renderRecordDrawerAdditionalVisitors(record, activity, editing)}
         </div>
         <div class="aim-drawer-foot aim-record-drawer-foot">
           ${editing && canVoidRecord(record, activity) ? `<button class="aim-button aim-button-danger" data-action="void-record" data-id="${record.id}" type="button">作廢紀錄</button>` : ''}
@@ -5388,7 +5421,8 @@
       toggleOptionNoteEditor(el.dataset.context || 'quick', el.dataset.field || '', el.dataset.optionKey || '');
     }
     if (action === 'edit-record') {
-      const record = state.records.find(r => r.id === el.dataset.id);
+      let record = state.records.find(r => r.id === el.dataset.id);
+      if (record && !record.supplementalDetailsLoaded) record = await fetchRecordDetails(record.id);
       if (canOpenRecordDrawer(record, selectedActivity())) ui.drawer = {
         type: 'record',
         mode: record.status === 'void' ? 'void' : 'edit',
@@ -5397,7 +5431,8 @@
         workingOther: Store.clone(otherAnswersForRecord(record)),
         workingOptionNotes: Store.clone(optionNotesForRecord(record)),
         optionNoteExpanded: {},
-        workingCardLink: Store.clone(cardLinkForRecord(record))
+        workingCardLink: Store.clone(cardLinkForRecord(record)),
+        workingAdditionalVisitors: editableAdditionalVisitorRows(record)
       };
     }
     if (action === 'save-record') await saveRecord();
@@ -5521,19 +5556,13 @@
       await openAdditionalVisitorCardPicker({
         context: 'record-additional-visitor',
         submissionId: el.dataset.id,
-        supplementId: el.dataset.supplementId,
-        personalInterest: el.dataset.personalInterest || ''
+        index: el.dataset.index || ''
       });
       render();
       return true;
     }
-    if (action === 'save-additional-visitor-interest') {
-      await saveAdditionalVisitorInterest(el.dataset.id, el.dataset.supplementId);
-      render();
-      return true;
-    }
-    if (action === 'delete-additional-visitor') {
-      await deleteAdditionalVisitor(el.dataset.id, el.dataset.supplementId);
+    if (action === 'remove-record-additional-visitor') {
+      removeRecordAdditionalVisitor(Number(el.dataset.index));
       render();
       return true;
     }
@@ -6123,14 +6152,14 @@
       node.addEventListener(eventName, () => {
         const before = ui.drawer && ui.drawer.working ? answerHasOther(ui.drawer.working[node.dataset.field]) : false;
         setWorking(node.dataset.field, node.value);
-        refreshRecordDrawerAnswerListIfOtherChanged(before, ui.drawer && ui.drawer.working && ui.drawer.working[node.dataset.field]);
+        refreshRecordDrawerAnswerListIfNeeded(node.dataset.field, before, ui.drawer && ui.drawer.working && ui.drawer.working[node.dataset.field]);
       });
     });
     rootNode.querySelectorAll('.aim-record-radio').forEach(node => node.addEventListener('change', () => {
       if (!node.checked) return;
       const before = ui.drawer && ui.drawer.working ? answerHasOther(ui.drawer.working[node.dataset.field]) : false;
       setWorking(node.dataset.field, node.value);
-      refreshRecordDrawerAnswerListIfOtherChanged(before, ui.drawer && ui.drawer.working && ui.drawer.working[node.dataset.field]);
+      refreshRecordDrawerAnswerListIfNeeded(node.dataset.field, before, ui.drawer && ui.drawer.working && ui.drawer.working[node.dataset.field]);
     }));
     rootNode.querySelectorAll('.aim-record-check').forEach(node => node.addEventListener('change', () => {
       if (!ui.drawer || !ui.drawer.working) return;
@@ -6145,15 +6174,21 @@
       setWorking(node.dataset.field, Array.from(list));
       const field = runtimeFieldById(node.dataset.field, 'record');
       if (fieldAllowsOptionNotes(field)) refreshRecordDrawerAnswerList();
-      else refreshRecordDrawerAnswerListIfOtherChanged(before, ui.drawer.working[node.dataset.field]);
+      else refreshRecordDrawerAnswerListIfNeeded(node.dataset.field, before, ui.drawer.working[node.dataset.field]);
     }));
     rootNode.querySelectorAll('.aim-record-other-input').forEach(node => {
       node.addEventListener('focus', () => refreshOtherHistorySuggestions(node));
       node.addEventListener('input', () => {
         setWorkingOther(node.dataset.field, node.value);
         refreshOtherHistorySuggestions(node);
+        const activity = selectedActivity();
+        const visitorField = activity && currentVisitorCountField(activity);
+        if (visitorField && visitorField.fieldId === node.dataset.field) render();
       });
     });
+    rootNode.querySelectorAll('.aim-additional-interest-edit').forEach(node => node.addEventListener('input', () => {
+      updateRecordAdditionalVisitorInterest(Number(node.dataset.index), node.value);
+    }));
     rootNode.querySelectorAll('.aim-option-note-input[data-context="record"]').forEach(node => node.addEventListener('input', () => setOptionNote('record', node.dataset.field, node.dataset.optionKey, node.value)));
   }
 
@@ -6174,6 +6209,13 @@
 
   function refreshRecordDrawerAnswerListIfOtherChanged(before, value) {
     if (before !== answerHasOther(value)) refreshRecordDrawerAnswerList();
+  }
+
+  function refreshRecordDrawerAnswerListIfNeeded(fieldId, before, value) {
+    const activity = selectedActivity();
+    const visitorField = activity && currentVisitorCountField(activity);
+    if (visitorField && visitorField.fieldId === fieldId) return render();
+    return refreshRecordDrawerAnswerListIfOtherChanged(before, value);
   }
 
   function applyOtherHistorySuggestion(button) {
@@ -7173,6 +7215,86 @@
     return Array.isArray(ui.quickAdditionalVisitors) ? ui.quickAdditionalVisitors : [];
   }
 
+  function editableAdditionalVisitorRows(record) {
+    return (((record && record.supplements && record.supplements.additionalVisitors) || []).map(entry => {
+      const card = normalizeRawCard(entry.cardSnapshot) || entry.cardSnapshot || {};
+      return {
+        clientId: entry.supplementId || newUuid(),
+        supplementId: entry.supplementId || '',
+        cardId: entry.cardId || card.cardId || '',
+        card,
+        cardSnapshot: entry.cardSnapshot || card,
+        personalInterest: entry.personalInterest || '',
+        removed: false,
+        dirty: false
+      };
+    }));
+  }
+
+  function activeRecordDrawerAdditionalVisitors() {
+    if (!ui.drawer || ui.drawer.type !== 'record') return [];
+    if (!Array.isArray(ui.drawer.workingAdditionalVisitors)) ui.drawer.workingAdditionalVisitors = [];
+    return ui.drawer.workingAdditionalVisitors;
+  }
+
+  function currentRecordDrawerVisitorCount(activity) {
+    const field = currentVisitorCountField(activity);
+    if (!field || !ui.drawer || ui.drawer.type !== 'record') return null;
+    const answer = ui.drawer.working && ui.drawer.working[field.fieldId];
+    const mainValue = visitorNumberValue(answer);
+    if (mainValue !== null) return mainValue;
+    if (!visitorAnswerIsOther(answer, field)) return null;
+    return visitorNumberValue(ui.drawer.workingOther && ui.drawer.workingOther[field.fieldId]);
+  }
+
+  function recordDrawerAdditionalVisitorsCanAdd(activity) {
+    return currentRecordDrawerVisitorCount(activity) > 1;
+  }
+
+  function applyRecordAdditionalVisitorCard(card, pickerState) {
+    if (!ui.drawer || ui.drawer.type !== 'record' || ui.drawer.id !== (pickerState && pickerState.submissionId)) return false;
+    const normalized = normalizeRawCard(card);
+    if (!normalized || !normalized.cardId) return false;
+    const rows = activeRecordDrawerAdditionalVisitors();
+    const hasIndex = pickerState && String(pickerState.index || '').trim() !== '';
+    const index = hasIndex ? Number(pickerState.index) : NaN;
+    if (Number.isInteger(index) && rows[index]) {
+      rows[index] = {
+        ...rows[index],
+        cardId: normalized.cardId,
+        card: normalized,
+        cardSnapshot: normalized,
+        removed: false,
+        dirty: true
+      };
+      return true;
+    }
+    rows.push({
+      clientId: newUuid(),
+      supplementId: '',
+      cardId: normalized.cardId,
+      card: normalized,
+      cardSnapshot: normalized,
+      personalInterest: '',
+      removed: false,
+      dirty: true
+    });
+    return true;
+  }
+
+  function updateRecordAdditionalVisitorInterest(index, value) {
+    const rows = activeRecordDrawerAdditionalVisitors();
+    if (!Number.isInteger(index) || !rows[index]) return;
+    rows[index] = { ...rows[index], personalInterest: value, dirty: true };
+  }
+
+  function removeRecordAdditionalVisitor(index) {
+    const rows = activeRecordDrawerAdditionalVisitors();
+    if (!Number.isInteger(index) || !rows[index]) return;
+    if (rows[index].supplementId) rows[index] = { ...rows[index], removed: true, dirty: true };
+    else rows.splice(index, 1);
+  }
+
   function isMyContribution(contribution) {
     return Boolean(currentUser && contribution && contribution.actorUserId === currentUser.userId);
   }
@@ -7895,6 +8017,7 @@
         context: options.context,
         submissionId: options.submissionId || '',
         supplementId: options.supplementId || '',
+        index: options.index || '',
         personalInterest: options.personalInterest || '',
         q: '',
         page: 1
@@ -7937,25 +8060,35 @@
     toast('已更新同行訪客。');
   }
 
-  async function saveAdditionalVisitorInterest(submissionId, supplementId) {
-    const node = document.querySelector(`.aim-additional-interest-edit[data-supplement-id="${cssEscape(supplementId)}"]`);
-    const record = state.records.find(item => item.id === submissionId);
-    const entry = record && record.supplements && record.supplements.additionalVisitors.find(row => row.supplementId === supplementId);
-    if (!record || !entry) return;
-    const updated = await window.ActivityIntelligenceApi.saveAdditionalVisitor(submissionId, {
-      supplementId,
-      cardId: entry.cardId || (entry.cardSnapshot && entry.cardSnapshot.cardId),
-      personalInterest: node ? node.value : entry.personalInterest
-    });
-    replaceRecord(updated);
-    toast('已更新同行訪客。');
-  }
-
   async function deleteAdditionalVisitor(submissionId, supplementId) {
     if (!submissionId || !supplementId) return;
     const updated = await window.ActivityIntelligenceApi.deleteAdditionalVisitor(submissionId, supplementId);
     replaceRecord(updated);
     toast('已移除同行訪客。');
+  }
+
+  async function persistRecordAdditionalVisitorChanges(submission, rows) {
+    let updated = submission;
+    let supplementalError = null;
+    const submissionId = submission && (submission.id || submission.submissionId);
+    for (const entry of rows || []) {
+      try {
+        if (entry.removed) {
+          if (entry.supplementId) updated = await window.ActivityIntelligenceApi.deleteAdditionalVisitor(submissionId, entry.supplementId);
+          continue;
+        }
+        if (!entry.cardId || (entry.supplementId && !entry.dirty)) continue;
+        const payload = {
+          cardId: entry.cardId,
+          personalInterest: entry.personalInterest || ''
+        };
+        if (entry.supplementId) payload.supplementId = entry.supplementId;
+        updated = await window.ActivityIntelligenceApi.saveAdditionalVisitor(submissionId, payload);
+      } catch (error) {
+        supplementalError = error;
+      }
+    }
+    return { updated, supplementalError };
   }
 
   function openContributionDrawer(submissionId) {
@@ -7981,6 +8114,7 @@
 
   async function deleteMyContribution(submissionId) {
     if (!submissionId) return;
+    if (!window.confirm('確定刪除這筆補充紀錄？原始訪談紀錄不會受到影響。')) return;
     const updated = await window.ActivityIntelligenceApi.deleteMyContribution(submissionId);
     replaceRecord(updated);
     ui.drawer = null;
@@ -8128,6 +8262,7 @@
     }
     if (context === 'record-additional-visitor') {
       ui.cardPicker = null;
+      if (applyRecordAdditionalVisitorCard(card, pickerState)) return;
       await saveRecordAdditionalVisitorFromCard(card, pickerState);
       return;
     }
@@ -8236,14 +8371,19 @@
     try {
       const answers = cleanAnswersForItems(ui.drawer.working || {}, items);
       const cardLink = cleanCardLink(ui.drawer.workingCardLink || cardLinkForRecord(record));
-      const updated = await window.ActivityIntelligenceApi.updateSubmission(record.id, {
+      const pendingAdditionalVisitors = !recordIsFieldIntelligence(record)
+        ? (ui.drawer.workingAdditionalVisitors || []).map(entry => ({ ...entry }))
+        : [];
+      let updated = await window.ActivityIntelligenceApi.updateSubmission(record.id, {
         answers: payloadAnswersForItems(answers, items, ui.drawer.workingOptionNotes || {}),
         otherAnswers: cleanOtherAnswers(ui.drawer.workingOther || {}, ui.drawer.working || {}, items),
         cardId: isGuestUser() ? null : (cardLink.cardId || null)
       });
+      const supplementalResult = await persistRecordAdditionalVisitorChanges(updated, pendingAdditionalVisitors);
+      updated = supplementalResult.updated;
       replaceRecord(updated);
       ui.drawer = null;
-      toast('已儲存紀錄。');
+      toast(supplementalResult.supplementalError ? '已儲存紀錄，但部分附加資訊未儲存。' : '已儲存紀錄。');
     } catch (error) {
       toast(error.message || 'Submission update failed.');
     } finally {
