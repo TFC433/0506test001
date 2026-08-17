@@ -875,7 +875,8 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(cssSource.includes('.aim-supplemental-detail'));
     assert(cssSource.includes('.aim-supplemental-visitor-line'));
     assert(cssSource.includes('.aim-contributor-note-section'));
-    assert(managementSource.includes('class="aim-inline-record-meta-card aim-supplemental-detail"'));
+    assert(managementSource.includes('class="aim-supplemental-detail"'));
+    assert(!managementSource.includes('class="aim-inline-record-meta-card aim-supplemental-detail"'));
     assert(managementSource.includes('class="aim-supplemental-interest-text"'));
     assert(managementSource.includes('有同行訪客時，可補充其名片與個別關注重點。'));
     assert(managementSource.includes('aim-textarea aim-auto-grow aim-supplemental-interest-input'));
@@ -891,6 +892,11 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(cssSource.includes('color: var(--aim-blue);'));
     assert(!cssSource.includes('.aim-record-context-label {\n  border-color: #bfdbfe'));
     assert(cssSource.includes('.aim-supplemental-text-action'));
+    assert(cssSource.indexOf('.aim-button {') < cssSource.indexOf('.aim-supplemental-text-action'));
+    assert(cssSource.indexOf('.aim-record-context-label {') < cssSource.indexOf('.aim-record-context-label-supplemental'));
+    assert(cssSource.indexOf('.aim-inline-record-meta-card {') < cssSource.indexOf('.aim-supplemental-detail {'));
+    const supplementalCssBlock = cssSource.slice(cssSource.indexOf('.aim-supplemental-entry,'), cssSource.indexOf('.aim-answer-badges'));
+    assert(!supplementalCssBlock.includes('!important'));
     assert(!cssSource.includes('.aim-supplemental-detail-row textarea,\n.aim-supplemental-interest-input'));
     assert(sqlSource.includes('activity_intelligence_submission_supplements'));
     assert(sqlSource.includes('activity_intelligence_save_additional_visitor'));
@@ -901,8 +907,8 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     const renderSource = [
         'const Store = { escapeHtml: value => String(value || ""), formatDateTime: value => String(value || "") };',
         'function recordIsFieldIntelligence() { return false; }',
-        'function canEditRecord() { return false; }',
-        'function canContributeToRecord() { return false; }',
+        'function canEditRecord() { return true; }',
+        'function canContributeToRecord() { return true; }',
         'function isMyContribution() { return false; }',
         'function selectedActivity() { return {}; }',
         extractFunctionDeclaration(managementSource, 'renderAdditionalVisitorDetailRow'),
@@ -925,8 +931,13 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(additionalOnlyHtml.includes('附加資訊'));
     assert(additionalOnlyHtml.includes('同行訪客'));
     assert(!additionalOnlyHtml.includes('補充紀錄'));
+    assert(!additionalOnlyHtml.includes('aim-inline-record-meta-card'));
+    assert(!additionalOnlyHtml.includes('record-add-additional-visitor'));
+    assert(!additionalOnlyHtml.includes('record-change-additional-visitor-card'));
     assert(!additionalOnlyHtml.includes('save-additional-visitor-interest'));
+    assert(!additionalOnlyHtml.includes('delete-additional-visitor'));
     assert(!additionalOnlyHtml.includes('aim-additional-interest-edit'));
+    assert(!additionalOnlyHtml.includes('<textarea'));
     assert(additionalOnlyHtml.includes('aim-supplemental-text-action'));
     const contributionOnlyHtml = contract.renderSupplementalDetail({
         ...baseRecord,
@@ -939,6 +950,7 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(contributionOnlyHtml.includes('附加資訊'));
     assert(!contributionOnlyHtml.includes('同行訪客'));
     assert(contributionOnlyHtml.includes('補充紀錄'));
+    assert(!contributionOnlyHtml.includes('open-my-contribution'));
     const bothHtml = contract.renderSupplementalDetail({
         ...baseRecord,
         supplements: {
@@ -949,6 +961,21 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     }, {});
     assert(bothHtml.includes('同行訪客'));
     assert(bothHtml.includes('補充紀錄'));
+
+    const quickRowSource = [
+        'const Store = { escapeHtml: value => String(value || "") };',
+        extractFunctionDeclaration(managementSource, 'renderQuickAdditionalVisitorRow'),
+        '({ renderQuickAdditionalVisitorRow })'
+    ].join('\n');
+    const quickContract = vm.runInNewContext(quickRowSource, {});
+    const quickHtml = quickContract.renderQuickAdditionalVisitorRow({
+        card: { cardId: 'c1', name: 'A', jobTitle: 'Title', company: 'Co' },
+        personalInterest: 'Need A'
+    }, 0, true);
+    assert(quickHtml.includes('class="aim-supplemental-visitor-row"'));
+    assert(!quickHtml.includes('aim-card'));
+    assert(!quickHtml.includes('儲存'));
+    assert(quickHtml.includes('aim-textarea aim-auto-grow aim-supplemental-interest-input'));
 }
 
 function assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource) {

@@ -1990,21 +1990,15 @@
     const supplements = record.supplements || {};
     const additionalVisitors = supplements.additionalVisitors || [];
     const contributions = supplements.contributions || [];
-    const canEditSupplement = canEditRecord(record, activity);
-    const canContribute = canContributeToRecord(record, activity);
     if (!additionalVisitors.length && !contributions.length) return '';
     return `
-      <section class="aim-inline-record-meta-card aim-supplemental-detail" aria-label="附加資訊">
+      <section class="aim-supplemental-detail" aria-label="附加資訊">
         <div class="aim-supplemental-detail-head">
           <h3>附加資訊</h3>
-          <div class="aim-supplemental-detail-actions">
-            ${canEditSupplement ? `<button class="aim-button aim-button-small" type="button" data-action="record-add-additional-visitor" data-id="${Store.escapeHtml(record.id)}">＋ 新增同行訪客</button>` : ''}
-            ${canContribute ? `<button class="aim-button aim-button-small" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">${supplements.myContribution ? '編輯我的紀錄' : '＋ 補充我的紀錄'}</button>` : ''}
-          </div>
         </div>
         ${additionalVisitors.length ? `<div class="aim-supplemental-section">
           <h4>同行訪客</h4>
-          ${additionalVisitors.map(entry => renderAdditionalVisitorDetailRow(record, entry, canEditSupplement)).join('')}
+          ${additionalVisitors.map(entry => renderAdditionalVisitorDetailRow(record, entry, false)).join('')}
         </div>` : ''}
         ${contributions.length ? `<div class="aim-supplemental-section">
           <h4>補充紀錄</h4>
@@ -2050,7 +2044,6 @@
           <span>${Store.formatDateTime(entry.updatedAt || entry.createdAt)}</span>
         </div>
         <p>${Store.escapeHtml(entry.note || '')}</p>
-        ${mine && canContributeToRecord(record, selectedActivity()) ? `<button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">編輯我的紀錄</button>` : ''}
       </article>
     `;
   }
