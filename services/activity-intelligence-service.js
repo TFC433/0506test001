@@ -415,6 +415,12 @@ class ActivityIntelligenceService {
     }
 
     async saveAdditionalVisitor(submissionId, payload = {}, user = {}) {
+        const traceId = randomUUID();
+        console.log('[ActivityIntelligenceSupplementTrace] saveAdditionalVisitor.start', {
+            traceId,
+            submissionId,
+            requestedCardId: payload.cardId || payload.card_id || null
+        });
         const current = await this._requireEditableVisitorSubmission(submissionId, user);
         const actor = this._actorFromUser(user);
         const supplementId = payload.supplementId || payload.supplement_id || randomUUID();
@@ -424,14 +430,30 @@ class ActivityIntelligenceService {
         this._assertUuid(cardId, 'cardId');
         const card = await this.rawContactSqlReader.getRawContactByCardId(cardId);
         if (!card) throw new ActivityIntelligenceError(404, 'RAW card not found.', 'RAW_CARD_NOT_FOUND');
+        const snapshot = this._rawCardSnapshot(card);
+        console.log('[ActivityIntelligenceSupplementTrace] saveAdditionalVisitor.resolved', {
+            traceId,
+            submissionId: current.id,
+            supplementId,
+            requestedCardId: cardId,
+            rawCardFound: Boolean(card),
+            resolvedCardId: card.cardId || null,
+            snapshotCardId: snapshot.cardId || null,
+            rpcName: 'activity_intelligence_save_additional_visitor'
+        });
 
         await this.writer.saveAdditionalVisitor({
             p_supplement_id: supplementId,
             p_submission_id: current.id,
             p_card_id: cardId,
-            p_card_snapshot: this._rawCardSnapshot(card),
+            p_card_snapshot: snapshot,
             p_personal_interest: this._normalizeSupplementText(payload.personalInterest || payload.personal_interest),
             p_actor: actor
+        });
+        console.log('[ActivityIntelligenceSupplementTrace] saveAdditionalVisitor.rpcSuccess', {
+            traceId,
+            submissionId: current.id,
+            supplementId
         });
 
         return this.getSubmission(current.id, user);
