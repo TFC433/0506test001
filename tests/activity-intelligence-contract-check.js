@@ -954,6 +954,7 @@ function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, se
         "const compactPreviewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'dropdown']);",
         "const previewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'multiple_choice', 'dropdown']);",
         "const cardAssistRoles = new Set(['person_name', 'job_title', 'company_name']);",
+        "function thumbnailSettingsForItem() { return {}; }",
         'function newUuid() { return "99999999-9999-4999-8999-999999999999"; }',
         'function fieldTypeLabel(type) { return type; }',
         'function makeCardLinkItem(item) { return { ...item, type: "card_link", itemKey: item.itemKey || "card", fieldId: item.fieldId || item.itemKey || "card", options: [], optionEntries: [], settings: item.settings || {}, allowOther: false }; }',
@@ -976,11 +977,14 @@ function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, se
         extractFunctionDeclaration(managementSource, 'otherHistoryFieldKey'),
         extractFunctionDeclaration(managementSource, 'otherHistorySnapshotField'),
         extractFunctionDeclaration(managementSource, 'otherHistorySuggestionKey'),
+        extractFunctionDeclaration(managementSource, 'designerItemSignature'),
+        extractFunctionDeclaration(managementSource, 'designerItemsEqual'),
         extractFunctionDeclaration(managementSource, 'serializeDraftItems'),
-        '({ state, setSelected(value) { selected = value; }, normalizeDesignerItem, fieldAllowsOtherHistorySuggestions, fieldHasOtherHistorySuggestionsEnabled, otherHistorySuggestionsForField, renderOtherHistorySuggestions, serializeDraftItems, answerHasOther });'
+        '({ state, setSelected(value) { selected = value; }, normalizeDesignerItem, fieldAllowsOtherHistorySuggestions, fieldHasOtherHistorySuggestionsEnabled, otherHistorySuggestionsForField, renderOtherHistorySuggestions, designerItemSignature, designerItemsEqual, serializeDraftItems, answerHasOther });'
     ].join('\n');
     const contract = vm.runInNewContext(source, {});
     const field = contract.normalizeDesignerItem({ itemKey: 'field-a', fieldId: 'field-a', type: 'single_choice', title: 'Same Title', options: ['Alpha'], allowOther: true, settings: { enableOtherHistorySuggestions: true } });
+    const disabledField = contract.normalizeDesignerItem({ itemKey: 'field-a', fieldId: 'field-a', type: 'single_choice', title: 'Same Title', options: ['Alpha'], allowOther: true, settings: {} });
     const sameTitleOtherField = contract.normalizeDesignerItem({ itemKey: 'field-b', fieldId: 'field-b', type: 'single_choice', title: 'Same Title', options: ['Alpha'], allowOther: true, settings: { enableOtherHistorySuggestions: true } });
     const multiField = contract.normalizeDesignerItem({ itemKey: 'field-m', fieldId: 'field-m', type: 'multiple_choice', title: 'Multi', options: ['Alpha'], allowOther: true, settings: { enableOtherHistorySuggestions: true } });
     const noOtherField = contract.normalizeDesignerItem({ itemKey: 'field-c', fieldId: 'field-c', type: 'single_choice', title: 'No Other', options: ['Alpha'], allowOther: false, settings: { enableOtherHistorySuggestions: true } });
@@ -994,6 +998,20 @@ function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, se
     assert(!Object.prototype.hasOwnProperty.call(noOtherField.settings, 'enableOtherHistorySuggestions'), 'normalizeDesignerItem must strip ineligible setting');
     assert.strictEqual(contract.serializeDraftItems([field])[0].settings.enableOtherHistorySuggestions, true, 'serializeDraftItems must persist eligible setting through item settings');
     assert(!Object.prototype.hasOwnProperty.call(contract.serializeDraftItems([dropdownField])[0].settings, 'enableOtherHistorySuggestions'), 'serializeDraftItems must not persist dropdown setting');
+    assert.strictEqual(disabledField.enableOtherHistorySuggestions, false, 'eligible choice item must expose disabled other history state');
+    assert(contract.designerItemSignature(field).includes('"enableOtherHistorySuggestions":true'), 'designer dirty-state signature must include enabled other history state');
+    assert(contract.designerItemSignature(disabledField).includes('"enableOtherHistorySuggestions":false'), 'designer dirty-state signature must include disabled other history state');
+    assert(!contract.designerItemsEqual(disabledField, field), 'false to true history setting changes must be detected as real item changes');
+    assert(!contract.designerItemsEqual(field, disabledField), 'true to false history setting changes must be detected as real item changes');
+    const reselectedField = contract.normalizeDesignerItem(contract.serializeDraftItems([field])[0]);
+    assert.strictEqual(reselectedField.enableOtherHistorySuggestions, true, 'reselect hydration must read the applied value from item settings');
+    assert.strictEqual(contract.serializeDraftItems([reselectedField])[0].settings.enableOtherHistorySuggestions, true, 'publish serialization must preserve the applied setting');
+    ['visitor', 'field_intelligence'].forEach(formContext => {
+        const contextField = contract.normalizeDesignerItem({ itemKey: `${formContext}-field`, fieldId: `${formContext}-field`, type: 'multiple_choice', title: formContext, options: ['Alpha'], allowOther: true, settings: { enableOtherHistorySuggestions: true } });
+        assert.strictEqual(contextField.settings.enableOtherHistorySuggestions, true, `${formContext} must use the shared other history builder setting path`);
+    });
+    assert(managementSource.includes('updateFormDesignDraft({ enableOtherHistorySuggestions: enableOtherHistorySuggestions.checked, settings });'), 'checkbox changes must update the actual field draft settings');
+    assert(managementSource.includes('const draft = normalizeDesignerItem(ui.formDesignDraft || {});') && managementSource.includes('design.draft.items[index] = draft;'), 'applyFieldDraft must normalize and apply the current field draft');
 
     const record = (id, activityId, item, answer, otherText, createdAt, status = 'active') => ({
         id,

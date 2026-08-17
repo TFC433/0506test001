@@ -2629,6 +2629,7 @@
       options: normalized.options || [],
       allowOther: Boolean(normalized.allowOther),
       allowOptionNotes: Boolean(normalized.allowOptionNotes),
+      enableOtherHistorySuggestions: Boolean(normalized.enableOtherHistorySuggestions),
       cardAssistField: normalized.cardAssistField || '',
       enableCardAssist: Boolean(normalized.enableCardAssist),
       visible: normalized.visible !== false,
