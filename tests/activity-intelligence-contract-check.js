@@ -875,10 +875,18 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(cssSource.includes('.aim-supplemental-detail'));
     assert(cssSource.includes('.aim-supplemental-visitor-line'));
     assert(cssSource.includes('.aim-contributor-note-section'));
+    assert(cssSource.includes('.aim-supplemental-add-action'));
+    assert(cssSource.includes('.aim-supplemental-entry-text-action'));
+    assert(cssSource.includes('color: var(--aim-blue-dark);'));
+    assert(cssSource.includes('.aim-supplemental-add-action {\n  flex: 0 0 auto;\n  min-height: 30px;\n  padding: 5px 10px;'));
+    assert(cssSource.includes('border-color: #bfdbfe;\n  background: #f8fbff;\n  color: var(--aim-blue);'));
     assert(managementSource.includes('class="aim-supplemental-detail"'));
     assert(!managementSource.includes('class="aim-inline-record-meta-card aim-supplemental-detail"'));
     assert(managementSource.includes('class="aim-supplemental-interest-text"'));
     assert(managementSource.includes('有同行訪客時，可補充其名片與個別關注重點。'));
+    assert(managementSource.includes('aim-button aim-button-small aim-supplemental-add-action'));
+    assert(managementSource.includes('aim-supplemental-text-action aim-supplemental-entry-text-action'));
+    assert(managementSource.includes('class="aim-supplemental-interest-label">個人關注</span><span class="aim-small">請填寫追加訪客的關注議題</span>'));
     assert(managementSource.includes('aim-textarea aim-auto-grow aim-supplemental-interest-input'));
     assert(managementSource.includes('aim-textarea aim-auto-grow aim-additional-interest-edit'));
     assert(!managementSource.includes('aim-input aim-supplemental-interest-input'));
@@ -893,6 +901,7 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(!cssSource.includes('.aim-record-context-label {\n  border-color: #bfdbfe'));
     assert(cssSource.includes('.aim-supplemental-text-action'));
     assert(cssSource.indexOf('.aim-button {') < cssSource.indexOf('.aim-supplemental-text-action'));
+    assert(cssSource.indexOf('.aim-button {') < cssSource.indexOf('.aim-supplemental-add-action'));
     assert(cssSource.indexOf('.aim-record-context-label {') < cssSource.indexOf('.aim-record-context-label-supplemental'));
     assert(cssSource.indexOf('.aim-inline-record-meta-card {') < cssSource.indexOf('.aim-supplemental-detail {'));
     const supplementalCssBlock = cssSource.slice(cssSource.indexOf('.aim-supplemental-entry,'), cssSource.indexOf('.aim-answer-badges'));
@@ -975,6 +984,11 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(quickHtml.includes('class="aim-supplemental-visitor-row"'));
     assert(!quickHtml.includes('aim-card'));
     assert(!quickHtml.includes('儲存'));
+    assert(!quickHtml.includes('個人關注（選填）'));
+    assert(quickHtml.includes('class="aim-supplemental-interest-label">個人關注</span>'));
+    assert(quickHtml.includes('<span class="aim-small">請填寫追加訪客的關注議題</span>'));
+    assert(quickHtml.includes('placeholder="請填寫追加訪客的關注議題"'));
+    assert(quickHtml.includes('aim-supplemental-entry-text-action'));
     assert(quickHtml.includes('aim-textarea aim-auto-grow aim-supplemental-interest-input'));
 }
 

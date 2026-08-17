@@ -1759,7 +1759,7 @@
             <h3>同行訪客（選填）</h3>
             <span class="aim-small">有同行訪客時，可補充其名片與個別關注重點。</span>
           </div>
-          <button class="aim-button aim-button-small" type="button" data-action="quick-add-additional-visitor" ${open ? '' : 'disabled'}>＋ 新增同行訪客</button>
+          <button class="aim-button aim-button-small aim-supplemental-add-action" type="button" data-action="quick-add-additional-visitor" ${open ? '' : 'disabled'}>＋ 新增同行訪客</button>
         </div>
         ${rows.length ? `
           <div class="aim-supplemental-visitor-list">
@@ -1782,11 +1782,11 @@
             ${subtitle ? `<span>${Store.escapeHtml(subtitle)}</span>` : ''}
           </div>
           <div class="aim-supplemental-visitor-actions">
-            ${card.cardId ? `<button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
-            <button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="remove-quick-additional-visitor" data-index="${index}" ${open ? '' : 'disabled'}>移除</button>
+            ${card.cardId ? `<button class="aim-button aim-button-small aim-supplemental-text-action aim-supplemental-entry-text-action" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
+            <button class="aim-button aim-button-small aim-supplemental-text-action aim-supplemental-entry-text-action" type="button" data-action="remove-quick-additional-visitor" data-index="${index}" ${open ? '' : 'disabled'}>移除</button>
           </div>
         </div>
-        <label class="aim-field aim-supplemental-interest-field"><span>個人關注（選填）</span><textarea class="aim-textarea aim-auto-grow aim-supplemental-interest-input" data-index="${index}" rows="1" placeholder="個人關注（選填）" ${open ? '' : 'disabled'}>${Store.escapeHtml(entry.personalInterest || '')}</textarea></label>
+        <label class="aim-field aim-supplemental-interest-field"><span class="aim-supplemental-interest-label">個人關注</span><span class="aim-small">請填寫追加訪客的關注議題</span><textarea class="aim-textarea aim-auto-grow aim-supplemental-interest-input" data-index="${index}" rows="1" placeholder="請填寫追加訪客的關注議題" ${open ? '' : 'disabled'}>${Store.escapeHtml(entry.personalInterest || '')}</textarea></label>
       </article>
     `;
   }

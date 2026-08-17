@@ -3272,8 +3272,23 @@ a:focus-visible {
   min-width: 0;
 }
 
+.aim-supplemental-add-action {
+  flex: 0 0 auto;
+  min-height: 30px;
+  padding: 5px 10px;
+  border-color: #bfdbfe;
+  background: #f8fbff;
+  color: var(--aim-blue);
+  font-size: 12px;
+}
+
+.aim-supplemental-add-action:hover {
+  border-color: #93c5fd;
+  background: var(--aim-blue-soft);
+}
+
 .aim-supplemental-entry h3,
-.aim-supplemental-interest-field>span {
+.aim-supplemental-interest-label {
   color: #475569;
   font-size: 13px;
   font-weight: 600;
@@ -3371,6 +3386,17 @@ a:focus-visible {
   color: var(--aim-muted);
   box-shadow: none;
   line-height: 1.35;
+}
+
+.aim-supplemental-entry-text-action {
+  min-height: 30px;
+  padding: 4px 2px;
+  color: var(--aim-blue-dark);
+}
+
+.aim-supplemental-entry-text-action:hover {
+  background: var(--aim-blue-soft);
+  color: var(--aim-blue-dark);
 }
 
 .aim-contribution-row p {
