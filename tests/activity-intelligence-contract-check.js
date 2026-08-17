@@ -863,7 +863,7 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(managementSource.includes('record.createdByUserId === currentUser.userId || recordHasMyContribution(record)'));
     assert(managementSource.includes('if (!additionalVisitors.length && !contributions.length) return \'\';'));
     assert(managementSource.includes('const contributorOnly = recordIsContributorOnly(record);'));
-    assert(managementSource.includes("contributorOnly\n      ? '<span class=\"aim-record-context-label\">我有補充</span>'"));
+    assert(managementSource.includes("contributorOnly\n      ? '<span class=\"aim-record-context-label aim-record-context-label-supplemental\">我有補充</span>'"));
     assert(managementSource.includes('submission = await window.ActivityIntelligenceApi.saveAdditionalVisitor(submission.id || submission.submissionId, {'));
     assert(managementSource.indexOf('let submission = await window.ActivityIntelligenceApi.createSubmission') < managementSource.indexOf('submission = await window.ActivityIntelligenceApi.saveAdditionalVisitor'));
     assert(managementSource.includes('cardId: entry.cardId,\n            personalInterest: entry.personalInterest || \'\''));
@@ -877,6 +877,21 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(cssSource.includes('.aim-contributor-note-section'));
     assert(managementSource.includes('class="aim-inline-record-meta-card aim-supplemental-detail"'));
     assert(managementSource.includes('class="aim-supplemental-interest-text"'));
+    assert(managementSource.includes('有同行訪客時，可補充其名片與個別關注重點。'));
+    assert(managementSource.includes('aim-textarea aim-auto-grow aim-supplemental-interest-input'));
+    assert(managementSource.includes('aim-textarea aim-auto-grow aim-additional-interest-edit'));
+    assert(!managementSource.includes('aim-input aim-supplemental-interest-input'));
+    assert(!managementSource.includes('aim-input aim-additional-interest-edit'));
+    assert(managementSource.includes('aim-record-context-label aim-record-context-label-supplemental">同行 ${supplementalSummary.additionalVisitorCount}</span>'));
+    assert(managementSource.includes('aim-record-context-label aim-record-context-label-supplemental">補充 ${supplementalSummary.contributionCount}</span>'));
+    assert(managementSource.includes('aim-record-context-label aim-record-context-label-supplemental">我有補充</span>'));
+    assert(managementSource.includes('<span class="aim-record-context-label aim-record-context-label-desktop">主動情報</span>'));
+    assert(cssSource.includes('.aim-record-context-label-supplemental'));
+    assert(cssSource.includes('background: var(--aim-blue-soft);'));
+    assert(cssSource.includes('color: var(--aim-blue);'));
+    assert(!cssSource.includes('.aim-record-context-label {\n  border-color: #bfdbfe'));
+    assert(cssSource.includes('.aim-supplemental-text-action'));
+    assert(!cssSource.includes('.aim-supplemental-detail-row textarea,\n.aim-supplemental-interest-input'));
     assert(sqlSource.includes('activity_intelligence_submission_supplements'));
     assert(sqlSource.includes('activity_intelligence_save_additional_visitor'));
     assert(sqlSource.includes('activity_intelligence_delete_additional_visitor'));
@@ -910,6 +925,9 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(additionalOnlyHtml.includes('附加資訊'));
     assert(additionalOnlyHtml.includes('同行訪客'));
     assert(!additionalOnlyHtml.includes('補充紀錄'));
+    assert(!additionalOnlyHtml.includes('save-additional-visitor-interest'));
+    assert(!additionalOnlyHtml.includes('aim-additional-interest-edit'));
+    assert(additionalOnlyHtml.includes('aim-supplemental-text-action'));
     const contributionOnlyHtml = contract.renderSupplementalDetail({
         ...baseRecord,
         supplements: {

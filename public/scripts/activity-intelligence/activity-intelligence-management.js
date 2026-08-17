@@ -1755,7 +1755,10 @@
     return `
       <section class="aim-supplemental-entry" aria-label="附加資訊">
         <div class="aim-supplemental-entry-head">
-          <h3>同行訪客（選填）</h3>
+          <div>
+            <h3>同行訪客（選填）</h3>
+            <span class="aim-small">有同行訪客時，可補充其名片與個別關注重點。</span>
+          </div>
           <button class="aim-button aim-button-small" type="button" data-action="quick-add-additional-visitor" ${open ? '' : 'disabled'}>＋ 新增同行訪客</button>
         </div>
         ${rows.length ? `
@@ -1779,11 +1782,11 @@
             ${subtitle ? `<span>${Store.escapeHtml(subtitle)}</span>` : ''}
           </div>
           <div class="aim-supplemental-visitor-actions">
-            ${card.cardId ? `<button class="aim-button aim-button-small" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
-            <button class="aim-button aim-button-small" type="button" data-action="remove-quick-additional-visitor" data-index="${index}" ${open ? '' : 'disabled'}>移除</button>
+            ${card.cardId ? `<button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
+            <button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="remove-quick-additional-visitor" data-index="${index}" ${open ? '' : 'disabled'}>移除</button>
           </div>
         </div>
-        <label class="aim-supplemental-interest-field"><span>個人關注（選填）</span><textarea class="aim-input aim-supplemental-interest-input" data-index="${index}" rows="1" placeholder="個人關注（選填）" ${open ? '' : 'disabled'}>${Store.escapeHtml(entry.personalInterest || '')}</textarea></label>
+        <label class="aim-field aim-supplemental-interest-field"><span>個人關注（選填）</span><textarea class="aim-textarea aim-auto-grow aim-supplemental-interest-input" data-index="${index}" rows="1" placeholder="個人關注（選填）" ${open ? '' : 'disabled'}>${Store.escapeHtml(entry.personalInterest || '')}</textarea></label>
       </article>
     `;
   }
@@ -1902,10 +1905,10 @@
     const supplementalSummary = record.supplementalSummary || {};
     const contributorOnly = recordIsContributorOnly(record);
     const supplementalHtml = contributorOnly
-      ? '<span class="aim-record-context-label">我有補充</span>'
+      ? '<span class="aim-record-context-label aim-record-context-label-supplemental">我有補充</span>'
       : [
-        supplementalSummary.additionalVisitorCount ? `<span class="aim-record-context-label">同行 ${supplementalSummary.additionalVisitorCount}</span>` : '',
-        supplementalSummary.contributionCount ? `<span class="aim-record-context-label">補充 ${supplementalSummary.contributionCount}</span>` : ''
+        supplementalSummary.additionalVisitorCount ? `<span class="aim-record-context-label aim-record-context-label-supplemental">同行 ${supplementalSummary.additionalVisitorCount}</span>` : '',
+        supplementalSummary.contributionCount ? `<span class="aim-record-context-label aim-record-context-label-supplemental">補充 ${supplementalSummary.contributionCount}</span>` : ''
       ].join('');
     return `<div class="aim-record-card-meta">
       <span class="aim-record-card-activity">${Store.escapeHtml(activity.name)}</span>
@@ -1964,19 +1967,19 @@
             <div><dt>活動</dt><dd>${Store.escapeHtml(activity.name)}</dd></div>
             <div><dt>紀錄者</dt><dd>${Store.escapeHtml(record.createdByDisplayName)}</dd></div>
             <div><dt>建立時間</dt><dd>${Store.formatDateTime(record.createdAt)}</dd></div>
-            <div><dt>狀態</dt><dd><span class="aim-record-context-label">我有補充</span></dd></div>
+            <div><dt>狀態</dt><dd><span class="aim-record-context-label aim-record-context-label-supplemental">我有補充</span></dd></div>
           </dl>
         </section>
         <section class="aim-contributor-note-section" aria-label="我的補充紀錄">
           <div class="aim-supplemental-detail-head">
             <h3>我的補充紀錄</h3>
-            ${canContributeToRecord(record, activity) ? `<button class="aim-button aim-button-small" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">編輯我的紀錄</button>` : ''}
+            ${canContributeToRecord(record, activity) ? `<button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">編輯我的紀錄</button>` : ''}
           </div>
           <article class="aim-contribution-row aim-contribution-row-inline">
             <p>${Store.escapeHtml(contribution && contribution.note ? contribution.note : '尚未填寫補充紀錄。')}</p>
             ${contribution && contribution.updatedAt ? `<span>${Store.formatDateTime(contribution.updatedAt)}</span>` : ''}
           </article>
-          <div class="aim-contributor-full-record-action"><button class="aim-button aim-button-small" type="button" data-action="view-full-record" data-id="${Store.escapeHtml(record.id)}">查看完整訪談紀錄</button></div>
+          <div class="aim-contributor-full-record-action"><button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="view-full-record" data-id="${Store.escapeHtml(record.id)}">查看完整訪談紀錄</button></div>
         </section>
       </div>
     `;
@@ -2023,15 +2026,15 @@
             ${subtitle ? `<span>${Store.escapeHtml(subtitle)}</span>` : ''}
             ${entry.personalInterest ? `<span class="aim-supplemental-interest-text">關注：${Store.escapeHtml(entry.personalInterest)}</span>` : ''}
           </div>
-          ${!canEditSupplement && card.cardId ? `<button class="aim-button aim-button-small" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
+          ${!canEditSupplement && card.cardId ? `<button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
         </div>
         ${canEditSupplement ? `
-          <label class="aim-supplemental-interest-field"><span>個人關注（選填）</span><textarea class="aim-input aim-additional-interest-edit" data-supplement-id="${Store.escapeHtml(entry.supplementId)}" rows="1" placeholder="個人關注（選填）">${Store.escapeHtml(entry.personalInterest || '')}</textarea></label>
+          <label class="aim-field aim-supplemental-interest-field"><span>個人關注（選填）</span><textarea class="aim-textarea aim-auto-grow aim-additional-interest-edit" data-supplement-id="${Store.escapeHtml(entry.supplementId)}" rows="1" placeholder="個人關注（選填）">${Store.escapeHtml(entry.personalInterest || '')}</textarea></label>
           <div class="aim-supplemental-visitor-actions">
-            ${card.cardId ? `<button class="aim-button aim-button-small" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
-            <button class="aim-button aim-button-small" type="button" data-action="record-change-additional-visitor-card" data-id="${Store.escapeHtml(record.id)}" data-supplement-id="${Store.escapeHtml(entry.supplementId)}" data-personal-interest="${Store.escapeHtml(entry.personalInterest || '')}">更換名片</button>
-            <button class="aim-button aim-button-small" type="button" data-action="save-additional-visitor-interest" data-id="${Store.escapeHtml(record.id)}" data-supplement-id="${Store.escapeHtml(entry.supplementId)}">儲存</button>
-            <button class="aim-button aim-button-small" type="button" data-action="delete-additional-visitor" data-id="${Store.escapeHtml(record.id)}" data-supplement-id="${Store.escapeHtml(entry.supplementId)}">移除</button>
+            ${card.cardId ? `<button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
+            <button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="record-change-additional-visitor-card" data-id="${Store.escapeHtml(record.id)}" data-supplement-id="${Store.escapeHtml(entry.supplementId)}" data-personal-interest="${Store.escapeHtml(entry.personalInterest || '')}">更換名片</button>
+            <button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="save-additional-visitor-interest" data-id="${Store.escapeHtml(record.id)}" data-supplement-id="${Store.escapeHtml(entry.supplementId)}">儲存</button>
+            <button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="delete-additional-visitor" data-id="${Store.escapeHtml(record.id)}" data-supplement-id="${Store.escapeHtml(entry.supplementId)}">移除</button>
           </div>
         ` : ''}
       </article>
@@ -2047,7 +2050,7 @@
           <span>${Store.formatDateTime(entry.updatedAt || entry.createdAt)}</span>
         </div>
         <p>${Store.escapeHtml(entry.note || '')}</p>
-        ${mine && canContributeToRecord(record, selectedActivity()) ? `<button class="aim-button aim-button-small" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">編輯我的紀錄</button>` : ''}
+        ${mine && canContributeToRecord(record, selectedActivity()) ? `<button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">編輯我的紀錄</button>` : ''}
       </article>
     `;
   }

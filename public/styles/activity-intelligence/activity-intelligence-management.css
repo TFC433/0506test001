@@ -9,8 +9,6 @@
   display: grid;
   gap: 8px;
   margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--aim-border);
 }
 
 .aim-supplemental-entry-head,
@@ -29,6 +27,39 @@
 .aim-supplemental-detail h3,
 .aim-supplemental-section h4 {
   margin: 0;
+}
+
+.aim-supplemental-entry-head {
+  padding-top: 10px;
+  border-top: 1px solid var(--aim-border);
+}
+
+.aim-supplemental-entry-head>div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.aim-supplemental-entry h3,
+.aim-supplemental-interest-field>span {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.aim-supplemental-detail h3 {
+  color: var(--aim-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.aim-supplemental-section h4 {
+  color: var(--aim-muted-2);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
 }
 
 .aim-supplemental-section {
@@ -71,6 +102,9 @@
 
 .aim-supplemental-visitor-main strong,
 .aim-contribution-meta strong {
+  color: var(--aim-text);
+  font-size: 13px;
+  line-height: 1.45;
   overflow-wrap: anywhere;
 }
 
@@ -85,24 +119,29 @@
   line-height: 1.45;
 }
 
-.aim-supplemental-detail-row textarea,
-.aim-supplemental-interest-input {
-  width: 100%;
-  min-height: 34px;
-  resize: vertical;
+.aim-supplemental-detail {
+  padding: 10px 12px;
+  border: 1px solid var(--aim-border);
+  border-radius: 6px;
+  background: transparent;
 }
 
 .aim-supplemental-interest-field {
-  display: grid;
-  gap: 5px;
-  color: #475569;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.4;
+  margin-bottom: 0;
+}
+
+.aim-supplemental-text-action {
+  border-color: transparent;
+  background: transparent;
+  color: var(--aim-muted);
+  box-shadow: none;
 }
 
 .aim-contribution-row p {
   margin: 0;
+  color: var(--aim-text);
+  font-size: 13px;
+  line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -139,6 +178,12 @@
   margin-top: 0;
   padding-top: 0;
   border-top: 0;
+}
+
+.aim-record-context-label-supplemental {
+  border-color: #bfdbfe;
+  background: var(--aim-blue-soft);
+  color: var(--aim-blue);
 }
 
 .aim-app {
