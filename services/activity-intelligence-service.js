@@ -417,8 +417,8 @@ class ActivityIntelligenceService {
     async saveAdditionalVisitor(submissionId, payload = {}, user = {}) {
         const current = await this._requireEditableVisitorSubmission(submissionId, user);
         const actor = this._actorFromUser(user);
-        const supplementId = payload.supplementId || payload.supplement_id || randomUUID();
-        this._assertUuid(supplementId, 'supplementId');
+        const supplementId = payload.supplementId || payload.supplement_id || null;
+        if (supplementId) this._assertUuid(supplementId, 'supplementId');
         const cardId = payload.cardId || payload.card_id;
         if (!cardId) throw new ActivityIntelligenceError(400, 'cardId is required.', 'MISSING_CARD_ID');
         this._assertUuid(cardId, 'cardId');

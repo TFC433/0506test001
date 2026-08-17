@@ -41,6 +41,7 @@ const IDS = {
     voidSubmission: '77777777-7777-4777-8777-777777777774',
     activeAiSubmission: '77777777-7777-4777-8777-777777777775',
     additionalVisitorSupplement: '88888888-8888-4888-8888-888888888881',
+    createdAdditionalVisitorSupplement: '88888888-8888-4888-8888-888888888883',
     contributionSupplement: '88888888-8888-4888-8888-888888888882',
     otherActivity: '11111111-1111-4111-8111-111111111114'
 };
@@ -264,8 +265,11 @@ function makeHarness(options = {}) {
         },
         async saveAdditionalVisitor(payload) {
             calls.saveAdditionalVisitor = payload;
-            supplements.set(payload.p_supplement_id, {
-                supplementId: payload.p_supplement_id,
+            calls.saveAdditionalVisitorHistory = calls.saveAdditionalVisitorHistory || [];
+            calls.saveAdditionalVisitorHistory.push(payload);
+            const supplementId = payload.p_supplement_id || IDS.createdAdditionalVisitorSupplement;
+            supplements.set(supplementId, {
+                supplementId,
                 submissionId: payload.p_submission_id,
                 supplementType: 'additional_visitor',
                 actorUserId: payload.p_actor.userId,
@@ -278,7 +282,7 @@ function makeHarness(options = {}) {
                 createdAt: '2026-08-18T00:00:00.000Z',
                 updatedAt: '2026-08-18T00:00:00.000Z'
             });
-            return { supplement_id: payload.p_supplement_id };
+            return { supplement_id: supplementId };
         },
         async deleteAdditionalVisitor(payload) {
             calls.deleteAdditionalVisitor = payload;
@@ -426,7 +430,7 @@ function makeHarness(options = {}) {
         formAiTextGenerator: options.formAiTextGenerator
     });
 
-    return { service, calls, publishedItems, supplements };
+    return { service, calls, publishedItems, supplements, submissions };
 }
 
 function actor() {
@@ -2078,6 +2082,25 @@ async function main() {
     assert.strictEqual(supplementalHarness.calls.getSupplementSummariesBySubmissionIds, 1);
     assert.strictEqual(supplementalListBefore.find(record => record.id === IDS.oldSubmission).supplements, null);
     await supplementalHarness.service.saveAdditionalVisitor(IDS.oldSubmission, {
+        cardId: IDS.secondCard,
+        personalInterest: 'Create path interest',
+        actor: { userId: 'browser-must-not-win' },
+        cardSnapshot: { name: 'Browser Must Not Win', card_id: IDS.card }
+    }, actor());
+    const createSupplementCall = supplementalHarness.calls.saveAdditionalVisitorHistory[0];
+    assert.strictEqual(createSupplementCall.p_supplement_id, null);
+    assert.strictEqual(createSupplementCall.p_card_id, IDS.secondCard);
+    assert.strictEqual(createSupplementCall.p_actor.userId, 'real-user');
+    assert.strictEqual(createSupplementCall.p_card_snapshot.cardId, IDS.secondCard);
+    assert.strictEqual(createSupplementCall.p_personal_interest, 'Create path interest');
+    assert.strictEqual(supplementalHarness.calls.createSubmissionCount || 0, 0);
+    assert(!JSON.stringify(createSupplementCall).includes('Browser Must Not Win'));
+    assert(!JSON.stringify(supplementalHarness.submissions.get(IDS.oldSubmission).answers).includes('Create path interest'));
+    const createSupplementDetail = await supplementalHarness.service.getSubmission(IDS.oldSubmission, actor());
+    assert.strictEqual(createSupplementDetail.supplementalSummary.additionalVisitorCount, 1);
+    assert.strictEqual(createSupplementDetail.supplements.additionalVisitors[0].supplementId, IDS.createdAdditionalVisitorSupplement);
+    assert.strictEqual(createSupplementDetail.supplements.additionalVisitors[0].personalInterest, 'Create path interest');
+    await supplementalHarness.service.saveAdditionalVisitor(IDS.oldSubmission, {
         supplementId: IDS.additionalVisitorSupplement,
         cardId: IDS.secondCard,
         personalInterest: 'Robotics procurement',
@@ -2093,13 +2116,19 @@ async function main() {
     assert.strictEqual(supplementalHarness.calls.saveAdditionalVisitor.p_card_snapshot.card_id, undefined);
     assert(!JSON.stringify(supplementalHarness.calls.saveAdditionalVisitor.p_card_snapshot).includes('Browser Must Not Win'));
     assert.strictEqual(supplementalHarness.calls.createSubmissionCount || 0, 0);
+    assert.strictEqual(supplementalHarness.calls.saveAdditionalVisitorHistory[1].p_supplement_id, IDS.additionalVisitorSupplement);
     const supplementalDetail = await supplementalHarness.service.getSubmission(IDS.oldSubmission, actor());
-    assert.strictEqual(supplementalDetail.supplementalSummary.additionalVisitorCount, 1);
-    assert.strictEqual(supplementalDetail.supplements.additionalVisitors[0].personalInterest, 'Robotics procurement');
-    assert.strictEqual(supplementalDetail.supplements.additionalVisitors[0].cardSnapshot.name, 'Card Name');
+    assert.strictEqual(supplementalDetail.supplementalSummary.additionalVisitorCount, 2);
+    const updatedSupplement = supplementalDetail.supplements.additionalVisitors.find(entry => entry.supplementId === IDS.additionalVisitorSupplement);
+    assert.strictEqual(updatedSupplement.personalInterest, 'Robotics procurement');
+    assert.strictEqual(updatedSupplement.cardSnapshot.name, 'Card Name');
+    await assertRejectsCode(() => supplementalHarness.service.saveAdditionalVisitor(IDS.oldSubmission, {
+        supplementId: 'not-a-uuid',
+        cardId: IDS.secondCard
+    }, actor()), 'INVALID_UUID');
     const supplementalListAfter = await supplementalHarness.service.listSubmissions(IDS.activity, { recordContext: 'visitor' }, actor());
     const supplementalListRow = supplementalListAfter.find(record => record.id === IDS.oldSubmission);
-    assert.strictEqual(supplementalListRow.supplementalSummary.additionalVisitorCount, 1);
+    assert.strictEqual(supplementalListRow.supplementalSummary.additionalVisitorCount, 2);
     assert.strictEqual(supplementalListRow.supplements, null);
     await supplementalHarness.service.upsertMyContribution(IDS.oldSubmission, { note: 'Follow up from contributor' }, actor());
     assert.strictEqual(supplementalHarness.calls.upsertMyContribution.p_note, 'Follow up from contributor');
