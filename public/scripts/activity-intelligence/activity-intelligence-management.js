@@ -221,7 +221,7 @@
         toast(error.message || 'Activity Intelligence load failed.');
       }
     }
-    applyRoleLanding();
+    applyInitialLanding();
     if (currentUser.authenticated && canManageActivities() && ui.view === 'overview') {
       await loadOverviewData({ force: true });
     } else if (currentUser.authenticated && ui.selectedActivityId && (ui.tab === 'records' || ui.tab === 'analytics')) {
@@ -696,6 +696,30 @@
     if (driveLink && driveLink !== 'undefined' && driveLink !== 'null') return `/api/drive/thumbnail?link=${encodeURIComponent(driveLink)}`;
     if (driveFileId && driveFileId !== 'undefined' && driveFileId !== 'null') return `/api/drive/thumbnail?fileId=${encodeURIComponent(driveFileId)}`;
     return '';
+  }
+
+  function applyInitialLanding() {
+    if (!currentUser || !currentUser.authenticated) return;
+    if (isMobileFormViewport()) {
+      applyRoleLanding();
+      return;
+    }
+    if (applyDesktopVisitorRecordLanding()) return;
+    applyRoleLanding();
+  }
+
+  function applyDesktopVisitorRecordLanding() {
+    const open = openActivities();
+    if (!open.length) return false;
+    if (!open.some(activity => activity.id === ui.selectedActivityId)) ui.selectedActivityId = open[0].id;
+    ui.view = 'workspace';
+    ui.tab = 'records';
+    ui.records.scope = 'entry';
+    ui.recordContextMode = recordContextVisitorMode;
+    ui.formContext = formContextVisitorMode;
+    resetAllQuickStates();
+    state.selectedActivityId = ui.selectedActivityId || null;
+    return true;
   }
 
   function applyRoleLanding() {

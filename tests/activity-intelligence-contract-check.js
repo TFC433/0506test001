@@ -763,6 +763,7 @@ function assertRealActiveIntelligenceRuntimeSourceContract(managementSource, css
     assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource);
     assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, service);
     assertStableVisualAssetsAndActiveBannerSharingContract(managementSource, service);
+    assertDesktopUnifiedVisitorRecordLandingContract(managementSource);
 }
 
 function assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource) {
@@ -1206,6 +1207,99 @@ function assertStableVisualAssetsAndActiveBannerSharingContract(managementSource
     const differentNext = fakeImage({ src: '/api/drive/thumbnail?fileId=drive-b', 'data-stable-image-key': 'form-thumbnail:/api/drive/thumbnail?fileId=drive-b' });
     contract.restoreStableImages({ querySelectorAll: () => [differentNext] }, new Map([[differentPrevious.getAttribute('data-stable-image-key'), [differentPrevious]]]));
     assert.strictEqual(differentNext.replacement, null, 'different resolved asset identity must trigger a real image update');
+}
+
+function assertDesktopUnifiedVisitorRecordLandingContract(managementSource) {
+    assert(managementSource.includes('applyInitialLanding();'), 'startup must use the unified initial landing boundary');
+    assert(managementSource.includes('function applyDesktopVisitorRecordLanding()'), 'desktop visitor record landing helper must exist');
+    assert(managementSource.includes("ui.tab = 'records';") && managementSource.includes("ui.records.scope = 'entry';"), 'default landing must use the existing records entry flow');
+    assert(managementSource.includes('ui.recordContextMode = recordContextVisitorMode;'), 'default landing must use Visitor record context');
+    assert(managementSource.includes('ui.formContext = formContextVisitorMode;'), 'default landing must reset Form Design context to Visitor');
+    assert(!managementSource.includes('applyDesktopVisitorRecordLanding(' + ');\\n    render();'), 'desktop landing must not be a post-render redirect');
+    assert(!/location\.(search|hash)/.test(managementSource), 'no supported URL search/hash deep-link mechanism exists to override');
+    const renderSource = extractFunctionDeclaration(managementSource, 'render');
+    assert(!renderSource.includes('applyInitialLanding') && !renderSource.includes('applyDesktopVisitorRecordLanding'), 'ordinary render must not force the landing again');
+    const selectTabSource = extractFunctionDeclaration(managementSource, 'selectTab');
+    assert(!selectTabSource.includes('applyInitialLanding') && !selectTabSource.includes('applyDesktopVisitorRecordLanding'), 'subsequent tab navigation must not force the landing again');
+    assert(managementSource.includes("if (tabName === 'form' && !canDesignForm()) ui.tab = 'overview';"), 'Form Design permission checks must remain authoritative');
+    assert(managementSource.includes("else if (tabName === 'analytics' && !canUseAnalytics()) ui.tab = 'overview';"), 'Analytics permission checks must remain authoritative');
+    assert(managementSource.includes('if (action === \'form-context\')'), 'Active Intelligence remains reachable through existing form context navigation');
+    assert(managementSource.includes('data-action="tab" data-tab="records"') || managementSource.includes("sidebarTab('records'"), 'Records navigation must remain available through existing sidebar tabs');
+    assert(managementSource.includes("sidebarTab('analytics'") && managementSource.includes("sidebarTab('form'"), 'Analytics and Form Design navigation must remain permission-controlled and reachable');
+    assert(managementSource.includes('data-stable-image-key="logo:form"'), 'stable visual asset behavior must remain present');
+    assert(!managementSource.includes('activity_intelligence_') && !managementSource.includes('CREATE TABLE'), 'landing change must not add DB/schema code to frontend');
+
+    const source = [
+        "const formContextVisitorMode = 'visitor';",
+        "const formContextFieldIntelligenceMode = 'field_intelligence';",
+        "const recordContextVisitorMode = 'visitor';",
+        "const recordContextActiveMode = 'active-intelligence';",
+        "let currentUser = null;",
+        "let mobile = false;",
+        "let fallbackCalls = 0;",
+        "let resetCalls = 0;",
+        "const state = { activities: [], selectedActivityId: null };",
+        "const ui = { selectedActivityId: null, view: 'overview', tab: 'overview', records: { scope: 'all' }, recordContextMode: recordContextActiveMode, formContext: formContextFieldIntelligenceMode };",
+        "function isMobileFormViewport() { return mobile; }",
+        "function activityStatus(activity) { return { key: activity && activity.open ? 'open' : 'ended' }; }",
+        "function openActivities() { return state.activities.filter(activity => activityStatus(activity).key === 'open'); }",
+        "function resetAllQuickStates() { resetCalls += 1; }",
+        "function applyRoleLanding() { fallbackCalls += 1; ui.view = 'fallback'; }",
+        extractFunctionDeclaration(managementSource, 'applyDesktopVisitorRecordLanding'),
+        extractFunctionDeclaration(managementSource, 'applyInitialLanding'),
+        "({ state, ui, setUser(value) { currentUser = value; }, setMobile(value) { mobile = value; }, applyInitialLanding, counts() { return { fallbackCalls, resetCalls }; } });"
+    ].join('\n');
+    const contract = vm.runInNewContext(source, {});
+    const roles = ['recorder', 'admin', 'super_admin'];
+    roles.forEach(role => {
+        contract.state.activities = [{ id: 'activity-a', open: true }, { id: 'activity-b', open: true }];
+        contract.state.selectedActivityId = null;
+        contract.ui.selectedActivityId = null;
+        contract.ui.view = 'overview';
+        contract.ui.tab = 'overview';
+        contract.ui.records.scope = 'all';
+        contract.ui.recordContextMode = 'active-intelligence';
+        contract.ui.formContext = 'field_intelligence';
+        contract.setUser({ authenticated: true, role });
+        contract.setMobile(false);
+        contract.applyInitialLanding();
+        assert.deepStrictEqual({
+            view: contract.ui.view,
+            tab: contract.ui.tab,
+            scope: contract.ui.records.scope,
+            recordContextMode: contract.ui.recordContextMode,
+            formContext: contract.ui.formContext
+        }, {
+            view: 'workspace',
+            tab: 'records',
+            scope: 'entry',
+            recordContextMode: 'visitor',
+            formContext: 'visitor'
+        }, `${role} desktop normal entry must land on Visitor Add Record`);
+    });
+
+    contract.state.activities = [{ id: 'activity-a', open: true }, { id: 'activity-b', open: true }];
+    contract.ui.selectedActivityId = 'activity-b';
+    contract.setMobile(false);
+    contract.applyInitialLanding();
+    assert.strictEqual(contract.ui.selectedActivityId, 'activity-b', 'current selected open Activity must be preserved');
+
+    contract.ui.selectedActivityId = 'closed-activity';
+    contract.applyInitialLanding();
+    assert.strictEqual(contract.ui.selectedActivityId, 'activity-a', 'missing current open Activity must reuse existing open-activity fallback');
+
+    contract.state.activities = [];
+    contract.ui.view = 'overview';
+    contract.setMobile(false);
+    contract.applyInitialLanding();
+    assert.strictEqual(contract.ui.view, 'fallback', 'missing Activity must use existing safe fallback behavior');
+
+    const beforeMobileFallbacks = contract.counts().fallbackCalls;
+    contract.state.activities = [{ id: 'activity-a', open: true }];
+    contract.ui.view = 'overview';
+    contract.setMobile(true);
+    contract.applyInitialLanding();
+    assert.strictEqual(contract.counts().fallbackCalls, beforeMobileFallbacks + 1, 'mobile landing behavior must remain delegated to existing role landing');
 }
 
 function assertCardAssistShortTextMappingBuilderContract(managementSource) {
