@@ -920,6 +920,8 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(cssSource.includes('.aim-record-context-label-supplemental'));
     assert(cssSource.includes('background: var(--aim-blue-soft);'));
     assert(cssSource.includes('color: var(--aim-blue);'));
+    assert(cssSource.includes('.aim-record-card-meta .aim-record-context-label-supplemental {\n    justify-self: start;\n    max-width: 100%;\n    min-height: 16px;\n    padding: 1px 5px;'));
+    assert(cssSource.includes('font-size: 10px;\n    font-weight: 600;\n    line-height: 1.1;\n    white-space: nowrap;'));
     assert(!cssSource.includes('.aim-record-context-label {\n  border-color: #bfdbfe'));
     assert(cssSource.includes('.aim-supplemental-text-action'));
     assert(cssSource.indexOf('.aim-button {') < cssSource.indexOf('.aim-supplemental-text-action'));

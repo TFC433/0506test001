@@ -5697,6 +5697,18 @@ a:focus-visible {
     line-height: 1.1;
   }
 
+  .aim-record-card-meta .aim-record-context-label-supplemental {
+    justify-self: start;
+    max-width: 100%;
+    min-height: 16px;
+    padding: 1px 5px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.1;
+    white-space: nowrap;
+  }
+
   .aim-record-card-completeness-label {
     font-size: 11px;
   }
