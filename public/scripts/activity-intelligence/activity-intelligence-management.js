@@ -183,7 +183,6 @@
       personal: new Set(),
       all: new Set()
     },
-    personalFullRecordIds: new Set(),
     overview: { q: '', status: 'all', sort: 'name', dir: 'asc' },
     records: {
       scope: 'entry',
@@ -1937,9 +1936,6 @@
 
   function renderInlineRecordDetail(record, activity) {
     if (!canViewRecord(record, activity)) return '';
-    if (recordIsContributorOnly(record) && !((ui.personalFullRecordIds || new Set()).has(record.id))) {
-      return renderContributorFocusedDetail(record, activity);
-    }
     const items = snapshotRecordItems(record, activity);
     const detail = renderRecordDetailItems(items, record);
     return `
@@ -1958,33 +1954,6 @@
           ${detail.cardRailHtml ? `<aside class="aim-record-detail-card-rail" aria-label="名片">${detail.cardRailHtml}</aside>` : ''}
         </div>
         ${renderSupplementalDetail(record, activity)}
-      </div>
-    `;
-  }
-
-  function renderContributorFocusedDetail(record, activity) {
-    const contribution = (record.supplements && record.supplements.myContribution) || (record.supplementalSummary && record.supplementalSummary.myContribution);
-    return `
-      <div class="aim-inline-record-detail aim-contributor-focused-detail">
-        <section class="aim-inline-record-meta-card" aria-label="紀錄資訊">
-          <dl class="aim-inline-record-meta">
-            <div><dt>活動</dt><dd>${Store.escapeHtml(activity.name)}</dd></div>
-            <div><dt>紀錄者</dt><dd>${Store.escapeHtml(record.createdByDisplayName)}</dd></div>
-            <div><dt>建立時間</dt><dd>${Store.formatDateTime(record.createdAt)}</dd></div>
-            <div><dt>狀態</dt><dd><span class="aim-record-context-label aim-record-context-label-supplemental">我有補充</span></dd></div>
-          </dl>
-        </section>
-        <section class="aim-contributor-note-section" aria-label="我的補充紀錄">
-          <div class="aim-supplemental-detail-head">
-            <h3>我的補充紀錄</h3>
-            ${canContributeToRecord(record, activity) ? `<button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">編輯我的紀錄</button>` : ''}
-          </div>
-          <article class="aim-contribution-row aim-contribution-row-inline">
-            <p>${Store.escapeHtml(contribution && contribution.note ? contribution.note : '尚未填寫補充紀錄。')}</p>
-            ${contribution && contribution.updatedAt ? `<span>${Store.formatDateTime(contribution.updatedAt)}</span>` : ''}
-          </article>
-          <div class="aim-contributor-full-record-action"><button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="view-full-record" data-id="${Store.escapeHtml(record.id)}">查看完整訪談紀錄</button></div>
-        </section>
       </div>
     `;
   }
@@ -2015,16 +1984,20 @@
   function renderAdditionalVisitorDetailRow(record, entry, canEditSupplement) {
     const card = entry.cardSnapshot || {};
     const title = card.name || '未命名名片';
-    const subtitle = [card.position, card.company].filter(Boolean).join(' / ');
+    const jobTitle = card.position || card.jobTitle || '';
+    const company = card.company || '';
     return `
       <article class="aim-supplemental-visitor-row aim-supplemental-detail-row">
         <div class="aim-supplemental-visitor-line">
           <div class="aim-supplemental-visitor-main">
-            <strong>${Store.escapeHtml(title)}</strong>
-            ${subtitle ? `<span>${Store.escapeHtml(subtitle)}</span>` : ''}
-            ${entry.personalInterest ? `<span class="aim-supplemental-interest-text">關注：${Store.escapeHtml(entry.personalInterest)}</span>` : ''}
+            <div class="aim-supplemental-visitor-title-line">
+              <strong class="aim-supplemental-visitor-name">${Store.escapeHtml(title)}</strong>
+              ${jobTitle ? `<span class="aim-supplemental-visitor-job">${Store.escapeHtml(jobTitle)}</span>` : ''}
+            </div>
+            ${company ? `<span class="aim-supplemental-visitor-company">${Store.escapeHtml(company)}</span>` : ''}
+            ${entry.personalInterest ? `<span class="aim-supplemental-interest-text"><span class="aim-supplemental-interest-prefix">關注：</span>${Store.escapeHtml(entry.personalInterest)}</span>` : ''}
           </div>
-          ${!canEditSupplement && card.cardId ? `<button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
+          ${!canEditSupplement && card.cardId ? `<button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看</button>` : ''}
         </div>
         ${canEditSupplement ? `
           <label class="aim-field aim-supplemental-interest-field"><span>個人關注（選填）</span><textarea class="aim-textarea aim-auto-grow aim-additional-interest-edit" data-supplement-id="${Store.escapeHtml(entry.supplementId)}" rows="1" placeholder="個人關注（選填）">${Store.escapeHtml(entry.personalInterest || '')}</textarea></label>
@@ -2044,8 +2017,14 @@
     return `
       <article class="aim-contribution-row ${mine ? 'aim-contribution-row-mine' : ''}">
         <div class="aim-contribution-meta">
-          <strong>${Store.escapeHtml(mine ? '我的補充紀錄' : (entry.actorDisplayName || '補充紀錄'))}</strong>
-          <span>${Store.formatDateTime(entry.updatedAt || entry.createdAt)}</span>
+          <div class="aim-contribution-author-line">
+            <strong>${Store.escapeHtml(entry.actorDisplayName || '補充紀錄')}</strong>
+            ${mine ? '<span class="aim-record-context-label aim-record-context-label-supplemental aim-contribution-mine-cue">我的補充</span>' : ''}
+          </div>
+          <div class="aim-contribution-row-actions">
+            <span>${Store.formatDateTime(entry.updatedAt || entry.createdAt)}</span>
+            ${mine && canContributeToRecord(record, selectedActivity()) ? `<button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">編輯</button>` : ''}
+          </div>
         </div>
         <p>${Store.escapeHtml(entry.note || '')}</p>
       </article>
@@ -5573,11 +5552,6 @@
       render();
       return true;
     }
-    if (action === 'view-full-record') {
-      await showContributorFullRecord(el.dataset.id);
-      render();
-      return true;
-    }
     if (action === 'form-assist-select-person') {
       selectFormAssistPerson(el.dataset.submissionId || '');
       return true;
@@ -8011,13 +7985,6 @@
     replaceRecord(updated);
     ui.drawer = null;
     toast('已刪除補充紀錄。');
-  }
-
-  async function showContributorFullRecord(submissionId) {
-    if (!submissionId) return;
-    if (!ui.personalFullRecordIds) ui.personalFullRecordIds = new Set();
-    await fetchRecordDetails(submissionId);
-    ui.personalFullRecordIds.add(submissionId);
   }
 
   function selectFormAssistPerson(submissionId) {

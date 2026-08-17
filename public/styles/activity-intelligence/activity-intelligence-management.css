@@ -3403,6 +3403,10 @@ a:focus-visible {
   line-height: 1.45;
 }
 
+.aim-supplemental-interest-prefix {
+  color: var(--aim-muted);
+}
+
 .aim-supplemental-detail {
   padding: 10px 12px;
   border: 1px solid var(--aim-border);
@@ -3447,38 +3451,34 @@ a:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.aim-contribution-author-line,
+.aim-contribution-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.aim-contribution-row-actions {
+  justify-content: flex-end;
+}
+
+.aim-contribution-mine-cue {
+  min-height: 18px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .aim-contribution-row-mine {
   border-color: var(--aim-border);
-}
-
-.aim-contributor-focused-detail .aim-contributor-note-section {
-  display: grid;
-  gap: 8px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--aim-border);
-}
-
-.aim-contribution-row-inline {
-  padding: 0;
-  border-bottom: 0;
-}
-
-.aim-contributor-full-record-action {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .aim-record-drawer-supplement-action {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid var(--aim-border);
-}
-
-.aim-contributor-focused-detail .aim-supplemental-detail {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
 }
 
 .aim-record-context-label-supplemental {

@@ -850,10 +850,14 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
         '查看名片',
         '移除',
         '我的補充紀錄',
-        '編輯我的紀錄',
-        '查看完整訪談紀錄',
+        '編輯',
+        '我的補充',
         '我有補充'
     ].forEach(copy => assert(managementSource.includes(copy), `missing approved supplemental copy: ${copy}`));
+    assert(!managementSource.includes('查看完整訪談紀錄'));
+    assert(!managementSource.includes('data-action="view-full-record"'));
+    assert(!managementSource.includes('function renderContributorFocusedDetail'));
+    assert(!managementSource.includes('personalFullRecordIds'));
     assert(!managementSource.includes('個人興趣或補充備註'));
     assert(!managementSource.includes('編輯我的補充紀錄'));
     assert(!managementSource.includes('新增我的補充紀錄'));
@@ -874,13 +878,17 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(apiSource.includes('/my-contribution'));
     assert(cssSource.includes('.aim-supplemental-detail'));
     assert(cssSource.includes('.aim-supplemental-visitor-line'));
-    assert(cssSource.includes('.aim-contributor-note-section'));
+    assert(!cssSource.includes('.aim-contributor-note-section'));
+    assert(!cssSource.includes('.aim-contributor-focused-detail'));
     assert(cssSource.includes('.aim-supplemental-add-action'));
     assert(cssSource.includes('.aim-supplemental-entry-text-action'));
     assert(cssSource.includes('.aim-supplemental-entry-card'));
     assert(cssSource.includes('.aim-supplemental-visitor-title-line'));
     assert(cssSource.includes('.aim-supplemental-visitor-job'));
     assert(cssSource.includes('.aim-supplemental-visitor-company'));
+    assert(cssSource.includes('.aim-contribution-author-line'));
+    assert(cssSource.includes('.aim-contribution-row-actions'));
+    assert(cssSource.includes('.aim-contribution-mine-cue'));
     assert(cssSource.includes('color: var(--aim-blue-dark);'));
     assert(cssSource.includes('.aim-supplemental-entry {\n  gap: 10px;\n  padding: 10px 12px 12px;\n  border: 1px solid var(--aim-border);\n  border-radius: 6px;\n  background: #fbfcfe;\n}'));
     assert(cssSource.includes('.aim-supplemental-entry-card {\n  gap: 8px;\n  padding: 9px 10px;\n  border: 1px solid var(--aim-border);\n  border-radius: 6px;\n  background: #fff;\n}'));
@@ -897,6 +905,9 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(managementSource.includes('class="aim-supplemental-visitor-name"'));
     assert(managementSource.includes('class="aim-supplemental-visitor-job"'));
     assert(managementSource.includes('class="aim-supplemental-visitor-company"'));
+    assert(managementSource.includes('class="aim-contribution-author-line"'));
+    assert(managementSource.includes('class="aim-contribution-row-actions"'));
+    assert(managementSource.includes('aim-contribution-mine-cue">我的補充</span>'));
     assert(managementSource.includes('class="aim-supplemental-interest-label">個人關注</span><span class="aim-small">請填寫追加訪客的關注議題</span>'));
     assert(managementSource.includes('aim-textarea aim-auto-grow aim-supplemental-interest-input'));
     assert(managementSource.includes('aim-textarea aim-auto-grow aim-additional-interest-edit'));
@@ -959,6 +970,9 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(!additionalOnlyHtml.includes('delete-additional-visitor'));
     assert(!additionalOnlyHtml.includes('aim-additional-interest-edit'));
     assert(!additionalOnlyHtml.includes('<textarea'));
+    assert(!additionalOnlyHtml.includes('查看名片'));
+    assert(additionalOnlyHtml.includes('>查看</button>'));
+    assert(additionalOnlyHtml.includes('class="aim-supplemental-visitor-company">Co</span>'));
     assert(additionalOnlyHtml.includes('aim-supplemental-text-action'));
     const contributionOnlyHtml = contract.renderSupplementalDetail({
         ...baseRecord,
@@ -972,6 +986,8 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(!contributionOnlyHtml.includes('同行訪客'));
     assert(contributionOnlyHtml.includes('補充紀錄'));
     assert(!contributionOnlyHtml.includes('open-my-contribution'));
+    assert(contributionOnlyHtml.includes('class="aim-contribution-row'));
+    assert(contributionOnlyHtml.includes('class="aim-contribution-author-line"'));
     const bothHtml = contract.renderSupplementalDetail({
         ...baseRecord,
         supplements: {
@@ -982,6 +998,25 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     }, {});
     assert(bothHtml.includes('同行訪客'));
     assert(bothHtml.includes('補充紀錄'));
+
+    const mineContributionSource = [
+        'const Store = { escapeHtml: value => String(value || ""), formatDateTime: value => String(value || "") };',
+        'function isMyContribution() { return true; }',
+        'function canContributeToRecord() { return true; }',
+        'function selectedActivity() { return {}; }',
+        extractFunctionDeclaration(managementSource, 'renderContributionDetailRow'),
+        '({ renderContributionDetailRow })'
+    ].join('\n');
+    const mineContributionContract = vm.runInNewContext(mineContributionSource, {});
+    const mineContributionHtml = mineContributionContract.renderContributionDetailRow(baseRecord, {
+        supplementId: 'mine',
+        note: 'Mine note',
+        actorDisplayName: 'Me',
+        updatedAt: '2026-08-17'
+    });
+    assert(mineContributionHtml.includes('我的補充'));
+    assert(mineContributionHtml.includes('>編輯</button>'));
+    assert(!mineContributionHtml.includes('編輯我的紀錄'));
 
     const quickRowSource = [
         'const Store = { escapeHtml: value => String(value || "") };',
