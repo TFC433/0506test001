@@ -40,6 +40,8 @@ const IDS = {
     aiSubmission: '77777777-7777-4777-8777-777777777773',
     voidSubmission: '77777777-7777-4777-8777-777777777774',
     activeAiSubmission: '77777777-7777-4777-8777-777777777775',
+    additionalVisitorSupplement: '88888888-8888-4888-8888-888888888881',
+    contributionSupplement: '88888888-8888-4888-8888-888888888882',
     otherActivity: '11111111-1111-4111-8111-111111111114'
 };
 const OTHER_CHOICE_VALUE = Buffer.from('5YW25LuW', 'base64').toString('utf8');
@@ -105,6 +107,7 @@ const activeItems = [
 function makeHarness(options = {}) {
     const calls = {};
     const submissions = new Map();
+    const supplements = new Map();
     const missingFormContexts = new Set(options.missingFormContexts || []);
     const initializedFormContexts = new Set(options.initializedFormContexts || []);
     const draftItemsByContext = options.draftItemsByContext || {};
@@ -168,6 +171,25 @@ function makeHarness(options = {}) {
         },
         async getSubmissionById(id) {
             return submissions.get(id) || null;
+        },
+        async getSupplementsBySubmissionIds(submissionIds) {
+            calls.getSupplementsBySubmissionIds = (calls.getSupplementsBySubmissionIds || 0) + 1;
+            const ids = new Set(submissionIds || []);
+            return [...supplements.values()].filter(row => ids.has(row.submissionId));
+        },
+        async getSupplementSummariesBySubmissionIds(submissionIds, actorUserId) {
+            calls.getSupplementSummariesBySubmissionIds = (calls.getSupplementSummariesBySubmissionIds || 0) + 1;
+            const rows = await this.getSupplementsBySubmissionIds(submissionIds);
+            return rows.reduce((acc, row) => {
+                const current = acc.get(row.submissionId) || { additionalVisitorCount: 0, contributionCount: 0, myContribution: null };
+                if (row.supplementType === 'additional_visitor') current.additionalVisitorCount += 1;
+                if (row.supplementType === 'contribution') {
+                    current.contributionCount += 1;
+                    if (actorUserId && row.actorUserId === actorUserId) current.myContribution = row;
+                }
+                acc.set(row.submissionId, current);
+                return acc;
+            }, new Map());
         }
     };
 
@@ -238,6 +260,49 @@ function makeHarness(options = {}) {
         async updateActivity(activityId, row) {
             calls.updateActivity = { activityId, row };
             return { activity_id: activityId, ...row };
+        },
+        async saveAdditionalVisitor(payload) {
+            calls.saveAdditionalVisitor = payload;
+            supplements.set(payload.p_supplement_id, {
+                supplementId: payload.p_supplement_id,
+                submissionId: payload.p_submission_id,
+                supplementType: 'additional_visitor',
+                actorUserId: payload.p_actor.userId,
+                actorDisplayName: payload.p_actor.displayName,
+                cardId: payload.p_card_id,
+                payload: {
+                    cardSnapshot: payload.p_card_snapshot,
+                    personalInterest: payload.p_personal_interest
+                },
+                createdAt: '2026-08-18T00:00:00.000Z',
+                updatedAt: '2026-08-18T00:00:00.000Z'
+            });
+            return { supplement_id: payload.p_supplement_id };
+        },
+        async deleteAdditionalVisitor(payload) {
+            calls.deleteAdditionalVisitor = payload;
+            supplements.delete(payload.p_supplement_id);
+            return { supplement_id: payload.p_supplement_id };
+        },
+        async upsertMyContribution(payload) {
+            calls.upsertMyContribution = payload;
+            supplements.set(IDS.contributionSupplement, {
+                supplementId: IDS.contributionSupplement,
+                submissionId: payload.p_submission_id,
+                supplementType: 'contribution',
+                actorUserId: payload.p_actor.userId,
+                actorDisplayName: payload.p_actor.displayName,
+                cardId: null,
+                payload: { note: payload.p_note },
+                createdAt: '2026-08-18T00:00:00.000Z',
+                updatedAt: '2026-08-18T00:00:00.000Z'
+            });
+            return { supplement_id: IDS.contributionSupplement };
+        },
+        async deleteMyContribution(payload) {
+            calls.deleteMyContribution = payload;
+            supplements.delete(IDS.contributionSupplement);
+            return { submission_id: payload.p_submission_id };
         }
     };
 
@@ -360,7 +425,7 @@ function makeHarness(options = {}) {
         formAiTextGenerator: options.formAiTextGenerator
     });
 
-    return { service, calls, publishedItems };
+    return { service, calls, publishedItems, supplements };
 }
 
 function actor() {
@@ -764,6 +829,29 @@ function assertRealActiveIntelligenceRuntimeSourceContract(managementSource, css
     assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, service);
     assertStableVisualAssetsAndActiveBannerSharingContract(managementSource, service);
     assertDesktopUnifiedVisitorRecordLandingContract(managementSource);
+}
+
+function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiSource, cssSource, sqlSource) {
+    assert(managementSource.includes('quickAdditionalVisitorsEnabled(activity)'));
+    assert(managementSource.includes('currentVisitorCountField(activity)'));
+    assert(managementSource.includes('visitorNumberValue(ui.quickOtherAnswers'));
+    assert(managementSource.includes("context: 'quick-additional-visitor'"));
+    assert(managementSource.includes("context: 'record-additional-visitor'"));
+    assert(managementSource.includes('renderSupplementalDetail(record, activity)'));
+    assert(managementSource.includes('我的補充紀錄'));
+    assert(managementSource.includes('查看完整訪談紀錄'));
+    assert(managementSource.includes('recordBelongsToCurrentUser'));
+    assert(managementSource.includes('record.createdByUserId === currentUser.userId || recordHasMyContribution(record)'));
+    assert(!/payloadAnswersForItems\([^)]*additional/i.test(managementSource));
+    assert(!/submission_answers/i.test(managementSource));
+    assert(apiSource.includes('/additional-visitors'));
+    assert(apiSource.includes('/my-contribution'));
+    assert(cssSource.includes('.aim-supplemental-detail'));
+    assert(sqlSource.includes('activity_intelligence_submission_supplements'));
+    assert(sqlSource.includes('activity_intelligence_save_additional_visitor'));
+    assert(sqlSource.includes('activity_intelligence_delete_additional_visitor'));
+    assert(sqlSource.includes('activity_intelligence_upsert_my_contribution'));
+    assert(sqlSource.includes('activity_intelligence_delete_my_contribution'));
 }
 
 function assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource) {
@@ -1910,6 +1998,46 @@ async function main() {
     assert.strictEqual(enriched.card.cardId, IDS.card);
     assert.strictEqual(enriched.card.thumbnailUrl, '/api/external/thumbnail?fileId=drive-1');
 
+    const supplementalHarness = makeHarness();
+    const supplementalListBefore = await supplementalHarness.service.listSubmissions(IDS.activity, { recordContext: 'visitor' }, actor());
+    assert.strictEqual(supplementalHarness.calls.getSupplementSummariesBySubmissionIds, 1);
+    assert.strictEqual(supplementalListBefore.find(record => record.id === IDS.oldSubmission).supplements, null);
+    await supplementalHarness.service.saveAdditionalVisitor(IDS.oldSubmission, {
+        supplementId: IDS.additionalVisitorSupplement,
+        cardId: IDS.secondCard,
+        personalInterest: 'Robotics procurement',
+        cardSnapshot: { name: 'Browser Must Not Win' }
+    }, actor());
+    assert.strictEqual(supplementalHarness.calls.saveAdditionalVisitor.p_supplement_id, IDS.additionalVisitorSupplement);
+    assert.strictEqual(supplementalHarness.calls.saveAdditionalVisitor.p_card_id, IDS.secondCard);
+    assert.strictEqual(supplementalHarness.calls.saveAdditionalVisitor.p_card_snapshot.name, 'Card Name');
+    assert.strictEqual(supplementalHarness.calls.saveAdditionalVisitor.p_card_snapshot.company, 'Card Co');
+    assert(!JSON.stringify(supplementalHarness.calls.saveAdditionalVisitor.p_card_snapshot).includes('Browser Must Not Win'));
+    const supplementalDetail = await supplementalHarness.service.getSubmission(IDS.oldSubmission, actor());
+    assert.strictEqual(supplementalDetail.supplementalSummary.additionalVisitorCount, 1);
+    assert.strictEqual(supplementalDetail.supplements.additionalVisitors[0].personalInterest, 'Robotics procurement');
+    assert.strictEqual(supplementalDetail.supplements.additionalVisitors[0].cardSnapshot.name, 'Card Name');
+    const supplementalListAfter = await supplementalHarness.service.listSubmissions(IDS.activity, { recordContext: 'visitor' }, actor());
+    const supplementalListRow = supplementalListAfter.find(record => record.id === IDS.oldSubmission);
+    assert.strictEqual(supplementalListRow.supplementalSummary.additionalVisitorCount, 1);
+    assert.strictEqual(supplementalListRow.supplements, null);
+    await supplementalHarness.service.upsertMyContribution(IDS.oldSubmission, { note: 'Follow up from contributor' }, actor());
+    assert.strictEqual(supplementalHarness.calls.upsertMyContribution.p_note, 'Follow up from contributor');
+    assert.strictEqual(supplementalHarness.calls.upsertMyContribution.p_actor.userId, 'real-user');
+    const contributionDetail = await supplementalHarness.service.getSubmission(IDS.oldSubmission, actor());
+    assert.strictEqual(contributionDetail.supplementalSummary.contributionCount, 1);
+    assert.strictEqual(contributionDetail.supplementalSummary.myContribution.note, 'Follow up from contributor');
+    assert.strictEqual(contributionDetail.supplements.contributions.length, 1);
+    await assertRejectsCode(() => supplementalHarness.service.upsertMyContribution(IDS.aiSubmission, { note: 'creator note' }, {
+        username: 'analyst',
+        displayName: 'Analyst',
+        role: 'recorder'
+    }), 'PRIMARY_RECORDER_CONTRIBUTION_FORBIDDEN');
+    await assertRejectsCode(() => supplementalHarness.service.saveAdditionalVisitor(IDS.activeAiSubmission, {
+        supplementId: IDS.additionalVisitorSupplement,
+        cardId: IDS.card
+    }, actor()), 'SUPPLEMENT_CONTEXT_FORBIDDEN');
+
     await service.voidSubmission(IDS.oldSubmission, actor());
     assert.strictEqual(calls.updateSubmissionStatus.status, 'void');
     await service.restoreSubmission(IDS.oldSubmission, actor());
@@ -2398,7 +2526,19 @@ async function main() {
                     otherText: 'AI visual inspection'
                 }] : [])
             ],
-            rawCard: null
+            rawCard: null,
+            supplemental: index === 0 ? {
+                additionalVisitors: [{
+                    name: 'Supplement Visitor',
+                    company: 'Supplement Co',
+                    position: 'Procurement',
+                    personalInterest: 'interested in wafer automation'
+                }],
+                contributions: [{
+                    actorDisplayName: 'Contributor',
+                    note: 'Contributor supplemental note about September follow-up'
+                }]
+            } : null
         }))
     };
     const fullTextScan = aiHarness.service._executeFormAiRetrieveTool({
@@ -2414,6 +2554,9 @@ async function main() {
     assert.strictEqual(fullTextScan.retrievedLongTextAnswers, 165);
     assert.strictEqual(fullTextScan.totalOptionNoteAnswers, 2);
     assert.strictEqual(fullTextScan.retrievedOptionNoteAnswers, 2);
+    assert.strictEqual(fullTextScan.recordsWithSupplementalEvidence, 1);
+    assert(JSON.stringify(fullTextScan).includes('Contributor supplemental note about September follow-up'));
+    assert(JSON.stringify(fullTextScan).includes('Supplement Visitor'));
     assert(JSON.stringify(fullTextScan).includes('PoC planned for December'));
     assert(JSON.stringify(fullTextScan).includes('AI visual inspection'));
     assert(!Object.prototype.hasOwnProperty.call(aiHarness.service._formAiChoiceValue({ label: 'Ignored Blank Note', value: 'Ignored Blank Note', note: '   ' }), 'note'));
@@ -2441,6 +2584,7 @@ async function main() {
     assert.strictEqual(optionNoteAggregate.selectionTotal, 2);
     assert.deepStrictEqual(optionNoteAggregate.rows.map(row => row.label).sort(), ['AI visual inspection', 'Digital Twin']);
     assert(!JSON.stringify(optionNoteAggregate).includes('PoC planned for December'));
+    assert(!JSON.stringify(optionNoteAggregate).includes('Contributor supplemental note'));
 
     const entitySubstring = aiHarness.service._executeFormAiRetrieveTool({
         filters: { fields: [{ field: { itemKey: 'companyField' }, values: ['中華精測'] }] }
@@ -2507,6 +2651,7 @@ async function main() {
     assertContextFoundationSqlContract(activityIntelligenceSqlSource);
     assertDualStreamFormBuilderSourceContract(managementSource, apiSource, cssSource);
     assertRealActiveIntelligenceRuntimeSourceContract(managementSource, cssSource, service);
+    assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiSource, cssSource, activityIntelligenceSqlSource);
     assert(managementSource.includes("if (ui.analytics.ai.state === 'loading') return;"));
     assert(managementSource.includes("state === 'loading'"));
     assert(!managementSource.includes('FORM_GEMINI_API_KEY'));

@@ -156,6 +156,26 @@
       return jsonRequest('PATCH', `/submissions/${encodeURIComponent(submissionId)}`, payload);
     },
 
+    saveAdditionalVisitor(submissionId, payload) {
+      const supplementId = payload && payload.supplementId;
+      if (supplementId) {
+        return jsonRequest('PATCH', `/submissions/${encodeURIComponent(submissionId)}/additional-visitors/${encodeURIComponent(supplementId)}`, payload);
+      }
+      return jsonRequest('POST', `/submissions/${encodeURIComponent(submissionId)}/additional-visitors`, payload);
+    },
+
+    deleteAdditionalVisitor(submissionId, supplementId) {
+      return request(`/submissions/${encodeURIComponent(submissionId)}/additional-visitors/${encodeURIComponent(supplementId)}`, { method: 'DELETE' });
+    },
+
+    upsertMyContribution(submissionId, note) {
+      return jsonRequest('PUT', `/submissions/${encodeURIComponent(submissionId)}/my-contribution`, { note });
+    },
+
+    deleteMyContribution(submissionId) {
+      return request(`/submissions/${encodeURIComponent(submissionId)}/my-contribution`, { method: 'DELETE' });
+    },
+
     hardDeleteSubmission(submissionId) {
       return request(`/submissions/${encodeURIComponent(submissionId)}`, { method: 'DELETE' });
     },

@@ -115,7 +115,7 @@ class ActivityIntelligenceController {
 
     listSubmissions = async (req, res) => {
         await this._handle(res, async () => {
-            const data = await this.activityIntelligenceService.listSubmissions(req.params.activityId, req.query);
+            const data = await this.activityIntelligenceService.listSubmissions(req.params.activityId, req.query, req.user);
             res.json({ success: true, data });
         });
     };
@@ -136,7 +136,38 @@ class ActivityIntelligenceController {
 
     getSubmission = async (req, res) => {
         await this._handle(res, async () => {
-            const data = await this.activityIntelligenceService.getSubmission(req.params.submissionId);
+            const data = await this.activityIntelligenceService.getSubmission(req.params.submissionId, req.user);
+            res.json({ success: true, data });
+        });
+    };
+
+    saveAdditionalVisitor = async (req, res) => {
+        await this._handle(res, async () => {
+            const payload = req.params.supplementId
+                ? { ...(req.body || {}), supplementId: req.params.supplementId }
+                : req.body;
+            const data = await this.activityIntelligenceService.saveAdditionalVisitor(req.params.submissionId, payload, req.user);
+            res.json({ success: true, data });
+        });
+    };
+
+    deleteAdditionalVisitor = async (req, res) => {
+        await this._handle(res, async () => {
+            const data = await this.activityIntelligenceService.deleteAdditionalVisitor(req.params.submissionId, req.params.supplementId, req.user);
+            res.json({ success: true, data });
+        });
+    };
+
+    upsertMyContribution = async (req, res) => {
+        await this._handle(res, async () => {
+            const data = await this.activityIntelligenceService.upsertMyContribution(req.params.submissionId, req.body, req.user);
+            res.json({ success: true, data });
+        });
+    };
+
+    deleteMyContribution = async (req, res) => {
+        await this._handle(res, async () => {
+            const data = await this.activityIntelligenceService.deleteMyContribution(req.params.submissionId, req.user);
             res.json({ success: true, data });
         });
     };

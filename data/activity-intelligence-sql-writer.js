@@ -46,6 +46,22 @@ class ActivityIntelligenceSqlWriter {
         return this._rpc('activity_intelligence_hard_delete_activity', payload);
     }
 
+    async saveAdditionalVisitor(payload) {
+        return this._rpc('activity_intelligence_save_additional_visitor', payload);
+    }
+
+    async deleteAdditionalVisitor(payload) {
+        return this._rpc('activity_intelligence_delete_additional_visitor', payload);
+    }
+
+    async upsertMyContribution(payload) {
+        return this._rpc('activity_intelligence_upsert_my_contribution', payload);
+    }
+
+    async deleteMyContribution(payload) {
+        return this._rpc('activity_intelligence_delete_my_contribution', payload);
+    }
+
     async updateActivity(activityId, updates) {
         const { data, error } = await supabase
             .from(this.activitiesTable)

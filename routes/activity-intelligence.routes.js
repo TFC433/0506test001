@@ -78,7 +78,7 @@ async function requireSubmissionReadAccess(req, res, next) {
         const service = services && services.activityIntelligenceService;
         if (!service) throw new Error('ActivityIntelligenceService is not initialized.');
 
-        const submission = await service.getSubmission(req.params.submissionId);
+        const submission = await service.getSubmission(req.params.submissionId, req.user);
         if (!submission || submission.createdByUserId !== req.user.userId) return sendForbidden(res);
         req.activityIntelligenceSubmission = submission;
         return next();
@@ -142,7 +142,7 @@ async function requireSubmissionAccess(req, res, next) {
         const service = services && services.activityIntelligenceService;
         if (!service) throw new Error('ActivityIntelligenceService is not initialized.');
 
-        const submission = await service.getSubmission(req.params.submissionId);
+        const submission = await service.getSubmission(req.params.submissionId, req.user);
         if (!submission || submission.createdByUserId !== req.user.userId) {
             return res.status(403).json({
                 success: false,
@@ -187,6 +187,11 @@ router.get('/activities/:activityId/submissions', requireSubmissionListAccess, s
 router.post('/activities/:activityId/submissions', requireSubmissionCreateAccess, (req, res, next) => getController(req).createSubmission(req, res, next));
 router.get('/submissions/:submissionId', requireSubmissionReadAccess, (req, res, next) => getController(req).getSubmission(req, res, next));
 router.patch('/submissions/:submissionId', requireSubmissionUpdateAccess, requireSubmissionAccess, (req, res, next) => getController(req).updateSubmission(req, res, next));
+router.post('/submissions/:submissionId/additional-visitors', requireSubmissionUpdateAccess, requireSubmissionAccess, (req, res, next) => getController(req).saveAdditionalVisitor(req, res, next));
+router.patch('/submissions/:submissionId/additional-visitors/:supplementId', requireSubmissionUpdateAccess, requireSubmissionAccess, (req, res, next) => getController(req).saveAdditionalVisitor(req, res, next));
+router.delete('/submissions/:submissionId/additional-visitors/:supplementId', requireSubmissionUpdateAccess, requireSubmissionAccess, (req, res, next) => getController(req).deleteAdditionalVisitor(req, res, next));
+router.put('/submissions/:submissionId/my-contribution', requireRole(SUBMISSION_ROLES), requireSubmissionReadAccess, (req, res, next) => getController(req).upsertMyContribution(req, res, next));
+router.delete('/submissions/:submissionId/my-contribution', requireRole(SUBMISSION_ROLES), requireSubmissionReadAccess, (req, res, next) => getController(req).deleteMyContribution(req, res, next));
 router.delete('/submissions/:submissionId', requireRole(HARD_DELETE_ROLES), (req, res, next) => getController(req).hardDeleteSubmission(req, res, next));
 router.post('/submissions/:submissionId/void', requireRole(SUBMISSION_ROLES), requireSubmissionAccess, (req, res, next) => getController(req).voidSubmission(req, res, next));
 router.post('/submissions/:submissionId/restore', requireRole(SUBMISSION_ROLES), requireSubmissionAccess, (req, res, next) => getController(req).restoreSubmission(req, res, next));

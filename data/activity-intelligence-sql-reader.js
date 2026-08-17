@@ -15,6 +15,7 @@ class ActivityIntelligenceSqlReader {
         this.formItemsTable = 'activity_intelligence_form_items';
         this.submissionsTable = 'activity_intelligence_submissions';
         this.answersTable = 'activity_intelligence_submission_answers';
+        this.supplementsTable = 'activity_intelligence_submission_supplements';
     }
 
     async listActivities() {
@@ -300,6 +301,38 @@ class ActivityIntelligenceSqlReader {
         }, new Map());
     }
 
+    async getSupplementSummariesBySubmissionIds(submissionIds, actorUserId) {
+        const rows = await this.getSupplementsBySubmissionIds(submissionIds);
+        return rows.reduce((acc, row) => {
+            const current = acc.get(row.submissionId) || {
+                additionalVisitorCount: 0,
+                contributionCount: 0,
+                myContribution: null
+            };
+            if (row.supplementType === 'additional_visitor') current.additionalVisitorCount += 1;
+            if (row.supplementType === 'contribution') {
+                current.contributionCount += 1;
+                if (actorUserId && row.actorUserId === actorUserId) current.myContribution = row;
+            }
+            acc.set(row.submissionId, current);
+            return acc;
+        }, new Map());
+    }
+
+    async getSupplementsBySubmissionIds(submissionIds) {
+        const ids = Array.isArray(submissionIds) ? [...new Set(submissionIds.filter(Boolean))] : [];
+        if (!ids.length) return [];
+
+        const { data, error } = await supabase
+            .from(this.supplementsTable)
+            .select('*')
+            .in('submission_id', ids)
+            .order('created_at', { ascending: true });
+
+        if (error) throw this._dbError('getSupplementsBySubmissionIds', error);
+        return (data || []).map(row => this.mapSupplementRow(row)).filter(Boolean);
+    }
+
     async getVersionsByIds(versionIds) {
         if (!Array.isArray(versionIds) || versionIds.length === 0) return new Map();
 
@@ -412,6 +445,22 @@ class ActivityIntelligenceSqlReader {
             valueBoolean: row.value_boolean,
             valueJsonb: row.value_jsonb,
             otherText: row.other_text
+        };
+    }
+
+    mapSupplementRow(row) {
+        if (!row) return null;
+        const payload = row.payload && typeof row.payload === 'object' ? row.payload : {};
+        return {
+            supplementId: row.supplement_id,
+            submissionId: row.submission_id,
+            supplementType: row.supplement_type,
+            actorUserId: row.actor_user_id,
+            actorDisplayName: row.actor_display_name,
+            cardId: row.card_id,
+            payload,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at
         };
     }
 

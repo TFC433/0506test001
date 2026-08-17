@@ -6,11 +6,13 @@ BEGIN;
 -- Manual Supabase reference script only. This file is not an auto-run migration.
 --
 -- Preconditions:
--- - The five Activity Intelligence tables already exist in public.
+-- - The core Activity Intelligence tables already exist in public.
+-- - The supplemental record table/RPC contract is represented below for source
+--   control parity with the deployed database.
 -- - RLS and table grants have already been verified by the product owner.
 -- - These functions are intended for server-side Supabase service_role calls.
 --
--- This script intentionally does not create tables, schemas, frontend grants, or
+-- This script intentionally does not create schemas, frontend grants, or
 -- compatibility fallbacks.
 
 create extension if not exists pgcrypto;
@@ -151,6 +153,25 @@ create unique index if not exists activity_intelligence_form_versions_one_publis
 
 create index if not exists activity_intelligence_submissions_activity_context_status_created_idx
     on public.activity_intelligence_submissions (activity_id, record_context, status, created_at desc);
+
+create table if not exists public.activity_intelligence_submission_supplements (
+    supplement_id uuid primary key default gen_random_uuid(),
+    submission_id uuid not null references public.activity_intelligence_submissions(submission_id) on delete cascade,
+    supplement_type text not null check (supplement_type in ('additional_visitor', 'contribution')),
+    actor_user_id text not null,
+    actor_display_name text not null,
+    card_id uuid,
+    payload jsonb not null default '{}'::jsonb,
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+
+create index if not exists activity_intelligence_submission_supplements_submission_idx
+    on public.activity_intelligence_submission_supplements (submission_id, supplement_type, created_at);
+
+create unique index if not exists activity_intelligence_submission_supplements_contribution_uidx
+    on public.activity_intelligence_submission_supplements (submission_id, actor_user_id)
+    where supplement_type = 'contribution';
 
 create or replace function public.activity_intelligence_private_normalize_context(
     p_context text
@@ -1440,6 +1461,184 @@ begin
 end;
 $$;
 
+create or replace function public.activity_intelligence_save_additional_visitor(
+    p_supplement_id uuid,
+    p_submission_id uuid,
+    p_card_id uuid,
+    p_card_snapshot jsonb,
+    p_personal_interest text,
+    p_actor jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_actor_user_id text := nullif(trim(p_actor ->> 'userId'), '');
+    v_actor_display_name text := coalesce(nullif(trim(p_actor ->> 'displayName'), ''), v_actor_user_id, 'Unknown User');
+begin
+    if v_actor_user_id is null then
+        raise exception 'Actor identity is required' using errcode = '23514';
+    end if;
+
+    insert into public.activity_intelligence_submission_supplements (
+        supplement_id,
+        submission_id,
+        supplement_type,
+        actor_user_id,
+        actor_display_name,
+        card_id,
+        payload,
+        created_at,
+        updated_at
+    )
+    values (
+        p_supplement_id,
+        p_submission_id,
+        'additional_visitor',
+        v_actor_user_id,
+        v_actor_display_name,
+        p_card_id,
+        jsonb_build_object(
+            'cardSnapshot', coalesce(p_card_snapshot, '{}'::jsonb),
+            'personalInterest', coalesce(nullif(trim(p_personal_interest), ''), '')
+        ),
+        now(),
+        now()
+    )
+    on conflict (supplement_id) do update
+    set card_id = excluded.card_id,
+        actor_user_id = excluded.actor_user_id,
+        actor_display_name = excluded.actor_display_name,
+        payload = excluded.payload,
+        updated_at = now()
+    where public.activity_intelligence_submission_supplements.supplement_type = 'additional_visitor';
+
+    return jsonb_build_object('supplement_id', p_supplement_id, 'submission_id', p_submission_id);
+end;
+$$;
+
+create or replace function public.activity_intelligence_delete_additional_visitor(
+    p_supplement_id uuid,
+    p_actor jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_actor_user_id text := nullif(trim(p_actor ->> 'userId'), '');
+    v_deleted_count integer;
+begin
+    if v_actor_user_id is null then
+        raise exception 'Actor identity is required' using errcode = '23514';
+    end if;
+
+    delete from public.activity_intelligence_submission_supplements
+    where supplement_id = p_supplement_id
+      and supplement_type = 'additional_visitor';
+
+    get diagnostics v_deleted_count = row_count;
+    if v_deleted_count = 0 then
+        raise exception 'Supplement not found' using errcode = '23514';
+    end if;
+
+    return jsonb_build_object('supplement_id', p_supplement_id);
+end;
+$$;
+
+create or replace function public.activity_intelligence_upsert_my_contribution(
+    p_submission_id uuid,
+    p_note text,
+    p_actor jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_actor_user_id text := nullif(trim(p_actor ->> 'userId'), '');
+    v_actor_display_name text := coalesce(nullif(trim(p_actor ->> 'displayName'), ''), v_actor_user_id, 'Unknown User');
+    v_supplement_id uuid;
+begin
+    if v_actor_user_id is null then
+        raise exception 'Actor identity is required' using errcode = '23514';
+    end if;
+    if nullif(trim(p_note), '') is null then
+        raise exception 'Contribution note is required' using errcode = '23514';
+    end if;
+
+    select supplement_id into v_supplement_id
+    from public.activity_intelligence_submission_supplements
+    where submission_id = p_submission_id
+      and supplement_type = 'contribution'
+      and actor_user_id = v_actor_user_id
+    limit 1;
+
+    if v_supplement_id is null then
+        v_supplement_id := gen_random_uuid();
+        insert into public.activity_intelligence_submission_supplements (
+            supplement_id,
+            submission_id,
+            supplement_type,
+            actor_user_id,
+            actor_display_name,
+            card_id,
+            payload,
+            created_at,
+            updated_at
+        )
+        values (
+            v_supplement_id,
+            p_submission_id,
+            'contribution',
+            v_actor_user_id,
+            v_actor_display_name,
+            null,
+            jsonb_build_object('note', trim(p_note)),
+            now(),
+            now()
+        );
+    else
+        update public.activity_intelligence_submission_supplements
+        set actor_display_name = v_actor_display_name,
+            payload = jsonb_build_object('note', trim(p_note)),
+            updated_at = now()
+        where supplement_id = v_supplement_id;
+    end if;
+
+    return jsonb_build_object('supplement_id', v_supplement_id, 'submission_id', p_submission_id);
+end;
+$$;
+
+create or replace function public.activity_intelligence_delete_my_contribution(
+    p_submission_id uuid,
+    p_actor jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+    v_actor_user_id text := nullif(trim(p_actor ->> 'userId'), '');
+begin
+    if v_actor_user_id is null then
+        raise exception 'Actor identity is required' using errcode = '23514';
+    end if;
+
+    delete from public.activity_intelligence_submission_supplements
+    where submission_id = p_submission_id
+      and supplement_type = 'contribution'
+      and actor_user_id = v_actor_user_id;
+
+    return jsonb_build_object('submission_id', p_submission_id);
+end;
+$$;
+
 revoke execute on function public.activity_intelligence_private_normalize_context(text) from PUBLIC;
 revoke execute on function public.activity_intelligence_private_normalize_context(text) from anon;
 revoke execute on function public.activity_intelligence_private_normalize_context(text) from authenticated;
@@ -1500,6 +1699,22 @@ revoke execute on function public.activity_intelligence_hard_delete_activity(uui
 revoke execute on function public.activity_intelligence_hard_delete_activity(uuid) from anon;
 revoke execute on function public.activity_intelligence_hard_delete_activity(uuid) from authenticated;
 
+revoke execute on function public.activity_intelligence_save_additional_visitor(uuid, uuid, uuid, jsonb, text, jsonb) from PUBLIC;
+revoke execute on function public.activity_intelligence_save_additional_visitor(uuid, uuid, uuid, jsonb, text, jsonb) from anon;
+revoke execute on function public.activity_intelligence_save_additional_visitor(uuid, uuid, uuid, jsonb, text, jsonb) from authenticated;
+
+revoke execute on function public.activity_intelligence_delete_additional_visitor(uuid, jsonb) from PUBLIC;
+revoke execute on function public.activity_intelligence_delete_additional_visitor(uuid, jsonb) from anon;
+revoke execute on function public.activity_intelligence_delete_additional_visitor(uuid, jsonb) from authenticated;
+
+revoke execute on function public.activity_intelligence_upsert_my_contribution(uuid, text, jsonb) from PUBLIC;
+revoke execute on function public.activity_intelligence_upsert_my_contribution(uuid, text, jsonb) from anon;
+revoke execute on function public.activity_intelligence_upsert_my_contribution(uuid, text, jsonb) from authenticated;
+
+revoke execute on function public.activity_intelligence_delete_my_contribution(uuid, jsonb) from PUBLIC;
+revoke execute on function public.activity_intelligence_delete_my_contribution(uuid, jsonb) from anon;
+revoke execute on function public.activity_intelligence_delete_my_contribution(uuid, jsonb) from authenticated;
+
 grant execute on function public.activity_intelligence_create_activity(jsonb, jsonb, jsonb) to service_role;
 grant execute on function public.activity_intelligence_duplicate_activity(uuid, jsonb, jsonb) to service_role;
 grant execute on function public.activity_intelligence_save_draft(uuid, jsonb, jsonb, text) to service_role;
@@ -1510,5 +1725,9 @@ grant execute on function public.activity_intelligence_initialize_form_context(u
 grant execute on function public.activity_intelligence_update_submission(uuid, uuid, jsonb, jsonb) to service_role;
 grant execute on function public.activity_intelligence_hard_delete_submission(uuid) to service_role;
 grant execute on function public.activity_intelligence_hard_delete_activity(uuid) to service_role;
+grant execute on function public.activity_intelligence_save_additional_visitor(uuid, uuid, uuid, jsonb, text, jsonb) to service_role;
+grant execute on function public.activity_intelligence_delete_additional_visitor(uuid, jsonb) to service_role;
+grant execute on function public.activity_intelligence_upsert_my_contribution(uuid, text, jsonb) to service_role;
+grant execute on function public.activity_intelligence_delete_my_contribution(uuid, jsonb) to service_role;
 
 COMMIT;

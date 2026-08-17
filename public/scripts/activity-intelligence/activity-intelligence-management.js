@@ -114,7 +114,9 @@
       otherAnswers: {},
       optionNotes: {},
       optionNoteExpanded: {},
-      cardLink: { linked: false, cardId: null, card: null }
+      cardLink: { linked: false, cardId: null, card: null },
+      additionalVisitors: [],
+      additionalVisitorActivityId: ''
     };
   }
 
@@ -164,6 +166,8 @@
     quickOptionNotes: {},
     quickOptionNoteExpanded: {},
     quickCardLink: { linked: false, cardId: null, card: null },
+    quickAdditionalVisitors: [],
+    quickAdditionalVisitorActivityId: '',
     formAssist: {
       activeFieldId: '',
       kind: '',
@@ -179,6 +183,7 @@
       personal: new Set(),
       all: new Set()
     },
+    personalFullRecordIds: new Set(),
     overview: { q: '', status: 'all', sort: 'name', dir: 'asc' },
     records: {
       scope: 'entry',
@@ -479,6 +484,8 @@
     ui.quickOptionNotes = stateForContext.optionNotes;
     ui.quickOptionNoteExpanded = stateForContext.optionNoteExpanded;
     ui.quickCardLink = stateForContext.cardLink;
+    ui.quickAdditionalVisitors = Array.isArray(stateForContext.additionalVisitors) ? stateForContext.additionalVisitors : [];
+    ui.quickAdditionalVisitorActivityId = stateForContext.additionalVisitorActivityId || '';
     return stateForContext;
   }
 
@@ -503,6 +510,13 @@
     const stateForContext = quickStateForContext(activeRecordFormContext());
     stateForContext.cardLink = cleanCardLink(cardLink);
     syncQuickStateForContext(activeRecordFormContext());
+  }
+
+  function setQuickAdditionalVisitors(activityId, rows) {
+    const stateForContext = quickStateForContext(formContextVisitorMode);
+    stateForContext.additionalVisitorActivityId = activityId || '';
+    stateForContext.additionalVisitors = Array.isArray(rows) ? rows : [];
+    syncQuickStateForContext(formContextVisitorMode);
   }
 
   function normalizeFormBundleDto(form) {
@@ -603,6 +617,9 @@
       runtimeOtherAnswers: submission.otherAnswers || submission.runtimeOtherAnswers || {},
       runtimeOptionNotes: extractOptionNotes(rawAnswers, snapshotItems),
       runtimeCardLink: card ? { linked: true, cardId: card.cardId, card } : (submission.cardId ? { linked: true, cardId: submission.cardId, card: null } : { linked: false, cardId: null, card: null }),
+      supplementalSummary: normalizeSupplementalSummary(submission.supplementalSummary),
+      supplements: normalizeSupplements(submission.supplements),
+      supplementalDetailsLoaded: Boolean(submission.supplements),
       formRuntimeSnapshot: formSnapshot ? {
         versionId: formSnapshot.versionId,
         formContext: formSnapshot.formContext || 'visitor',
@@ -610,6 +627,84 @@
         publishedAt: formSnapshot.publishedAt || '',
         items: ((formSnapshot.items) || []).map(normalizeDesignerItem)
       } : null
+    };
+  }
+
+  function normalizeSupplementalSummary(summary) {
+    const source = summary || {};
+    return {
+      additionalVisitorCount: Number(source.additionalVisitorCount || 0),
+      contributionCount: Number(source.contributionCount || 0),
+      myContribution: normalizeContribution(source.myContribution)
+    };
+  }
+
+  function normalizeSupplements(supplements) {
+    if (!supplements) {
+      return {
+        additionalVisitors: [],
+        contributions: [],
+        myContribution: null,
+        summary: normalizeSupplementalSummary(null)
+      };
+    }
+    const additionalVisitors = (supplements.additionalVisitors || []).map(normalizeAdditionalVisitor).filter(Boolean);
+    const contributions = (supplements.contributions || []).map(normalizeContribution).filter(Boolean);
+    const myContribution = normalizeContribution(supplements.myContribution) || contributions.find(isMyContribution) || null;
+    return {
+      additionalVisitors,
+      contributions,
+      myContribution,
+      summary: normalizeSupplementalSummary({
+        additionalVisitorCount: additionalVisitors.length,
+        contributionCount: contributions.length,
+        myContribution
+      })
+    };
+  }
+
+  function normalizeAdditionalVisitor(entry) {
+    if (!entry) return null;
+    const cardSnapshot = normalizeSupplementCardSnapshot(entry.cardSnapshot || entry.card_snapshot || {});
+    return {
+      supplementId: entry.supplementId || entry.supplement_id || '',
+      submissionId: entry.submissionId || entry.submission_id || '',
+      cardId: entry.cardId || entry.card_id || cardSnapshot.cardId || '',
+      cardSnapshot,
+      personalInterest: String(entry.personalInterest || entry.personal_interest || '').trim(),
+      actorUserId: entry.actorUserId || entry.actor_user_id || '',
+      actorDisplayName: entry.actorDisplayName || entry.actor_display_name || '',
+      createdAt: entry.createdAt || entry.created_at || '',
+      updatedAt: entry.updatedAt || entry.updated_at || ''
+    };
+  }
+
+  function normalizeContribution(entry) {
+    if (!entry) return null;
+    return {
+      supplementId: entry.supplementId || entry.supplement_id || '',
+      submissionId: entry.submissionId || entry.submission_id || '',
+      note: String(entry.note || '').trim(),
+      actorUserId: entry.actorUserId || entry.actor_user_id || '',
+      actorDisplayName: entry.actorDisplayName || entry.actor_display_name || '',
+      createdAt: entry.createdAt || entry.created_at || '',
+      updatedAt: entry.updatedAt || entry.updated_at || ''
+    };
+  }
+
+  function normalizeSupplementCardSnapshot(card) {
+    const source = card || {};
+    const driveFileId = source.driveFileId || source.drive_file_id || '';
+    return {
+      cardId: source.cardId || source.card_id || '',
+      name: source.name || '',
+      company: source.company || '',
+      department: source.department || '',
+      position: source.position || source.jobTitle || source.job_title || '',
+      driveFileId,
+      driveLink: source.driveLink || source.drive_link || '',
+      driveFilename: source.driveFilename || source.drive_filename || '',
+      thumbnailUrl: source.thumbnailUrl || (driveFileId ? `/api/external/thumbnail?fileId=${encodeURIComponent(driveFileId)}` : null)
     };
   }
 
@@ -1065,7 +1160,7 @@
     if (!activity || !currentUser || !currentUser.authenticated) return { mine: 0, all: 0 };
     const rows = recordsFor(activity.id).filter(record => record.status !== 'void');
     return {
-      mine: rows.filter(record => record.createdByUserId === currentUser.userId).length,
+      mine: rows.filter(recordBelongsToCurrentUser).length,
       all: rows.length
     };
   }
@@ -1648,7 +1743,47 @@
   function renderQuickEntryAnswerContent(activity, open) {
     const fields = quickEntryFields(activity, activeRecordFormContext());
     if (ui.recordContextMode === recordContextActiveMode) return renderActiveIntelligenceRuntimeForm(fields, open);
-    return fields.map(field => renderQuickField(field, open)).join('');
+    return `
+      ${fields.map(field => renderQuickField(field, open)).join('')}
+      ${renderQuickAdditionalVisitors(activity, open)}
+    `;
+  }
+
+  function renderQuickAdditionalVisitors(activity, open) {
+    if (!quickAdditionalVisitorsEnabled(activity)) return '';
+    const rows = activeQuickAdditionalVisitors(activity);
+    return `
+      <section class="aim-supplemental-entry" aria-label="附加資訊">
+        <div class="aim-supplemental-entry-head">
+          <h3>同行訪客</h3>
+          <button class="aim-button aim-button-small" type="button" data-action="quick-add-additional-visitor" ${open ? '' : 'disabled'}>新增同行訪客</button>
+        </div>
+        ${rows.length ? `
+          <div class="aim-supplemental-visitor-list">
+            ${rows.map((entry, index) => renderQuickAdditionalVisitorRow(entry, index, open)).join('')}
+          </div>
+        ` : '<div class="aim-empty aim-supplemental-empty">尚未加入同行訪客。</div>'}
+      </section>
+    `;
+  }
+
+  function renderQuickAdditionalVisitorRow(entry, index, open) {
+    const card = entry.card || {};
+    const title = card.name || '未命名名片';
+    const subtitle = [card.position || card.jobTitle, card.company].filter(Boolean).join(' / ');
+    return `
+      <article class="aim-supplemental-visitor-row" data-index="${index}">
+        <div class="aim-supplemental-visitor-main">
+          <strong>${Store.escapeHtml(title)}</strong>
+          ${subtitle ? `<span>${Store.escapeHtml(subtitle)}</span>` : ''}
+        </div>
+        <textarea class="aim-input aim-supplemental-interest-input" data-index="${index}" rows="2" placeholder="個人興趣或補充備註" ${open ? '' : 'disabled'}>${Store.escapeHtml(entry.personalInterest || '')}</textarea>
+        <div class="aim-supplemental-visitor-actions">
+          ${card.cardId ? `<button class="aim-button aim-button-small" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
+          <button class="aim-button aim-button-small" type="button" data-action="remove-quick-additional-visitor" data-index="${index}" ${open ? '' : 'disabled'}>移除</button>
+        </div>
+      </article>
+    `;
   }
 
   function renderActiveIntelligenceRuntimeForm(fields, open) {
@@ -1724,6 +1859,7 @@
           </div>
           <div class="aim-answer-list">
             ${fields.map(field => renderQuickField(field, open)).join('')}
+            ${renderQuickAdditionalVisitors(activity, open)}
             ${hasCardLink ? '' : renderGuestUserIdBlock()}
           </div>
           <div class="aim-entry-save-actions">
@@ -1761,12 +1897,19 @@
     const barColor = pct >= 70 ? '#15803d' : pct >= 40 ? '#b45309' : '#b42318';
     const activeBadge = recordIsFieldIntelligence(record);
     const completenessHtml = `<span class="aim-record-card-completeness" title="欄位完整度 ${answered}/${total}"><span class="aim-record-card-completeness-label">完整度</span><span class="aim-record-card-completeness-count">${answered}/${total}</span><span class="aim-record-card-completeness-bar" style="--bar-w:${barWidth}px;--bar-color:${barColor}" aria-hidden="true"></span>${activeBadge ? '<span class="aim-record-context-label aim-record-context-label-mobile">主動</span>' : ''}</span>`;
+    const supplementalSummary = record.supplementalSummary || {};
+    const supplementalHtml = [
+      supplementalSummary.additionalVisitorCount ? `<span class="aim-record-context-label">同行 ${supplementalSummary.additionalVisitorCount}</span>` : '',
+      supplementalSummary.contributionCount ? `<span class="aim-record-context-label">補充 ${supplementalSummary.contributionCount}</span>` : '',
+      recordIsContributorOnly(record) ? '<span class="aim-record-context-label">我的補充</span>' : ''
+    ].join('');
     return `<div class="aim-record-card-meta">
       <span class="aim-record-card-activity">${Store.escapeHtml(activity.name)}</span>
       ${activeBadge ? '<span class="aim-record-context-label aim-record-context-label-desktop">主動情報</span>' : ''}
       <span class="aim-record-card-recorder">${Store.escapeHtml(record.createdByDisplayName)}</span>
       <span class="aim-record-card-time">${Store.formatDateTime(record.createdAt)}</span>
       ${record.status === 'void' ? '<span class="aim-pill aim-pill-void">已作廢</span>' : ''}
+      ${supplementalHtml}
       ${completenessHtml}
     </div>`;
   }
@@ -1783,6 +1926,9 @@
 
   function renderInlineRecordDetail(record, activity) {
     if (!canViewRecord(record, activity)) return '';
+    if (recordIsContributorOnly(record) && !((ui.personalFullRecordIds || new Set()).has(record.id))) {
+      return renderContributorFocusedDetail(record, activity);
+    }
     const items = snapshotRecordItems(record, activity);
     const detail = renderRecordDetailItems(items, record);
     return `
@@ -1800,7 +1946,97 @@
           <div class="aim-record-detail-sheet">${detail.rowsHtml || '<p class="aim-inline-record-empty">此紀錄沒有已填寫的內容。</p>'}</div>
           ${detail.cardRailHtml ? `<aside class="aim-record-detail-card-rail" aria-label="名片">${detail.cardRailHtml}</aside>` : ''}
         </div>
+        ${renderSupplementalDetail(record, activity)}
       </div>
+    `;
+  }
+
+  function renderContributorFocusedDetail(record, activity) {
+    const contribution = (record.supplements && record.supplements.myContribution) || (record.supplementalSummary && record.supplementalSummary.myContribution);
+    return `
+      <div class="aim-inline-record-detail aim-contributor-focused-detail">
+        <section class="aim-supplemental-detail" aria-label="我的補充紀錄">
+          <div class="aim-supplemental-detail-head">
+            <h3>我的補充紀錄</h3>
+            <button class="aim-button aim-button-small" type="button" data-action="view-full-record" data-id="${Store.escapeHtml(record.id)}">查看完整訪談紀錄</button>
+          </div>
+          <article class="aim-contribution-row">
+            <p>${Store.escapeHtml(contribution && contribution.note ? contribution.note : '尚未填寫補充紀錄。')}</p>
+            ${contribution && contribution.updatedAt ? `<span>${Store.formatDateTime(contribution.updatedAt)}</span>` : ''}
+          </article>
+          ${canContributeToRecord(record, activity) ? `<button class="aim-button aim-button-small" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">${contribution ? '編輯我的補充紀錄' : '新增我的補充紀錄'}</button>` : ''}
+        </section>
+      </div>
+    `;
+  }
+
+  function renderSupplementalDetail(record, activity) {
+    if (recordIsFieldIntelligence(record)) return '';
+    const supplements = record.supplements || {};
+    const additionalVisitors = supplements.additionalVisitors || [];
+    const contributions = supplements.contributions || [];
+    const canEditSupplement = canEditRecord(record, activity);
+    const canContribute = canContributeToRecord(record, activity);
+    if (!additionalVisitors.length && !contributions.length && !canEditSupplement && !canContribute) return '';
+    return `
+      <section class="aim-supplemental-detail" aria-label="附加資訊">
+        <div class="aim-supplemental-detail-head">
+          <h3>附加資訊</h3>
+          <div class="aim-supplemental-detail-actions">
+            ${canEditSupplement ? `<button class="aim-button aim-button-small" type="button" data-action="record-add-additional-visitor" data-id="${Store.escapeHtml(record.id)}">新增同行訪客</button>` : ''}
+            ${canContribute ? `<button class="aim-button aim-button-small" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">${supplements.myContribution ? '編輯我的補充紀錄' : '新增我的補充紀錄'}</button>` : ''}
+          </div>
+        </div>
+        <div class="aim-supplemental-section">
+          <h4>同行訪客</h4>
+          ${additionalVisitors.length ? additionalVisitors.map(entry => renderAdditionalVisitorDetailRow(record, entry, canEditSupplement)).join('') : '<div class="aim-empty aim-supplemental-empty">尚無同行訪客。</div>'}
+        </div>
+        <div class="aim-supplemental-section">
+          <h4>補充紀錄</h4>
+          ${contributions.length ? contributions.map(entry => renderContributionDetailRow(record, entry)).join('') : '<div class="aim-empty aim-supplemental-empty">尚無補充紀錄。</div>'}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderAdditionalVisitorDetailRow(record, entry, canEditSupplement) {
+    const card = entry.cardSnapshot || {};
+    const title = card.name || '未命名名片';
+    const subtitle = [card.position, card.company].filter(Boolean).join(' / ');
+    return `
+      <article class="aim-supplemental-visitor-row aim-supplemental-detail-row">
+        <div class="aim-supplemental-visitor-main">
+          <strong>${Store.escapeHtml(title)}</strong>
+          ${subtitle ? `<span>${Store.escapeHtml(subtitle)}</span>` : ''}
+          ${entry.actorDisplayName ? `<small>${Store.escapeHtml(entry.actorDisplayName)} · ${Store.formatDateTime(entry.updatedAt || entry.createdAt)}</small>` : ''}
+        </div>
+        ${canEditSupplement ? `
+          <textarea class="aim-input aim-additional-interest-edit" data-supplement-id="${Store.escapeHtml(entry.supplementId)}" rows="2" placeholder="個人興趣或補充備註">${Store.escapeHtml(entry.personalInterest || '')}</textarea>
+          <div class="aim-supplemental-visitor-actions">
+            ${card.cardId ? `<button class="aim-button aim-button-small" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
+            <button class="aim-button aim-button-small" type="button" data-action="record-change-additional-visitor-card" data-id="${Store.escapeHtml(record.id)}" data-supplement-id="${Store.escapeHtml(entry.supplementId)}" data-personal-interest="${Store.escapeHtml(entry.personalInterest || '')}">更換名片</button>
+            <button class="aim-button aim-button-small" type="button" data-action="save-additional-visitor-interest" data-id="${Store.escapeHtml(record.id)}" data-supplement-id="${Store.escapeHtml(entry.supplementId)}">儲存</button>
+            <button class="aim-button aim-button-small" type="button" data-action="delete-additional-visitor" data-id="${Store.escapeHtml(record.id)}" data-supplement-id="${Store.escapeHtml(entry.supplementId)}">移除</button>
+          </div>
+        ` : `
+          ${entry.personalInterest ? `<p>${Store.escapeHtml(entry.personalInterest)}</p>` : ''}
+          ${card.cardId ? `<button class="aim-button aim-button-small" type="button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId)}" data-viewer-context="linked">查看名片</button>` : ''}
+        `}
+      </article>
+    `;
+  }
+
+  function renderContributionDetailRow(record, entry) {
+    const mine = isMyContribution(entry);
+    return `
+      <article class="aim-contribution-row ${mine ? 'aim-contribution-row-mine' : ''}">
+        <div class="aim-contribution-meta">
+          <strong>${Store.escapeHtml(mine ? '我的補充紀錄' : (entry.actorDisplayName || '補充紀錄'))}</strong>
+          <span>${Store.formatDateTime(entry.updatedAt || entry.createdAt)}</span>
+        </div>
+        <p>${Store.escapeHtml(entry.note || '')}</p>
+        ${mine && canContributeToRecord(record, selectedActivity()) ? `<button class="aim-button aim-button-small" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">編輯</button>` : ''}
+      </article>
     `;
   }
 
@@ -3392,9 +3628,28 @@
     const linkedCards = [
       ui.quickCardLink && ui.quickCardLink.card,
       ui.drawer && ui.drawer.workingCardLink && ui.drawer.workingCardLink.card,
-      ...(state.records || []).map(record => cardLinkForRecord(record).card)
+      ...(ui.quickAdditionalVisitors || []).map(entry => entry && entry.card),
+      ...(state.records || []).map(record => cardLinkForRecord(record).card),
+      ...(state.records || []).flatMap(record => ((record.supplements && record.supplements.additionalVisitors) || []).map(entry => supplementSnapshotAsRawCard(entry.cardSnapshot)))
     ];
     return rawCardById(cardId) || linkedCards.find(card => normalizeRawCard(card)?.cardId === cardId) || null;
+  }
+
+  function supplementSnapshotAsRawCard(snapshot) {
+    const card = normalizeSupplementCardSnapshot(snapshot);
+    if (!card || !card.cardId) return null;
+    return {
+      cardId: card.cardId,
+      name: card.name,
+      company: card.company,
+      department: card.department,
+      position: card.position,
+      jobTitle: card.position,
+      driveFileId: card.driveFileId,
+      driveLink: card.driveLink,
+      driveFilename: card.driveFilename,
+      thumbnailUrl: card.thumbnailUrl
+    };
   }
 
   function ensureRawCardViewer() {
@@ -3403,11 +3658,11 @@
     dialog = document.createElement('dialog');
     dialog.id = 'aim-raw-card-viewer';
     dialog.className = 'aim-raw-card-viewer';
-    dialog.addEventListener('click', event => {
+    dialog.addEventListener('click', async event => {
       const selectButton = event.target.closest('[data-action="select-viewer-card"]');
       if (selectButton) {
         closeRawCardViewer();
-        selectRawCard(selectButton.dataset.cardId);
+        await selectRawCard(selectButton.dataset.cardId);
         render();
         return;
       }
@@ -4845,7 +5100,30 @@
     if (!ui.drawer) return '';
     if (ui.drawer.type === 'settings' && canManageActivities()) return settingsDrawer();
     if (ui.drawer.type === 'record' && ['edit', 'void'].includes(ui.drawer.mode)) return recordDrawer();
+    if (ui.drawer.type === 'contribution') return contributionDrawer();
     return '';
+  }
+
+  function contributionDrawer() {
+    const record = state.records.find(item => item.id === ui.drawer.id);
+    if (!canContributeToRecord(record, selectedActivity())) return '';
+    const contribution = (record.supplements && record.supplements.myContribution) || (record.supplementalSummary && record.supplementalSummary.myContribution);
+    return `
+      <div class="aim-drawer-backdrop" data-action="close-drawer"></div>
+      <aside class="aim-drawer aim-record-edit-drawer" role="dialog" aria-modal="true">
+        <div class="aim-drawer-head"><div><h2>我的補充紀錄</h2></div><button class="aim-button aim-icon-button" data-action="close-drawer" type="button" aria-label="關閉補充紀錄">x</button></div>
+        <div class="aim-drawer-body">
+          <div class="aim-field">
+            <label>補充紀錄</label>
+            <textarea class="aim-textarea aim-auto-grow aim-record-supplemental-interest-input" rows="5" placeholder="補充這筆訪談的觀察、後續或個人紀錄">${Store.escapeHtml(ui.drawer.note || '')}</textarea>
+          </div>
+        </div>
+        <div class="aim-drawer-foot aim-record-drawer-foot">
+          ${contribution ? `<button class="aim-button aim-button-danger-soft" data-action="delete-my-contribution" data-id="${Store.escapeHtml(record.id)}" type="button">刪除補充紀錄</button>` : ''}
+          <div class="aim-drawer-actions"><button class="aim-button" data-action="close-drawer" type="button">關閉</button><button class="aim-button aim-button-primary" data-action="save-my-contribution" type="button">儲存補充紀錄</button></div>
+        </div>
+      </aside>
+    `;
   }
 
   function settingsDrawer() {
@@ -5106,13 +5384,14 @@
       if (canViewRecord(record, selectedActivity())) {
         ui.tab = 'records';
         ui.records.scope = 'all';
+        if (!record.supplementalDetailsLoaded) await fetchRecordDetails(record.id);
         ui.expandedRecords.all.add(record.id);
       }
     }
     if (action === 'toggle-record-expansion') {
-      toggleRecordExpansion(el.dataset.context, el.dataset.id);
+      await toggleRecordExpansion(el.dataset.context, el.dataset.id);
     }
-    if (action === 'toggle-all-records') toggleAllRecordExpansions(el.dataset.context);
+    if (action === 'toggle-all-records') await toggleAllRecordExpansions(el.dataset.context);
     if (action === 'toggle-option-note') {
       toggleOptionNoteEditor(el.dataset.context || 'quick', el.dataset.field || '', el.dataset.optionKey || '');
     }
@@ -5222,12 +5501,67 @@
       return true;
     }
     if (action === 'choose-card') {
-      selectRawCard(el.dataset.cardId);
+      await selectRawCard(el.dataset.cardId);
       render();
       return true;
     }
     if (action === 'form-assist-card') {
       await openQuickFormAssistCardPicker(el.dataset.section || '');
+      render();
+      return true;
+    }
+    if (action === 'quick-add-additional-visitor') {
+      await openAdditionalVisitorCardPicker({ context: 'quick-additional-visitor' });
+      render();
+      return true;
+    }
+    if (action === 'remove-quick-additional-visitor') {
+      removeQuickAdditionalVisitor(Number(el.dataset.index));
+      render();
+      return true;
+    }
+    if (action === 'record-add-additional-visitor') {
+      await openAdditionalVisitorCardPicker({ context: 'record-additional-visitor', submissionId: el.dataset.id });
+      render();
+      return true;
+    }
+    if (action === 'record-change-additional-visitor-card') {
+      await openAdditionalVisitorCardPicker({
+        context: 'record-additional-visitor',
+        submissionId: el.dataset.id,
+        supplementId: el.dataset.supplementId,
+        personalInterest: el.dataset.personalInterest || ''
+      });
+      render();
+      return true;
+    }
+    if (action === 'save-additional-visitor-interest') {
+      await saveAdditionalVisitorInterest(el.dataset.id, el.dataset.supplementId);
+      render();
+      return true;
+    }
+    if (action === 'delete-additional-visitor') {
+      await deleteAdditionalVisitor(el.dataset.id, el.dataset.supplementId);
+      render();
+      return true;
+    }
+    if (action === 'open-my-contribution') {
+      openContributionDrawer(el.dataset.id);
+      render();
+      return true;
+    }
+    if (action === 'save-my-contribution') {
+      await saveMyContribution();
+      render();
+      return true;
+    }
+    if (action === 'delete-my-contribution') {
+      await deleteMyContribution(el.dataset.id);
+      render();
+      return true;
+    }
+    if (action === 'view-full-record') {
+      await showContributorFullRecord(el.dataset.id);
       render();
       return true;
     }
@@ -5737,7 +6071,7 @@
         const before = answerHasOther(ui.quickAnswers[node.dataset.field]);
         setQuickAnswer(node.dataset.field, node.value);
         if (node.dataset.assistKind) handleQuickFormAssistInput(node.dataset.field, node.dataset.assistKind, node.value);
-        refreshQuickAnswerListIfOtherChanged(before, ui.quickAnswers[node.dataset.field]);
+        refreshQuickAnswerListIfNeeded(node.dataset.field, before, ui.quickAnswers[node.dataset.field]);
       });
       if (node.dataset.assistKind) {
         node.addEventListener('blur', () => {
@@ -5752,7 +6086,7 @@
       if (!node.checked) return;
       const before = answerHasOther(ui.quickAnswers[node.dataset.field]);
       setQuickAnswer(node.dataset.field, node.value);
-      refreshQuickAnswerListIfOtherChanged(before, ui.quickAnswers[node.dataset.field]);
+      refreshQuickAnswerListIfNeeded(node.dataset.field, before, ui.quickAnswers[node.dataset.field]);
     }));
     rootNode.querySelectorAll('.aim-quick-check').forEach(node => node.addEventListener('change', () => {
       const before = answerHasOther(ui.quickAnswers[node.dataset.field]);
@@ -5766,15 +6100,32 @@
       setQuickAnswer(node.dataset.field, Array.from(list));
       const field = runtimeFieldById(node.dataset.field, 'quick');
       if (fieldAllowsOptionNotes(field)) refreshQuickAnswerList();
-      else refreshQuickAnswerListIfOtherChanged(before, ui.quickAnswers[node.dataset.field]);
+      else refreshQuickAnswerListIfNeeded(node.dataset.field, before, ui.quickAnswers[node.dataset.field]);
     }));
     rootNode.querySelectorAll('.aim-quick-other-input').forEach(node => {
       node.addEventListener('focus', () => refreshOtherHistorySuggestions(node));
       node.addEventListener('input', () => {
         setQuickOtherAnswer(node.dataset.field, node.value);
         refreshOtherHistorySuggestions(node);
+        const activity = selectedActivity();
+        const visitorField = activity && currentVisitorCountField(activity);
+        if (visitorField && visitorField.fieldId === node.dataset.field) refreshQuickAnswerList();
       });
     });
+    rootNode.querySelectorAll('.aim-supplemental-interest-input').forEach(node => node.addEventListener('input', () => {
+      const activity = selectedActivity();
+      if (!activity) return;
+      const index = Number(node.dataset.index);
+      const rows = activeQuickAdditionalVisitors(activity).map(entry => ({ ...entry }));
+      if (!Number.isInteger(index) || !rows[index]) return;
+      rows[index].personalInterest = node.value;
+      setQuickAdditionalVisitors(activity.id, rows);
+    }));
+    rootNode.querySelectorAll('.aim-record-supplemental-interest-input').forEach(node => node.addEventListener('input', () => {
+      const drawer = ui.drawer;
+      if (!drawer || drawer.type !== 'contribution') return;
+      drawer.note = node.value;
+    }));
     rootNode.querySelectorAll('.aim-option-note-input[data-context="quick"]').forEach(node => node.addEventListener('input', () => setOptionNote('quick', node.dataset.field, node.dataset.optionKey, node.value)));
   }
 
@@ -5825,6 +6176,13 @@
 
   function refreshQuickAnswerListIfOtherChanged(before, value) {
     if (before !== answerHasOther(value)) refreshQuickAnswerList();
+  }
+
+  function refreshQuickAnswerListIfNeeded(fieldId, before, value) {
+    const activity = selectedActivity();
+    const visitorField = activity && currentVisitorCountField(activity);
+    if (visitorField && visitorField.fieldId === fieldId) return refreshQuickAnswerList();
+    return refreshQuickAnswerListIfOtherChanged(before, value);
   }
 
   function refreshRecordDrawerAnswerListIfOtherChanged(before, value) {
@@ -6543,7 +6901,7 @@
   function recordsOwnedByCurrentUser(activityId) {
     if (!currentUser || !currentUser.authenticated) return [];
     return recordsFor(activityId)
-      .filter(record => record.createdByUserId === currentUser.userId)
+      .filter(recordBelongsToCurrentUser)
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || state.records.indexOf(b) - state.records.indexOf(a));
   }
 
@@ -6551,30 +6909,44 @@
     return recordsOwnedByCurrentUser(activityId).filter(record => ui.records.showVoidRecords || record.status !== 'void');
   }
 
-  function toggleRecordExpansion(context, recordId) {
+  async function toggleRecordExpansion(context, recordId) {
     if (!['personal', 'all'].includes(context)) return;
-    const record = state.records.find(item => item.id === recordId);
+    let record = state.records.find(item => item.id === recordId);
     if (!canViewRecord(record, selectedActivity())) return;
     const expanded = ui.expandedRecords[context];
     if (expanded.has(recordId)) expanded.delete(recordId);
-    else expanded.add(recordId);
+    else {
+      if (record && !record.supplementalDetailsLoaded) {
+        record = await fetchRecordDetails(recordId);
+      }
+      expanded.add(recordId);
+    }
+  }
+
+  async function fetchRecordDetails(recordId) {
+    if (!recordId || !window.ActivityIntelligenceApi) return state.records.find(item => item.id === recordId) || null;
+    const record = await window.ActivityIntelligenceApi.getSubmission(recordId);
+    return replaceRecord(record);
   }
 
   function visibleRecordsForContext(context, activity) {
     return context === 'personal' ? visiblePersonalRecords(activity.id) : filteredRecords(activity, 'all');
   }
 
-  function toggleAllRecordExpansions(context) {
+  async function toggleAllRecordExpansions(context) {
     if (!['personal', 'all'].includes(context)) return;
     const activity = selectedActivity();
     if (!activity) return;
     const expanded = ui.expandedRecords[context];
     const records = visibleRecordsForContext(context, activity).filter(record => canViewRecord(record, activity));
     const allExpanded = records.length > 0 && records.every(record => expanded.has(record.id));
-    records.forEach(record => {
+    for (const record of records) {
       if (allExpanded) expanded.delete(record.id);
-      else expanded.add(record.id);
-    });
+      else {
+        if (!record.supplementalDetailsLoaded) await fetchRecordDetails(record.id);
+        expanded.add(record.id);
+      }
+    }
   }
 
   function setVoidRecordsVisibility(showVoidRecords) {
@@ -6683,6 +7055,15 @@
     Object.values(otherAnswersForRecord(record)).forEach(value => chunks.push(value));
     const card = cardLinkForRecord(record).card || {};
     chunks.push(card.name, card.company, card.jobTitle);
+    const summary = record.supplementalSummary || {};
+    const supplements = record.supplements || {};
+    chunks.push(summary.additionalVisitorCount ? `同行訪客 ${summary.additionalVisitorCount}` : '');
+    chunks.push(summary.contributionCount ? `補充紀錄 ${summary.contributionCount}` : '');
+    (supplements.additionalVisitors || []).forEach(entry => {
+      const cardSnapshot = entry.cardSnapshot || {};
+      chunks.push(cardSnapshot.name, cardSnapshot.company, cardSnapshot.position, entry.personalInterest);
+    });
+    (supplements.contributions || []).forEach(entry => chunks.push(entry.actorDisplayName, entry.note));
     return chunks.filter(hasValue).join(' ').toLowerCase();
   }
 
@@ -6690,7 +7071,7 @@
     const q = ui.records.q.trim().toLowerCase();
     const [dateStart, dateEnd] = recordDateRange(activity);
     return recordsFor(activity.id).filter(r => {
-      if (scope === 'mine' && r.createdByUserId !== currentUser.userId) return false;
+      if (scope === 'mine' && !recordBelongsToCurrentUser(r)) return false;
       if (ui.records.recordContext === formContextFieldIntelligenceMode && !recordIsFieldIntelligence(r)) return false;
       if (!ui.records.showVoidRecords && r.status === 'void') return false;
       if (ui.records.state !== 'all' && (ui.records.state === 'void') !== (r.status === 'void')) return false;
@@ -6783,6 +7164,46 @@
       return Number.isFinite(number) ? number : null;
     }
     return null;
+  }
+
+  function currentQuickVisitorCount(activity) {
+    const field = currentVisitorCountField(activity);
+    if (!field) return null;
+    const mainAnswer = ui.quickAnswers && ui.quickAnswers[field.fieldId];
+    const mainValue = visitorNumberValue(mainAnswer);
+    if (mainValue !== null) return mainValue;
+    if (!visitorAnswerIsOther(mainAnswer, field)) return null;
+    return visitorNumberValue(ui.quickOtherAnswers && ui.quickOtherAnswers[field.fieldId]);
+  }
+
+  function quickAdditionalVisitorsEnabled(activity) {
+    return !isGuestUser() && (canManageRecords() || isRecorder()) && ui.recordContextMode !== recordContextActiveMode && currentQuickVisitorCount(activity) > 1;
+  }
+
+  function activeQuickAdditionalVisitors(activity) {
+    if (!quickAdditionalVisitorsEnabled(activity)) return [];
+    if (ui.quickAdditionalVisitorActivityId !== activity.id) return [];
+    return Array.isArray(ui.quickAdditionalVisitors) ? ui.quickAdditionalVisitors : [];
+  }
+
+  function isMyContribution(contribution) {
+    return Boolean(currentUser && contribution && contribution.actorUserId === currentUser.userId);
+  }
+
+  function recordHasMyContribution(record) {
+    const summary = record && record.supplementalSummary;
+    if (summary && summary.myContribution) return true;
+    const supplements = record && record.supplements;
+    return Boolean(supplements && supplements.myContribution);
+  }
+
+  function recordBelongsToCurrentUser(record) {
+    if (!currentUser || !record) return false;
+    return record.createdByUserId === currentUser.userId || recordHasMyContribution(record);
+  }
+
+  function recordIsContributorOnly(record) {
+    return Boolean(currentUser && record && record.createdByUserId !== currentUser.userId && recordHasMyContribution(record));
   }
 
   function openDuplicate(activityId) {
@@ -7479,6 +7900,113 @@
     }
   }
 
+  async function openAdditionalVisitorCardPicker(options = {}) {
+    if (isGuestUser() || (!canManageRecords() && !isRecorder())) return;
+    try {
+      await loadRawCards({ force: true });
+      ui.cardPicker = {
+        context: options.context,
+        submissionId: options.submissionId || '',
+        supplementId: options.supplementId || '',
+        personalInterest: options.personalInterest || '',
+        q: '',
+        page: 1
+      };
+    } catch (error) {
+      toast(error.message || 'RAW card load failed.');
+    }
+  }
+
+  function addQuickAdditionalVisitor(card) {
+    const activity = selectedActivity();
+    if (!activity || !quickAdditionalVisitorsEnabled(activity)) return;
+    const rows = activeQuickAdditionalVisitors(activity).map(entry => ({ ...entry }));
+    rows.push({
+      clientId: newUuid(),
+      cardId: card.cardId,
+      card: normalizeRawCard(card),
+      personalInterest: ''
+    });
+    setQuickAdditionalVisitors(activity.id, rows);
+  }
+
+  function removeQuickAdditionalVisitor(index) {
+    const activity = selectedActivity();
+    if (!activity) return;
+    const rows = activeQuickAdditionalVisitors(activity).filter((entry, rowIndex) => rowIndex !== index);
+    setQuickAdditionalVisitors(activity.id, rows);
+  }
+
+  async function saveRecordAdditionalVisitorFromCard(card, pickerState) {
+    const submissionId = pickerState && pickerState.submissionId;
+    if (!submissionId || !card || !card.cardId) return;
+    const payload = {
+      cardId: card.cardId,
+      personalInterest: pickerState.personalInterest || ''
+    };
+    if (pickerState.supplementId) payload.supplementId = pickerState.supplementId;
+    const updated = await window.ActivityIntelligenceApi.saveAdditionalVisitor(submissionId, payload);
+    replaceRecord(updated);
+    toast('已更新同行訪客。');
+  }
+
+  async function saveAdditionalVisitorInterest(submissionId, supplementId) {
+    const node = document.querySelector(`.aim-additional-interest-edit[data-supplement-id="${cssEscape(supplementId)}"]`);
+    const record = state.records.find(item => item.id === submissionId);
+    const entry = record && record.supplements && record.supplements.additionalVisitors.find(row => row.supplementId === supplementId);
+    if (!record || !entry) return;
+    const updated = await window.ActivityIntelligenceApi.saveAdditionalVisitor(submissionId, {
+      supplementId,
+      cardId: entry.cardId || (entry.cardSnapshot && entry.cardSnapshot.cardId),
+      personalInterest: node ? node.value : entry.personalInterest
+    });
+    replaceRecord(updated);
+    toast('已更新同行訪客。');
+  }
+
+  async function deleteAdditionalVisitor(submissionId, supplementId) {
+    if (!submissionId || !supplementId) return;
+    const updated = await window.ActivityIntelligenceApi.deleteAdditionalVisitor(submissionId, supplementId);
+    replaceRecord(updated);
+    toast('已移除同行訪客。');
+  }
+
+  function openContributionDrawer(submissionId) {
+    const record = state.records.find(item => item.id === submissionId);
+    if (!record || !canContributeToRecord(record, selectedActivity())) return;
+    const contribution = (record.supplements && record.supplements.myContribution) || (record.supplementalSummary && record.supplementalSummary.myContribution) || null;
+    ui.drawer = {
+      type: 'contribution',
+      id: submissionId,
+      note: contribution ? contribution.note : ''
+    };
+  }
+
+  async function saveMyContribution() {
+    if (!ui.drawer || ui.drawer.type !== 'contribution') return;
+    const note = String(ui.drawer.note || '').trim();
+    if (!note) return toast('請填寫補充紀錄。');
+    const updated = await window.ActivityIntelligenceApi.upsertMyContribution(ui.drawer.id, note);
+    replaceRecord(updated);
+    ui.drawer = null;
+    toast('已儲存補充紀錄。');
+  }
+
+  async function deleteMyContribution(submissionId) {
+    if (!submissionId) return;
+    const updated = await window.ActivityIntelligenceApi.deleteMyContribution(submissionId);
+    replaceRecord(updated);
+    ui.drawer = null;
+    toast('已刪除補充紀錄。');
+  }
+
+  async function showContributorFullRecord(submissionId) {
+    if (!submissionId) return;
+    if (!ui.personalFullRecordIds) ui.personalFullRecordIds = new Set();
+    await fetchRecordDetails(submissionId);
+    ui.personalFullRecordIds.add(submissionId);
+  }
+
   function selectFormAssistPerson(submissionId) {
     const suggestion = (ui.formAssist && ui.formAssist.suggestions || []).find(item => item.submissionId === submissionId);
     if (!suggestion) return;
@@ -7602,14 +8130,25 @@
     if (pagination) pagination.innerHTML = renderCardPickerPaginationForCurrent();
   }
 
-  function selectRawCard(cardId) {
+  async function selectRawCard(cardId) {
     const card = rawCardById(cardId);
     if (!card) return toast('找不到選擇的 RAW 名片。');
     const context = ui.cardPicker && ui.cardPicker.context;
+    const pickerState = ui.cardPicker;
     if (context === 'quick-assist') {
       importQuickAssistCard(card, ui.cardPicker && ui.cardPicker.sectionId);
       ui.cardPicker = null;
       resetFormAssistState();
+      return;
+    }
+    if (context === 'quick-additional-visitor') {
+      addQuickAdditionalVisitor(card);
+      ui.cardPicker = null;
+      return;
+    }
+    if (context === 'record-additional-visitor') {
+      ui.cardPicker = null;
+      await saveRecordAdditionalVisitorFromCard(card, pickerState);
       return;
     }
     const next = { linked: true, cardId: card.cardId, card };
@@ -7633,6 +8172,13 @@
     if (isGuestUser()) return record.createdByUserId === currentUser.userId;
     if (canManageRecords()) return true;
     return isRecorder() && record.createdByUserId === currentUser.userId;
+  }
+
+  function canContributeToRecord(record, activity) {
+    if (!canViewRecord(record, activity) || record.status === 'void') return false;
+    if (recordIsFieldIntelligence(record)) return false;
+    if (!currentUser || record.createdByUserId === currentUser.userId) return false;
+    return canManageRecords() || isRecorder();
   }
 
   function canVoidRecord(record, activity) {
@@ -7666,12 +8212,26 @@
     try {
       const answers = cleanAnswersForItems(ui.quickAnswers || {}, items);
       const cardLink = cleanCardLink(ui.quickCardLink);
-      const submission = await window.ActivityIntelligenceApi.createSubmission(activity.id, {
+      const pendingAdditionalVisitors = formContext === formContextVisitorMode
+        ? activeQuickAdditionalVisitors(activity).filter(entry => entry && entry.cardId)
+        : [];
+      let submission = await window.ActivityIntelligenceApi.createSubmission(activity.id, {
         recordContext: formContext,
         answers: payloadAnswersForItems(answers, items, ui.quickOptionNotes || {}),
         otherAnswers: cleanOtherAnswers(ui.quickOtherAnswers || {}, ui.quickAnswers || {}, items),
         cardId: isGuestUser() ? null : (cardLink.cardId || null)
       });
+      let supplementalError = null;
+      for (const entry of pendingAdditionalVisitors) {
+        try {
+          submission = await window.ActivityIntelligenceApi.saveAdditionalVisitor(submission.id || submission.submissionId, {
+            cardId: entry.cardId,
+            personalInterest: entry.personalInterest || ''
+          });
+        } catch (error) {
+          supplementalError = error;
+        }
+      }
       if (!isGuestUser()) replaceRecord(submission);
       else recordLoadState.delete(`guest-own:${activity.id}`);
       resetQuickState(formContext);
@@ -7679,7 +8239,7 @@
       ui.focusQuickFirst = true;
       ui.tab = 'records';
       ui.records.scope = 'entry';
-      toast('已儲存一筆紀錄。');
+      toast(supplementalError ? '已儲存一筆紀錄，但部分附加資訊未儲存。' : '已儲存一筆紀錄。');
     } catch (error) {
       toast(error.message || 'Submission save failed.');
     } finally {

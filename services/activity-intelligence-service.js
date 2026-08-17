@@ -25,6 +25,8 @@ const ALLOWED_ITEM_TYPES = new Set([
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ANALYTICS_ROLES = new Set(['admin', 'super_admin']);
+const CANONICAL_EDIT_ROLES = new Set(['admin', 'super_admin']);
+const SUBMISSION_USE_ROLES = new Set(['recorder', 'admin', 'super_admin']);
 const FORM_AI_MAX_QUESTION_LENGTH = 1000;
 const FORM_AI_MAX_CONTEXT_CHARS = 800000;
 const FORM_AI_PROVIDER_TIMEOUT_MS = 45000;
@@ -286,11 +288,12 @@ class ActivityIntelligenceService {
         });
     }
 
-    async listSubmissions(activityId, query = {}) {
+    async listSubmissions(activityId, query = {}, user = {}) {
         await this._requireActivity(activityId);
         const filters = this._normalizeSubmissionFilters(query);
         const submissions = await this.reader.listSubmissions(activityId, filters);
-        return this._enrichSubmissionCards(submissions);
+        const enriched = await this._enrichSubmissionCards(submissions);
+        return this._enrichSubmissionSummaries(enriched, user);
     }
 
     async getFormAssistSuggestions(activityId, query = {}) {
@@ -357,14 +360,15 @@ class ActivityIntelligenceService {
         });
 
         const submissionId = this._resultId(result, 'submission_id');
-        return this.getSubmission(submissionId);
+        return this.getSubmission(submissionId, user);
     }
 
-    async getSubmission(submissionId) {
+    async getSubmission(submissionId, user = {}) {
         const submission = await this.reader.getSubmissionById(submissionId);
         if (!submission) throw new ActivityIntelligenceError(404, 'Submission not found.', 'SUBMISSION_NOT_FOUND');
         const enriched = await this._enrichSubmissionCards([submission]);
-        return enriched[0];
+        const withSupplements = await this._enrichSubmissionDetails(enriched, user);
+        return withSupplements[0];
     }
 
     async updateSubmission(submissionId, payload = {}, user = {}) {
@@ -389,7 +393,7 @@ class ActivityIntelligenceService {
             p_actor: actor
         });
 
-        return this.getSubmission(submissionId);
+        return this.getSubmission(submissionId, user);
     }
 
     async voidSubmission(submissionId, user = {}) {
@@ -410,6 +414,66 @@ class ActivityIntelligenceService {
         return { submissionId, activityId: current.activityId, deleted: true };
     }
 
+    async saveAdditionalVisitor(submissionId, payload = {}, user = {}) {
+        const current = await this._requireEditableVisitorSubmission(submissionId, user);
+        const actor = this._actorFromUser(user);
+        const supplementId = payload.supplementId || payload.supplement_id || randomUUID();
+        this._assertUuid(supplementId, 'supplementId');
+        const cardId = payload.cardId || payload.card_id;
+        if (!cardId) throw new ActivityIntelligenceError(400, 'cardId is required.', 'MISSING_CARD_ID');
+        this._assertUuid(cardId, 'cardId');
+        const card = await this.rawContactSqlReader.getRawContactByCardId(cardId);
+        if (!card) throw new ActivityIntelligenceError(404, 'RAW card not found.', 'RAW_CARD_NOT_FOUND');
+
+        await this.writer.saveAdditionalVisitor({
+            p_supplement_id: supplementId,
+            p_submission_id: current.id,
+            p_card_id: cardId,
+            p_card_snapshot: this._rawCardSnapshot(card),
+            p_personal_interest: this._normalizeSupplementText(payload.personalInterest || payload.personal_interest),
+            p_actor: actor
+        });
+
+        return this.getSubmission(current.id, user);
+    }
+
+    async deleteAdditionalVisitor(submissionId, supplementId, user = {}) {
+        const current = await this._requireEditableVisitorSubmission(submissionId, user);
+        this._assertUuid(supplementId, 'supplementId');
+        const supplements = await this.reader.getSupplementsBySubmissionIds([current.id]);
+        const target = supplements.find(row => row.supplementId === supplementId && row.supplementType === 'additional_visitor');
+        if (!target) throw new ActivityIntelligenceError(404, 'Supplement not found.', 'SUPPLEMENT_NOT_FOUND');
+        const actor = this._actorFromUser(user);
+        await this.writer.deleteAdditionalVisitor({
+            p_supplement_id: supplementId,
+            p_actor: actor
+        });
+        return this.getSubmission(current.id, user);
+    }
+
+    async upsertMyContribution(submissionId, payload = {}, user = {}) {
+        const current = await this._requireContributableVisitorSubmission(submissionId, user);
+        const actor = this._actorFromUser(user);
+        const note = this._normalizeSupplementText(payload.note);
+        if (!note) throw new ActivityIntelligenceError(400, 'Contribution note is required.', 'MISSING_CONTRIBUTION_NOTE');
+        await this.writer.upsertMyContribution({
+            p_submission_id: current.id,
+            p_note: note,
+            p_actor: actor
+        });
+        return this.getSubmission(current.id, user);
+    }
+
+    async deleteMyContribution(submissionId, user = {}) {
+        const current = await this._requireContributableVisitorSubmission(submissionId, user);
+        const actor = this._actorFromUser(user);
+        await this.writer.deleteMyContribution({
+            p_submission_id: current.id,
+            p_actor: actor
+        });
+        return this.getSubmission(current.id, user);
+    }
+
     async analyzeActivity(activityId, payload = {}, user = {}) {
         const actor = this._actorFromUser(user);
         if (!ANALYTICS_ROLES.has(actor.role)) {
@@ -425,7 +489,7 @@ class ActivityIntelligenceService {
             recordContext: analysisContext,
             recorderDisplayName: scope.recorderDisplayName,
             includeVoid: false
-        });
+        }, user);
 
         const activeSubmissions = submissions.filter(submission => submission.status !== 'void');
         if (!activeSubmissions.length) {
@@ -438,7 +502,8 @@ class ActivityIntelligenceService {
             throw new ActivityIntelligenceError(400, '目前範圍沒有可分析的有效表單紀錄。', 'FORM_AI_NO_DATA');
         }
 
-        const analysis = await this._runFormAiDataAgent({ activity, scope, submissions: activeSubmissions, question });
+        const aiSubmissions = await this._enrichSubmissionDetails(activeSubmissions, user);
+        const analysis = await this._runFormAiDataAgent({ activity, scope, submissions: aiSubmissions, question });
         return {
             completed: true,
             answer: analysis.answer
@@ -1063,6 +1128,62 @@ class ActivityIntelligenceService {
         });
     }
 
+    async _requireEditableVisitorSubmission(submissionId, user = {}) {
+        const current = await this.reader.getSubmissionById(submissionId);
+        if (!current) throw new ActivityIntelligenceError(404, 'Submission not found.', 'SUBMISSION_NOT_FOUND');
+        this._requireActiveVisitorSubmission(current);
+        const actor = this._actorFromUser(user);
+        if (!this._canEditCanonicalSubmission(current, actor, user)) {
+            throw new ActivityIntelligenceError(403, 'Activity Intelligence permission denied.', 'ACTIVITY_INTELLIGENCE_FORBIDDEN');
+        }
+        return current;
+    }
+
+    async _requireContributableVisitorSubmission(submissionId, user = {}) {
+        const current = await this.reader.getSubmissionById(submissionId);
+        if (!current) throw new ActivityIntelligenceError(404, 'Submission not found.', 'SUBMISSION_NOT_FOUND');
+        this._requireActiveVisitorSubmission(current);
+        const actor = this._actorFromUser(user);
+        if (current.createdByUserId === actor.userId) {
+            throw new ActivityIntelligenceError(403, 'Primary recorder edits the canonical FORM.', 'PRIMARY_RECORDER_CONTRIBUTION_FORBIDDEN');
+        }
+        if (!SUBMISSION_USE_ROLES.has(actor.role)) {
+            throw new ActivityIntelligenceError(403, 'Activity Intelligence permission denied.', 'ACTIVITY_INTELLIGENCE_FORBIDDEN');
+        }
+        return current;
+    }
+
+    _requireActiveVisitorSubmission(submission) {
+        if (this._normalizeFormContext(submission && submission.recordContext) !== DEFAULT_FORM_CONTEXT) {
+            throw new ActivityIntelligenceError(400, 'Supplements are available for Visitor records only.', 'SUPPLEMENT_CONTEXT_FORBIDDEN');
+        }
+        if (!submission || submission.status !== 'active') {
+            throw new ActivityIntelligenceError(409, 'Supplements are available for active submissions only.', 'SUPPLEMENT_INACTIVE_SUBMISSION');
+        }
+    }
+
+    _canEditCanonicalSubmission(submission, actor, user = {}) {
+        if (CANONICAL_EDIT_ROLES.has(actor.role)) return true;
+        if (submission.createdByUserId !== actor.userId) return false;
+        return actor.role === 'recorder' || user.accessClass === 'guest';
+    }
+
+    _normalizeSupplementText(value) {
+        return String(value || '').trim();
+    }
+
+    _rawCardSnapshot(card) {
+        return {
+            cardId: card.cardId,
+            name: card.name || '',
+            position: card.position || card.jobTitle || '',
+            company: card.company || '',
+            driveFileId: card.driveFileId || '',
+            driveLink: card.driveLink || '',
+            driveFilename: card.driveFilename || ''
+        };
+    }
+
     async _setSubmissionStatus(submissionId, status, user) {
         const current = await this.reader.getSubmissionById(submissionId);
         if (!current) throw new ActivityIntelligenceError(404, 'Submission not found.', 'SUBMISSION_NOT_FOUND');
@@ -1070,7 +1191,7 @@ class ActivityIntelligenceService {
         const actor = this._actorFromUser(user);
         const updated = await this.writer.updateSubmissionStatus(submissionId, status, this._actorUpdateRow(actor));
         if (!updated) throw new ActivityIntelligenceError(404, 'Submission not found.', 'SUBMISSION_NOT_FOUND');
-        return this.getSubmission(submissionId);
+        return this.getSubmission(submissionId, user);
     }
 
     async _requireActivity(activityId) {
@@ -1679,7 +1800,8 @@ class ActivityIntelligenceService {
         records.forEach(record => {
             const longTextAnswers = this._formAiPublicLongTextAnswers(record, context);
             const optionNoteAnswers = this._formAiPublicOptionNoteAnswers(record, context);
-            if (!longTextAnswers.length && !optionNoteAnswers.length) return;
+            const supplementalEvidence = this._formAiPublicSupplementalText(record.supplemental);
+            if (!longTextAnswers.length && !optionNoteAnswers.length && !supplementalEvidence.length) return;
             longTextAnswerCount += longTextAnswers.length;
             if (longTextAnswers.length) longTextRecordCount += 1;
             optionNoteAnswerCount += optionNoteAnswers.length;
@@ -1693,7 +1815,8 @@ class ActivityIntelligenceService {
                 company: this._formAiPublicIdentityValue(record, context, '公司名稱') || (record.rawCard && record.rawCard.company) || '',
                 contextAnswers: this._formAiPublicContextAnswers(record, context),
                 longTextAnswers,
-                optionNoteAnswers
+                optionNoteAnswers,
+                supplementalEvidence
             });
         });
         return {
@@ -1708,6 +1831,7 @@ class ActivityIntelligenceService {
             retrievedLongTextAnswers: longTextAnswerCount,
             totalOptionNoteAnswers: optionNoteAnswerCount,
             retrievedOptionNoteAnswers: optionNoteAnswerCount,
+            recordsWithSupplementalEvidence: evidenceRecords.filter(record => record.supplementalEvidence && record.supplementalEvidence.length).length,
             filtersApplied: this._publicFormAiFullTextScanFilters(filters, context),
             records: evidenceRecords
         };
@@ -1977,8 +2101,45 @@ class ActivityIntelligenceService {
                         otherText: answer.otherText
                     };
                 }),
-            rawCard: this._formAiPublicRawCardEvidence(record.rawCard)
+            rawCard: this._formAiPublicRawCardEvidence(record.rawCard),
+            supplemental: this._formAiPublicSupplementalEvidence(record.supplemental)
         };
+    }
+
+    _formAiPublicSupplementalEvidence(supplemental) {
+        if (!supplemental) return null;
+        const additionalVisitors = Array.isArray(supplemental.additionalVisitors)
+            ? supplemental.additionalVisitors.map(visitor => ({
+                name: visitor.name || '',
+                company: visitor.company || '',
+                position: visitor.position || '',
+                personalInterest: visitor.personalInterest || ''
+            })).filter(visitor => visitor.name || visitor.company || visitor.position || visitor.personalInterest)
+            : [];
+        const contributions = Array.isArray(supplemental.contributions)
+            ? supplemental.contributions.map(contribution => ({
+                actorDisplayName: contribution.actorDisplayName || '',
+                note: contribution.note || ''
+            })).filter(contribution => contribution.note)
+            : [];
+        if (!additionalVisitors.length && !contributions.length) return null;
+        return { additionalVisitors, contributions };
+    }
+
+    _formAiPublicSupplementalText(supplemental) {
+        const evidence = this._formAiPublicSupplementalEvidence(supplemental);
+        if (!evidence) return [];
+        return [
+            ...evidence.additionalVisitors.map(visitor => ({
+                supplementType: 'additional_visitor',
+                text: [visitor.name, visitor.position, visitor.company, visitor.personalInterest].filter(Boolean).join(' / ')
+            })),
+            ...evidence.contributions.map(contribution => ({
+                supplementType: 'contribution',
+                actorDisplayName: contribution.actorDisplayName,
+                text: contribution.note
+            }))
+        ].filter(item => item.text);
     }
 
     _formAiPublicLongTextAnswers(record, context) {
@@ -2223,7 +2384,8 @@ class ActivityIntelligenceService {
                 .filter(item => ANSWER_ITEM_TYPES.has(item.type))
                 .map(item => this._formAiAnswerContext(item, submission.answers || {}, submission.otherAnswers || {}))
                 .filter(Boolean),
-            rawCard: this._formAiRawCardContext(submission.card)
+            rawCard: this._formAiRawCardContext(submission.card),
+            supplemental: this._formAiSupplementalContext(submission.supplements)
         };
     }
 
@@ -2296,6 +2458,27 @@ class ActivityIntelligenceService {
             driveFilename: card.driveFilename,
             notes: card.notes
         };
+    }
+
+    _formAiSupplementalContext(supplements) {
+        if (!supplements) return null;
+        const additionalVisitors = (supplements.additionalVisitors || []).map(entry => {
+            const card = entry.cardSnapshot || {};
+            return {
+                name: card.name || '',
+                company: card.company || '',
+                position: card.position || card.jobTitle || '',
+                personalInterest: entry.personalInterest || ''
+            };
+        }).filter(entry => entry.name || entry.company || entry.position || entry.personalInterest);
+        const contributions = (supplements.contributions || []).map(entry => ({
+            actorDisplayName: entry.actorDisplayName || '',
+            note: entry.note || '',
+            createdAt: entry.createdAt || '',
+            updatedAt: entry.updatedAt || ''
+        })).filter(entry => entry.note);
+        if (!additionalVisitors.length && !contributions.length) return null;
+        return { additionalVisitors, contributions };
     }
 
     _assertFormAiContextSize(systemInstruction, userPrompt) {
@@ -2415,6 +2598,124 @@ class ActivityIntelligenceService {
             });
         }
         return enriched;
+    }
+
+    async _enrichSubmissionSummaries(submissions, user = {}) {
+        if (!Array.isArray(submissions) || !submissions.length) return submissions || [];
+        const actor = this._safeActorFromUser(user);
+        const summaries = await this.reader.getSupplementSummariesBySubmissionIds(
+            submissions.map(submission => submission.id),
+            actor && actor.userId
+        );
+        return submissions.map(submission => ({
+            ...submission,
+            supplementalSummary: this._supplementSummaryDto(summaries.get(submission.id)),
+            supplements: null
+        }));
+    }
+
+    async _enrichSubmissionDetails(submissions, user = {}) {
+        if (!Array.isArray(submissions) || !submissions.length) return submissions || [];
+        const actor = this._safeActorFromUser(user);
+        const rows = await this.reader.getSupplementsBySubmissionIds(submissions.map(submission => submission.id));
+        const rowsBySubmissionId = rows.reduce((acc, row) => {
+            if (!acc.has(row.submissionId)) acc.set(row.submissionId, []);
+            acc.get(row.submissionId).push(row);
+            return acc;
+        }, new Map());
+        return submissions.map(submission => {
+            const supplements = this._supplementsDto(rowsBySubmissionId.get(submission.id) || [], actor && actor.userId);
+            return {
+                ...submission,
+                supplementalSummary: supplements.summary,
+                supplements
+            };
+        });
+    }
+
+    _safeActorFromUser(user = {}) {
+        try {
+            return this._actorFromUser(user);
+        } catch (error) {
+            return null;
+        }
+    }
+
+    _supplementSummaryDto(summary = {}) {
+        return {
+            additionalVisitorCount: Number(summary.additionalVisitorCount || 0),
+            contributionCount: Number(summary.contributionCount || 0),
+            myContribution: summary.myContribution ? this._contributionDto(summary.myContribution) : null
+        };
+    }
+
+    _supplementsDto(rows, actorUserId) {
+        const additionalVisitors = [];
+        const contributions = [];
+        rows.forEach(row => {
+            if (row.supplementType === 'additional_visitor') {
+                additionalVisitors.push(this._additionalVisitorDto(row));
+            } else if (row.supplementType === 'contribution') {
+                contributions.push(this._contributionDto(row));
+            }
+        });
+        const myContribution = actorUserId
+            ? contributions.find(entry => entry.actorUserId === actorUserId) || null
+            : null;
+        return {
+            additionalVisitors,
+            contributions,
+            myContribution,
+            summary: {
+                additionalVisitorCount: additionalVisitors.length,
+                contributionCount: contributions.length,
+                myContribution
+            }
+        };
+    }
+
+    _additionalVisitorDto(row) {
+        const payload = row.payload || {};
+        const snapshot = payload.cardSnapshot || payload.card_snapshot || {};
+        return {
+            supplementId: row.supplementId,
+            submissionId: row.submissionId,
+            cardId: row.cardId,
+            cardSnapshot: this._publicCardSnapshot(snapshot, row.cardId),
+            personalInterest: this._normalizeSupplementText(payload.personalInterest || payload.personal_interest),
+            actorUserId: row.actorUserId,
+            actorDisplayName: row.actorDisplayName,
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt
+        };
+    }
+
+    _contributionDto(row) {
+        const payload = row.payload || {};
+        return {
+            supplementId: row.supplementId,
+            submissionId: row.submissionId,
+            note: this._normalizeSupplementText(payload.note || payload.text),
+            actorUserId: row.actorUserId,
+            actorDisplayName: row.actorDisplayName,
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt
+        };
+    }
+
+    _publicCardSnapshot(snapshot = {}, fallbackCardId = null) {
+        const driveFileId = snapshot.driveFileId || snapshot.drive_file_id || null;
+        return {
+            cardId: snapshot.cardId || snapshot.card_id || fallbackCardId,
+            name: snapshot.name || '',
+            company: snapshot.company || '',
+            department: snapshot.department || '',
+            position: snapshot.position || snapshot.jobTitle || snapshot.job_title || '',
+            driveFileId,
+            driveLink: snapshot.driveLink || snapshot.drive_link || '',
+            driveFilename: snapshot.driveFilename || snapshot.drive_filename || '',
+            thumbnailUrl: driveFileId ? `/api/external/thumbnail?fileId=${encodeURIComponent(driveFileId)}` : null
+        };
     }
 
     _actorFromUser(user = {}) {
