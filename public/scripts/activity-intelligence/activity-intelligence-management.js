@@ -702,15 +702,11 @@
   function applyInitialLanding(options) {
     options = options || {};
     if (!currentUser || !currentUser.authenticated) return;
-    if (isMobileFormViewport()) {
-      applyRoleLanding();
-      return;
-    }
-    if (applyDesktopVisitorRecordLanding(options)) return;
+    if (applyUnifiedVisitorRecordLanding(options)) return;
     applyRoleLanding();
   }
 
-  function applyDesktopVisitorRecordLanding(options) {
+  function applyUnifiedVisitorRecordLanding(options) {
     options = options || {};
     const open = openActivities();
     if (!open.length) return false;
@@ -1024,6 +1020,7 @@
 
   function renderMobileFramework() {
     if (!currentUser || !currentUser.authenticated) return '';
+    if (ui.view === 'activityChooser') return '';
     if (ui.mobileAnalysisMode && isMobileFormViewport() && canUseAnalytics()) {
       return `
         <section class="aim-mobile-framework aim-mobile-analysis-framework" aria-label="行動數據分析模式">
