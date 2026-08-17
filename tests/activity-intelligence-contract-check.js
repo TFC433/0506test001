@@ -1210,15 +1210,26 @@ function assertStableVisualAssetsAndActiveBannerSharingContract(managementSource
 }
 
 function assertDesktopUnifiedVisitorRecordLandingContract(managementSource) {
-    assert(managementSource.includes('applyInitialLanding();'), 'startup must use the unified initial landing boundary');
-    assert(managementSource.includes('function applyDesktopVisitorRecordLanding()'), 'desktop visitor record landing helper must exist');
+    assert(managementSource.includes('applyInitialLanding({ explicitSelectedActivityId: selectedActivityIdBeforeLoad });'), 'startup must use the unified initial landing boundary with captured explicit selection state');
+    assert(extractFunctionDeclaration(managementSource, 'applyDesktopVisitorRecordLanding'), 'desktop visitor record landing helper must exist');
+    assert(managementSource.includes('function enterVisitorRecordEntryState('), 'Visitor Records entry state helper must exist');
+    assert(managementSource.includes('function chooseCurrentActivity('), 'chooser selection action helper must exist');
     assert(managementSource.includes("ui.tab = 'records';") && managementSource.includes("ui.records.scope = 'entry';"), 'default landing must use the existing records entry flow');
     assert(managementSource.includes('ui.recordContextMode = recordContextVisitorMode;'), 'default landing must use Visitor record context');
     assert(managementSource.includes('ui.formContext = formContextVisitorMode;'), 'default landing must reset Form Design context to Visitor');
+    assert(managementSource.includes("ui.view = 'activityChooser';"), 'multi-open desktop landing must expose an Activity chooser state');
+    assert(managementSource.includes('選擇目前活動'), 'chooser heading must use the requested concise Traditional Chinese copy');
+    assert(managementSource.includes('目前有多個進行中的活動，請選擇要紀錄的活動。'), 'chooser helper must use the requested concise Traditional Chinese copy');
+    assert(managementSource.includes('進入紀錄'), 'chooser action must use the requested concise Traditional Chinese copy');
+    assert(managementSource.includes('data-action="choose-current-activity"'), 'chooser rows must use the direct choose-current-activity action');
+    assert(managementSource.includes("if (action === 'choose-current-activity' && currentUser && currentUser.authenticated)"), 'chooser action must be available to authenticated desktop roles');
     assert(!managementSource.includes('applyDesktopVisitorRecordLanding(' + ');\\n    render();'), 'desktop landing must not be a post-render redirect');
     assert(!/location\.(search|hash)/.test(managementSource), 'no supported URL search/hash deep-link mechanism exists to override');
     const renderSource = extractFunctionDeclaration(managementSource, 'render');
     assert(!renderSource.includes('applyInitialLanding') && !renderSource.includes('applyDesktopVisitorRecordLanding'), 'ordinary render must not force the landing again');
+    assert(renderSource.includes("ui.view === 'activityChooser' ? renderActivityChooser() : renderOverview()"), 'desktop chooser content must render for non-recorder roles');
+    const renderActivityChooserSource = extractFunctionDeclaration(managementSource, 'renderActivityChooser');
+    assert(!renderActivityChooserSource.includes('ActivityIntelligenceApi'), 'chooser must use already loaded Activity state without a decoration fetch');
     const selectTabSource = extractFunctionDeclaration(managementSource, 'selectTab');
     assert(!selectTabSource.includes('applyInitialLanding') && !selectTabSource.includes('applyDesktopVisitorRecordLanding'), 'subsequent tab navigation must not force the landing again');
     assert(managementSource.includes("if (tabName === 'form' && !canDesignForm()) ui.tab = 'overview';"), 'Form Design permission checks must remain authoritative');
@@ -1238,16 +1249,24 @@ function assertDesktopUnifiedVisitorRecordLandingContract(managementSource) {
         "let mobile = false;",
         "let fallbackCalls = 0;",
         "let resetCalls = 0;",
+        "const loadRecordsCalls = [];",
         "const state = { activities: [], selectedActivityId: null };",
         "const ui = { selectedActivityId: null, view: 'overview', tab: 'overview', records: { scope: 'all' }, recordContextMode: recordContextActiveMode, formContext: formContextFieldIntelligenceMode };",
+        "const Store = { escapeHtml(value) { return String(value == null ? '' : value).replace(/[&<>\"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[char])); }, formatDate(value) { return value || ''; }, activitySubtitle(activity) { return activity && activity.location ? activity.location : ''; } };",
         "function isMobileFormViewport() { return mobile; }",
         "function activityStatus(activity) { return { key: activity && activity.open ? 'open' : 'ended' }; }",
         "function openActivities() { return state.activities.filter(activity => activityStatus(activity).key === 'open'); }",
         "function resetAllQuickStates() { resetCalls += 1; }",
         "function applyRoleLanding() { fallbackCalls += 1; ui.view = 'fallback'; }",
+        "function canCreateRecord(activity) { return currentUser && currentUser.authenticated && activity && activityStatus(activity).key === 'open'; }",
+        "function loadRecordsForActivity(activityId, options) { loadRecordsCalls.push({ activityId, options }); }",
+        "function statusPill(status) { return `<span class=\"aim-pill\">${status.key}</span>`; }",
+        extractFunctionDeclaration(managementSource, 'enterVisitorRecordEntryState'),
         extractFunctionDeclaration(managementSource, 'applyDesktopVisitorRecordLanding'),
         extractFunctionDeclaration(managementSource, 'applyInitialLanding'),
-        "({ state, ui, setUser(value) { currentUser = value; }, setMobile(value) { mobile = value; }, applyInitialLanding, counts() { return { fallbackCalls, resetCalls }; } });"
+        extractFunctionDeclaration(managementSource, 'chooseCurrentActivity'),
+        extractFunctionDeclaration(managementSource, 'renderActivityChooser'),
+        "({ state, ui, loadRecordsCalls, setUser(value) { currentUser = value; }, setMobile(value) { mobile = value; }, applyInitialLanding, chooseCurrentActivity, renderActivityChooser, counts() { return { fallbackCalls, resetCalls }; } });"
     ].join('\n');
     const contract = vm.runInNewContext(source, {});
     const roles = ['recorder', 'admin', 'super_admin'];
@@ -1263,6 +1282,163 @@ function assertDesktopUnifiedVisitorRecordLandingContract(managementSource) {
         contract.setUser({ authenticated: true, role });
         contract.setMobile(false);
         contract.applyInitialLanding();
+        assert.strictEqual(contract.ui.view, 'activityChooser', `${role} desktop multi-open entry must show chooser`);
+        assert.notStrictEqual(contract.ui.selectedActivityId, 'activity-a', `${role} desktop multi-open entry must not silently choose item 0`);
+        assert.deepStrictEqual({
+            tab: contract.ui.tab,
+            scope: contract.ui.records.scope,
+            recordContextMode: contract.ui.recordContextMode,
+            formContext: contract.ui.formContext
+        }, {
+            tab: 'records',
+            scope: 'entry',
+            recordContextMode: 'visitor',
+            formContext: 'visitor'
+        }, `${role} desktop chooser state must be prepared for Visitor Records entry`);
+    });
+
+    contract.state.activities = [{ id: 'closed-a', open: false }, { id: 'activity-b', open: true }];
+    contract.ui.selectedActivityId = null;
+    contract.ui.view = 'overview';
+    contract.ui.tab = 'overview';
+    contract.ui.records.scope = 'all';
+    contract.ui.recordContextMode = 'active-intelligence';
+    contract.ui.formContext = 'field_intelligence';
+    contract.setUser({ authenticated: true, role: 'admin' });
+    contract.setMobile(false);
+    contract.applyInitialLanding();
+    assert.deepStrictEqual({
+        id: contract.ui.selectedActivityId,
+        view: contract.ui.view,
+        tab: contract.ui.tab,
+        scope: contract.ui.records.scope,
+        recordContextMode: contract.ui.recordContextMode,
+        formContext: contract.ui.formContext
+    }, {
+        id: 'activity-b',
+        view: 'workspace',
+        tab: 'records',
+        scope: 'entry',
+        recordContextMode: 'visitor',
+        formContext: 'visitor'
+    }, 'exactly one open Activity must auto-enter Visitor Add Record');
+
+    contract.state.activities = [
+        { id: 'activity-a', name: 'Alpha', open: true, formOpenStart: '2026-08-01', formOpenEnd: '2026-08-02', location: 'Taipei' },
+        { id: 'closed-c', name: 'Closed', open: false, formOpenStart: '2026-08-03', formOpenEnd: '2026-08-04' },
+        { id: 'activity-b', name: 'Beta', open: true, formOpenStart: '2026-08-05', formOpenEnd: '2026-08-06' }
+    ];
+    contract.ui.selectedActivityId = null;
+    contract.ui.view = 'overview';
+    contract.applyInitialLanding();
+    assert.strictEqual(contract.ui.view, 'activityChooser', 'two open Activities must produce chooser state');
+    const chooserHtml = contract.renderActivityChooser();
+    assert(chooserHtml.includes('Alpha') && chooserHtml.includes('Beta'), 'chooser must render all eligible open Activities');
+    assert(!chooserHtml.includes('Closed'), 'chooser must not render closed Activities');
+    assert(chooserHtml.includes('進入紀錄'), 'chooser must render a clear enter-record action');
+
+    contract.state.activities = [
+        { id: 'activity-a', open: true },
+        { id: 'activity-b', open: true },
+        { id: 'activity-c', open: true }
+    ];
+    contract.ui.selectedActivityId = null;
+    contract.ui.view = 'overview';
+    contract.applyInitialLanding();
+    assert.strictEqual(contract.ui.view, 'activityChooser', 'three or more open Activities must use the same chooser state as two');
+
+    contract.state.activities = [{ id: 'activity-a', open: true }, { id: 'activity-b', open: true }];
+    contract.ui.selectedActivityId = 'activity-a';
+    contract.ui.view = 'overview';
+    contract.applyInitialLanding({ explicitSelectedActivityId: 'activity-b' });
+    assert.deepStrictEqual({
+        id: contract.ui.selectedActivityId,
+        view: contract.ui.view,
+        tab: contract.ui.tab,
+        scope: contract.ui.records.scope,
+        recordContextMode: contract.ui.recordContextMode,
+        formContext: contract.ui.formContext
+    }, {
+        id: 'activity-b',
+        view: 'workspace',
+        tab: 'records',
+        scope: 'entry',
+        recordContextMode: 'visitor',
+        formContext: 'visitor'
+    }, 'explicit selected open Activity must be preserved when session state supports it');
+
+    contract.ui.selectedActivityId = 'activity-a';
+    contract.ui.view = 'overview';
+    contract.applyInitialLanding({ explicitSelectedActivityId: 'closed-activity' });
+    assert.strictEqual(contract.ui.view, 'activityChooser', 'selected Activity that is no longer open must not be blindly preserved');
+    assert.strictEqual(contract.ui.selectedActivityId, null, 'invalid selected Activity must be cleared for chooser selection');
+
+    contract.state.activities = [{ id: 'activity-a', open: true }, { id: 'activity-b', open: true }];
+    contract.loadRecordsCalls.length = 0;
+    contract.chooseCurrentActivity('activity-a');
+    assert.deepStrictEqual({
+        id: contract.ui.selectedActivityId,
+        view: contract.ui.view,
+        tab: contract.ui.tab,
+        scope: contract.ui.records.scope,
+        recordContextMode: contract.ui.recordContextMode,
+        formContext: contract.ui.formContext,
+        loadedActivityId: contract.loadRecordsCalls[0] && contract.loadRecordsCalls[0].activityId
+    }, {
+        id: 'activity-a',
+        view: 'workspace',
+        tab: 'records',
+        scope: 'entry',
+        recordContextMode: 'visitor',
+        formContext: 'visitor',
+        loadedActivityId: 'activity-a'
+    }, 'choosing Activity A must enter Activity A Visitor Add Record directly');
+
+    contract.loadRecordsCalls.length = 0;
+    contract.chooseCurrentActivity('activity-b');
+    assert.deepStrictEqual({
+        id: contract.ui.selectedActivityId,
+        view: contract.ui.view,
+        tab: contract.ui.tab,
+        scope: contract.ui.records.scope,
+        recordContextMode: contract.ui.recordContextMode,
+        formContext: contract.ui.formContext,
+        loadedActivityId: contract.loadRecordsCalls[0] && contract.loadRecordsCalls[0].activityId
+    }, {
+        id: 'activity-b',
+        view: 'workspace',
+        tab: 'records',
+        scope: 'entry',
+        recordContextMode: 'visitor',
+        formContext: 'visitor',
+        loadedActivityId: 'activity-b'
+    }, 'choosing Activity B must enter Activity B Visitor Add Record directly');
+
+    contract.state.activities = [];
+    contract.ui.selectedActivityId = null;
+    contract.ui.view = 'overview';
+    contract.setMobile(false);
+    contract.applyInitialLanding();
+    assert.strictEqual(contract.ui.view, 'fallback', 'zero open Activities must use existing safe fallback behavior');
+
+    const beforeMobileFallbacks = contract.counts().fallbackCalls;
+    contract.state.activities = [{ id: 'activity-a', open: true }, { id: 'activity-b', open: true }];
+    contract.ui.view = 'overview';
+    contract.setMobile(true);
+    contract.applyInitialLanding();
+    assert.strictEqual(contract.counts().fallbackCalls, beforeMobileFallbacks + 1, 'mobile landing behavior must remain delegated to existing role landing');
+
+    roles.forEach(role => {
+        contract.state.activities = [{ id: 'activity-a', open: true }, { id: 'activity-b', open: true }];
+        contract.ui.selectedActivityId = null;
+        contract.ui.view = 'overview';
+        contract.ui.tab = 'overview';
+        contract.ui.records.scope = 'all';
+        contract.ui.recordContextMode = 'active-intelligence';
+        contract.ui.formContext = 'field_intelligence';
+        contract.setUser({ authenticated: true, role });
+        contract.setMobile(false);
+        contract.applyInitialLanding({ explicitSelectedActivityId: 'activity-a' });
         assert.deepStrictEqual({
             view: contract.ui.view,
             tab: contract.ui.tab,
@@ -1277,29 +1453,6 @@ function assertDesktopUnifiedVisitorRecordLandingContract(managementSource) {
             formContext: 'visitor'
         }, `${role} desktop normal entry must land on Visitor Add Record`);
     });
-
-    contract.state.activities = [{ id: 'activity-a', open: true }, { id: 'activity-b', open: true }];
-    contract.ui.selectedActivityId = 'activity-b';
-    contract.setMobile(false);
-    contract.applyInitialLanding();
-    assert.strictEqual(contract.ui.selectedActivityId, 'activity-b', 'current selected open Activity must be preserved');
-
-    contract.ui.selectedActivityId = 'closed-activity';
-    contract.applyInitialLanding();
-    assert.strictEqual(contract.ui.selectedActivityId, 'activity-a', 'missing current open Activity must reuse existing open-activity fallback');
-
-    contract.state.activities = [];
-    contract.ui.view = 'overview';
-    contract.setMobile(false);
-    contract.applyInitialLanding();
-    assert.strictEqual(contract.ui.view, 'fallback', 'missing Activity must use existing safe fallback behavior');
-
-    const beforeMobileFallbacks = contract.counts().fallbackCalls;
-    contract.state.activities = [{ id: 'activity-a', open: true }];
-    contract.ui.view = 'overview';
-    contract.setMobile(true);
-    contract.applyInitialLanding();
-    assert.strictEqual(contract.counts().fallbackCalls, beforeMobileFallbacks + 1, 'mobile landing behavior must remain delegated to existing role landing');
 }
 
 function assertCardAssistShortTextMappingBuilderContract(managementSource) {

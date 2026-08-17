@@ -214,6 +214,7 @@
       render();
       return;
     }
+    const selectedActivityIdBeforeLoad = ui.selectedActivityId || state.selectedActivityId || null;
     if (currentUser.authenticated) {
       try {
         await loadActivitiesFromApi();
@@ -221,7 +222,7 @@
         toast(error.message || 'Activity Intelligence load failed.');
       }
     }
-    applyInitialLanding();
+    applyInitialLanding({ explicitSelectedActivityId: selectedActivityIdBeforeLoad });
     if (currentUser.authenticated && canManageActivities() && ui.view === 'overview') {
       await loadOverviewData({ force: true });
     } else if (currentUser.authenticated && ui.selectedActivityId && (ui.tab === 'records' || ui.tab === 'analytics')) {
@@ -698,20 +699,42 @@
     return '';
   }
 
-  function applyInitialLanding() {
+  function applyInitialLanding(options) {
+    options = options || {};
     if (!currentUser || !currentUser.authenticated) return;
     if (isMobileFormViewport()) {
       applyRoleLanding();
       return;
     }
-    if (applyDesktopVisitorRecordLanding()) return;
+    if (applyDesktopVisitorRecordLanding(options)) return;
     applyRoleLanding();
   }
 
-  function applyDesktopVisitorRecordLanding() {
+  function applyDesktopVisitorRecordLanding(options) {
+    options = options || {};
     const open = openActivities();
     if (!open.length) return false;
-    if (!open.some(activity => activity.id === ui.selectedActivityId)) ui.selectedActivityId = open[0].id;
+    const explicitSelectedActivityId = options.explicitSelectedActivityId || null;
+    const explicitSelectedActivity = explicitSelectedActivityId
+      ? open.find(activity => activity.id === explicitSelectedActivityId)
+      : null;
+    if (open.length > 1 && !explicitSelectedActivity) {
+      ui.selectedActivityId = null;
+      ui.view = 'activityChooser';
+      ui.tab = 'records';
+      ui.records.scope = 'entry';
+      ui.recordContextMode = recordContextVisitorMode;
+      ui.formContext = formContextVisitorMode;
+      resetAllQuickStates();
+      state.selectedActivityId = null;
+      return true;
+    }
+    enterVisitorRecordEntryState((explicitSelectedActivity || open[0]).id);
+    return true;
+  }
+
+  function enterVisitorRecordEntryState(activityId) {
+    if (activityId) ui.selectedActivityId = activityId;
     ui.view = 'workspace';
     ui.tab = 'records';
     ui.records.scope = 'entry';
@@ -719,7 +742,6 @@
     ui.formContext = formContextVisitorMode;
     resetAllQuickStates();
     state.selectedActivityId = ui.selectedActivityId || null;
-    return true;
   }
 
   function applyRoleLanding() {
@@ -921,7 +943,9 @@
     if (isRecorder()) {
       content = renderRecorderShellContent();
     } else {
-      content = ui.view === 'workspace' ? renderWorkspace() : renderOverview();
+      content = ui.view === 'workspace'
+        ? renderWorkspace()
+        : (ui.view === 'activityChooser' ? renderActivityChooser() : renderOverview());
     }
 
     replaceHtmlPreservingStableImages(root, shell(content));
@@ -1247,7 +1271,7 @@
       `;
     }
     if (ui.view === 'activityChooser') {
-      return `<header class="aim-page-header"><div><h1>選擇開放中的活動</h1><p>目前有多個活動開放填寫，請選擇要紀錄的活動。</p></div></header>`;
+      return `<header class="aim-page-header"><div><h1>選擇目前活動</h1><p>目前有多個進行中的活動，請選擇要紀錄的活動。</p></div></header>`;
     }
     if (ui.view === 'noOpenActivity') {
       return `<header class="aim-page-header"><div><h1>表單紀錄</h1><p>目前沒有可填寫的活動。</p></div></header>`;
@@ -1354,10 +1378,11 @@
       <section>
         <div class="aim-activity-chooser">
           ${rows.map(activity => `
-            <button class="aim-chooser-row" type="button" data-action="recorder-open" data-id="${activity.id}">
+            <button class="aim-chooser-row" type="button" data-action="choose-current-activity" data-id="${activity.id}">
               <strong>${Store.escapeHtml(activity.name)}</strong>
               <span>${Store.formatDate(activity.formOpenStart)} - ${Store.formatDate(activity.formOpenEnd)}</span>
               ${Store.activitySubtitle(activity) ? `<span>${Store.escapeHtml(Store.activitySubtitle(activity))}</span>` : ''}
+              <span class="aim-chooser-action">進入紀錄</span>
               ${statusPill(activityStatus(activity))}
             </button>
           `).join('')}
@@ -1395,6 +1420,16 @@
     }
     ui.view = 'overview';
     ui.tab = 'overview';
+  }
+
+  function chooseCurrentActivity(activityId) {
+    const activity = openActivities().find(item => item.id === activityId);
+    if (!canCreateRecord(activity)) {
+      applyRoleLanding();
+      return;
+    }
+    enterVisitorRecordEntryState(activity.id);
+    return loadRecordsForActivity(activity.id, { includeVoid: true });
   }
 
   function renderOverview() {
@@ -4975,12 +5010,11 @@
       ui.tab = 'overview';
       await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
     }
+    if (action === 'choose-current-activity' && currentUser && currentUser.authenticated) {
+      await chooseCurrentActivity(el.dataset.id);
+    }
     if (action === 'recorder-open' && isRecorder()) {
-      ui.selectedActivityId = el.dataset.id;
-      ui.view = 'workspace';
-      ui.tab = 'records';
-      ui.records.scope = 'entry';
-      await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
+      await chooseCurrentActivity(el.dataset.id);
     }
     if (action === 'tab') {
       selectTab(el.dataset.tab);
