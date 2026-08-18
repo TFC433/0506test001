@@ -2180,9 +2180,13 @@
     const items = answerProducingItems(snapshotRecordItems(record, activity));
     const fields = items.filter(field => hasValue(record.answers[field.fieldId]));
     const otherAnswers = otherAnswersForRecord(record);
-    const customerField = fields.find(field => field.fieldId === 'fld_customer_name') || fields.find(field => /客戶|受訪者|姓名/.test(field.title));
-    const companyField = fields.find(field => field.fieldId === 'fld_company') || fields.find(field => /公司|企業|組織/.test(field.title));
-    const jobTitleField = fields.find(field => field.fieldId === 'fld_job_title') || fields.find(field => /職稱|職位|頭銜|title/i.test(field.title));
+    const visitorRecord = !recordIsFieldIntelligence(record);
+    const legacyCustomerField = legacyPreviewField(fields, 'fld_customer_name', /客戶|受訪者|姓名/, visitorRecord);
+    const legacyCompanyField = legacyPreviewField(fields, 'fld_company', /公司|企業|組織/, visitorRecord);
+    const legacyJobTitleField = legacyPreviewField(fields, 'fld_job_title', /職稱|職位|頭銜|title/i, visitorRecord);
+    const customerField = visitorRecord ? (semanticPreviewField(fields, 'person_name') || legacyCustomerField) : legacyCustomerField;
+    const companyField = visitorRecord ? (semanticPreviewField(fields, 'company_name') || legacyCompanyField) : legacyCompanyField;
+    const jobTitleField = visitorRecord ? (semanticPreviewField(fields, 'job_title') || legacyJobTitleField) : legacyJobTitleField;
     const priorityField = fields.find(field => field.fieldId === 'fld_priority') || fields.find(field => /優先/.test(field.title));
     const primaryField = fields.find(field => previewPlacementForItem(field) === 'primary' && compactPreviewChoiceFieldTypes.has(field.type) && field !== priorityField);
     const badgeGroups = [];
@@ -2212,6 +2216,17 @@
       text: textPreviews[0] || null,
       textPreviews
     };
+  }
+
+  function semanticPreviewField(fields, role) {
+    return fields.find(field => cardAssistFieldRole(field) === role) || null;
+  }
+
+  function legacyPreviewField(fields, fixedFieldId, titlePattern, textTitleOnly) {
+    const fixed = fields.find(field => field.fieldId === fixedFieldId);
+    if (fixed) return fixed;
+    const candidates = textTitleOnly ? fields.filter(field => ['short_text', 'long_text'].includes(field.type)) : fields;
+    return candidates.find(field => titlePattern.test(field.title)) || null;
   }
 
   function categoricalValues(value) {

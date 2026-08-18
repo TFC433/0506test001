@@ -2115,6 +2115,90 @@ function assertCardAssistShortTextMappingBuilderContract(managementSource) {
     assert(!managementSource.includes('title.includes'), 'Card Assist mapping must not infer roles from visible titles');
 }
 
+function assertVisitorRecordPreviewIdentityContract(managementSource) {
+    const missingName = '未填姓名';
+    const source = [
+        "const formContextVisitorMode = 'visitor';",
+        "const formContextFieldIntelligenceMode = 'field_intelligence';",
+        "const cardAssistRoles = new Set(['person_name', 'job_title', 'company_name']);",
+        "const compactPreviewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'dropdown']);",
+        `const otherAnswerValue = ${JSON.stringify(OTHER_CHOICE_VALUE)};`,
+        "const Store = { clone(value) { return JSON.parse(JSON.stringify(value)); }, answerText(value) { if (Array.isArray(value)) return value.filter(item => item != null && String(item).trim()).join(', '); return String(value == null ? '' : value); }, escapeHtml(value) { return String(value == null ? '' : value).replace(/[&<>\"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[char])); } };",
+        "function normalizeFormContext(value) { return value === formContextFieldIntelligenceMode ? formContextFieldIntelligenceMode : formContextVisitorMode; }",
+        "function recordIsFieldIntelligence(record) { return normalizeFormContext(record && record.recordContext) === formContextFieldIntelligenceMode; }",
+        "function normalizeDesignerItem(item) { const settings = item && item.settings && typeof item.settings === 'object' ? item.settings : {}; const fieldId = item.fieldId || item.field_id || item.itemKey || item.item_key || ''; const type = item.type || item.itemType || item.item_type || 'short_text'; const cardAssistField = type === 'short_text' && cardAssistRoles.has(String(item.cardAssistField || settings.cardAssistField || '').trim()) ? String(item.cardAssistField || settings.cardAssistField || '').trim() : ''; return { ...item, fieldId, type, title: item.title || '', settings, cardAssistField, previewPlacement: item.previewPlacement || settings.previewPlacement || '' }; }",
+        "function recordEditFields(activity) { return (activity && activity.formFields || []).map(normalizeDesignerItem); }",
+        "function previewPlacementForItem(item) { return item && item.previewPlacement || ''; }",
+        extractFunctionDeclaration(managementSource, 'hasValue'),
+        extractFunctionDeclaration(managementSource, 'answerProducingItems'),
+        extractFunctionDeclaration(managementSource, 'snapshotRecordItems'),
+        extractFunctionDeclaration(managementSource, 'otherAnswersForRecord'),
+        extractFunctionDeclaration(managementSource, 'displayAnswerValue'),
+        extractFunctionDeclaration(managementSource, 'cardAssistFieldRole'),
+        extractFunctionDeclaration(managementSource, 'semanticPreviewField'),
+        extractFunctionDeclaration(managementSource, 'legacyPreviewField'),
+        extractFunctionDeclaration(managementSource, 'categoricalValues'),
+        extractFunctionDeclaration(managementSource, 'isChoiceField'),
+        extractFunctionDeclaration(managementSource, 'recordPreview'),
+        '({ recordPreview });'
+    ].join('\n');
+    const contract = vm.runInNewContext(source, {});
+    const items = [
+        { fieldId: 'topic', type: 'multiple_choice', title: '客戶關注議題', settings: { previewPlacement: 'badges' } },
+        { fieldId: 'person', type: 'short_text', title: '訪談對象', settings: { cardAssistField: 'person_name' } },
+        { fieldId: 'job', type: 'short_text', title: '職稱', settings: { cardAssistField: 'job_title' } },
+        { fieldId: 'company', type: 'short_text', title: '公司名稱', settings: { cardAssistField: 'company_name' } }
+    ];
+    const visitorRecord = {
+        id: 'visitor-semantic',
+        recordContext: 'visitor',
+        answers: {
+            topic: ['IoT', '數位雙生', '客製開發'],
+            person: '施俊晟',
+            job: '主任',
+            company: '台灣發那那'
+        },
+        submission: { card_id: null },
+        formRuntimeSnapshot: { items }
+    };
+    const visitorPreview = contract.recordPreview(visitorRecord, {});
+    assert.strictEqual(visitorPreview.customer, '施俊晟', 'Visitor preview must resolve person_name from Card Assist semantics');
+    assert.strictEqual(visitorPreview.jobTitle, '主任', 'Visitor preview must resolve job_title from Card Assist semantics');
+    assert.strictEqual(visitorPreview.company, '台灣發那那', 'Visitor preview must resolve company_name from Card Assist semantics');
+    assert.notStrictEqual(visitorPreview.customer, 'IoT, 數位雙生, 客製開發', 'choice answers must not override semantic Visitor identity');
+    assert.strictEqual(visitorRecord.submission.card_id, null, 'test fixture must prove card_id can be null while identity still resolves');
+
+    const choiceOnlyVisitor = {
+        id: 'visitor-choice-only',
+        recordContext: 'visitor',
+        answers: { topic: ['IoT', '數位雙生', '客製開發'] },
+        formRuntimeSnapshot: { items: [items[0]] }
+    };
+    const choiceOnlyPreview = contract.recordPreview(choiceOnlyVisitor, {});
+    assert.strictEqual(choiceOnlyPreview.customer || missingName, missingName, 'filled 客戶關注議題 must not become the Visitor name');
+
+    const legacyVisitor = {
+        id: 'visitor-legacy',
+        recordContext: 'visitor',
+        answers: { legacyName: 'Legacy Person' },
+        formRuntimeSnapshot: { items: [{ fieldId: 'legacyName', type: 'short_text', title: '姓名' }] }
+    };
+    assert.strictEqual(contract.recordPreview(legacyVisitor, {}).customer, 'Legacy Person', 'missing semantic name must preserve safe legacy text identity fallback');
+
+    const activeRecord = {
+        id: 'active-topic',
+        recordContext: 'field_intelligence',
+        answers: { topic: ['IoT', '數位雙生'] },
+        formRuntimeSnapshot: { items: [items[0]] }
+    };
+    assert.strictEqual(contract.recordPreview(activeRecord, {}).customer, 'IoT, 數位雙生', 'Active Intelligence preview must keep existing content-oriented legacy behavior');
+
+    const renderCardBody = extractFunctionDeclaration(managementSource, 'renderRecordCard');
+    assert(renderCardBody.includes('const preview = recordPreview(record, activity);'), 'record cards must keep one shared preview source');
+    assert.strictEqual((renderCardBody.match(/recordPreview\(record, activity\)/g) || []).length, 1, 'collapsed and expanded card header must not fork recordPreview logic');
+    assert(!extractFunctionDeclaration(managementSource, 'renderInlineRecordDetail').includes('recordPreview(record, activity)'), 'expanded FORM detail must not introduce separate preview identity logic');
+}
+
 async function main() {
     const { service, calls, publishedItems } = makeHarness();
 
@@ -3041,6 +3125,7 @@ async function main() {
     assertContextFoundationSqlContract(activityIntelligenceSqlSource);
     assertDualStreamFormBuilderSourceContract(managementSource, apiSource, cssSource);
     assertRealActiveIntelligenceRuntimeSourceContract(managementSource, cssSource, service);
+    assertVisitorRecordPreviewIdentityContract(managementSource);
     assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiSource, cssSource, activityIntelligenceSqlSource);
     assert(managementSource.includes("if (ui.analytics.ai.state === 'loading') return;"));
     assert(managementSource.includes("state === 'loading'"));
