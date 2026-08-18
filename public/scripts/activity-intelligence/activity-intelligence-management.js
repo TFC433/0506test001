@@ -2046,6 +2046,7 @@
 
   function renderContributionDetailRow(record, entry) {
     const mine = isMyContribution(entry);
+    const timestamp = Store.formatDateTime(entry.updatedAt || entry.createdAt);
     return `
       <article class="aim-contribution-row ${mine ? 'aim-contribution-row-mine' : ''}">
         <div class="aim-contribution-meta">
@@ -2053,12 +2054,10 @@
             <strong>${Store.escapeHtml(entry.actorDisplayName || '補充紀錄')}</strong>
             ${mine ? '<span class="aim-record-context-label aim-record-context-label-supplemental aim-contribution-mine-cue">我的補充</span>' : ''}
           </div>
-          <div class="aim-contribution-row-actions">
-            <span>${Store.formatDateTime(entry.updatedAt || entry.createdAt)}</span>
-            ${mine && canContributeToRecord(record, selectedActivity()) ? `<button class="aim-button aim-button-small aim-supplemental-text-action" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">編輯</button>` : ''}
-          </div>
+          ${mine && canContributeToRecord(record, selectedActivity()) ? `<div class="aim-contribution-row-actions"><button class="aim-button aim-button-small aim-supplemental-text-action aim-supplemental-entry-text-action" type="button" data-action="open-my-contribution" data-id="${Store.escapeHtml(record.id)}">編輯</button></div>` : ''}
         </div>
-        <p>${Store.escapeHtml(entry.note || '')}</p>
+        <p class="aim-contribution-note">${Store.escapeHtml(entry.note || '')}</p>
+        ${timestamp ? `<span class="aim-contribution-timestamp">${Store.escapeHtml(timestamp)}</span>` : ''}
       </article>
     `;
   }
@@ -5280,6 +5279,13 @@
     else if (ui.cardPicker) ui.cardPicker = null;
     else return;
     render();
+  });
+
+  root.addEventListener('pointerdown', event => {
+    const el = event.target.closest('.aim-other-history-suggestion[data-action="other-history-suggestion"]');
+    if (!el) return;
+    event.preventDefault();
+    applyOtherHistorySuggestion(el);
   });
 
   root.addEventListener('click', async event => {

@@ -905,6 +905,8 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(cssSource.includes('.aim-supplemental-visitor-company'));
     assert(cssSource.includes('.aim-contribution-author-line'));
     assert(cssSource.includes('.aim-contribution-row-actions'));
+    assert(cssSource.includes('.aim-contribution-note'));
+    assert(cssSource.includes('.aim-contribution-timestamp'));
     assert(cssSource.includes('.aim-contribution-mine-cue'));
     assert(cssSource.includes('.aim-record-drawer-supplemental-editor'));
     assert(cssSource.includes('.aim-record-contribution-create'));
@@ -927,6 +929,8 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(managementSource.includes('class="aim-supplemental-visitor-company"'));
     assert(managementSource.includes('class="aim-contribution-author-line"'));
     assert(managementSource.includes('class="aim-contribution-row-actions"'));
+    assert(managementSource.includes('class="aim-contribution-note"'));
+    assert(managementSource.includes('class="aim-contribution-timestamp"'));
     assert(managementSource.includes('aim-contribution-mine-cue">我的補充</span>'));
     assert(managementSource.includes('class="aim-supplemental-interest-label">個人關注</span><span class="aim-small">請填寫追加訪客的關注議題</span>'));
     assert(managementSource.includes('aim-textarea aim-auto-grow aim-supplemental-interest-input'));
@@ -1039,11 +1043,12 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
 
     const mineContributionSource = [
         'const Store = { escapeHtml: value => String(value || ""), formatDateTime: value => String(value || "") };',
-        'function isMyContribution() { return true; }',
+        'let mine = true;',
+        'function isMyContribution() { return mine; }',
         'function canContributeToRecord() { return true; }',
         'function selectedActivity() { return {}; }',
         extractFunctionDeclaration(managementSource, 'renderContributionDetailRow'),
-        '({ renderContributionDetailRow })'
+        '({ renderContributionDetailRow, setMine: value => { mine = value; } })'
     ].join('\n');
     const mineContributionContract = vm.runInNewContext(mineContributionSource, {});
     const mineContributionHtml = mineContributionContract.renderContributionDetailRow(baseRecord, {
@@ -1054,7 +1059,23 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     });
     assert(mineContributionHtml.includes('我的補充'));
     assert(mineContributionHtml.includes('>編輯</button>'));
+    assert(mineContributionHtml.includes('class="aim-contribution-note">Mine note</p>'));
+    assert(mineContributionHtml.includes('class="aim-contribution-timestamp">2026-08-17</span>'));
+    assert(mineContributionHtml.indexOf('class="aim-contribution-note"') < mineContributionHtml.indexOf('class="aim-contribution-timestamp"'), 'timestamp must render after contribution content');
+    assert(mineContributionHtml.indexOf('class="aim-contribution-author-line"') < mineContributionHtml.indexOf('class="aim-contribution-note"'), 'author identity must render before content');
+    const metaOnly = mineContributionHtml.slice(mineContributionHtml.indexOf('class="aim-contribution-meta"'), mineContributionHtml.indexOf('class="aim-contribution-note"'));
+    assert(!metaOnly.includes('2026-08-17'), 'timestamp must not compete in the main identity/action row');
     assert(!mineContributionHtml.includes('編輯我的紀錄'));
+    mineContributionContract.setMine(false);
+    const otherContributionHtml = mineContributionContract.renderContributionDetailRow(baseRecord, {
+        supplementId: 'other',
+        note: 'Other note',
+        actorDisplayName: 'Other User',
+        updatedAt: '2026-08-17'
+    });
+    assert(!otherContributionHtml.includes('open-my-contribution'), 'other users contributions must not render edit action');
+    assert(otherContributionHtml.includes('class="aim-contribution-note">Other note</p>'));
+    assert(otherContributionHtml.includes('class="aim-contribution-timestamp">2026-08-17</span>'));
 
     const contributionCreateSource = [
         'const Store = { escapeHtml: value => String(value || "") };',
@@ -1335,6 +1356,9 @@ function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, se
     assert(managementSource.includes('從此活動同一題目的過往「其他」內容提供建議，仍可輸入新內容。'), 'Builder must expose the approved Other history suggestion helper');
     assert(managementSource.includes('data-action="other-history-suggestion"'), 'Runtime suggestions must be clickable without a second choice system');
     assert(managementSource.includes('setQuickOtherAnswer(fieldId, value)') && managementSource.includes('setWorkingOther(fieldId, value)'), 'Clicking a suggestion must write only other_text state');
+    assert(managementSource.includes("root.addEventListener('pointerdown'"), 'Other history suggestions must commit on pointerdown before mobile blur can hide the list');
+    assert(managementSource.includes("'.aim-other-history-suggestion[data-action=\"other-history-suggestion\"]'"), 'Pointer handling must be scoped to Other history suggestion buttons');
+    assert(managementSource.includes('event.preventDefault();\n    applyOtherHistorySuggestion(el);'), 'Pointer selection must prevent blur and write authoritative state');
     assert(!managementSource.includes('ActivityIntelligenceApi.otherHistory'), 'Other history suggestions must not add a new frontend API path');
     assert(cssSource.includes('.aim-other-history-suggestion'), 'Other history suggestions must have compact badge styling');
     assert(cssSource.includes('.aim-runtime-other-control:not(:focus-within) .aim-other-history-suggestions'), 'Other history suggestions must remain focus-scoped');
@@ -1464,6 +1488,29 @@ function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, se
     assert(html.includes('· 3次'), 'badge must display usage count');
     assert(html.includes('data-value="digital twin"') || html.includes('data-value="Digital Twin"'), 'badge value must be only the canonical historical string');
     assert(!html.includes('data-value="Digital Twin · 3次"'), 'badge must not store the count suffix as other_text');
+
+    const selectionSource = [
+        'let quickOtherAnswers = {};',
+        'let workingOther = {};',
+        'let refreshedValue = "";',
+        'let focused = false;',
+        'let selectedInput = { value: "", focus() { focused = true; } };',
+        'const document = { querySelector() { return selectedInput; } };',
+        'function cssEscape(value) { return String(value || ""); }',
+        'function setQuickOtherAnswer(fieldId, value) { if (String(value || "").trim()) quickOtherAnswers[fieldId] = value; else delete quickOtherAnswers[fieldId]; }',
+        'function setWorkingOther(fieldId, value) { if (String(value || "").trim()) workingOther[fieldId] = value; else delete workingOther[fieldId]; }',
+        'function refreshOtherHistorySuggestions(input) { refreshedValue = input.value; }',
+        extractFunctionDeclaration(managementSource, 'applyOtherHistorySuggestion'),
+        '({ applyOtherHistorySuggestion, quickOtherAnswers, workingOther, selectedInput, getFocused: () => focused, getRefreshedValue: () => refreshedValue })'
+    ].join('\n');
+    const selectionContract = vm.runInNewContext(selectionSource, {});
+    selectionContract.applyOtherHistorySuggestion({ dataset: { field: 'field-a', context: 'quick', value: '賣玉米' } });
+    assert.strictEqual(selectionContract.quickOtherAnswers['field-a'], '賣玉米', 'selecting a counted display badge must write only the historical value to quick other_text state');
+    assert.strictEqual(selectionContract.selectedInput.value, '賣玉米', 'selection must update the live Other input value');
+    assert.strictEqual(selectionContract.getFocused(), true, 'selection must keep the input interaction stable after writeback');
+    assert.strictEqual(selectionContract.getRefreshedValue(), '賣玉米', 'rerender/refresh must preserve the selected value');
+    selectionContract.applyOtherHistorySuggestion({ dataset: { field: 'field-a', context: 'record', value: 'Record Other' } });
+    assert.strictEqual(selectionContract.workingOther['field-a'], 'Record Other', 'desktop/record click path must remain supported by the shared selector action');
 }
 
 function assertStableVisualAssetsAndActiveBannerSharingContract(managementSource, service) {

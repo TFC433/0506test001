@@ -3451,6 +3451,17 @@ a:focus-visible {
   overflow-wrap: anywhere;
 }
 
+.aim-contribution-note {
+  width: 100%;
+}
+
+.aim-contribution-timestamp {
+  color: var(--aim-muted-2);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
 .aim-contribution-author-line,
 .aim-contribution-row-actions {
   display: inline-flex;
@@ -3461,6 +3472,7 @@ a:focus-visible {
 }
 
 .aim-contribution-row-actions {
+  flex: 0 0 auto;
   justify-content: flex-end;
 }
 
