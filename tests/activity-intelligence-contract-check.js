@@ -824,9 +824,9 @@ function assertRealActiveIntelligenceRuntimeSourceContract(managementSource, css
     assert(managementSource.includes('const activeBadge = recordIsFieldIntelligence(record);'), 'real active record cards must use recordContext for visible identity');
     assert(cssSource.includes('.aim-record-card-field-intelligence'), 'real active record cards must receive dedicated light-purple styling');
     assert(cssSource.includes('.aim-record-context-label'), 'active record cards must include a visible context badge');
-    assert(managementSource.includes('aim-record-context-label-mobile">主動</span>'), 'mobile active badge must use short label');
-    assert(cssSource.includes('.aim-record-context-label-desktop') && cssSource.includes('display: none;'), 'mobile layout must hide the desktop active badge');
-    assert(cssSource.includes('.aim-record-context-label-mobile') && cssSource.includes('border-radius: 4px'), 'mobile active badge must use compact rectangular styling');
+    assert(managementSource.includes('<span class="aim-record-context-label">主動</span>'), 'active badge must use the compact short label');
+    assert(managementSource.includes('aim-record-card-meta-labels'), 'active and supplemental metadata labels must be grouped with completeness');
+    assert(cssSource.includes('.aim-record-context-label') && cssSource.includes('border-radius: 4px'), 'active badge must use compact rectangular styling');
     assert(!cssSource.includes('aim-record-card-active-intelligence-prototype'), 'prototype active record styling must be removed');
     assert(!cssSource.includes('aim-prototype-chart'), 'prototype analytics chart styling must be removed');
     assertCardAssistShortTextMappingBuilderContract(managementSource);
@@ -876,7 +876,8 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(managementSource.includes('record.createdByUserId === currentUser.userId || recordHasMyContribution(record)'));
     assert(managementSource.includes('if (!additionalVisitors.length && !contributions.length) return \'\';'));
     assert(managementSource.includes('const contributorOnly = recordIsContributorOnly(record);'));
-    assert(managementSource.includes("contributorOnly\n      ? '<span class=\"aim-record-context-label aim-record-context-label-supplemental\">我有補充</span>'"));
+    assert(managementSource.includes("contributorOnly\n        ? '<span class=\"aim-record-context-label aim-record-context-label-supplemental\">我有補充</span>'"));
+    assert(managementSource.includes('aim-record-card-meta-labels'), 'supplemental record-card cues must remain in the metadata label group');
     assert(managementSource.includes('if (record && !record.supplementalDetailsLoaded) record = await fetchRecordDetails(record.id);'), 'canonical edit must hydrate supplements before opening the drawer');
     assert(managementSource.includes('workingAdditionalVisitors: editableAdditionalVisitorRows(record)'), 'canonical edit drawer must hydrate persisted Additional Visitors');
     assert(managementSource.includes('renderRecordDrawerAdditionalVisitors(record, activity, editing)'), 'canonical edit drawer must render Additional Visitors in the same edit session');
@@ -940,12 +941,12 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(managementSource.includes('aim-record-context-label aim-record-context-label-supplemental">同行 ${supplementalSummary.additionalVisitorCount}</span>'));
     assert(managementSource.includes('aim-record-context-label aim-record-context-label-supplemental">補充 ${supplementalSummary.contributionCount}</span>'));
     assert(managementSource.includes('aim-record-context-label aim-record-context-label-supplemental">我有補充</span>'));
-    assert(managementSource.includes('<span class="aim-record-context-label aim-record-context-label-desktop">主動情報</span>'));
+    assert(managementSource.includes('<span class="aim-record-context-label">主動</span>'));
     assert(cssSource.includes('.aim-record-context-label-supplemental'));
     assert(cssSource.includes('background: var(--aim-blue-soft);'));
     assert(cssSource.includes('color: var(--aim-blue);'));
-    assert(cssSource.includes('.aim-record-card-meta .aim-record-context-label-supplemental {\n    justify-self: start;\n    max-width: 100%;\n    min-height: 16px;\n    padding: 1px 5px;'));
-    assert(cssSource.includes('font-size: 10px;\n    font-weight: 600;\n    line-height: 1.1;\n    white-space: nowrap;'));
+    assert(cssSource.includes('.aim-record-card-meta .aim-record-context-label {\n    max-width: 100%;\n    min-height: 16px;\n    padding: 1px 5px;'));
+    assert(cssSource.includes('font-size: 10px;\n    font-weight: 700;\n    line-height: 1.1;\n    white-space: nowrap;'));
     assert(!cssSource.includes('.aim-record-context-label {\n  border-color: #bfdbfe'));
     assert(cssSource.includes('.aim-supplemental-text-action'));
     assert(cssSource.indexOf('.aim-button {') < cssSource.indexOf('.aim-supplemental-text-action'));
@@ -2136,6 +2137,10 @@ function assertVisitorRecordPreviewIdentityContract(managementSource) {
         extractFunctionDeclaration(managementSource, 'displayAnswerValue'),
         extractFunctionDeclaration(managementSource, 'cardAssistFieldRole'),
         extractFunctionDeclaration(managementSource, 'semanticPreviewField'),
+        extractFunctionDeclaration(managementSource, 'activeIntelligencePreview'),
+        extractFunctionDeclaration(managementSource, 'activeBoothSourceField'),
+        extractFunctionDeclaration(managementSource, 'activeCompanySourceField'),
+        extractFunctionDeclaration(managementSource, 'activeInformationTypeField'),
         extractFunctionDeclaration(managementSource, 'legacyPreviewField'),
         extractFunctionDeclaration(managementSource, 'categoricalValues'),
         extractFunctionDeclaration(managementSource, 'isChoiceField'),
@@ -2185,18 +2190,129 @@ function assertVisitorRecordPreviewIdentityContract(managementSource) {
     };
     assert.strictEqual(contract.recordPreview(legacyVisitor, {}).customer, 'Legacy Person', 'missing semantic name must preserve safe legacy text identity fallback');
 
+    const activeItems = [
+        { fieldId: 'person', type: 'short_text', title: '訪談對象', settings: { cardAssistField: 'person_name' } },
+        { fieldId: 'job', type: 'short_text', title: '職稱', settings: { cardAssistField: 'job_title' } },
+        { fieldId: 'companyType', type: 'single_choice', title: '公司類型' },
+        { fieldId: 'booth', type: 'short_text', title: 'BOOTH名稱' },
+        { fieldId: 'informationType', type: 'single_choice', title: '情報類型' }
+    ];
     const activeRecord = {
-        id: 'active-topic',
+        id: 'active-source',
         recordContext: 'field_intelligence',
-        answers: { topic: ['IoT', '數位雙生'] },
-        formRuntimeSnapshot: { items: [items[0]] }
+        answers: {
+            person: '施俊晟',
+            job: '總經理',
+            companyType: 'SI系統商(上層/OT層)',
+            booth: '麥當勞',
+            informationType: '市場情報'
+        },
+        formRuntimeSnapshot: { items: activeItems }
     };
-    assert.strictEqual(contract.recordPreview(activeRecord, {}).customer, 'IoT, 數位雙生', 'Active Intelligence preview must keep existing content-oriented legacy behavior');
+    const activePreview = contract.recordPreview(activeRecord, {});
+    assert.strictEqual(activePreview.customer, '麥當勞', 'Active preview must prioritize BOOTH/source name');
+    assert.strictEqual(activePreview.company, '市場情報', 'Active preview secondary value must use 情報類型');
+    assert.strictEqual(activePreview.jobTitle, '', 'Active preview must not use Visitor job_title semantics');
+    assert.notStrictEqual(activePreview.customer, '施俊晟', 'Active preview must not use Visitor person_name semantics');
+    assert.notStrictEqual(activePreview.company, 'SI系統商(上層/OT層)', '公司類型 must not replace 情報類型 in Active preview');
+
+    const companyFallbackPreview = contract.recordPreview({
+        id: 'active-company-fallback',
+        recordContext: 'field_intelligence',
+        answers: { company: '台灣發那那', informationType: '競品情報' },
+        formRuntimeSnapshot: { items: [
+            { fieldId: 'company', type: 'short_text', title: '公司名稱', settings: { cardAssistField: 'company_name' } },
+            { fieldId: 'informationType', type: 'single_choice', title: '情報類型' }
+        ] }
+    }, {});
+    assert.strictEqual(companyFallbackPreview.customer, '台灣發那那', 'Active preview can use company_name as source fallback');
+    assert.strictEqual(companyFallbackPreview.company, '競品情報');
+
+    const missingSourcePreview = contract.recordPreview({
+        id: 'active-missing-source',
+        recordContext: 'field_intelligence',
+        answers: { informationType: '市場情報' },
+        formRuntimeSnapshot: { items: [{ fieldId: 'informationType', type: 'single_choice', title: '情報類型' }] }
+    }, {});
+    assert.strictEqual(missingSourcePreview.customer, '未填攤位名稱', 'missing Active source must use the approved placeholder');
+    assert.strictEqual(missingSourcePreview.company, '市場情報');
 
     const renderCardBody = extractFunctionDeclaration(managementSource, 'renderRecordCard');
     assert(renderCardBody.includes('const preview = recordPreview(record, activity);'), 'record cards must keep one shared preview source');
     assert.strictEqual((renderCardBody.match(/recordPreview\(record, activity\)/g) || []).length, 1, 'collapsed and expanded card header must not fork recordPreview logic');
     assert(!extractFunctionDeclaration(managementSource, 'renderInlineRecordDetail').includes('recordPreview(record, activity)'), 'expanded FORM detail must not introduce separate preview identity logic');
+}
+
+function assertRecordCardMetaResponsiveContract(managementSource, cssSource) {
+    const metaSource = [
+        "const formContextFieldIntelligenceMode = 'field_intelligence';",
+        "const Store = { escapeHtml(value) { return String(value == null ? '' : value).replace(/[&<>\"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[char])); }, formatDateTime(value) { return value; } };",
+        "function normalizeFormContext(value) { return value === formContextFieldIntelligenceMode ? formContextFieldIntelligenceMode : 'visitor'; }",
+        "function recordIsFieldIntelligence(record) { return normalizeFormContext(record && record.recordContext) === formContextFieldIntelligenceMode; }",
+        "function recordIsContributorOnly(record) { return Boolean(record && record.contributorOnly); }",
+        extractFunctionDeclaration(managementSource, 'renderRecordCardMeta'),
+        '({ renderRecordCardMeta });'
+    ].join('\n');
+    const metaContract = vm.runInNewContext(metaSource, {});
+    const visitorMeta = metaContract.renderRecordCardMeta({
+        recordContext: 'visitor',
+        status: 'active',
+        createdByDisplayName: 'Recorder',
+        createdAt: '2026-08-18 18:18',
+        supplementalSummary: { additionalVisitorCount: 2, contributionCount: 1 }
+    }, { name: '2026台北自動化國際大展' }, { answered: 11, total: 11, percent: 100 });
+    const activeMeta = metaContract.renderRecordCardMeta({
+        recordContext: 'field_intelligence',
+        status: 'active',
+        createdByDisplayName: 'TFC施俊晟',
+        createdAt: '2026-08-19 08:20',
+        supplementalSummary: {}
+    }, { name: '2026台北自動化國際大展' }, { answered: 8, total: 8, percent: 100 });
+    const mineMeta = metaContract.renderRecordCardMeta({
+        recordContext: 'visitor',
+        status: 'active',
+        createdByDisplayName: 'Contributor',
+        createdAt: '2026-08-19 08:20',
+        contributorOnly: true,
+        supplementalSummary: { myContribution: true }
+    }, { name: '2026台北自動化國際大展' }, { answered: 7, total: 11, percent: 64 });
+
+    assert(visitorMeta.indexOf('aim-record-card-activity') < visitorMeta.indexOf('aim-record-card-recorder'), 'metadata order must start with activity then recorder');
+    assert(visitorMeta.indexOf('aim-record-card-recorder') < visitorMeta.indexOf('aim-record-card-time'), 'metadata order must place timestamp after recorder');
+    assert(visitorMeta.indexOf('aim-record-card-time') < visitorMeta.indexOf('aim-record-card-completeness'), 'completeness must follow timestamp');
+    assert(visitorMeta.includes('aim-record-card-meta-labels'), 'metadata cues must render inside the completeness metadata group');
+    assert(visitorMeta.indexOf('完整度') < visitorMeta.indexOf('同行 2'), '同行 cue must appear beside completeness');
+    assert(visitorMeta.indexOf('完整度') < visitorMeta.indexOf('補充 1'), '補充 cue must appear beside completeness');
+    assert(activeMeta.indexOf('完整度') < activeMeta.indexOf('主動'), '主動 cue must appear beside completeness');
+    assert(mineMeta.indexOf('完整度') < mineMeta.indexOf('我有補充'), '我有補充 cue must appear beside completeness');
+
+    const actionSource = [
+        "function canHardDelete() { return false; }",
+        "function canOpenRecordDrawer() { return false; }",
+        extractFunctionDeclaration(managementSource, 'renderRecordReviewActions'),
+        '({ renderRecordReviewActions });'
+    ].join('\n');
+    const actionContract = vm.runInNewContext(actionSource, {});
+    const collapsedAction = actionContract.renderRecordReviewActions({ id: 'record-a' }, {}, 'all', false);
+    assert(collapsedAction.includes('aim-record-action-label-desktop">查看</span>'), 'desktop Record expand action must keep framed 查看 copy');
+    assert(collapsedAction.includes('aim-record-action-label-mobile">＋ 查看</span>'), 'mobile Record expand action copy must be exactly ＋ 查看');
+    assert(!extractFunctionDeclaration(managementSource, 'renderAdditionalVisitorDetailRow').includes('aim-record-action-label-mobile'), 'Supplemental 查看 actions must not use the Record expand action label');
+
+    const baseLabelRule = cssSource.match(/\.aim-record-context-label \{[\s\S]*?\n\}/);
+    const supplementalLabelRule = cssSource.match(/\.aim-record-context-label-supplemental \{[\s\S]*?\n\}/);
+    assert(baseLabelRule && baseLabelRule[0].includes('border-radius: 4px;'), 'metadata labels must use the compact rectangular label family');
+    assert(baseLabelRule[0].includes('background: #f1eaff;') && baseLabelRule[0].includes('color: #5b3b91;'), '主動 must remain purple');
+    assert(supplementalLabelRule && supplementalLabelRule[0].includes('background: var(--aim-blue-soft);') && supplementalLabelRule[0].includes('color: var(--aim-blue);'), 'Supplemental cues must remain blue');
+    assert(baseLabelRule[0].includes('min-height: 20px;') && baseLabelRule[0].includes('font-size: 12px;'), 'compact metadata cues must share approximate height and font scale');
+    assert(cssSource.includes('.aim-record-card-meta-labels'), 'completeness label group must have a shared wrapping style');
+    assert(cssSource.includes('.aim-record-card-activity') && cssSource.includes('white-space: normal;'), 'mobile Activity name must be allowed to wrap naturally');
+    assert(cssSource.includes('.aim-record-card-recorder') && cssSource.includes('.aim-record-card-time'), 'mobile recorder and timestamp must remain secondary metadata');
+    assert(cssSource.includes('.aim-record-card-completeness') && cssSource.includes('flex: 1 1 100%;'), 'mobile completeness and labels must share one metadata row/group');
+    assert(cssSource.includes('.aim-record-actions .aim-button[data-action="toggle-record-expansion"][aria-expanded="false"]'), 'mobile Record expand action must be scoped to the Record card toggle');
+    assert(cssSource.includes('border-color: transparent;') && cssSource.includes('background: transparent;') && cssSource.includes('color: var(--aim-red);'), 'mobile Record expand action must be borderless theme-red text');
+    assert(cssSource.includes('.aim-record-action-label-desktop') && cssSource.includes('.aim-record-action-label-mobile'), 'responsive action labels must preserve desktop and mobile copy separately');
+    assert(cssSource.includes('.aim-record-actions .aim-button {\n    min-height: 28px;'), 'desktop Record action must retain the framed compact button family outside the mobile text-action override');
+    assert(!/toggle-record-expansion[\s\S]*?!important/.test(cssSource), 'Record expand responsive CSS must not use !important');
 }
 
 async function main() {
@@ -3126,6 +3242,7 @@ async function main() {
     assertDualStreamFormBuilderSourceContract(managementSource, apiSource, cssSource);
     assertRealActiveIntelligenceRuntimeSourceContract(managementSource, cssSource, service);
     assertVisitorRecordPreviewIdentityContract(managementSource);
+    assertRecordCardMetaResponsiveContract(managementSource, cssSource);
     assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiSource, cssSource, activityIntelligenceSqlSource);
     assert(managementSource.includes("if (ui.analytics.ai.state === 'loading') return;"));
     assert(managementSource.includes("state === 'loading'"));

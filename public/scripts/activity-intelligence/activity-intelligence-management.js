@@ -1904,22 +1904,24 @@
     const pct = coverage.percent;
     const barColor = pct >= 70 ? '#15803d' : pct >= 40 ? '#b45309' : '#b42318';
     const activeBadge = recordIsFieldIntelligence(record);
-    const completenessHtml = `<span class="aim-record-card-completeness" title="欄位完整度 ${answered}/${total}"><span class="aim-record-card-completeness-label">完整度</span><span class="aim-record-card-completeness-count">${answered}/${total}</span><span class="aim-record-card-completeness-bar" style="--bar-w:${barWidth}px;--bar-color:${barColor}" aria-hidden="true"></span>${activeBadge ? '<span class="aim-record-context-label aim-record-context-label-mobile">主動</span>' : ''}</span>`;
     const supplementalSummary = record.supplementalSummary || {};
     const contributorOnly = recordIsContributorOnly(record);
-    const supplementalHtml = contributorOnly
-      ? '<span class="aim-record-context-label aim-record-context-label-supplemental">我有補充</span>'
-      : [
-        supplementalSummary.additionalVisitorCount ? `<span class="aim-record-context-label aim-record-context-label-supplemental">同行 ${supplementalSummary.additionalVisitorCount}</span>` : '',
-        supplementalSummary.contributionCount ? `<span class="aim-record-context-label aim-record-context-label-supplemental">補充 ${supplementalSummary.contributionCount}</span>` : ''
-      ].join('');
+    const contextLabelsHtml = [
+      activeBadge ? '<span class="aim-record-context-label">主動</span>' : '',
+      contributorOnly
+        ? '<span class="aim-record-context-label aim-record-context-label-supplemental">我有補充</span>'
+        : [
+          supplementalSummary.additionalVisitorCount ? `<span class="aim-record-context-label aim-record-context-label-supplemental">同行 ${supplementalSummary.additionalVisitorCount}</span>` : '',
+          supplementalSummary.contributionCount ? `<span class="aim-record-context-label aim-record-context-label-supplemental">補充 ${supplementalSummary.contributionCount}</span>` : ''
+        ].join('')
+    ].join('');
+    const labelsHtml = contextLabelsHtml ? `<span class="aim-record-card-meta-labels">${contextLabelsHtml}</span>` : '';
+    const completenessHtml = `<span class="aim-record-card-completeness" title="欄位完整度 ${answered}/${total}"><span class="aim-record-card-completeness-label">完整度</span><span class="aim-record-card-completeness-count">${answered}/${total}</span><span class="aim-record-card-completeness-bar" style="--bar-w:${barWidth}px;--bar-color:${barColor}" aria-hidden="true"></span>${labelsHtml}</span>`;
     return `<div class="aim-record-card-meta">
       <span class="aim-record-card-activity">${Store.escapeHtml(activity.name)}</span>
-      ${activeBadge ? '<span class="aim-record-context-label aim-record-context-label-desktop">主動情報</span>' : ''}
       <span class="aim-record-card-recorder">${Store.escapeHtml(record.createdByDisplayName)}</span>
       <span class="aim-record-card-time">${Store.formatDateTime(record.createdAt)}</span>
       ${record.status === 'void' ? '<span class="aim-pill aim-pill-void">已作廢</span>' : ''}
-      ${supplementalHtml}
       ${completenessHtml}
     </div>`;
   }
@@ -2111,7 +2113,8 @@
   }
 
   function renderRecordReviewActions(record, activity, context, expanded) {
-    const toggle = `<button class="aim-button" data-action="toggle-record-expansion" data-context="${context}" data-id="${record.id}" aria-expanded="${expanded}" type="button">${expanded ? '收合' : '查看'}</button>`;
+    const toggleLabel = expanded ? '收合' : '<span class="aim-record-action-label-desktop">查看</span><span class="aim-record-action-label-mobile">＋ 查看</span>';
+    const toggle = `<button class="aim-button" data-action="toggle-record-expansion" data-context="${context}" data-id="${record.id}" aria-expanded="${expanded}" type="button">${toggleLabel}</button>`;
     const hardDelete = canHardDelete() ? `<button class="aim-button aim-button-danger-soft" data-action="open-hard-delete-submission" data-id="${record.id}" type="button">永久刪除</button>` : '';
     if (!expanded) return `<div class="aim-record-actions">${toggle}${hardDelete}</div>`;
     const edit = canOpenRecordDrawer(record, activity) ? `<button class="aim-button" data-action="edit-record" data-id="${record.id}" type="button">編輯</button>` : '';
@@ -2187,6 +2190,7 @@
     const customerField = visitorRecord ? (semanticPreviewField(fields, 'person_name') || legacyCustomerField) : legacyCustomerField;
     const companyField = visitorRecord ? (semanticPreviewField(fields, 'company_name') || legacyCompanyField) : legacyCompanyField;
     const jobTitleField = visitorRecord ? (semanticPreviewField(fields, 'job_title') || legacyJobTitleField) : legacyJobTitleField;
+    const activePreview = visitorRecord ? null : activeIntelligencePreview(fields, record, otherAnswers);
     const priorityField = fields.find(field => field.fieldId === 'fld_priority') || fields.find(field => /優先/.test(field.title));
     const primaryField = fields.find(field => previewPlacementForItem(field) === 'primary' && compactPreviewChoiceFieldTypes.has(field.type) && field !== priorityField);
     const badgeGroups = [];
@@ -2206,9 +2210,9 @@
     }).filter(Boolean);
     const primaryValues = primaryField ? categoricalValues(displayAnswerValue(primaryField, record.answers[primaryField.fieldId], otherAnswers)) : [];
     return {
-      customer: customerField ? Store.answerText(displayAnswerValue(customerField, record.answers[customerField.fieldId], otherAnswers)) : '',
-      company: companyField ? Store.answerText(displayAnswerValue(companyField, record.answers[companyField.fieldId], otherAnswers)) : '',
-      jobTitle: jobTitleField ? Store.answerText(displayAnswerValue(jobTitleField, record.answers[jobTitleField.fieldId], otherAnswers)) : '',
+      customer: activePreview ? activePreview.source : (customerField ? Store.answerText(displayAnswerValue(customerField, record.answers[customerField.fieldId], otherAnswers)) : ''),
+      company: activePreview ? activePreview.informationType : (companyField ? Store.answerText(displayAnswerValue(companyField, record.answers[companyField.fieldId], otherAnswers)) : ''),
+      jobTitle: activePreview ? '' : (jobTitleField ? Store.answerText(displayAnswerValue(jobTitleField, record.answers[jobTitleField.fieldId], otherAnswers)) : ''),
       priority: priorityField ? Store.answerText(displayAnswerValue(priorityField, record.answers[priorityField.fieldId], otherAnswers)) : '',
       priorityLabel: priorityField ? '後續追蹤優先度' : '',
       primaryGroup: primaryField && primaryValues.length ? { field: primaryField, values: primaryValues } : null,
@@ -2220,6 +2224,28 @@
 
   function semanticPreviewField(fields, role) {
     return fields.find(field => cardAssistFieldRole(field) === role) || null;
+  }
+
+  function activeIntelligencePreview(fields, record, otherAnswers) {
+    const sourceField = activeBoothSourceField(fields) || activeCompanySourceField(fields);
+    const informationTypeField = activeInformationTypeField(fields);
+    return {
+      source: sourceField ? Store.answerText(displayAnswerValue(sourceField, record.answers[sourceField.fieldId], otherAnswers)) : '未填攤位名稱',
+      informationType: informationTypeField ? Store.answerText(displayAnswerValue(informationTypeField, record.answers[informationTypeField.fieldId], otherAnswers)) : ''
+    };
+  }
+
+  function activeBoothSourceField(fields) {
+    return fields.find(field => ['short_text', 'long_text'].includes(field.type) && /^(BOOTH名稱|BOOTH|booth name|攤位名稱|攤位|展位名稱|展位)$/i.test(String(field.title || '').trim())) || null;
+  }
+
+  function activeCompanySourceField(fields) {
+    return semanticPreviewField(fields, 'company_name')
+      || fields.find(field => ['short_text', 'long_text'].includes(field.type) && (field.fieldId === 'fld_company' || /^(公司名稱|公司|企業|組織)$/.test(String(field.title || '').trim()))) || null;
+  }
+
+  function activeInformationTypeField(fields) {
+    return fields.find(field => /^(情報類型|情報分類|intelligence type)$/i.test(String(field.title || '').trim())) || null;
   }
 
   function legacyPreviewField(fields, fixedFieldId, titlePattern, textTitleOnly) {

@@ -2879,9 +2879,9 @@ a:focus-visible {
   display: inline-flex;
   align-items: center;
   min-height: 20px;
-  padding: 2px 7px;
+  padding: 2px 6px;
   border: 1px solid #ccb5ef;
-  border-radius: 999px;
+  border-radius: 4px;
   background: #f1eaff;
   color: #5b3b91;
   font-size: 12px;
@@ -2910,8 +2910,17 @@ a:focus-visible {
 .aim-record-card-completeness {
   display: inline-flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
-  white-space: nowrap;
+  white-space: normal;
+}
+
+.aim-record-card-meta-labels {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
 }
 
 .aim-record-card-completeness-label {
@@ -3084,6 +3093,10 @@ a:focus-visible {
   min-height: 30px;
   padding: 5px 9px;
   font-size: 12px;
+}
+
+.aim-record-action-label-mobile {
+  display: none;
 }
 
 .aim-inline-record-detail {
@@ -5671,7 +5684,7 @@ a:focus-visible {
 
   .aim-record-card-summary {
     position: relative;
-    grid-template-columns: minmax(0, 1fr) 72px;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 8px;
     min-height: 132px;
     padding: 10px;
@@ -5685,28 +5698,41 @@ a:focus-visible {
   }
 
   .aim-record-card-meta {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
     gap: 2px 8px;
-    padding-right: 58px;
+    padding-right: 0;
     font-size: 11px;
     line-height: 1.3;
   }
 
   .aim-record-card-meta span {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    overflow-wrap: normal;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
+  .aim-record-card-activity {
+    flex: 1 1 100%;
+    color: var(--aim-text);
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
+  .aim-record-card-recorder,
   .aim-record-card-time {
-    grid-column: 1 / -1;
+    color: var(--aim-muted);
+    font-size: 11px;
+    font-weight: 500;
   }
 
   .aim-record-card-completeness {
-    grid-column: 1 / -1;
+    flex: 1 1 100%;
     margin-top: 1px;
+    gap: 4px 5px;
   }
 
   .aim-record-context-label-desktop {
@@ -5723,16 +5749,19 @@ a:focus-visible {
     line-height: 1.1;
   }
 
-  .aim-record-card-meta .aim-record-context-label-supplemental {
-    justify-self: start;
+  .aim-record-card-meta .aim-record-context-label {
     max-width: 100%;
     min-height: 16px;
     padding: 1px 5px;
-    border-radius: 999px;
+    border-radius: 4px;
     font-size: 10px;
-    font-weight: 600;
+    font-weight: 700;
     line-height: 1.1;
     white-space: nowrap;
+  }
+
+  .aim-record-card-meta-labels {
+    gap: 3px;
   }
 
   .aim-record-card-completeness-label {
@@ -5811,6 +5840,32 @@ a:focus-visible {
     min-height: 28px;
     padding: 4px 8px;
     font-size: 12px;
+  }
+
+  .aim-record-actions .aim-button[data-action="toggle-record-expansion"][aria-expanded="false"] {
+    min-width: 0;
+    min-height: 30px;
+    padding: 4px 2px;
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    color: var(--aim-red);
+    font-weight: 700;
+  }
+
+  .aim-record-actions .aim-button[data-action="toggle-record-expansion"][aria-expanded="false"]:hover,
+  .aim-record-actions .aim-button[data-action="toggle-record-expansion"][aria-expanded="false"]:focus-visible {
+    border-color: transparent;
+    background: transparent;
+    color: var(--aim-red);
+  }
+
+  .aim-record-action-label-desktop {
+    display: none;
+  }
+
+  .aim-record-action-label-mobile {
+    display: inline;
   }
 
   .aim-record-card-biz-slot {
