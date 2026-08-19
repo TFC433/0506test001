@@ -2350,6 +2350,13 @@ function assertRecordCardMetaResponsiveContract(managementSource, cssSource) {
     const supplementalLabelRule = cssSource.match(/\.aim-record-context-label-supplemental \{[\s\S]*?\n\}/);
     const mobileLabelRule = cssSource.match(/\.aim-record-card-meta \.aim-record-context-label \{[\s\S]*?\n  \}/);
     const subjectLabelRule = cssSource.match(/\.aim-record-subject-label \{[\s\S]*?\n\}/);
+    const subjectPrimaryRules = Array.from(cssSource.matchAll(/\.aim-record-card-primary \{[\s\S]*?\n(?:  )?\}/g)).map(match => match[0]);
+    const desktopSubjectPrimaryRule = subjectPrimaryRules[0] || '';
+    const mobileSubjectPrimaryRule = subjectPrimaryRules[subjectPrimaryRules.length - 1] || '';
+    const mobileMetaRule = cssSource.match(/\.aim-record-card-recorder,\n  \.aim-record-card-time \{[\s\S]*?\n  \}/);
+    const mobileSubjectValueRule = cssSource.match(/\.aim-record-card-primary strong \{[\s\S]*?\n  \}/);
+    const mobileJobRule = cssSource.match(/\.aim-record-card-job-title \{[\s\S]*?\n  \}/);
+    const mobileCompanyRule = cssSource.match(/\.aim-record-card-company \{[\s\S]*?\n  \}/);
     assert(baseLabelRule && baseLabelRule[0].includes('border-radius: 999px;'), 'desktop metadata labels must use compact pill geometry');
     assert(baseLabelRule[0].includes('background: #f1eaff;') && baseLabelRule[0].includes('color: #5b3b91;'), '主動 must remain purple');
     assert(supplementalLabelRule && supplementalLabelRule[0].includes('background: var(--aim-blue-soft);') && supplementalLabelRule[0].includes('color: var(--aim-blue);'), 'Supplemental cues must remain blue');
@@ -2358,6 +2365,13 @@ function assertRecordCardMetaResponsiveContract(managementSource, cssSource) {
     assert(cssSource.includes('.aim-record-card-meta-labels'), 'completeness label group must have a shared wrapping style');
     assert(subjectLabelRule && subjectLabelRule[0].includes('font-weight: 400;') && subjectLabelRule[0].includes('color: var(--aim-muted-2);'), 'subject semantic labels must use quiet muted helper styling');
     assert(subjectLabelRule && !/border|background/.test(subjectLabelRule[0]), 'subject semantic labels must not be badges, pills, or framed controls');
+    assert(desktopSubjectPrimaryRule.includes('display: flex;') && desktopSubjectPrimaryRule.includes('flex-direction: row;') && desktopSubjectPrimaryRule.includes('flex-wrap: wrap;'), 'desktop subject semantic pairs must share one horizontal flex row');
+    assert(!/grid-template|display:\s*grid|table/.test(desktopSubjectPrimaryRule), 'desktop subject layout must not use a rigid table/grid structure');
+    assert(mobileSubjectPrimaryRule.includes('flex-direction: column;') && mobileSubjectPrimaryRule.includes('flex-wrap: nowrap;'), 'mobile subject semantic pairs must remain two-line');
+    assert(mobileMetaRule && mobileMetaRule[0].includes('font-weight: 400;'), 'mobile timestamp and Recorder metadata must not be artificially bold');
+    assert(mobileSubjectValueRule && mobileSubjectValueRule[0].includes('font-weight: 400;'), 'mobile primary subject value must not be artificially bold');
+    assert(mobileJobRule && mobileJobRule[0].includes('font-weight: 400;'), 'mobile Visitor job title must not be artificially bold');
+    assert(mobileCompanyRule && mobileCompanyRule[0].includes('font-weight: 400;'), 'mobile company/information type value must not be artificially bold');
     assert(cssSource.includes('.aim-record-card-recorder') && cssSource.includes('.aim-record-card-time'), 'mobile recorder and timestamp must remain secondary metadata');
     assert(cssSource.includes('.aim-record-card-completeness') && cssSource.includes('flex: 1 1 100%;'), 'mobile completeness and labels must share one metadata row/group');
     assert(cssSource.includes('.aim-record-actions .aim-button[data-action="toggle-record-expansion"][aria-expanded="false"]'), 'mobile Record expand action must be scoped to the Record card toggle');
