@@ -3019,11 +3019,37 @@ a:focus-visible {
 
 .aim-record-card-primary {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   flex: 1 1 240px;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-direction: column;
+  gap: 3px;
   min-width: 0;
+}
+
+.aim-record-subject-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.aim-record-subject-label {
+  flex: 0 0 auto;
+  color: var(--aim-muted-2);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.aim-record-subject-values {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .aim-record-card-primary strong {
@@ -3053,6 +3079,10 @@ a:focus-visible {
   margin-right: 5px;
   color: var(--aim-muted-2);
   content: "/";
+}
+
+.aim-record-subject-row-secondary .aim-record-card-company::before {
+  content: none;
 }
 
 .aim-record-card-job-title {
@@ -5777,20 +5807,31 @@ a:focus-visible {
   }
 
   .aim-record-card-primary {
-    display: grid;
-    grid-template-columns: minmax(0, auto) minmax(0, 1fr);
-    gap: 2px 5px;
-    align-items: baseline;
+    gap: 3px;
+  }
+
+  .aim-record-subject-row {
+    gap: 2px 7px;
+  }
+
+  .aim-record-subject-label {
+    font-size: 11px;
+    line-height: 1.35;
+  }
+
+  .aim-record-subject-values {
+    min-width: 0;
+    max-width: 100%;
   }
 
   .aim-record-card-primary strong,
   .aim-record-card-job-title,
   .aim-record-card-company {
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    overflow-wrap: normal;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   .aim-record-card-primary strong {
@@ -5804,7 +5845,6 @@ a:focus-visible {
   }
 
   .aim-record-card-company {
-    grid-column: 1 / -1;
     max-width: calc(100vw - 132px);
     font-size: 13px;
     line-height: 1.35;

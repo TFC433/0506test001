@@ -1710,14 +1710,7 @@
           <div class="aim-record-card-copy">
             ${renderRecordCardMeta(record, activity, coverage, options)}
             <div class="aim-record-card-identity-row">
-              <div class="aim-record-card-primary">
-                <strong class="${preview.customer ? '' : 'aim-missing-name'}">${Store.escapeHtml(preview.customer || '未填姓名')}</strong>
-                ${preview.jobTitle ? `<span class="aim-record-card-job-title">${Store.escapeHtml(preview.jobTitle)}</span>` : ''}
-                ${preview.company ? `<span class="aim-record-card-company">${Store.escapeHtml(preview.company)}</span>` : ''}
-                ${preview.primaryGroup || preview.priority ? '<span class="aim-preview-sep" aria-hidden="true">|</span>' : ''}
-                ${preview.primaryGroup ? renderPreviewPrimaryGroup(preview.primaryGroup) : ''}
-                ${preview.priority ? `<span class="aim-record-card-status-group"><span class="aim-record-preview-label">${Store.escapeHtml(preview.priorityLabel || '後續追蹤優先度')}</span>${priorityPill(preview.priority)}</span>` : ''}
-              </div>
+              ${renderRecordCardSubject(record, preview)}
             </div>
             ${renderRecordPreviewContent(preview, context)}
           </div>
@@ -1922,7 +1915,7 @@
     const activityHtml = options.showActivityName === false ? '' : `<span class="aim-record-card-activity">${Store.escapeHtml(activity.name)}</span>`;
     return `<div class="aim-record-card-meta">
       <span class="aim-record-card-time">${Store.formatDateTime(record.createdAt)}</span>
-      <span class="aim-record-card-recorder">紀錄者：${Store.escapeHtml(record.createdByDisplayName)}</span>
+      <span class="aim-record-card-recorder">Recorder: ${Store.escapeHtml(record.createdByDisplayName)}</span>
       ${activityHtml}
       ${record.status === 'void' ? '<span class="aim-pill aim-pill-void">已作廢</span>' : ''}
       ${completenessHtml}
@@ -2124,6 +2117,31 @@
     return `<div class="aim-record-actions">${toggle}${edit}${hardDelete}</div>`;
   }
 
+  function renderRecordCardSubject(record, preview) {
+    const active = recordIsFieldIntelligence(record);
+    const primaryLabel = active ? '情報來源' : '訪客';
+    const secondaryLabel = active ? '情報類型' : '公司';
+    const primaryValue = preview.customer || (active ? '' : '未填姓名');
+    const primaryClass = primaryValue ? '' : 'aim-missing-name';
+    return `<div class="aim-record-card-primary">
+      <div class="aim-record-subject-row aim-record-subject-row-primary">
+        <span class="aim-record-subject-label">${Store.escapeHtml(primaryLabel)}</span>
+        <span class="aim-record-subject-values">
+          <strong class="${primaryClass}">${Store.escapeHtml(primaryValue)}</strong>
+          ${!active && preview.jobTitle ? `<span class="aim-record-card-job-title">${Store.escapeHtml(preview.jobTitle)}</span>` : ''}
+        </span>
+      </div>
+      ${preview.company ? `<div class="aim-record-subject-row aim-record-subject-row-secondary">
+        <span class="aim-record-subject-label">${Store.escapeHtml(secondaryLabel)}</span>
+        <span class="aim-record-subject-values"><span class="aim-record-card-company">${Store.escapeHtml(preview.company)}</span></span>
+      </div>` : ''}
+      ${preview.primaryGroup || preview.priority ? `<div class="aim-record-subject-row aim-record-subject-row-preview">
+        ${preview.primaryGroup ? renderPreviewPrimaryGroup(preview.primaryGroup) : ''}
+        ${preview.priority ? `<span class="aim-record-card-status-group"><span class="aim-record-preview-label">${Store.escapeHtml(preview.priorityLabel || '後續追蹤優先度')}</span>${priorityPill(preview.priority)}</span>` : ''}
+      </div>` : ''}
+    </div>`;
+  }
+
   function isChoiceField(field) {
     return ['yes_no', 'single_choice', 'multiple_choice', 'dropdown', 'boolean', 'checkbox', 'toggle'].includes(field.type);
   }
@@ -2194,10 +2212,11 @@
     const companyField = visitorRecord ? (semanticPreviewField(fields, 'company_name') || legacyCompanyField) : legacyCompanyField;
     const jobTitleField = visitorRecord ? (semanticPreviewField(fields, 'job_title') || legacyJobTitleField) : legacyJobTitleField;
     const activePreview = visitorRecord ? null : activeIntelligencePreview(fields, record, otherAnswers);
+    const consumedActiveInformationTypeFieldId = activePreview && activePreview.informationTypeFieldId;
     const priorityField = fields.find(field => field.fieldId === 'fld_priority') || fields.find(field => /優先/.test(field.title));
-    const primaryField = fields.find(field => previewPlacementForItem(field) === 'primary' && compactPreviewChoiceFieldTypes.has(field.type) && field !== priorityField);
+    const primaryField = fields.find(field => field.fieldId !== consumedActiveInformationTypeFieldId && previewPlacementForItem(field) === 'primary' && compactPreviewChoiceFieldTypes.has(field.type) && field !== priorityField);
     const badgeGroups = [];
-    fields.filter(field => isChoiceField(field) && field !== priorityField && field !== primaryField && previewPlacementForItem(field) !== 'none' && previewPlacementForItem(field) !== 'primary' && previewPlacementForItem(field) !== 'text').forEach(field => {
+    fields.filter(field => field.fieldId !== consumedActiveInformationTypeFieldId && isChoiceField(field) && field !== priorityField && field !== primaryField && previewPlacementForItem(field) !== 'none' && previewPlacementForItem(field) !== 'primary' && previewPlacementForItem(field) !== 'text').forEach(field => {
       const placement = previewPlacementForItem(field);
       if (placement && placement !== 'badges') return;
       const values = categoricalValues(displayAnswerValue(field, record.answers[field.fieldId], otherAnswers));
@@ -2234,7 +2253,8 @@
     const informationTypeField = activeInformationTypeField(fields);
     return {
       source: sourceField ? Store.answerText(displayAnswerValue(sourceField, record.answers[sourceField.fieldId], otherAnswers)) : '未填攤位名稱',
-      informationType: informationTypeField ? Store.answerText(displayAnswerValue(informationTypeField, record.answers[informationTypeField.fieldId], otherAnswers)) : ''
+      informationType: informationTypeField ? Store.answerText(displayAnswerValue(informationTypeField, record.answers[informationTypeField.fieldId], otherAnswers)) : '',
+      informationTypeFieldId: informationTypeField ? informationTypeField.fieldId : ''
     };
   }
 

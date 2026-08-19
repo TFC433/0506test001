@@ -2196,6 +2196,7 @@ function assertVisitorRecordPreviewIdentityContract(managementSource) {
         { fieldId: 'person', type: 'short_text', title: '訪談對象', settings: { cardAssistField: 'person_name' } },
         { fieldId: 'job', type: 'short_text', title: '職稱', settings: { cardAssistField: 'job_title' } },
         { fieldId: 'companyType', type: 'single_choice', title: '公司類型' },
+        { fieldId: 'topic', type: 'multiple_choice', title: '情報主題' },
         { fieldId: 'booth', type: 'short_text', title: 'BOOTH名稱' },
         { fieldId: 'informationType', type: 'single_choice', title: '情報類型' }
     ];
@@ -2206,6 +2207,7 @@ function assertVisitorRecordPreviewIdentityContract(managementSource) {
             person: '施俊晟',
             job: '總經理',
             companyType: 'SI系統商(上層/OT層)',
+            topic: ['IoT', '數位雙生'],
             booth: '麥當勞',
             informationType: '市場情報'
         },
@@ -2217,6 +2219,11 @@ function assertVisitorRecordPreviewIdentityContract(managementSource) {
     assert.strictEqual(activePreview.jobTitle, '', 'Active preview must not use Visitor job_title semantics');
     assert.notStrictEqual(activePreview.customer, '施俊晟', 'Active preview must not use Visitor person_name semantics');
     assert.notStrictEqual(activePreview.company, 'SI系統商(上層/OT層)', '公司類型 must not replace 情報類型 in Active preview');
+    assert(activePreview.badgeGroups.some(group => group.field.fieldId === 'companyType'), 'other generic Active preview fields must remain available');
+    assert(activePreview.badgeGroups.some(group => group.field.fieldId === 'topic'), 'additional generic Active preview badges must remain available');
+    assert(!activePreview.badgeGroups.some(group => group.field.fieldId === 'informationType'), 'Active 情報類型 consumed by the subject must not duplicate in generic preview badges');
+    assert(managementSource.includes("const explicitTextFields = items.filter(field => field.type === 'long_text' && previewPlacementForItem(field) === 'text').slice(0, 2);"), 'long-text preview selection logic must remain on the existing path');
+    assert(managementSource.includes("fields.filter(field => field.type === 'long_text' && previewPlacementForItem(field) !== 'none').slice(0, 1);"), 'long-text preview fallback selection must remain unchanged');
 
     const companyFallbackPreview = contract.recordPreview({
         id: 'active-company-fallback',
@@ -2290,7 +2297,8 @@ function assertRecordCardMetaResponsiveContract(managementSource, cssSource) {
     assert(crossActivityMeta.includes('aim-record-card-activity') && crossActivityMeta.includes('2026台北自動化國際大展'), 'cross-activity renderer default must preserve Activity identity');
     assert(scopedVisitorMeta.indexOf('aim-record-card-time') < scopedVisitorMeta.indexOf('aim-record-card-recorder'), 'scoped metadata order must start with timestamp then recorder');
     assert(scopedVisitorMeta.indexOf('aim-record-card-recorder') < scopedVisitorMeta.indexOf('aim-record-card-completeness'), 'scoped metadata order must place completeness after recorder');
-    assert(scopedVisitorMeta.includes('紀錄者：Recorder'), 'recorder metadata must use the approved label copy');
+    assert(scopedVisitorMeta.includes('Recorder: Recorder'), 'recorder metadata must use exact Recorder: copy');
+    assert(!scopedVisitorMeta.includes('紀錄者：'), 'old Record Card recorder copy must be removed from this presentation path');
     assert(scopedVisitorMeta.includes('aim-record-card-meta-labels'), 'metadata cues must render inside the completeness metadata group');
     assert(scopedVisitorMeta.indexOf('完整度') < scopedVisitorMeta.indexOf('同行 2'), '同行 cue must appear beside completeness');
     assert(scopedVisitorMeta.indexOf('完整度') < scopedVisitorMeta.indexOf('補充 1'), '補充 cue must appear beside completeness');
@@ -2311,15 +2319,45 @@ function assertRecordCardMetaResponsiveContract(managementSource, cssSource) {
     assert(collapsedAction.includes('aim-record-action-label-mobile">＋ 查看</span>'), 'mobile Record expand action copy must be exactly ＋ 查看');
     assert(!extractFunctionDeclaration(managementSource, 'renderAdditionalVisitorDetailRow').includes('aim-record-action-label-mobile'), 'Supplemental 查看 actions must not use the Record expand action label');
 
+    const subjectSource = [
+        "const formContextFieldIntelligenceMode = 'field_intelligence';",
+        "const Store = { escapeHtml(value) { return String(value == null ? '' : value).replace(/[&<>\"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[char])); } };",
+        "function normalizeFormContext(value) { return value === formContextFieldIntelligenceMode ? formContextFieldIntelligenceMode : 'visitor'; }",
+        "function recordIsFieldIntelligence(record) { return normalizeFormContext(record && record.recordContext) === formContextFieldIntelligenceMode; }",
+        "function renderPreviewPrimaryGroup() { return '<span></span>'; }",
+        "function priorityPill() { return '<span></span>'; }",
+        extractFunctionDeclaration(managementSource, 'renderRecordCardSubject'),
+        '({ renderRecordCardSubject });'
+    ].join('\n');
+    const subjectContract = vm.runInNewContext(subjectSource, {});
+    const visitorSubject = subjectContract.renderRecordCardSubject({ recordContext: 'visitor' }, {
+        customer: '施俊晟',
+        jobTitle: '主任',
+        company: '台灣發那那'
+    });
+    const activeSubject = subjectContract.renderRecordCardSubject({ recordContext: 'field_intelligence' }, {
+        customer: '麥當勞',
+        company: '市場情報'
+    });
+    assert(visitorSubject.includes('aim-record-subject-label">訪客</span>'), 'Visitor subject must render the lightweight 訪客 label');
+    assert(visitorSubject.includes('aim-record-subject-label">公司</span>'), 'Visitor subject must render the lightweight 公司 label');
+    assert(visitorSubject.includes('施俊晟') && visitorSubject.includes('主任') && visitorSubject.includes('台灣發那那'), 'Visitor subject values must remain unchanged');
+    assert(activeSubject.includes('aim-record-subject-label">情報來源</span>'), 'Active subject must render the lightweight 情報來源 label');
+    assert(activeSubject.includes('aim-record-subject-label">情報類型</span>'), 'Active subject must render the lightweight 情報類型 label');
+    assert(activeSubject.includes('麥當勞') && activeSubject.includes('市場情報'), 'Active subject values must remain unchanged');
+
     const baseLabelRule = cssSource.match(/\.aim-record-context-label \{[\s\S]*?\n\}/);
     const supplementalLabelRule = cssSource.match(/\.aim-record-context-label-supplemental \{[\s\S]*?\n\}/);
     const mobileLabelRule = cssSource.match(/\.aim-record-card-meta \.aim-record-context-label \{[\s\S]*?\n  \}/);
+    const subjectLabelRule = cssSource.match(/\.aim-record-subject-label \{[\s\S]*?\n\}/);
     assert(baseLabelRule && baseLabelRule[0].includes('border-radius: 999px;'), 'desktop metadata labels must use compact pill geometry');
     assert(baseLabelRule[0].includes('background: #f1eaff;') && baseLabelRule[0].includes('color: #5b3b91;'), '主動 must remain purple');
     assert(supplementalLabelRule && supplementalLabelRule[0].includes('background: var(--aim-blue-soft);') && supplementalLabelRule[0].includes('color: var(--aim-blue);'), 'Supplemental cues must remain blue');
     assert(baseLabelRule[0].includes('min-height: 20px;') && baseLabelRule[0].includes('font-size: 12px;'), 'compact metadata cues must share approximate height and font scale');
     assert(mobileLabelRule && mobileLabelRule[0].includes('border-radius: 4px;') && mobileLabelRule[0].includes('font-size: 10px;'), 'mobile metadata labels must keep compact rectangular geometry');
     assert(cssSource.includes('.aim-record-card-meta-labels'), 'completeness label group must have a shared wrapping style');
+    assert(subjectLabelRule && subjectLabelRule[0].includes('font-weight: 400;') && subjectLabelRule[0].includes('color: var(--aim-muted-2);'), 'subject semantic labels must use quiet muted helper styling');
+    assert(subjectLabelRule && !/border|background/.test(subjectLabelRule[0]), 'subject semantic labels must not be badges, pills, or framed controls');
     assert(cssSource.includes('.aim-record-card-recorder') && cssSource.includes('.aim-record-card-time'), 'mobile recorder and timestamp must remain secondary metadata');
     assert(cssSource.includes('.aim-record-card-completeness') && cssSource.includes('flex: 1 1 100%;'), 'mobile completeness and labels must share one metadata row/group');
     assert(cssSource.includes('.aim-record-actions .aim-button[data-action="toggle-record-expansion"][aria-expanded="false"]'), 'mobile Record expand action must be scoped to the Record card toggle');
