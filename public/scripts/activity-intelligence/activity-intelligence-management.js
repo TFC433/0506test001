@@ -2335,13 +2335,13 @@
   }
 
   function renderRecordDetailCompactField(field, value) {
-    return `<div class="aim-record-detail-field" data-field-type="${Store.escapeHtml(field.type || '')}"><span class="aim-record-detail-label">${Store.escapeHtml(field.title)}</span><span class="aim-record-detail-value">${Store.escapeHtml(Store.answerText(value))}</span></div>`;
+    return `<div class="aim-record-detail-field"><span class="aim-record-detail-label">${Store.escapeHtml(field.title)}</span><span class="aim-record-detail-value">${Store.escapeHtml(Store.answerText(value))}</span></div>`;
   }
 
   function renderRecordDetailCompactCategoricalField(field, value) {
     const badges = categoricalValues(value).map(label => renderRecordDetailChoiceBadge(field, label)).join('');
     if (!badges) return '';
-    return `<div class="aim-record-detail-field aim-record-detail-field-categorical" data-field-type="${Store.escapeHtml(field.type || '')}"><span class="aim-record-detail-label">${Store.escapeHtml(field.title)}</span><span class="aim-answer-badges">${badges}</span></div>`;
+    return `<div class="aim-record-detail-field aim-record-detail-field-categorical"><span class="aim-record-detail-label">${Store.escapeHtml(field.title)}</span><span class="aim-answer-badges">${badges}</span></div>`;
   }
 
   function renderRecordDetailChoiceField(field, value, record) {
