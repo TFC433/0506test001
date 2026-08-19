@@ -9,6 +9,7 @@ const jwt = require('jsonwebtoken');
 const config = require('../config');
 const AuthService = require('../services/auth-service');
 const ActivityIntelligenceService = require('../services/activity-intelligence-service');
+const LineLeadsController = require('../controllers/line-leads.controller');
 const {
     getEffectiveRoles,
     isAdminEquivalentRole,
@@ -20,11 +21,16 @@ const {
 const {
     getLineLeadSession,
     issueLineLeadSessionJwt,
+    requireLineLeadSession,
     resolveCrmSystemManagerLineUser
 } = require('../middleware/line-lead-session.middleware');
 
 function makeCrmToken(payload) {
     return jwt.sign(payload, config.AUTH.JWT_SECRET, { expiresIn: config.AUTH.JWT_EXPIRES_IN });
+}
+
+function makeExpiredCrmToken(payload) {
+    return jwt.sign(payload, config.AUTH.JWT_SECRET, { expiresIn: -1 });
 }
 
 function makeRequest({ token, headers = {}, originalUrl = '/api/line/leads', services = {} } = {}) {
@@ -70,8 +76,57 @@ function makeResponse() {
     };
 }
 
+function lineCookieHeader(lineJwt) {
+    return `${config.LINE_LEAD.COOKIE_NAME}=${encodeURIComponent(lineJwt)}`;
+}
+
+async function assertLineFallback({ label, token, originalUrl, headers = {}, lineJwt, services }) {
+    const req = makeRequest({
+        token,
+        originalUrl,
+        headers: {
+            ...headers,
+            cookie: lineCookieHeader(lineJwt)
+        },
+        services
+    });
+    const res = makeResponse();
+
+    await getLineLeadSession(req, res);
+    assert.strictEqual(res.statusCode, 200, label);
+    assert.strictEqual(res.body.userId, 'line-user', label);
+    assert.strictEqual(res.body.displayName, 'Line User', label);
+    assert.strictEqual(res.body.role, 'recorder', label);
+    assert.strictEqual(res.body.authSource, undefined, label);
+
+    const protectedReq = makeRequest({
+        token,
+        originalUrl,
+        headers: {
+            ...headers,
+            cookie: lineCookieHeader(lineJwt)
+        },
+        services
+    });
+    const protectedRes = makeResponse();
+    let nextCalled = false;
+    await requireLineLeadSession(protectedReq, protectedRes, () => {
+        nextCalled = true;
+    });
+    assert.strictEqual(protectedRes.statusCode, 200, label);
+    assert.strictEqual(nextCalled, true, label);
+    assert.strictEqual(protectedReq.lineUser.userId, 'line-user', label);
+    assert.strictEqual(protectedReq.lineUser.role, 'recorder', label);
+}
+
 async function main() {
     assert.strictEqual(config.AUTH.JWT_EXPIRES_IN, '8h');
+
+    const portalSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'portal.html'), 'utf8');
+    assert(portalSource.includes('href="/dashboard.html" aria-label="CRM"'));
+    assert(portalSource.includes('href="/views/activity-intelligence.html" aria-label="Activity Intelligence"'));
+    assert(portalSource.includes('href="/leads-view.html" aria-label="OCR"'));
+    assert(!portalSource.includes('href="/login.html" aria-label="CRM"'));
 
     assert.deepStrictEqual(getEffectiveRoles('system_manager'), ['system_manager', 'admin']);
     assert.deepStrictEqual(getEffectiveRoles('super_admin'), ['super_admin', 'admin']);
@@ -146,15 +201,17 @@ async function main() {
     assert.strictEqual(formLineUser.authSource, 'crm');
     assert.strictEqual(formLineUser.accessClass, 'member');
 
+    const cardDisplayName = Buffer.from('546L5aSn5piO', 'base64').toString('utf8');
     const cardToken = makeCrmToken({
         username: 'manager-card',
-        displayName: 'Card Manager',
+        displayName: cardDisplayName,
         role: 'system_manager',
         session_id: 'session-card'
     });
     const cardLineUser = resolveCrmSystemManagerLineUser(makeRequest({ token: cardToken, services }));
     assert.strictEqual(cardLineUser.userId, 'crm:manager-card');
     assert.strictEqual(cardLineUser.username, 'manager-card');
+    assert.strictEqual(cardLineUser.displayName, cardDisplayName);
 
     const adminToken = makeCrmToken({
         username: 'admin001',
@@ -162,7 +219,36 @@ async function main() {
         role: 'admin',
         session_id: 'session-admin'
     });
+    const salesToken = makeCrmToken({
+        username: 'sales001',
+        displayName: 'Sales One',
+        role: 'sales',
+        session_id: 'session-sales'
+    });
+    const superAdminToken = makeCrmToken({
+        username: 'super001',
+        displayName: 'Super One',
+        role: 'super_admin',
+        session_id: 'session-super'
+    });
+    const unknownRoleToken = makeCrmToken({
+        username: 'unknown001',
+        displayName: 'Unknown One',
+        role: 'unknown',
+        session_id: 'session-unknown'
+    });
+    const expiredSystemManagerToken = makeExpiredCrmToken({
+        username: 'expired-manager',
+        displayName: 'Expired Manager',
+        role: 'system_manager',
+        session_id: 'session-expired'
+    });
     assert.strictEqual(resolveCrmSystemManagerLineUser(makeRequest({ token: adminToken, services })), null);
+    assert.strictEqual(resolveCrmSystemManagerLineUser(makeRequest({ token: salesToken, services })), null);
+    assert.strictEqual(resolveCrmSystemManagerLineUser(makeRequest({ token: superAdminToken, services })), null);
+    assert.strictEqual(resolveCrmSystemManagerLineUser(makeRequest({ token: unknownRoleToken, services })), null);
+    assert.strictEqual(resolveCrmSystemManagerLineUser(makeRequest({ token: expiredSystemManagerToken, services })), null);
+    assert.strictEqual(resolveCrmSystemManagerLineUser(makeRequest({ services })), null);
     assert.strictEqual(resolveCrmSystemManagerLineUser(makeRequest({ token: 'TEST_LOCAL_TOKEN', services })), null);
     assert.strictEqual(resolveCrmSystemManagerLineUser(makeRequest({ token: 'not-a-jwt', services })), null);
 
@@ -187,15 +273,60 @@ async function main() {
             }
         }
     };
-    const fallbackRes = makeResponse();
-    await getLineLeadSession(makeRequest({
-        token: 'not-a-jwt',
-        headers: { cookie: `${config.LINE_LEAD.COOKIE_NAME}=${encodeURIComponent(lineJwt)}` },
-        services: fallbackServices
-    }), fallbackRes);
-    assert.strictEqual(fallbackRes.statusCode, 200);
-    assert.strictEqual(fallbackRes.body.userId, 'line-user');
-    assert.strictEqual(fallbackRes.body.role, 'recorder');
+    const fastPassFailures = [
+        ['form-no-crm-token', null],
+        ['form-expired-crm-token', expiredSystemManagerToken],
+        ['form-malformed-crm-token', 'not-a-jwt'],
+        ['form-admin-crm-token', adminToken],
+        ['form-sales-crm-token', salesToken],
+        ['form-super-admin-crm-token', superAdminToken],
+        ['form-unknown-role-crm-token', unknownRoleToken],
+        ['card-no-crm-token', null],
+        ['card-expired-crm-token', expiredSystemManagerToken],
+        ['card-malformed-crm-token', 'not-a-jwt'],
+        ['card-admin-crm-token', adminToken],
+        ['card-sales-crm-token', salesToken],
+        ['card-super-admin-crm-token', superAdminToken],
+        ['card-unknown-role-crm-token', unknownRoleToken]
+    ];
+    for (const [label, token] of fastPassFailures) {
+        const form = label.startsWith('form-');
+        await assertLineFallback({
+            label,
+            token,
+            originalUrl: form ? '/api/line/activity-intelligence/activities' : '/api/line/leads',
+            headers: form ? { 'x-line-session-product': 'form' } : {},
+            lineJwt,
+            services: fallbackServices
+        });
+    }
+
+    const cardSessionRes = makeResponse();
+    await getLineLeadSession(makeRequest({ token: cardToken, services }), cardSessionRes);
+    assert.strictEqual(cardSessionRes.statusCode, 200);
+    assert.strictEqual(cardSessionRes.body.userId, 'crm:manager-card');
+    assert.strictEqual(cardSessionRes.body.username, 'manager-card');
+    assert.strictEqual(cardSessionRes.body.displayName, cardDisplayName);
+    assert.strictEqual(cardSessionRes.body.role, 'system_manager');
+    assert.strictEqual(cardSessionRes.body.authSource, 'crm');
+    assert.deepStrictEqual(cardSessionRes.cookies, []);
+
+    const lineLeadsController = new LineLeadsController({
+        async getPotentialContactByRow(rowIndex) {
+            assert.strictEqual(rowIndex, 'row-1');
+            return { rowIndex: 'row-1', lineUserId: 'U-real-line-owner' };
+        },
+        async updatePotentialContact() {
+            throw new Error('system_manager must not update non-owned Card rows');
+        }
+    }, null, null);
+    const updateRes = makeResponse();
+    await lineLeadsController.updateLead({
+        lineUser: cardLineUser,
+        params: { rowIndex: 'row-1' },
+        body: { name: 'Changed' }
+    }, updateRes);
+    assert.strictEqual(updateRes.statusCode, 403);
 
     const activityService = new ActivityIntelligenceService({
         activityIntelligenceSqlReader: {},
