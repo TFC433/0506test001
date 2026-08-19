@@ -1692,13 +1692,14 @@
               ${renderExpansionToggle('personal', personalRecords)}
             </div>
           </div>
-          <div class="aim-latest-list aim-personal-record-list aim-record-card-list aim-record-card-list-personal">${personalRecords.map(record => renderRecordCard(record, activity, 'personal')).join('') || '<div class="aim-empty">目前尚無我的紀錄。</div>'}</div>
+          <div class="aim-latest-list aim-personal-record-list aim-record-card-list aim-record-card-list-personal">${personalRecords.map(record => renderRecordCard(record, activity, 'personal', { showActivityName: false })).join('') || '<div class="aim-empty">目前尚無我的紀錄。</div>'}</div>
         </aside>
       </div>
     `;
   }
 
-  function renderRecordCard(record, activity, context) {
+  function renderRecordCard(record, activity, context, options) {
+    options = options || {};
     const expanded = ui.expandedRecords[context].has(record.id) && canViewRecord(record, activity);
     const preview = recordPreview(record, activity);
     const coverage = recordCoverage(record, activity);
@@ -1707,7 +1708,7 @@
       <article class="aim-latest-item aim-record-card aim-record-card-${context} ${contextClass} ${record.status === 'void' ? 'aim-record-card-void' : ''}">
         <div class="aim-record-card-summary">
           <div class="aim-record-card-copy">
-            ${renderRecordCardMeta(record, activity, coverage)}
+            ${renderRecordCardMeta(record, activity, coverage, options)}
             <div class="aim-record-card-identity-row">
               <div class="aim-record-card-primary">
                 <strong class="${preview.customer ? '' : 'aim-missing-name'}">${Store.escapeHtml(preview.customer || '未填姓名')}</strong>
@@ -1886,7 +1887,7 @@
           <h2>我的紀錄</h2>
           <span class="aim-personal-record-count">${rows.length} 筆</span>
         </div>
-        <div class="aim-latest-list aim-personal-record-list aim-record-card-list aim-record-card-list-personal">${rows.map(record => renderRecordCard(record, activity, 'personal')).join('') || '<div class="aim-empty">目前尚無我的紀錄。</div>'}</div>
+        <div class="aim-latest-list aim-personal-record-list aim-record-card-list aim-record-card-list-personal">${rows.map(record => renderRecordCard(record, activity, 'personal', { showActivityName: false })).join('') || '<div class="aim-empty">目前尚無我的紀錄。</div>'}</div>
       </section>
     `;
   }
@@ -1897,7 +1898,8 @@
     return `<button class="aim-record-card-thumb-button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(link.cardId || '')}" data-viewer-context="linked" type="button" aria-label="開啟名片預覽">${renderRawCardVisual(link.card, 'thumb')}</button>`;
   }
 
-  function renderRecordCardMeta(record, activity, coverage) {
+  function renderRecordCardMeta(record, activity, coverage, options) {
+    options = options || {};
     const answered = coverage.answered;
     const total = coverage.total;
     const barWidth = total > 0 ? Math.round(answered / total * 36) : 0;
@@ -1917,10 +1919,11 @@
     ].join('');
     const labelsHtml = contextLabelsHtml ? `<span class="aim-record-card-meta-labels">${contextLabelsHtml}</span>` : '';
     const completenessHtml = `<span class="aim-record-card-completeness" title="欄位完整度 ${answered}/${total}"><span class="aim-record-card-completeness-label">完整度</span><span class="aim-record-card-completeness-count">${answered}/${total}</span><span class="aim-record-card-completeness-bar" style="--bar-w:${barWidth}px;--bar-color:${barColor}" aria-hidden="true"></span>${labelsHtml}</span>`;
+    const activityHtml = options.showActivityName === false ? '' : `<span class="aim-record-card-activity">${Store.escapeHtml(activity.name)}</span>`;
     return `<div class="aim-record-card-meta">
-      <span class="aim-record-card-activity">${Store.escapeHtml(activity.name)}</span>
-      <span class="aim-record-card-recorder">${Store.escapeHtml(record.createdByDisplayName)}</span>
       <span class="aim-record-card-time">${Store.formatDateTime(record.createdAt)}</span>
+      <span class="aim-record-card-recorder">紀錄者：${Store.escapeHtml(record.createdByDisplayName)}</span>
+      ${activityHtml}
       ${record.status === 'void' ? '<span class="aim-pill aim-pill-void">已作廢</span>' : ''}
       ${completenessHtml}
     </div>`;
@@ -3973,7 +3976,7 @@
   }
 
   function renderRecordListCards(activity, scope, rows) {
-    const cards = (rows || []).map(record => renderRecordCard(record, activity, 'all'));
+    const cards = (rows || []).map(record => renderRecordCard(record, activity, 'all', { showActivityName: false }));
     return cards.join('') || '<div class="aim-empty">沒有符合篩選條件的紀錄。</div>';
   }
 

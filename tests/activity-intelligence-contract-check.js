@@ -826,7 +826,7 @@ function assertRealActiveIntelligenceRuntimeSourceContract(managementSource, css
     assert(cssSource.includes('.aim-record-context-label'), 'active record cards must include a visible context badge');
     assert(managementSource.includes('<span class="aim-record-context-label">主動</span>'), 'active badge must use the compact short label');
     assert(managementSource.includes('aim-record-card-meta-labels'), 'active and supplemental metadata labels must be grouped with completeness');
-    assert(cssSource.includes('.aim-record-context-label') && cssSource.includes('border-radius: 4px'), 'active badge must use compact rectangular styling');
+    assert(cssSource.includes('.aim-record-context-label') && cssSource.includes('border-radius: 999px'), 'desktop active badge must use compact pill styling');
     assert(!cssSource.includes('aim-record-card-active-intelligence-prototype'), 'prototype active record styling must be removed');
     assert(!cssSource.includes('aim-prototype-chart'), 'prototype analytics chart styling must be removed');
     assertCardAssistShortTextMappingBuilderContract(managementSource);
@@ -946,6 +946,8 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(cssSource.includes('background: var(--aim-blue-soft);'));
     assert(cssSource.includes('color: var(--aim-blue);'));
     assert(cssSource.includes('.aim-record-card-meta .aim-record-context-label {\n    max-width: 100%;\n    min-height: 16px;\n    padding: 1px 5px;'));
+    assert(cssSource.includes('border-radius: 999px;'), 'desktop supplemental metadata labels must keep pill geometry');
+    assert(cssSource.includes('border-radius: 4px;'), 'mobile supplemental metadata labels must keep compact geometry');
     assert(cssSource.includes('font-size: 10px;\n    font-weight: 700;\n    line-height: 1.1;\n    white-space: nowrap;'));
     assert(!cssSource.includes('.aim-record-context-label {\n  border-color: #bfdbfe'));
     assert(cssSource.includes('.aim-supplemental-text-action'));
@@ -2254,20 +2256,27 @@ function assertRecordCardMetaResponsiveContract(managementSource, cssSource) {
         '({ renderRecordCardMeta });'
     ].join('\n');
     const metaContract = vm.runInNewContext(metaSource, {});
-    const visitorMeta = metaContract.renderRecordCardMeta({
+    const scopedVisitorMeta = metaContract.renderRecordCardMeta({
         recordContext: 'visitor',
         status: 'active',
         createdByDisplayName: 'Recorder',
         createdAt: '2026-08-18 18:18',
         supplementalSummary: { additionalVisitorCount: 2, contributionCount: 1 }
-    }, { name: '2026台北自動化國際大展' }, { answered: 11, total: 11, percent: 100 });
+    }, { name: '2026台北自動化國際大展' }, { answered: 11, total: 11, percent: 100 }, { showActivityName: false });
+    const crossActivityMeta = metaContract.renderRecordCardMeta({
+        recordContext: 'visitor',
+        status: 'active',
+        createdByDisplayName: 'Cross Recorder',
+        createdAt: '2026-08-18 18:18',
+        supplementalSummary: {}
+    }, { name: '2026台北自動化國際大展' }, { answered: 9, total: 11, percent: 82 });
     const activeMeta = metaContract.renderRecordCardMeta({
         recordContext: 'field_intelligence',
         status: 'active',
         createdByDisplayName: 'TFC施俊晟',
         createdAt: '2026-08-19 08:20',
         supplementalSummary: {}
-    }, { name: '2026台北自動化國際大展' }, { answered: 8, total: 8, percent: 100 });
+    }, { name: '2026台北自動化國際大展' }, { answered: 8, total: 8, percent: 100 }, { showActivityName: false });
     const mineMeta = metaContract.renderRecordCardMeta({
         recordContext: 'visitor',
         status: 'active',
@@ -2275,16 +2284,20 @@ function assertRecordCardMetaResponsiveContract(managementSource, cssSource) {
         createdAt: '2026-08-19 08:20',
         contributorOnly: true,
         supplementalSummary: { myContribution: true }
-    }, { name: '2026台北自動化國際大展' }, { answered: 7, total: 11, percent: 64 });
+    }, { name: '2026台北自動化國際大展' }, { answered: 7, total: 11, percent: 64 }, { showActivityName: false });
 
-    assert(visitorMeta.indexOf('aim-record-card-activity') < visitorMeta.indexOf('aim-record-card-recorder'), 'metadata order must start with activity then recorder');
-    assert(visitorMeta.indexOf('aim-record-card-recorder') < visitorMeta.indexOf('aim-record-card-time'), 'metadata order must place timestamp after recorder');
-    assert(visitorMeta.indexOf('aim-record-card-time') < visitorMeta.indexOf('aim-record-card-completeness'), 'completeness must follow timestamp');
-    assert(visitorMeta.includes('aim-record-card-meta-labels'), 'metadata cues must render inside the completeness metadata group');
-    assert(visitorMeta.indexOf('完整度') < visitorMeta.indexOf('同行 2'), '同行 cue must appear beside completeness');
-    assert(visitorMeta.indexOf('完整度') < visitorMeta.indexOf('補充 1'), '補充 cue must appear beside completeness');
+    assert(!scopedVisitorMeta.includes('aim-record-card-activity'), 'activity-scoped Record Cards must not repeat Activity name');
+    assert(crossActivityMeta.includes('aim-record-card-activity') && crossActivityMeta.includes('2026台北自動化國際大展'), 'cross-activity renderer default must preserve Activity identity');
+    assert(scopedVisitorMeta.indexOf('aim-record-card-time') < scopedVisitorMeta.indexOf('aim-record-card-recorder'), 'scoped metadata order must start with timestamp then recorder');
+    assert(scopedVisitorMeta.indexOf('aim-record-card-recorder') < scopedVisitorMeta.indexOf('aim-record-card-completeness'), 'scoped metadata order must place completeness after recorder');
+    assert(scopedVisitorMeta.includes('紀錄者：Recorder'), 'recorder metadata must use the approved label copy');
+    assert(scopedVisitorMeta.includes('aim-record-card-meta-labels'), 'metadata cues must render inside the completeness metadata group');
+    assert(scopedVisitorMeta.indexOf('完整度') < scopedVisitorMeta.indexOf('同行 2'), '同行 cue must appear beside completeness');
+    assert(scopedVisitorMeta.indexOf('完整度') < scopedVisitorMeta.indexOf('補充 1'), '補充 cue must appear beside completeness');
     assert(activeMeta.indexOf('完整度') < activeMeta.indexOf('主動'), '主動 cue must appear beside completeness');
     assert(mineMeta.indexOf('完整度') < mineMeta.indexOf('我有補充'), '我有補充 cue must appear beside completeness');
+    assert(managementSource.includes("renderRecordCard(record, activity, 'all', { showActivityName: false })"), 'activity-scoped all-record cards must opt out of repeated Activity name');
+    assert(managementSource.includes("renderRecordCard(record, activity, 'personal', { showActivityName: false })"), 'activity-scoped personal cards must opt out of repeated Activity name');
 
     const actionSource = [
         "function canHardDelete() { return false; }",
@@ -2300,12 +2313,13 @@ function assertRecordCardMetaResponsiveContract(managementSource, cssSource) {
 
     const baseLabelRule = cssSource.match(/\.aim-record-context-label \{[\s\S]*?\n\}/);
     const supplementalLabelRule = cssSource.match(/\.aim-record-context-label-supplemental \{[\s\S]*?\n\}/);
-    assert(baseLabelRule && baseLabelRule[0].includes('border-radius: 4px;'), 'metadata labels must use the compact rectangular label family');
+    const mobileLabelRule = cssSource.match(/\.aim-record-card-meta \.aim-record-context-label \{[\s\S]*?\n  \}/);
+    assert(baseLabelRule && baseLabelRule[0].includes('border-radius: 999px;'), 'desktop metadata labels must use compact pill geometry');
     assert(baseLabelRule[0].includes('background: #f1eaff;') && baseLabelRule[0].includes('color: #5b3b91;'), '主動 must remain purple');
     assert(supplementalLabelRule && supplementalLabelRule[0].includes('background: var(--aim-blue-soft);') && supplementalLabelRule[0].includes('color: var(--aim-blue);'), 'Supplemental cues must remain blue');
     assert(baseLabelRule[0].includes('min-height: 20px;') && baseLabelRule[0].includes('font-size: 12px;'), 'compact metadata cues must share approximate height and font scale');
+    assert(mobileLabelRule && mobileLabelRule[0].includes('border-radius: 4px;') && mobileLabelRule[0].includes('font-size: 10px;'), 'mobile metadata labels must keep compact rectangular geometry');
     assert(cssSource.includes('.aim-record-card-meta-labels'), 'completeness label group must have a shared wrapping style');
-    assert(cssSource.includes('.aim-record-card-activity') && cssSource.includes('white-space: normal;'), 'mobile Activity name must be allowed to wrap naturally');
     assert(cssSource.includes('.aim-record-card-recorder') && cssSource.includes('.aim-record-card-time'), 'mobile recorder and timestamp must remain secondary metadata');
     assert(cssSource.includes('.aim-record-card-completeness') && cssSource.includes('flex: 1 1 100%;'), 'mobile completeness and labels must share one metadata row/group');
     assert(cssSource.includes('.aim-record-actions .aim-button[data-action="toggle-record-expansion"][aria-expanded="false"]'), 'mobile Record expand action must be scoped to the Record card toggle');
