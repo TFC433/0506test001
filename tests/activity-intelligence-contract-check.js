@@ -2444,6 +2444,30 @@ function assertRecordCardMetaResponsiveContract(managementSource, cssSource) {
     assert(activeSubject.includes('aim-record-subject-label">情報類型</span>'), 'Active subject must render the lightweight 情報類型 label');
     assert(activeSubject.includes('麥當勞') && activeSubject.includes('市場情報'), 'Active subject values must remain unchanged');
 
+    const detailFieldSource = [
+        "const Store = { escapeHtml(value) { return String(value == null ? '' : value).replace(/[&<>\"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[char])); }, answerText(value) { return Array.isArray(value) ? value.join(', ') : String(value == null ? '' : value); } };",
+        "function categoricalValues(value) { return Array.isArray(value) ? value.filter(Boolean) : (value ? [value] : []); }",
+        "function answerBadgeClass() { return ''; }",
+        "function answerBadgePaletteClass() { return ''; }",
+        extractFunctionDeclaration(managementSource, 'renderRecordDetailCompactField'),
+        extractFunctionDeclaration(managementSource, 'renderRecordDetailChoiceBadge'),
+        extractFunctionDeclaration(managementSource, 'renderRecordDetailCompactCategoricalField'),
+        extractFunctionDeclaration(managementSource, 'renderRecordDetailLongText'),
+        '({ renderRecordDetailCompactField, renderRecordDetailCompactCategoricalField, renderRecordDetailLongText });'
+    ].join('\n');
+    const detailFieldContract = vm.runInNewContext(detailFieldSource, {});
+    const renamedShortTextHtml = detailFieldContract.renderRecordDetailCompactField({ type: 'short_text', title: 'Renamed Field' }, 'Alpha');
+    const arbitraryShortTextHtml = detailFieldContract.renderRecordDetailCompactField({ type: 'short_text', title: 'Arbitrary Future Field' }, 'Beta');
+    const numberHtml = detailFieldContract.renderRecordDetailCompactField({ type: 'number', title: 'Count' }, 1);
+    const singleChoiceHtml = detailFieldContract.renderRecordDetailCompactCategoricalField({ type: 'single_choice', title: 'Choice' }, 'A');
+    const longTextHtml = detailFieldContract.renderRecordDetailLongText({ type: 'long_text', title: 'Long' }, 'Long value');
+    assert(renamedShortTextHtml.includes('data-field-type="short_text"'), 'renamed short_text fields must expose schema-driven marker');
+    assert(arbitraryShortTextHtml.includes('data-field-type="short_text"'), 'new arbitrary short_text fields must expose schema-driven marker');
+    assert(numberHtml.includes('data-field-type="number"'), 'non-short compact fields must expose their actual schema type, not short_text');
+    assert(singleChoiceHtml.includes('data-field-type="single_choice"'), 'compact categorical fields must expose their actual schema type, not short_text');
+    assert(!longTextHtml.includes('data-field-type='), 'long_text content fields must not receive compact-row schema marker');
+    assert(!/data-title|nth-child|公司名稱|訪談對象|職稱/.test(extractFunctionDeclaration(managementSource, 'renderRecordDetailCompactField')), 'short_text marker must not be title-based');
+
     const baseLabelRule = cssSource.match(/\.aim-record-context-label \{[\s\S]*?\n\}/);
     const supplementalLabelRule = cssSource.match(/\.aim-record-context-label-supplemental \{[\s\S]*?\n\}/);
     const mobileLabelRule = cssSource.match(/\.aim-record-card-meta \.aim-record-context-label \{[\s\S]*?\n  \}/);
@@ -2463,12 +2487,13 @@ function assertRecordCardMetaResponsiveContract(managementSource, cssSource) {
     const desktopInlineMetaItemRule = desktopCss.match(/\.aim-inline-record-meta>div \{[\s\S]*?\n\}/);
     const desktopInlineMetaLabelRule = desktopCss.match(/\.aim-inline-record-meta dt \{[\s\S]*?\n\}/);
     const desktopInlineMetaValueRule = desktopCss.match(/\.aim-inline-record-meta dd \{[\s\S]*?\n\}/);
-    const mobileCompactFieldRule = mobileCss.match(/\.aim-record-detail-field \{[\s\S]*?\n  \}/);
+    const mobileGenericCompactFieldRule = mobileCss.match(/\.aim-record-detail-field \{[\s\S]*?\n  \}/);
+    const mobileShortTextFieldRule = mobileCss.match(/\.aim-record-detail-field\[data-field-type="short_text"\] \{[\s\S]*?\n  \}/);
     const mobileCompactCategoricalRule = mobileCss.match(/\.aim-record-detail-field-categorical \{[\s\S]*?\n  \}/);
-    const mobileCompactLabelRule = mobileCss.match(/\.aim-record-detail-field>\.aim-record-detail-label \{[\s\S]*?\n  \}/);
-    const mobileCompactValueRule = mobileCss.match(/\.aim-record-detail-field>\.aim-record-detail-value \{[\s\S]*?\n  \}/);
+    const mobileShortTextLabelRule = mobileCss.match(/\.aim-record-detail-field\[data-field-type="short_text"\]>\.aim-record-detail-label \{[\s\S]*?\n  \}/);
+    const mobileShortTextValueRule = mobileCss.match(/\.aim-record-detail-field\[data-field-type="short_text"\]>\.aim-record-detail-value \{[\s\S]*?\n  \}/);
+    const mobileCategoricalLabelRule = mobileCss.match(/\.aim-record-detail-field-categorical>\.aim-record-detail-label \{[\s\S]*?\n  \}/);
     const mobileCompactBadgesRule = mobileCss.match(/\.aim-record-detail-field-categorical>\.aim-answer-badges \{[\s\S]*?\n  \}/);
-    const mobileCompactBadgeRule = mobileCss.match(/\.aim-record-detail-field-categorical>\.aim-answer-badges \.aim-answer-badge \{[\s\S]*?\n  \}/);
     const mobileInlineMetaRule = mobileCss.match(/\.aim-inline-record-meta \{[\s\S]*?\n  \}/);
     const mobileInlineMetaItemRule = mobileCss.match(/\.aim-inline-record-meta>div \{[\s\S]*?\n  \}/);
     const mobileInlineMetaLabelRule = mobileCss.match(/\.aim-inline-record-meta dt \{[\s\S]*?\n  \}/);
@@ -2503,39 +2528,42 @@ function assertRecordCardMetaResponsiveContract(managementSource, cssSource) {
     assert(!/toggle-record-expansion[\s\S]*?!important/.test(cssSource), 'Record expand responsive CSS must not use !important');
     assert(desktopInlineMetaRule && desktopInlineMetaRule[0].includes('display: flex;') && desktopInlineMetaRule[0].includes('flex-wrap: wrap;') && desktopInlineMetaRule[0].includes('gap: 4px 16px;'), 'desktop expanded metadata must keep the accepted wrapping flex layout');
     assert(desktopInlineMetaItemRule && desktopInlineMetaItemRule[0].includes('flex: 1 1 112px;'), 'desktop expanded metadata columns must remain unchanged');
-    assert(mobileCompactFieldRule && mobileCompactFieldRule[0].includes('display: grid;'), 'mobile compact FORM fields must use a shared label/value grid');
-    assert(mobileCompactFieldRule[0].includes('grid-template-columns: 5.5em minmax(0, 1fr);'), 'mobile compact FORM field labels must use the shared fixed label column');
-    assert(mobileCompactFieldRule[0].includes('column-gap: 7px;'), 'mobile compact FORM fields must keep compact label/value spacing');
-    assert(mobileCompactCategoricalRule && !mobileCompactCategoricalRule[0].includes('flex-wrap'), 'mobile compact categorical rows must not keep wrapping flex layout');
-    assert(mobileCompactLabelRule && mobileCompactLabelRule[0].includes('white-space: nowrap;'), 'mobile compact FORM labels must stay on one line');
-    assert(mobileCompactLabelRule[0].includes('overflow: hidden;') && mobileCompactLabelRule[0].includes('text-overflow: ellipsis;'), 'mobile compact FORM labels must ellipsize instead of changing the shared value start line');
-    assert(!mobileCompactLabelRule[0].includes('flex: 0 0 auto;') && !mobileCompactLabelRule[0].includes('max-content'), 'short compact labels must not pull values leftward');
-    assert(mobileCompactValueRule && mobileCompactValueRule[0].includes('min-width: 0;'), 'mobile compact FORM values must be allowed to shrink in the shared value column');
-    assert(mobileCompactValueRule[0].includes('white-space: nowrap;') && mobileCompactValueRule[0].includes('text-overflow: ellipsis;'), 'mobile compact FORM values must stay single-line with ellipsis');
-    assert(mobileCompactValueRule[0].includes('overflow-wrap: normal;'), 'mobile compact FORM values must not wrap through anywhere behavior');
-    assert(mobileCompactBadgesRule && mobileCompactBadgesRule[0].includes('display: block;') && mobileCompactBadgesRule[0].includes('overflow: hidden;') && mobileCompactBadgesRule[0].includes('text-overflow: ellipsis;'), 'mobile compact choice values must use the same fixed value column behavior');
-    assert(mobileCompactBadgeRule && mobileCompactBadgeRule[0].includes('white-space: nowrap;') && mobileCompactBadgeRule[0].includes('text-overflow: ellipsis;'), 'mobile compact choice badges must not force row wrapping');
-    assert(!mobileCompactFieldRule[0].includes('title') && !mobileCompactLabelRule[0].includes('title'), 'mobile compact alignment must not be title-specific');
+    assert(!mobileGenericCompactFieldRule || !mobileGenericCompactFieldRule[0].includes('grid-template-columns'), 'generic compact FORM fields must not receive the previous broad fixed-column treatment');
+    assert(mobileShortTextFieldRule && mobileShortTextFieldRule[0].includes('display: grid;'), 'mobile short_text FORM fields must use schema-targeted label/value grid');
+    assert(mobileShortTextFieldRule[0].includes('grid-template-columns: 4.5em minmax(0, 1fr);'), 'mobile short_text labels must use a compact fixed schema-driven label column');
+    assert(mobileShortTextFieldRule[0].includes('column-gap: 6px;'), 'mobile short_text fields must keep a compact label/value gap');
+    assert(!mobileCss.includes('5.5em'), 'previous excessive 5.5em mobile label column must be removed');
+    assert(mobileCompactCategoricalRule && mobileCompactCategoricalRule[0].includes('flex-wrap: wrap;'), 'mobile compact categorical rows must restore wrapping flex behavior');
+    assert(mobileCategoricalLabelRule && mobileCategoricalLabelRule[0].includes('flex: 0 0 auto;'), 'mobile categorical labels must restore intrinsic-width behavior');
+    assert(mobileCompactBadgesRule && mobileCompactBadgesRule[0].includes('flex: 1 0 max-content;') && mobileCompactBadgesRule[0].includes('overflow: visible;'), 'mobile compact choice values must restore pre-repair badge flow');
+    assert(!mobileCss.includes('.aim-record-detail-field-categorical>.aim-answer-badges .aim-answer-badge'), 'mobile compact choice badges must not receive short_text truncation rules');
+    assert(mobileShortTextLabelRule && mobileShortTextLabelRule[0].includes('white-space: nowrap;'), 'mobile short_text labels must stay on one line');
+    assert(mobileShortTextLabelRule[0].includes('overflow: hidden;') && mobileShortTextLabelRule[0].includes('text-overflow: ellipsis;'), 'mobile short_text labels must ellipsize only if they overflow the schema-driven label column');
+    assert(mobileShortTextValueRule && mobileShortTextValueRule[0].includes('min-width: 0;'), 'mobile short_text values must be allowed to shrink in the shared value column');
+    assert(mobileShortTextValueRule[0].includes('white-space: nowrap;') && mobileShortTextValueRule[0].includes('text-overflow: ellipsis;'), 'mobile short_text values must stay single-line with ellipsis at true overflow');
+    assert(mobileShortTextValueRule[0].includes('overflow-wrap: normal;'), 'mobile short_text values must not wrap through anywhere behavior');
+    assert(!mobileShortTextFieldRule[0].includes('title') && !mobileShortTextLabelRule[0].includes('title'), 'mobile short_text alignment must not be title-specific');
     assert(mobileInlineMetaRule && mobileInlineMetaRule[0].includes('gap: 4px;'), 'mobile expanded metadata must use compact row spacing');
     assert(mobileInlineMetaItemRule && mobileInlineMetaItemRule[0].includes('display: flex;'), 'mobile expanded metadata items must become label/value rows');
     assert(mobileInlineMetaItemRule[0].includes('flex: 1 1 100%;') && mobileInlineMetaItemRule[0].includes('width: 100%;'), 'mobile expanded metadata items must consume full available width');
     assert(!mobileInlineMetaItemRule[0].includes('112px') && !mobileInlineMetaItemRule[0].includes('50%') && !mobileInlineMetaItemRule[0].includes('grid-template'), 'mobile expanded metadata must not keep narrow multi-column sizing');
-    assert(mobileInlineMetaLabelRule && mobileInlineMetaLabelRule[0].includes('flex: 0 0 5.5em;') && mobileInlineMetaLabelRule[0].includes('max-width: 5.5em;'), 'mobile metadata labels must use the same shared fixed label column');
+    assert(mobileInlineMetaLabelRule && mobileInlineMetaLabelRule[0].includes('flex: 0 0 4.5em;') && mobileInlineMetaLabelRule[0].includes('max-width: 4.5em;'), 'mobile metadata labels must use a compact shared fixed label column');
     assert(mobileInlineMetaLabelRule[0].includes('white-space: nowrap;') && mobileInlineMetaLabelRule[0].includes('text-overflow: ellipsis;'), 'mobile metadata labels must stay single-line and ellipsize');
-    assert(mobileInlineMetaLabelRule[0].includes('font-size: 11px;') && mobileInlineMetaLabelRule[0].includes('font-weight: 400;'), 'mobile metadata labels must remain muted lightweight text');
+    assert(mobileInlineMetaLabelRule[0].includes('font-size: 11px;') && mobileInlineMetaLabelRule[0].includes('font-weight: 400;') && mobileInlineMetaLabelRule[0].includes('line-height: 1.3;'), 'mobile metadata labels must match the mobile Record Card metadata tier');
     assert(desktopInlineMetaLabelRule && desktopInlineMetaLabelRule[0].includes('color: var(--aim-muted-2);'), 'expanded metadata labels must stay muted');
     assert(mobileInlineMetaValueRule && mobileInlineMetaValueRule[0].includes('flex: 1 1 auto;'), 'mobile metadata values, including activity and recent update, must receive flexible horizontal space');
     assert(mobileInlineMetaValueRule[0].includes('min-width: 0;') && mobileInlineMetaValueRule[0].includes('overflow-wrap: normal;'), 'mobile metadata values must not wrap through anywhere behavior');
     assert(mobileInlineMetaValueRule[0].includes('white-space: nowrap;') && mobileInlineMetaValueRule[0].includes('text-overflow: ellipsis;'), 'mobile metadata values must stay single-line with ellipsis');
-    assert(mobileInlineMetaValueRule[0].includes('font-size: 12px;') && mobileInlineMetaValueRule[0].includes('font-weight: 400;'), 'mobile metadata values must remain normal-weight secondary text');
-    assert(desktopInlineMetaValueRule && desktopInlineMetaValueRule[0].includes('color: #475569;'), 'expanded metadata values must remain slightly darker than labels');
+    assert(mobileInlineMetaValueRule[0].includes('font-size: 11px;') && mobileInlineMetaValueRule[0].includes('font-weight: 400;') && mobileInlineMetaValueRule[0].includes('line-height: 1.3;'), 'mobile metadata values must match the mobile Record Card metadata tier');
+    assert(mobileMetaRule && mobileMetaRule[0].includes('font-size: 11px;') && mobileMetaRule[0].includes('font-weight: 400;'), 'Record Card metadata tier used for comparison must remain unchanged');
+    assert(desktopInlineMetaValueRule && desktopInlineMetaValueRule[0].includes('color: #475569;'), 'desktop expanded metadata values must remain unchanged');
     assert(!mobileCss.includes('.aim-record-detail-choice h3 {') && !mobileCss.includes('.aim-record-detail-text h3 {'), 'mobile compact alignment must not affect content-style headings');
     assert(!mobileCss.includes('.aim-record-detail-text>div {') && !mobileCss.includes('.aim-record-detail-choice-list {'), 'mobile compact alignment must not affect long/content-style values');
     assert(desktopCss.match(/\.aim-record-detail-value \{[\s\S]*?font-size: 13px;/), 'business compact value font size must remain defined outside the mobile alignment patch');
     assert(!/font-weight:\s*(600|700|bold)/.test(mobileInlineMetaRules), 'mobile expanded metadata must not introduce bold labels or values');
     assert(!mobileInlineMetaRules.includes('.aim-record-detail-label') && !mobileInlineMetaRules.includes('.aim-record-detail-value'), 'mobile expanded metadata patch must not alter FORM answer typography');
     assert(!mobileInlineMetaRules.includes('.aim-record-card'), 'expanded metadata patch must not alter collapsed Record Card layout rules');
-    assert(!mobileInlineMetaRules.includes('!important') && !mobileCompactFieldRule[0].includes('!important') && !mobileCompactLabelRule[0].includes('!important') && !mobileCompactValueRule[0].includes('!important'), 'mobile compact alignment CSS must not use !important');
+    assert(!mobileInlineMetaRules.includes('!important') && !mobileShortTextFieldRule[0].includes('!important') && !mobileShortTextLabelRule[0].includes('!important') && !mobileShortTextValueRule[0].includes('!important'), 'mobile corrective alignment CSS must not use !important');
 }
 
 async function main() {
