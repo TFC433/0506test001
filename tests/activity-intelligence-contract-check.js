@@ -2455,6 +2455,24 @@ function assertRecordCardMetaResponsiveContract(managementSource, cssSource) {
     const mobileSubjectValueRule = cssSource.match(/\.aim-record-card-primary strong \{[\s\S]*?\n  \}/);
     const mobileJobRule = cssSource.match(/\.aim-record-card-job-title \{[\s\S]*?\n  \}/);
     const mobileCompanyRule = cssSource.match(/\.aim-record-card-company \{[\s\S]*?\n  \}/);
+    const mobileBreakpointStart = cssSource.indexOf('@media (max-width: 640px)');
+    const mobileBreakpointEnd = cssSource.indexOf('@media', mobileBreakpointStart + 1);
+    const desktopCss = cssSource.slice(0, mobileBreakpointStart);
+    const mobileCss = cssSource.slice(mobileBreakpointStart, mobileBreakpointEnd > -1 ? mobileBreakpointEnd : cssSource.length);
+    const desktopInlineMetaRule = desktopCss.match(/\.aim-inline-record-meta \{[\s\S]*?\n\}/);
+    const desktopInlineMetaItemRule = desktopCss.match(/\.aim-inline-record-meta>div \{[\s\S]*?\n\}/);
+    const desktopInlineMetaLabelRule = desktopCss.match(/\.aim-inline-record-meta dt \{[\s\S]*?\n\}/);
+    const desktopInlineMetaValueRule = desktopCss.match(/\.aim-inline-record-meta dd \{[\s\S]*?\n\}/);
+    const mobileInlineMetaRule = mobileCss.match(/\.aim-inline-record-meta \{[\s\S]*?\n  \}/);
+    const mobileInlineMetaItemRule = mobileCss.match(/\.aim-inline-record-meta>div \{[\s\S]*?\n  \}/);
+    const mobileInlineMetaLabelRule = mobileCss.match(/\.aim-inline-record-meta dt \{[\s\S]*?\n  \}/);
+    const mobileInlineMetaValueRule = mobileCss.match(/\.aim-inline-record-meta dd \{[\s\S]*?\n  \}/);
+    const mobileInlineMetaRules = [
+        mobileInlineMetaRule && mobileInlineMetaRule[0],
+        mobileInlineMetaItemRule && mobileInlineMetaItemRule[0],
+        mobileInlineMetaLabelRule && mobileInlineMetaLabelRule[0],
+        mobileInlineMetaValueRule && mobileInlineMetaValueRule[0]
+    ].filter(Boolean).join('\n');
     assert(baseLabelRule && baseLabelRule[0].includes('border-radius: 999px;'), 'desktop metadata labels must use compact pill geometry');
     assert(baseLabelRule[0].includes('background: #f1eaff;') && baseLabelRule[0].includes('color: #5b3b91;'), '主動 must remain purple');
     assert(supplementalLabelRule && supplementalLabelRule[0].includes('background: var(--aim-blue-soft);') && supplementalLabelRule[0].includes('color: var(--aim-blue);'), 'Supplemental cues must remain blue');
@@ -2477,6 +2495,23 @@ function assertRecordCardMetaResponsiveContract(managementSource, cssSource) {
     assert(cssSource.includes('.aim-record-action-label-desktop') && cssSource.includes('.aim-record-action-label-mobile'), 'responsive action labels must preserve desktop and mobile copy separately');
     assert(cssSource.includes('.aim-record-actions .aim-button {\n    min-height: 28px;'), 'desktop Record action must retain the framed compact button family outside the mobile text-action override');
     assert(!/toggle-record-expansion[\s\S]*?!important/.test(cssSource), 'Record expand responsive CSS must not use !important');
+    assert(desktopInlineMetaRule && desktopInlineMetaRule[0].includes('display: flex;') && desktopInlineMetaRule[0].includes('flex-wrap: wrap;') && desktopInlineMetaRule[0].includes('gap: 4px 16px;'), 'desktop expanded metadata must keep the accepted wrapping flex layout');
+    assert(desktopInlineMetaItemRule && desktopInlineMetaItemRule[0].includes('flex: 1 1 112px;'), 'desktop expanded metadata columns must remain unchanged');
+    assert(mobileInlineMetaRule && mobileInlineMetaRule[0].includes('gap: 4px;'), 'mobile expanded metadata must use compact row spacing');
+    assert(mobileInlineMetaItemRule && mobileInlineMetaItemRule[0].includes('display: flex;'), 'mobile expanded metadata items must become label/value rows');
+    assert(mobileInlineMetaItemRule[0].includes('flex: 1 1 100%;') && mobileInlineMetaItemRule[0].includes('width: 100%;'), 'mobile expanded metadata items must consume full available width');
+    assert(!mobileInlineMetaItemRule[0].includes('112px') && !mobileInlineMetaItemRule[0].includes('50%') && !mobileInlineMetaItemRule[0].includes('grid-template'), 'mobile expanded metadata must not keep narrow multi-column sizing');
+    assert(mobileInlineMetaLabelRule && mobileInlineMetaLabelRule[0].includes('flex: 0 0 auto;'), 'mobile metadata labels must remain compact');
+    assert(mobileInlineMetaLabelRule[0].includes('font-size: 11px;') && mobileInlineMetaLabelRule[0].includes('font-weight: 400;'), 'mobile metadata labels must remain muted lightweight text');
+    assert(desktopInlineMetaLabelRule && desktopInlineMetaLabelRule[0].includes('color: var(--aim-muted-2);'), 'expanded metadata labels must stay muted');
+    assert(mobileInlineMetaValueRule && mobileInlineMetaValueRule[0].includes('flex: 1 1 auto;'), 'mobile metadata values, including activity and recent update, must receive flexible horizontal space');
+    assert(mobileInlineMetaValueRule[0].includes('min-width: 0;') && mobileInlineMetaValueRule[0].includes('overflow-wrap: break-word;'), 'mobile metadata values must wrap only when remaining row space is exhausted');
+    assert(mobileInlineMetaValueRule[0].includes('font-size: 12px;') && mobileInlineMetaValueRule[0].includes('font-weight: 400;'), 'mobile metadata values must remain normal-weight secondary text');
+    assert(desktopInlineMetaValueRule && desktopInlineMetaValueRule[0].includes('color: #475569;'), 'expanded metadata values must remain slightly darker than labels');
+    assert(!/font-weight:\s*(600|700|bold)/.test(mobileInlineMetaRules), 'mobile expanded metadata must not introduce bold labels or values');
+    assert(!mobileInlineMetaRules.includes('.aim-record-detail-label') && !mobileInlineMetaRules.includes('.aim-record-detail-value'), 'mobile expanded metadata patch must not alter FORM answer typography');
+    assert(!mobileInlineMetaRules.includes('.aim-record-card'), 'expanded metadata patch must not alter collapsed Record Card layout rules');
+    assert(!mobileInlineMetaRules.includes('!important'), 'mobile expanded metadata CSS must not use !important');
 }
 
 async function main() {
