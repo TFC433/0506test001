@@ -2118,6 +2118,82 @@ function assertCardAssistShortTextMappingBuilderContract(managementSource) {
     assert(!managementSource.includes('title.includes'), 'Card Assist mapping must not infer roles from visible titles');
 }
 
+function assertLongTextPreviewExplicitDesignerStateContract(managementSource) {
+    const source = [
+        "const formContextVisitorMode = 'visitor';",
+        "const formContextFieldIntelligenceMode = 'field_intelligence';",
+        "const choiceFieldTypes = ['single_choice', 'multiple_choice', 'dropdown'];",
+        "const previewPlacementValues = new Set(['none', 'primary', 'badges', 'text']);",
+        "const previewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'multiple_choice', 'dropdown']);",
+        "const compactPreviewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'dropdown']);",
+        "const fixedPreviewFieldIds = new Set();",
+        "const cardAssistRoles = new Set(['person_name', 'job_title', 'company_name']);",
+        "const Store = { clone(value) { return JSON.parse(JSON.stringify(value)); }, escapeHtml(value) { return String(value == null ? '' : value).replace(/[&<>\"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[char])); } };",
+        "function newUuid() { return '99999999-9999-4999-8999-999999999999'; }",
+        "function fieldTypeLabel(type) { return type; }",
+        "function makeCardLinkItem(item) { return { ...item, type: 'card_link', itemKey: item.itemKey || 'card', fieldId: item.fieldId || item.itemKey || 'card', options: [], optionEntries: [], settings: item.settings || {}, allowOther: false }; }",
+        "function makeFormThumbnailItem(item) { return { ...item, type: 'form_thumbnail', itemKey: item.itemKey || 'thumb', fieldId: item.fieldId || item.itemKey || 'thumb', options: [], optionEntries: [], settings: item.settings || {}, allowOther: false }; }",
+        "function thumbnailSettingsForItem() { return {}; }",
+        "function thumbnailSourceForItem() { return ''; }",
+        "function option(value, label, selected) { return `<option value=\"${Store.escapeHtml(value)}\" ${String(value) === String(selected) ? 'selected' : ''}>${Store.escapeHtml(label)}</option>`; }",
+        "let currentContext = formContextVisitorMode;",
+        "const activity = { formDesignRuntimeByContext: {} };",
+        "function normalizeFormContext(value) { return value === formContextFieldIntelligenceMode ? formContextFieldIntelligenceMode : formContextVisitorMode; }",
+        "function currentFormContext() { return currentContext; }",
+        "function selectedActivity() { return activity; }",
+        "function formDesign(sourceActivity, formContext) { const context = normalizeFormContext(formContext); return sourceActivity.formDesignRuntimeByContext[context]; }",
+        extractFunctionDeclaration(managementSource, 'normalizeOptionEntries'),
+        extractFunctionDeclaration(managementSource, 'designerItemKey'),
+        extractFunctionDeclaration(managementSource, 'normalizePreviewPlacement'),
+        extractFunctionDeclaration(managementSource, 'normalizeDesignerItem'),
+        extractFunctionDeclaration(managementSource, 'previewPlacementForItem'),
+        extractFunctionDeclaration(managementSource, 'isFixedPreviewField'),
+        extractFunctionDeclaration(managementSource, 'isPreviewPlacementEligible'),
+        extractFunctionDeclaration(managementSource, 'previewPlacementOptionsForField'),
+        extractFunctionDeclaration(managementSource, 'effectiveDesignerPreviewPlacement'),
+        extractFunctionDeclaration(managementSource, 'renderPreviewPlacementEditor'),
+        extractFunctionDeclaration(managementSource, 'designerItemSignature'),
+        extractFunctionDeclaration(managementSource, 'serializeDraftItems'),
+        "({ activity, setContext(value) { currentContext = value; }, normalizeDesignerItem, renderPreviewPlacementEditor, effectiveDesignerPreviewPlacement, designerItemSignature, serializeDraftItems });"
+    ].join('\n');
+    const contract = vm.runInNewContext(source, {});
+    const checked = html => /id="aim-field-preview-enabled"[^>]*checked/.test(html);
+    const item = (itemKey, title, settings) => contract.normalizeDesignerItem({
+        itemKey,
+        fieldId: itemKey,
+        type: 'long_text',
+        title,
+        settings: settings || {}
+    });
+
+    const implicitFirst = item('implicit-first', '情報紀錄', {});
+    contract.activity.formDesignRuntimeByContext.visitor = { draft: { items: [implicitFirst] } };
+    contract.setContext('visitor');
+    assert.strictEqual(contract.effectiveDesignerPreviewPlacement(implicitFirst), 'text', 'first long_text effective fallback remains available');
+    assert.strictEqual(checked(contract.renderPreviewPlacementEditor(implicitFirst)), false, 'first long_text without explicit previewPlacement must render unchecked');
+
+    const explicit = item('explicit-text', '情報紀錄', { previewPlacement: 'text' });
+    assert.strictEqual(checked(contract.renderPreviewPlacementEditor(explicit)), true, 'explicit long_text previewPlacement=text must render checked');
+    assert.strictEqual(contract.serializeDraftItems([explicit])[0].settings.previewPlacement, 'text', 'explicit long_text previewPlacement must survive serialization');
+    assert.notStrictEqual(contract.designerItemSignature(implicitFirst, 'visitor'), contract.designerItemSignature(explicit, 'visitor'), 'explicit previewPlacement must affect dirty-state signature');
+
+    const activeInfo = item('active-info', '情報紀錄', {});
+    const activeFollow = item('active-follow', '後續動作', { previewPlacement: 'text' });
+    contract.activity.formDesignRuntimeByContext.field_intelligence = { draft: { items: [activeInfo, activeFollow] } };
+    contract.setContext('field_intelligence');
+    assert.strictEqual(checked(contract.renderPreviewPlacementEditor(activeInfo)), false, 'Active first long_text fallback field must render unchecked without explicit setting');
+    assert.strictEqual(checked(contract.renderPreviewPlacementEditor(activeFollow)), true, 'Active explicit second long_text field must render checked');
+
+    const visitorInfo = item('visitor-info', '情報紀錄', { previewPlacement: 'text' });
+    const visitorFollow = item('visitor-follow', '後續動作', { previewPlacement: 'text' });
+    contract.activity.formDesignRuntimeByContext.visitor = { draft: { items: [visitorInfo, visitorFollow] } };
+    contract.setContext('visitor');
+    assert.strictEqual(checked(contract.renderPreviewPlacementEditor(visitorInfo)), true, 'Visitor first explicit long_text field must stay checked');
+    assert.strictEqual(checked(contract.renderPreviewPlacementEditor(visitorFollow)), true, 'Visitor second explicit long_text field must stay checked');
+    assert(managementSource.includes('updateFormDesignDraft({\n      previewPlacement: nextPlacement,\n      settings: {\n        ...(ui.formDesignDraft.settings || {}),\n        previewPlacement: nextPlacement\n      }\n    });'), 'preview toggle must continue writing previewPlacement and settings.previewPlacement');
+    assert(managementSource.includes("items.filter(item => previewPlacementForItem(item) === 'text').length >= 2"), 'max-two explicit long_text validation must remain unchanged');
+}
+
 function assertVisitorRecordPreviewIdentityContract(managementSource) {
     const missingName = '未填姓名';
     const source = [
@@ -2224,6 +2300,28 @@ function assertVisitorRecordPreviewIdentityContract(managementSource) {
     assert(!activePreview.badgeGroups.some(group => group.field.fieldId === 'informationType'), 'Active 情報類型 consumed by the subject must not duplicate in generic preview badges');
     assert(managementSource.includes("const explicitTextFields = items.filter(field => field.type === 'long_text' && previewPlacementForItem(field) === 'text').slice(0, 2);"), 'long-text preview selection logic must remain on the existing path');
     assert(managementSource.includes("fields.filter(field => field.type === 'long_text' && previewPlacementForItem(field) !== 'none').slice(0, 1);"), 'long-text preview fallback selection must remain unchanged');
+
+    const implicitLongTextPreview = contract.recordPreview({
+        id: 'implicit-long-text',
+        recordContext: 'field_intelligence',
+        answers: { note: 'first note', follow: 'second note' },
+        formRuntimeSnapshot: { items: [
+            { fieldId: 'note', type: 'long_text', title: '情報紀錄' },
+            { fieldId: 'follow', type: 'long_text', title: '後續動作' }
+        ] }
+    }, {});
+    assert.deepStrictEqual(implicitLongTextPreview.textPreviews.map(item => item.label), ['情報紀錄'], 'zero explicit long_text previews must preserve first-long-text runtime fallback');
+
+    const explicitLongTextPreview = contract.recordPreview({
+        id: 'explicit-long-text',
+        recordContext: 'field_intelligence',
+        answers: { note: 'first note', follow: 'second note' },
+        formRuntimeSnapshot: { items: [
+            { fieldId: 'note', type: 'long_text', title: '情報紀錄', settings: { previewPlacement: 'text' } },
+            { fieldId: 'follow', type: 'long_text', title: '後續動作', settings: { previewPlacement: 'text' } }
+        ] }
+    }, {});
+    assert.deepStrictEqual(explicitLongTextPreview.textPreviews.map(item => item.label), ['情報紀錄', '後續動作'], 'two explicit long_text previews must both remain selected for collapsed preview');
 
     const companyFallbackPreview = contract.recordPreview({
         id: 'active-company-fallback',
@@ -3307,6 +3405,7 @@ async function main() {
     assertContextFoundationSqlContract(activityIntelligenceSqlSource);
     assertDualStreamFormBuilderSourceContract(managementSource, apiSource, cssSource);
     assertRealActiveIntelligenceRuntimeSourceContract(managementSource, cssSource, service);
+    assertLongTextPreviewExplicitDesignerStateContract(managementSource);
     assertVisitorRecordPreviewIdentityContract(managementSource);
     assertRecordCardMetaResponsiveContract(managementSource, cssSource);
     assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiSource, cssSource, activityIntelligenceSqlSource);

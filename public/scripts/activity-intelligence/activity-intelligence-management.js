@@ -3478,7 +3478,7 @@
 
   function renderPreviewPlacementEditor(field) {
     if (!isPreviewPlacementEligible(field)) return '';
-    const placement = effectiveDesignerPreviewPlacement(field);
+    const placement = previewPlacementForItem(field);
     const enabled = placement && placement !== 'none';
     const disabled = field.retired ? 'disabled' : '';
     const options = previewPlacementOptionsForField(field);
