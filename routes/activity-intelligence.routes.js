@@ -1,4 +1,5 @@
 const express = require('express');
+const { roleAllows, isAdminEquivalentRole } = require('../middleware/role.middleware');
 
 const router = express.Router();
 const ADMIN_ROLES = new Set(['admin', 'super_admin']);
@@ -18,7 +19,7 @@ function getController(req) {
 function requireRole(allowedRoles) {
     return (req, res, next) => {
         const role = req.user && req.user.role;
-        if (allowedRoles.has(role)) return next();
+        if (roleAllows(allowedRoles, role)) return next();
         return res.status(403).json({
             success: false,
             error: 'Activity Intelligence permission denied.',
@@ -41,7 +42,7 @@ function sendForbidden(res) {
 
 function requireSubmissionCreateAccess(req, res, next) {
     const role = req.user && req.user.role;
-    if (SUBMISSION_ROLES.has(role)) return next();
+    if (roleAllows(SUBMISSION_ROLES, role)) return next();
     if (isGuestAccess(req)) {
         if (req.body && req.body.cardId) {
             return res.status(403).json({
@@ -57,7 +58,7 @@ function requireSubmissionCreateAccess(req, res, next) {
 
 function requireSubmissionListAccess(req, res, next) {
     const role = req.user && req.user.role;
-    if (SUBMISSION_ROLES.has(role)) return next();
+    if (roleAllows(SUBMISSION_ROLES, role)) return next();
     if (isGuestAccess(req)) {
         req.query = {
             ...(req.query || {}),
@@ -71,7 +72,7 @@ function requireSubmissionListAccess(req, res, next) {
 async function requireSubmissionReadAccess(req, res, next) {
     try {
         const role = req.user && req.user.role;
-        if (SUBMISSION_ROLES.has(role)) return next();
+        if (roleAllows(SUBMISSION_ROLES, role)) return next();
         if (!isGuestAccess(req) || !req.user.userId) return sendForbidden(res);
 
         const services = req.app.get('services');
@@ -89,7 +90,7 @@ async function requireSubmissionReadAccess(req, res, next) {
 
 function requireSubmissionUpdateAccess(req, res, next) {
     const role = req.user && req.user.role;
-    if (SUBMISSION_ROLES.has(role)) return next();
+    if (roleAllows(SUBMISSION_ROLES, role)) return next();
     if (isGuestAccess(req)) {
         if (req.body && req.body.cardId) {
             return res.status(403).json({
@@ -104,7 +105,7 @@ function requireSubmissionUpdateAccess(req, res, next) {
 }
 
 function isAdminRole(req) {
-    return req.user && ADMIN_ROLES.has(req.user.role);
+    return req.user && isAdminEquivalentRole(req.user.role);
 }
 
 function scopeSubmissionList(req, res, next) {

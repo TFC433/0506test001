@@ -12,6 +12,22 @@
 
 window.CRM_APP = window.CRM_APP || {};
 
+function normalizeLayoutRole(role) {
+    return String(role || '').trim().toLowerCase();
+}
+
+function getEffectiveLayoutRoles(role) {
+    const normalizedRole = normalizeLayoutRole(role) || 'sales';
+    if (normalizedRole === 'super_admin' || normalizedRole === 'system_manager') {
+        return [normalizedRole, 'admin'];
+    }
+    return [normalizedRole];
+}
+
+function isAdminEquivalentLayoutRole(role) {
+    return getEffectiveLayoutRoles(role).includes('admin');
+}
+
 const LayoutManager = {
     isPinned: true,
     currentUserRole: 'sales', // 預設
@@ -20,6 +36,7 @@ const LayoutManager = {
     // 1. 定義預設的角色設定 (預設為中文，確保斷線時也顯示正常)
     defaultRoleDefs: {
         'admin': { title: '管理員', permission: 'System Admin', color: '#fee2e2', textColor: '#991b1b' },
+        'system_manager': { title: '系統管理員', permission: 'System Manager', color: '#e0f2fe', textColor: '#075985' },
         'sales': { title: '業務', permission: 'General User', color: '#dbeafe', textColor: '#1e40af' }
     },
 
@@ -120,7 +137,7 @@ const LayoutManager = {
     },
 
     loadUserRole() {
-        this.currentUserRole = localStorage.getItem('crmUserRole') || 'sales';
+        this.currentUserRole = normalizeLayoutRole(localStorage.getItem('crmUserRole')) || 'sales';
         window.CRM_APP.currentUserRole = this.currentUserRole;
     },
 
@@ -185,8 +202,7 @@ const LayoutManager = {
     },
 
     injectAdminFeatures() {
-        const adminLevelRoles = ['admin', 'super_admin'];
-        if (!adminLevelRoles.includes(this.currentUserRole)) return;
+        if (!isAdminEquivalentLayoutRole(this.currentUserRole)) return;
 
         const sidebarNav = document.querySelector('.sidebar-nav ul') || document.querySelector('.sidebar-menu');
         if (!sidebarNav) return;

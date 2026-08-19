@@ -13,6 +13,23 @@
 
   let currentSession = null;
 
+  function crmToken() {
+    try {
+      return localStorage.getItem('crmToken') || localStorage.getItem('crm-token') || '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function crmAuthorizationHeaders() {
+    const token = crmToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  }
+
+  function isCrmSystemManagerSession(session = currentSession) {
+    return Boolean(session && session.authSource === 'crm' && session.role === 'system_manager' && crmToken());
+  }
+
   function isLocalDevelopment() {
     return location.hostname === 'localhost' || location.hostname === '127.0.0.1';
   }
@@ -89,7 +106,10 @@
   async function readSession() {
     const response = await fetch('/api/line/session', {
       credentials: 'same-origin',
-      headers: { [FORM_PRODUCT_HEADER]: 'form' }
+      headers: {
+        [FORM_PRODUCT_HEADER]: 'form',
+        ...crmAuthorizationHeaders()
+      }
     });
     const body = await response.json().catch(() => ({}));
     return { response, body };
@@ -211,10 +231,11 @@
   }
 
   function requestHeaders() {
-    if (currentSession && currentSession.accessClass === 'guest' && currentSession.whitelisted === false) return {};
+    const headers = isCrmSystemManagerSession() ? crmAuthorizationHeaders() : {};
+    if (currentSession && currentSession.accessClass === 'guest' && currentSession.whitelisted === false) return headers;
     const role = localPreviewRole();
-    if (role === 'guest') return { [LOCAL_ACCESS_HEADER]: 'guest' };
-    return role ? { [LOCAL_ROLE_HEADER]: role } : {};
+    if (role === 'guest') return { ...headers, [LOCAL_ACCESS_HEADER]: 'guest' };
+    return role ? { ...headers, [LOCAL_ROLE_HEADER]: role } : headers;
   }
 
   async function recoverSession() {

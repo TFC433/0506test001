@@ -1,6 +1,7 @@
 ﻿const { randomUUID } = require('crypto');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { plannerDomainContext, finalizerDomainContext } = require('./form-ai-domain-context');
+const { roleAllows } = require('../middleware/role.middleware');
 
 const ANSWER_ITEM_TYPES = new Set([
     'short_text',
@@ -476,7 +477,7 @@ class ActivityIntelligenceService {
 
     async analyzeActivity(activityId, payload = {}, user = {}) {
         const actor = this._actorFromUser(user);
-        if (!ANALYTICS_ROLES.has(actor.role)) {
+        if (!roleAllows(ANALYTICS_ROLES, actor.role)) {
             throw new ActivityIntelligenceError(403, 'Activity Intelligence AI analysis is not allowed.', 'FORM_AI_FORBIDDEN');
         }
 
@@ -1147,7 +1148,7 @@ class ActivityIntelligenceService {
         if (current.createdByUserId === actor.userId) {
             throw new ActivityIntelligenceError(403, 'Primary recorder edits the canonical FORM.', 'PRIMARY_RECORDER_CONTRIBUTION_FORBIDDEN');
         }
-        if (!SUBMISSION_USE_ROLES.has(actor.role)) {
+        if (!roleAllows(SUBMISSION_USE_ROLES, actor.role)) {
             throw new ActivityIntelligenceError(403, 'Activity Intelligence permission denied.', 'ACTIVITY_INTELLIGENCE_FORBIDDEN');
         }
         return current;
@@ -1163,7 +1164,7 @@ class ActivityIntelligenceService {
     }
 
     _canEditCanonicalSubmission(submission, actor, user = {}) {
-        if (CANONICAL_EDIT_ROLES.has(actor.role)) return true;
+        if (roleAllows(CANONICAL_EDIT_ROLES, actor.role)) return true;
         if (submission.createdByUserId !== actor.userId) return false;
         return actor.role === 'recorder' || user.accessClass === 'guest';
     }

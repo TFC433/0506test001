@@ -18,7 +18,10 @@ const LEAD_LIST_PAGE_SIZE = 50;
 let currentUser = {
     userId: null,
     displayName: '訪客',
-    pictureUrl: null
+    pictureUrl: null,
+    username: null,
+    role: null,
+    authSource: null
 };
 let currentView = 'all'; 
 let leadPagination = {
@@ -60,6 +63,23 @@ function localManualLoginEnabled() {
     } catch (_) {
         return false;
     }
+}
+
+function crmToken() {
+    try {
+        return localStorage.getItem('crmToken') || localStorage.getItem('crm-token') || '';
+    } catch (_) {
+        return '';
+    }
+}
+
+function crmAuthorizationHeaders() {
+    const token = crmToken();
+    return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function isCrmSystemManagerUser() {
+    return currentUser.authSource === 'crm' && currentUser.role === 'system_manager' && Boolean(crmToken());
 }
 
 function setLocalManualLoginEnabled(enabled) {
@@ -207,12 +227,18 @@ function resetCurrentUser() {
     currentUser.userId = null;
     currentUser.displayName = '訪客';
     currentUser.pictureUrl = null;
+    currentUser.username = null;
+    currentUser.role = null;
+    currentUser.authSource = null;
 }
 
 function applyAuthenticatedUser(sessionUser) {
     currentUser.userId = sessionUser.userId;
     currentUser.displayName = sessionUser.displayName || sessionUser.userId;
     currentUser.pictureUrl = sessionUser.pictureUrl || null;
+    currentUser.username = sessionUser.username || null;
+    currentUser.role = sessionUser.role || null;
+    currentUser.authSource = sessionUser.authSource || null;
     updateUserUI(true);
 }
 
@@ -321,7 +347,8 @@ function showAccessDenied(userId) {
 async function initLIFF() {
     try {
         const existingSession = await fetch('/api/line/session', {
-            credentials: 'same-origin'
+            credentials: 'same-origin',
+            headers: crmAuthorizationHeaders()
         });
 
         if (existingSession.ok) {
@@ -557,6 +584,10 @@ async function lineLeadFetch(url, options = {}, allowRecovery = true) {
             ...(options.headers || {})
         }
     };
+
+    if (isCrmSystemManagerUser()) {
+        Object.assign(fetchOptions.headers, crmAuthorizationHeaders());
+    }
 
     let response = await fetch(url, fetchOptions);
 

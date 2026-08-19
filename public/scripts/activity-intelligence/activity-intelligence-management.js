@@ -928,8 +928,14 @@
     return currentUser && currentUser.role === 'super_admin';
   }
 
+  function effectiveRolesForCurrentUser() {
+    const role = currentUser && typeof currentUser.role === 'string' ? currentUser.role.trim().toLowerCase() : '';
+    if (role === 'super_admin' || role === 'system_manager') return [role, 'admin'];
+    return role ? [role] : [];
+  }
+
   function canManageActivities() {
-    return currentUser && ['super_admin', 'admin'].includes(currentUser.role);
+    return currentUser && effectiveRolesForCurrentUser().includes('admin');
   }
 
   function canDesignForm() {
@@ -1199,6 +1205,7 @@
   function productRoleLabel(role) {
     return {
       super_admin: '最高管理者',
+      system_manager: '系統管理員',
       admin: '管理者',
       recorder: '紀錄者'
     }[role] || '尚未取得角色';

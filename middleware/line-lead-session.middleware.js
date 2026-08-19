@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const config = require('../config');
+const { verifyBearerTokenFromRequest, touchSessionLastSeenForUser } = require('./auth.middleware');
 
 const lineLeadConfig = config.LINE_LEAD;
 const LINE_ID_TOKEN_EXPIRED_CODE = 'LINE_ID_TOKEN_EXPIRED';
@@ -159,6 +160,39 @@ function resolveLineLeadSessionProduct(req) {
 
 function isFormLineLeadSessionRequest(req) {
     return resolveLineLeadSessionProduct(req) === LINE_LEAD_PRODUCT_FORM;
+}
+
+function resolveCrmSystemManagerLineUser(req) {
+    const result = verifyBearerTokenFromRequest(req, {
+        allowLocalTestToken: false,
+        logFailures: false,
+        touchLastSeen: false
+    });
+
+    const user = result && result.ok ? result.user : null;
+    if (!user || user.role !== 'system_manager') return null;
+
+    const username = typeof user.username === 'string' ? user.username.trim() : '';
+    if (!username) return null;
+
+    touchSessionLastSeenForUser(req, user);
+
+    return {
+        userId: isFormLineLeadSessionRequest(req) ? username : `crm:${username}`,
+        username,
+        displayName: user.displayName || user.name || username,
+        pictureUrl: null,
+        role: 'system_manager',
+        authSource: 'crm',
+        accessClass: 'member',
+        whitelisted: true,
+        session_id: user.session_id || null
+    };
+}
+
+function crmRoleForSessionResponse(lineUser, guest) {
+    if (lineUser && lineUser.authSource === 'crm') return lineUser.role;
+    return guest ? null : normalizeLineLeadRole(lineUser.role);
 }
 
 function normalizeVerifiedLineUser(user) {
@@ -337,8 +371,15 @@ function sendLineLeadSessionResponse(req, res, lineUser) {
         userId: lineUser.userId,
         displayName: lineUser.displayName,
         pictureUrl: lineUser.pictureUrl,
-        role: guest ? null : normalizeLineLeadRole(lineUser.role)
+        role: crmRoleForSessionResponse(lineUser, guest)
     };
+
+    if (lineUser.authSource) body.authSource = lineUser.authSource;
+    if (lineUser.username) body.username = lineUser.username;
+    if (lineUser.authSource === 'crm') {
+        body.accessClass = 'member';
+        body.whitelisted = true;
+    }
 
     if (guest) {
         body.accessClass = LINE_LEAD_ACCESS_CLASS_GUEST;
@@ -349,6 +390,9 @@ function sendLineLeadSessionResponse(req, res, lineUser) {
 }
 
 async function getLineLeadSession(req, res) {
+    const crmLineUser = resolveCrmSystemManagerLineUser(req);
+    if (crmLineUser) return sendLineLeadSessionResponse(req, res, crmLineUser);
+
     const cookies = parseCookies(req.headers && req.headers.cookie);
     const token = cookies[lineLeadConfig.COOKIE_NAME];
 
@@ -478,6 +522,12 @@ function deleteLineLeadSession(req, res) {
 }
 
 async function requireLineLeadSession(req, res, next) {
+    const crmLineUser = resolveCrmSystemManagerLineUser(req);
+    if (crmLineUser) {
+        req.lineUser = crmLineUser;
+        return next();
+    }
+
     const cookies = parseCookies(req.headers && req.headers.cookie);
     const token = cookies[lineLeadConfig.COOKIE_NAME];
 
@@ -537,6 +587,7 @@ module.exports = {
     clearLineLeadSessionCookie,
     resolveLineLeadSessionDays,
     normalizeLineLeadRole,
+    resolveCrmSystemManagerLineUser,
     isGuestLineLeadUser,
     findLineUserWhitelistEntry,
     resolveLineLeadRoleFromWhitelistEntry,

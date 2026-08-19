@@ -40,6 +40,21 @@ const ACTIVITY_INTELLIGENCE_LOCAL_ACCESS_HEADER = 'x-activity-intelligence-local
 
 function bridgeLineUserToActivityIntelligenceUser(req, res, next) {
     const lineUser = req.lineUser || {};
+    if (lineUser.authSource === 'crm' && lineUser.role === 'system_manager') {
+        req.user = {
+            username: lineUser.username,
+            displayName: lineUser.displayName || lineUser.username,
+            name: lineUser.displayName || lineUser.username,
+            pictureUrl: lineUser.pictureUrl || null,
+            role: 'system_manager',
+            session_id: lineUser.session_id || null,
+            authSource: 'crm',
+            accessClass: 'member',
+            whitelisted: true
+        };
+        return next();
+    }
+
     const localAccessOverride = String(req.get(ACTIVITY_INTELLIGENCE_LOCAL_ACCESS_HEADER) || '').trim().toLowerCase();
     const allowedLocalOverride = lineUser.isLocalDev === true && isAllowedLocalDevRequest(req);
     const guest = isGuestLineLeadUser(lineUser) || (localAccessOverride === 'guest' && allowedLocalOverride);

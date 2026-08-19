@@ -10,8 +10,7 @@
  */
 
 const config = require('../config');
-
-const ADMIN_LEVEL_ROLES = new Set(['admin', 'super_admin']);
+const { isAdminEquivalentRole } = require('../middleware/role.middleware');
 
 class ProductController {
     /**
@@ -28,7 +27,7 @@ class ProductController {
     async getProducts(req, res) {
         try {
             // 權限檢查 (Controller 職責)
-            if (!ADMIN_LEVEL_ROLES.has(req.user.role)) {
+            if (!isAdminEquivalentRole(req.user.role)) {
                 return res.status(403).json({ success: false, error: config.ERROR_MESSAGES.ADMIN_ONLY });
             }
 
@@ -62,7 +61,7 @@ class ProductController {
      */
     async refresh(req, res) {
         try {
-            if (!ADMIN_LEVEL_ROLES.has(req.user.role)) {
+            if (!isAdminEquivalentRole(req.user.role)) {
                 return res.status(403).json({ success: false, error: 'Forbidden' });
             }
             await this.productService.refreshCache();
@@ -78,7 +77,7 @@ class ProductController {
      */
     async batchUpdate(req, res) {
         try {
-            if (!ADMIN_LEVEL_ROLES.has(req.user.role)) {
+            if (!isAdminEquivalentRole(req.user.role)) {
                 return res.status(403).json({ success: false, error: '權限不足' });
             }
             const { products } = req.body;
@@ -110,7 +109,7 @@ class ProductController {
      */
     async saveCategoryOrder(req, res) {
         try {
-            if (!ADMIN_LEVEL_ROLES.has(req.user.role)) return res.status(403).json({ success: false, error: '權限不足' });
+            if (!isAdminEquivalentRole(req.user.role)) return res.status(403).json({ success: false, error: '權限不足' });
             
             const { order } = req.body;
             await this.productService.saveCategoryOrder(order, req.user);

@@ -36,7 +36,11 @@ function shouldTouchSession(sessionId) {
 }
 
 function touchSessionLastSeen(req) {
-    const sessionId = req && req.user ? req.user.session_id : null;
+    touchSessionLastSeenForUser(req, req && req.user);
+}
+
+function touchSessionLastSeenForUser(req, user) {
+    const sessionId = user ? user.session_id : null;
     if (!shouldTouchSession(sessionId)) return;
 
     const auditLoggerService = getAuditLogger(req);
@@ -47,14 +51,31 @@ function touchSessionLastSeen(req) {
     });
 }
 
-exports.verifyToken = (req, res, next) => {
-    const authHeader = req.headers['authorization'];
-    // Bearer <token>
-    const token = authHeader && authHeader.split(' ')[1];
+function getBearerTokenFromRequest(req) {
+    const headers = req && req.headers ? req.headers : {};
+    const authHeader = headers['authorization'] || headers.authorization;
+    if (!authHeader || typeof authHeader !== 'string') return null;
 
+    const match = authHeader.match(/^Bearer\s+(.+)$/i);
+    return match ? match[1] : null;
+}
+
+function localTestUser() {
+    return {
+        username: 'TEST_LOCAL_USER',
+        name: 'Local Developer',
+        displayName: 'Local Developer',
+        email: 'dev@localhost',
+        picture: '',
+        role: 'admin', // 給予最高權限以利測試
+        session_id: 'dev-local-session'
+    };
+}
+
+function verifyBearerTokenFromRequest(req, options = {}) {
+    const token = getBearerTokenFromRequest(req);
     if (!token) {
-        // 403 Forbidden: 伺服器理解請求但拒絕授權 (未提供 Token)
-        return res.status(403).json({ success: false, message: '未提供驗證 Token' }); 
+        return { ok: false, status: 403, message: '未提供驗證 Token' };
     }
 
     // ============================================================
@@ -62,36 +83,50 @@ exports.verifyToken = (req, res, next) => {
     // ============================================================
     // 前端 leads-view.js 在本地環境 (localhost) 會發送此固定 Token。
     // 為了不修改前端代碼，後端必須在此攔截並給予放行。
-    if (token === 'TEST_LOCAL_TOKEN') {
-        console.warn('🚧 [Auth Middleware] 偵測到本地測試 Token，略過 JWT 驗證並注入模擬身分。');
-        
-        // 注入模擬的 User 物件，確保後續 Controller 不會壞掉
-        req.user = {
-            username: 'TEST_LOCAL_USER',
-            name: 'Local Developer',
-            displayName: 'Local Developer',
-            email: 'dev@localhost',
-            picture: '',
-            session_id: 'dev-local-session',
-            role: 'admin', // 給予最高權限以利測試
-            session_id: 'dev-local-session'
-        };
-        touchSessionLastSeen(req);
-        
-        return next(); // 直接放行
+    if (token === 'TEST_LOCAL_TOKEN' && options.allowLocalTestToken === true) {
+        if (options.logFailures !== false) {
+            console.warn('🚧 [Auth Middleware] 偵測到本地測試 Token，略過 JWT 驗證並注入模擬身分。');
+        }
+
+        const user = localTestUser();
+        if (options.attachToRequest === true) req.user = user;
+        if (options.touchLastSeen === true) touchSessionLastSeenForUser(req, user);
+        return { ok: true, token, user };
     }
     // ============================================================
 
     // 標準 JWT 驗證流程 (正式環境)
-    jwt.verify(token, config.AUTH.JWT_SECRET, (err, user) => {
-        if (err) {
+    try {
+        const user = jwt.verify(token, config.AUTH.JWT_SECRET);
+        if (options.attachToRequest === true) req.user = user; // 將解碼後的用戶資訊附加到 req 物件
+        if (options.touchLastSeen === true) touchSessionLastSeenForUser(req, user);
+        return { ok: true, token, user };
+    } catch (err) {
+        if (options.logFailures !== false) {
             console.warn(`[Auth] Token 驗證失敗: ${err.message}`);
-            // 401 Unauthorized: 身份驗證失敗 (Token 無效或過期)
-            return res.status(401).json({ success: false, message: 'Token 無效或已過期' }); 
         }
-        
-        req.user = user; // 將解碼後的用戶資訊附加到 req 物件
-        touchSessionLastSeen(req);
-        next();
+        return { ok: false, status: 401, message: 'Token 無效或已過期', error: err };
+    }
+}
+
+function verifyToken(req, res, next) {
+    const result = verifyBearerTokenFromRequest(req, {
+        allowLocalTestToken: true,
+        attachToRequest: true,
+        touchLastSeen: true
     });
+
+    if (!result.ok) {
+        return res.status(result.status).json({ success: false, message: result.message });
+    }
+
+    return next();
+}
+
+module.exports = {
+    verifyToken,
+    getBearerTokenFromRequest,
+    verifyBearerTokenFromRequest,
+    touchSessionLastSeen,
+    touchSessionLastSeenForUser
 };

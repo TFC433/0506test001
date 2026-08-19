@@ -11,14 +11,29 @@ function normalizeRole(role, fallbackRole = '') {
 function getEffectiveRoles(role) {
     const normalizedRole = normalizeRole(role, 'sales');
 
-    if (normalizedRole === 'super_admin') {
-        return ['super_admin', 'admin'];
+    if (normalizedRole === 'super_admin' || normalizedRole === 'system_manager') {
+        return [normalizedRole, 'admin'];
     }
 
     return [normalizedRole];
 }
 
-exports.requireRole = (allowedRoles) => {
+function normalizeAllowedRoles(allowedRoles) {
+    if (allowedRoles instanceof Set) return Array.from(allowedRoles).map(role => normalizeRole(role));
+    return (Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles]).map(role => normalizeRole(role));
+}
+
+function roleAllows(allowedRoles, userRole) {
+    const roles = normalizeAllowedRoles(allowedRoles);
+    const effectiveRoles = getEffectiveRoles(userRole);
+    return roles.some(role => effectiveRoles.includes(role));
+}
+
+function isAdminEquivalentRole(role) {
+    return roleAllows('admin', role);
+}
+
+const requireRole = (allowedRoles) => {
     return (req, res, next) => {
         // 1. 確保使用者已登入 (req.user 存在)
         if (!req.user) {
@@ -26,19 +41,25 @@ exports.requireRole = (allowedRoles) => {
         }
 
         // 2. 統一轉為陣列處理
-        const roles = (Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles]).map(normalizeRole);
+        const roles = normalizeAllowedRoles(allowedRoles);
 
         // 3. 檢查權限
         // 假設 req.user.role 來自 decoded JWT payload
         const userRole = normalizeRole(req.user.role, 'sales'); // 預設降級為 sales
 
-        const effectiveRoles = getEffectiveRoles(userRole);
-
-        if (roles.some(role => effectiveRoles.includes(role))) {
+        if (roleAllows(roles, userRole)) {
             next(); // 通行
         } else {
             console.warn(`⛔ [Access Denied] User: ${req.user.username}, Role: ${userRole}, Required: ${roles.join(',')}`);
             return res.status(403).json({ success: false, message: '權限不足：您無法存取此資源' });
         }
     };
+};
+
+module.exports = {
+    requireRole,
+    normalizeRole,
+    getEffectiveRoles,
+    roleAllows,
+    isAdminEquivalentRole
 };

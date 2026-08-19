@@ -1,5 +1,13 @@
 // public/scripts/core/login.js
 
+function normalizeLoginRole(role) {
+    return String(role || '').trim().toLowerCase();
+}
+
+function redirectPathForLoginRole(role) {
+    return normalizeLoginRole(role) === 'system_manager' ? 'portal.html' : 'dashboard.html';
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
     const loginForm = document.getElementById('login-form');
     // 【修正】這裡改回正確的 ID 'error-message'
@@ -36,6 +44,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (response.ok && result.success) {
                 console.log('✅ [Login] Token 有效，自動跳轉...');
+                const verifiedUser = result.user || {};
+                const verifiedRole = verifiedUser.role || localStorage.getItem('crmUserRole') || 'sales';
                 
                 // 確保雙重 Token 一致性 (修復無限重導問題)
                 if (!localStorage.getItem('crm-token')) {
@@ -43,6 +53,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }
                 if (!localStorage.getItem('crmToken')) {
                     localStorage.setItem('crmToken', cachedToken);
+                }
+                localStorage.setItem('crmUserRole', verifiedRole);
+                if (verifiedUser.displayName || verifiedUser.name) {
+                    localStorage.setItem('crmCurrentUserName', verifiedUser.displayName || verifiedUser.name);
                 }
 
                 if (messageEl) {
@@ -52,7 +66,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 // 驗證成功：直接跳轉，不需要清除 Storage
                 setTimeout(() => {
-                    window.location.href = 'dashboard.html';
+                    window.location.href = redirectPathForLoginRole(verifiedRole);
                 }, 500); // 稍微延遲讓視覺更平滑
                 return; // ★ 重要：中止後續程式碼執行
             }
@@ -111,6 +125,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             const result = await response.json();
 
             if (result.success) {
+                const loginRole = result.role || 'sales';
                 // 1. 儲存 Token
                 localStorage.setItem('crmToken', result.token);
                 // 相容舊版 Key (部分頁面可能還在用 crm-token)
@@ -120,7 +135,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 localStorage.setItem('crmCurrentUserName', result.name);
                 
                 // ★★★ 3. 儲存角色權限 ★★★
-                localStorage.setItem('crmUserRole', result.role || 'sales');
+                localStorage.setItem('crmUserRole', loginRole);
 
                 if (messageEl) {
                     messageEl.textContent = '登入成功，正在跳轉...';
@@ -129,7 +144,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 // 4. 延遲跳轉
                 setTimeout(() => {
-                    window.location.href = 'dashboard.html';
+                    window.location.href = redirectPathForLoginRole(loginRole);
                 }, 800);
             } else {
                 throw new Error(result.message || '登入失敗');
