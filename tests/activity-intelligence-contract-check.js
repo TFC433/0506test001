@@ -368,6 +368,7 @@ function makeHarness(options = {}) {
 
     const rawContactSqlReader = {
         async getRawContactByCardId(cardId) {
+            calls.getRawContactByCardId = (calls.getRawContactByCardId || 0) + 1;
             if (cardId === IDS.missingCard) return null;
             return {
                 cardId,
@@ -386,6 +387,30 @@ function makeHarness(options = {}) {
                 sourceFilename: 'scan-source.jpg',
                 notes: 'RAW note'
             };
+        },
+        async getRawContactsByCardIds(cardIds) {
+            calls.getRawContactsByCardIds = calls.getRawContactsByCardIds || [];
+            calls.getRawContactsByCardIds.push([...(cardIds || [])]);
+            return new Map((cardIds || [])
+                .filter(cardId => cardId !== IDS.missingCard)
+                .map(cardId => [String(cardId), {
+                    cardId,
+                    name: 'Card Name',
+                    company: 'Card Co',
+                    position: 'Buyer',
+                    jobTitle: 'Buyer',
+                    email: 'card@example.test',
+                    phone: '',
+                    mobile: '0912',
+                    fax: '02-0000',
+                    website: 'https://card.example.test',
+                    address: 'Taipei',
+                    driveFileId: 'drive-1',
+                    driveLink: 'https://drive.example/file',
+                    driveFilename: 'card.jpg',
+                    sourceFilename: 'scan-source.jpg',
+                    notes: 'RAW note'
+                }]));
         }
     };
 
@@ -2782,8 +2807,69 @@ function assertRecordCardMetaResponsiveContract(managementSource, cssSource) {
     assert(!mobileInlineMetaRules.includes('!important') && !mobileCss.includes('[data-field-type') && !mobileCss.includes('grid-template-columns: 4.5em'), 'mobile rollback CSS must not use !important or leave alignment-only selectors');
 }
 
+async function assertRawCardBatchEnrichmentContract() {
+    const harness = makeHarness({ includeActiveAiSubmission: false });
+    const duplicateSubmissionId = '77777777-7777-4777-8777-777777777776';
+    const missingCardSubmissionId = '77777777-7777-4777-8777-777777777777';
+    harness.submissions.set(duplicateSubmissionId, {
+        ...harness.submissions.get(IDS.aiSubmission),
+        id: duplicateSubmissionId,
+        createdAt: '2026-08-16T11:00:00.000Z',
+        updatedAt: '2026-08-16T11:00:00.000Z',
+        cardId: IDS.card
+    });
+    harness.submissions.set(missingCardSubmissionId, {
+        ...harness.submissions.get(IDS.aiSubmission),
+        id: missingCardSubmissionId,
+        createdAt: '2026-08-16T12:00:00.000Z',
+        updatedAt: '2026-08-16T12:00:00.000Z',
+        cardId: IDS.missingCard
+    });
+
+    const profile = { timings: {}, counts: {} };
+    const rows = await harness.service.listSubmissions(IDS.activity, { state: 'all' }, actor(), {
+        submissionsProfile: profile
+    });
+
+    assert.strictEqual(harness.calls.getRawContactByCardId || 0, 0, 'listSubmissions card enrichment must not use repeated single-card lookups');
+    assert.strictEqual(harness.calls.getRawContactsByCardIds.length, 1, 'listSubmissions card enrichment must use one batch lookup');
+    assert.deepStrictEqual(harness.calls.getRawContactsByCardIds[0], [IDS.card, IDS.missingCard], 'batch lookup must deduplicate card IDs and include missing IDs once');
+    assert.deepStrictEqual(rows.map(row => row.id), [...harness.submissions.values()].map(row => row.id), 'batch enrichment must preserve submission ordering');
+
+    const enriched = rows.find(row => row.id === IDS.aiSubmission);
+    assert(enriched.card, 'matched RAW Contact must still enrich the submission');
+    assert.strictEqual(enriched.card.cardId, IDS.card);
+    assert.strictEqual(enriched.card.name, 'Card Name');
+    assert.strictEqual(enriched.card.company, 'Card Co');
+    assert.strictEqual(enriched.card.position, 'Buyer');
+    assert.strictEqual(enriched.card.jobTitle, 'Buyer');
+    assert.strictEqual(enriched.card.email, 'card@example.test');
+    assert.strictEqual(enriched.card.mobile, '0912');
+    assert.strictEqual(enriched.card.thumbnailUrl, '/api/external/thumbnail?fileId=drive-1');
+    assert.strictEqual(rows.find(row => row.id === missingCardSubmissionId).card, null, 'unmatched RAW Contact must preserve null card behavior');
+    assert.strictEqual(rows.find(row => row.id === IDS.voidSubmission).card, null, 'submissions without cardId must preserve original card behavior');
+    assert.strictEqual(profile.counts.card_reference_count, 4, 'diagnostic must count logical card references');
+    assert.strictEqual(profile.counts.card_unique_id_count, 2, 'diagnostic must count deduplicated card IDs');
+    assert.strictEqual(profile.counts.card_db_query_count, 1, 'diagnostic must count the single batch DB query');
+    assert.strictEqual(profile.counts.card_lookup_count, 1, 'legacy diagnostic lookup count must now represent DB requests');
+}
+
+function assertRawCardBatchReaderSourceContract(rawContactSqlSource, serviceSource) {
+    const enrichStart = serviceSource.indexOf('async _enrichSubmissionCards');
+    const enrichEnd = serviceSource.indexOf('async _enrichSubmissionSummaries', enrichStart);
+    const enrichSource = enrichStart >= 0 && enrichEnd > enrichStart ? serviceSource.slice(enrichStart, enrichEnd) : '';
+    assert(rawContactSqlSource.includes('async getRawContactsByCardIds(cardIds)'), 'RAW reader must expose a narrow batch card lookup');
+    assert(rawContactSqlSource.includes(".in('card_id', ids)"), 'RAW batch lookup must query card_id with an IN filter');
+    assert(rawContactSqlSource.includes('return new Map();'), 'RAW batch lookup must safely return an empty map for empty input');
+    assert(serviceSource.includes('getRawContactsByCardIds(uniqueCardIds)'), 'submission card enrichment must use the RAW card batch reader');
+    assert(enrichSource && !enrichSource.includes('getRawContactByCardId'), 'submission card enrichment must not call the single-card reader');
+    assert(enrichSource && !enrichSource.includes('Promise.all'), 'submission card enrichment must not substitute parallel N-plus-one requests');
+}
+
 async function main() {
     const { service, calls, publishedItems } = makeHarness();
+
+    await assertRawCardBatchEnrichmentContract();
 
     await service.createActivity({
         name: 'Created',
@@ -3701,8 +3787,11 @@ async function main() {
     const apiSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'scripts', 'activity-intelligence', 'activity-intelligence-api.js'), 'utf8');
     const routesSource = fs.readFileSync(path.join(__dirname, '..', 'routes', 'activity-intelligence.routes.js'), 'utf8');
     const controllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'activity-intelligence.controller.js'), 'utf8');
+    const serviceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'activity-intelligence-service.js'), 'utf8');
+    const rawContactSqlSource = fs.readFileSync(path.join(__dirname, '..', 'data', 'raw-contact-sql-reader.js'), 'utf8');
     const cssSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles', 'activity-intelligence', 'activity-intelligence-management.css'), 'utf8');
     const activityIntelligenceSqlSource = fs.readFileSync(path.join(__dirname, '..', 'docs', 'schema', 'activity-intelligence-transactions-v1.sql'), 'utf8');
+    assertRawCardBatchReaderSourceContract(rawContactSqlSource, serviceSource);
     assertFormAssistCjkContract(managementSource);
     assertVisitorKpiOtherNumericContract(managementSource);
     await assertVisitorKpiCacheHydrationContract(managementSource);

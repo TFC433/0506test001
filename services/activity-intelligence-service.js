@@ -2726,21 +2726,23 @@ class ActivityIntelligenceService {
 
     async _enrichSubmissionCards(submissions, profile = null) {
         const enrichStart = performance.now();
-        let cardLookupCount = 0;
-        let cardLookupTotalMs = 0;
-        const enriched = [];
+        const cardIds = (submissions || []).map(submission => submission && submission.cardId).filter(Boolean);
+        const uniqueCardIds = [...new Set(cardIds.map(cardId => String(cardId)))];
+        let cardDbQueryCount = 0;
+        let cardBatchQueryMs = 0;
         try {
-            for (const submission of submissions) {
-                if (!submission.cardId) {
-                    enriched.push(submission);
-                    continue;
-                }
-
-                cardLookupCount += 1;
+            let cardsById = new Map();
+            if (uniqueCardIds.length) {
+                cardDbQueryCount = 1;
                 const lookupStart = performance.now();
-                const card = await this.rawContactSqlReader.getRawContactByCardId(submission.cardId);
-                cardLookupTotalMs += elapsedProfileMs(lookupStart);
-                enriched.push({
+                cardsById = await this.rawContactSqlReader.getRawContactsByCardIds(uniqueCardIds);
+                cardBatchQueryMs = elapsedProfileMs(lookupStart);
+            }
+
+            return (submissions || []).map(submission => {
+                if (!submission.cardId) return submission;
+                const card = cardsById.get(String(submission.cardId));
+                return {
                     ...submission,
                     card: card ? {
                         cardId: card.cardId,
@@ -2765,14 +2767,17 @@ class ActivityIntelligenceService {
                         driveFilename: card.driveFilename,
                         thumbnailUrl: card.driveFileId ? `/api/external/thumbnail?fileId=${encodeURIComponent(card.driveFileId)}` : null
                     } : null
-                });
-            }
-            return enriched;
+                };
+            });
         } finally {
-            setProfileCount(profile, 'card_lookup_count', cardLookupCount);
-            setProfileTiming(profile, 'card_lookup_total_ms', cardLookupTotalMs);
+            setProfileCount(profile, 'card_reference_count', cardIds.length);
+            setProfileCount(profile, 'card_unique_id_count', uniqueCardIds.length);
+            setProfileCount(profile, 'card_db_query_count', cardDbQueryCount);
+            setProfileCount(profile, 'card_lookup_count', cardDbQueryCount);
+            setProfileTiming(profile, 'card_batch_query_ms', cardBatchQueryMs);
+            setProfileTiming(profile, 'card_lookup_total_ms', cardBatchQueryMs);
             setProfileTiming(profile, 'card_enrichment_ms', elapsedProfileMs(enrichStart));
-            setProfileTiming(profile, 'card_enrich_avg_ms', cardLookupCount ? cardLookupTotalMs / cardLookupCount : 0);
+            setProfileTiming(profile, 'card_enrich_avg_ms', uniqueCardIds.length ? cardBatchQueryMs / uniqueCardIds.length : 0);
         }
     }
 

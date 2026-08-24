@@ -166,6 +166,48 @@ class RawContactSqlReader {
         }
     }
 
+    async getRawContactsByCardIds(cardIds) {
+        const ids = Array.isArray(cardIds)
+            ? [...new Set(cardIds.filter(Boolean).map(cardId => String(cardId)))]
+            : [];
+        if (!ids.length) return new Map();
+
+        try {
+            const { data, error } = await supabase
+                .from(this.tableName)
+                .select('*')
+                .in('card_id', ids);
+
+            if (error) {
+                throw new Error(`[RawContactSqlReader] DB Error: ${error.message}`);
+            }
+
+            const rowsByCardId = new Map();
+            (data || []).forEach(row => {
+                const cardId = row && row.card_id ? String(row.card_id) : '';
+                if (!cardId) return;
+                const rows = rowsByCardId.get(cardId) || [];
+                rows.push(row);
+                rowsByCardId.set(cardId, rows);
+            });
+
+            const contactsByCardId = new Map();
+            rowsByCardId.forEach((rows, cardId) => {
+                if (rows.length > 1) {
+                    const err = new Error(`[RawContactSqlReader] Duplicate card_id: ${cardId}`);
+                    err.code = 'RAW_CARD_ID_DUPLICATE';
+                    err.cardId = cardId;
+                    throw err;
+                }
+                contactsByCardId.set(cardId, this._mapRowToDto(rows[0]));
+            });
+            return contactsByCardId;
+        } catch (error) {
+            console.error('[RawContactSqlReader] getRawContactsByCardIds Error:', error);
+            throw error;
+        }
+    }
+
     async getRawContactByLegacyRowIndex(rowIndex) {
         const normalizedRowIndex = this._normalizeLookupLegacyRowIndex(rowIndex);
         if (normalizedRowIndex == null) return null;
