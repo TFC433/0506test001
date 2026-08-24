@@ -853,7 +853,7 @@ function assertDualStreamFormBuilderSourceContract(managementSource, apiSource, 
     assert(cssSource.includes('.aim-form-context-tabs'), 'context tabs must have dedicated mobile-safe styling');
 }
 
-function assertRealActiveIntelligenceRuntimeSourceContract(managementSource, cssSource, service) {
+async function assertRealActiveIntelligenceRuntimeSourceContract(managementSource, cssSource, service) {
     assert(managementSource.includes('async function switchRecordContextMode'), 'record-context mode switch must load runtime form context');
     assert(managementSource.includes('await loadPublishedFormForActivity(activity.id, formContext);'), 'active runtime entry must load the published context bundle');
     assert(managementSource.includes('const formContext = activeRecordFormContext();'), 'runtime record form context must be derived explicitly');
@@ -904,7 +904,7 @@ function assertRealActiveIntelligenceRuntimeSourceContract(managementSource, css
     assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource);
     assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, service);
     assertStableVisualAssetsAndActiveBannerSharingContract(managementSource, service);
-    assertDesktopUnifiedVisitorRecordLandingContract(managementSource);
+    await assertDesktopUnifiedVisitorRecordLandingContract(managementSource);
 }
 
 function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiSource, cssSource, sqlSource) {
@@ -1846,7 +1846,7 @@ function assertStableVisualAssetsAndActiveBannerSharingContract(managementSource
     assert.strictEqual(differentNext.replacement, null, 'different resolved asset identity must trigger a real image update');
 }
 
-function assertDesktopUnifiedVisitorRecordLandingContract(managementSource) {
+async function assertDesktopUnifiedVisitorRecordLandingContract(managementSource) {
     assert(managementSource.includes('applyInitialLanding({ explicitSelectedActivityId: selectedActivityIdBeforeLoad });'), 'startup must use the unified initial landing boundary with captured explicit selection state');
     assert(extractFunctionDeclaration(managementSource, 'applyUnifiedVisitorRecordLanding'), 'shared visitor record landing helper must exist');
     assert(managementSource.includes('function enterVisitorRecordEntryState('), 'Visitor Records entry state helper must exist');
@@ -1891,7 +1891,8 @@ function assertDesktopUnifiedVisitorRecordLandingContract(managementSource) {
         "let mobile = false;",
         "let fallbackCalls = 0;",
         "let resetCalls = 0;",
-        "const loadRecordsCalls = [];",
+        "const loadPublishedFormCalls = [];",
+        "const backgroundLoadCalls = [];",
         "const state = { activities: [], selectedActivityId: null };",
         "const ui = { selectedActivityId: null, view: 'overview', tab: 'overview', records: { scope: 'all' }, recordContextMode: recordContextActiveMode, formContext: formContextFieldIntelligenceMode };",
         "const Store = { escapeHtml(value) { return String(value == null ? '' : value).replace(/[&<>\"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '\"': '&quot;', \"'\": '&#39;' }[char])); }, formatDate(value) { return value || ''; }, activitySubtitle(activity) { return activity && activity.location ? activity.location : ''; } };",
@@ -1901,14 +1902,15 @@ function assertDesktopUnifiedVisitorRecordLandingContract(managementSource) {
         "function resetAllQuickStates() { resetCalls += 1; }",
         "function applyRoleLanding() { fallbackCalls += 1; ui.view = 'fallback'; }",
         "function canCreateRecord(activity) { return currentUser && currentUser.authenticated && activity && activityStatus(activity).key === 'open'; }",
-        "function loadRecordsForActivity(activityId, options) { loadRecordsCalls.push({ activityId, options }); }",
+        "function loadPublishedFormForActivity(activityId) { loadPublishedFormCalls.push(activityId); return Promise.resolve(); }",
+        "function startBackgroundRecordLoadForActivity(activityId, options) { backgroundLoadCalls.push({ activityId, options }); }",
         "function statusPill(status) { return `<span class=\"aim-pill\">${status.key}</span>`; }",
         extractFunctionDeclaration(managementSource, 'enterVisitorRecordEntryState'),
         extractFunctionDeclaration(managementSource, 'applyUnifiedVisitorRecordLanding'),
         extractFunctionDeclaration(managementSource, 'applyInitialLanding'),
-        extractFunctionDeclaration(managementSource, 'chooseCurrentActivity'),
+        extractFunctionDeclaration(managementSource, 'chooseCurrentActivity').replace(/^function /, 'async function '),
         extractFunctionDeclaration(managementSource, 'renderActivityChooser'),
-        "({ state, ui, loadRecordsCalls, setUser(value) { currentUser = value; }, setMobile(value) { mobile = value; }, applyInitialLanding, chooseCurrentActivity, renderActivityChooser, counts() { return { fallbackCalls, resetCalls }; } });"
+        "({ state, ui, loadPublishedFormCalls, backgroundLoadCalls, setUser(value) { currentUser = value; }, setMobile(value) { mobile = value; }, applyInitialLanding, chooseCurrentActivity, renderActivityChooser, counts() { return { fallbackCalls, resetCalls }; } });"
     ].join('\n');
     const contract = vm.runInNewContext(source, {});
     const roles = ['recorder', 'admin', 'super_admin'];
@@ -2016,8 +2018,9 @@ function assertDesktopUnifiedVisitorRecordLandingContract(managementSource) {
     assert.strictEqual(contract.ui.selectedActivityId, null, 'invalid selected Activity must be cleared for chooser selection');
 
     contract.state.activities = [{ id: 'activity-a', open: true }, { id: 'activity-b', open: true }];
-    contract.loadRecordsCalls.length = 0;
-    contract.chooseCurrentActivity('activity-a');
+    contract.loadPublishedFormCalls.length = 0;
+    contract.backgroundLoadCalls.length = 0;
+    await contract.chooseCurrentActivity('activity-a');
     assert.deepStrictEqual({
         id: contract.ui.selectedActivityId,
         view: contract.ui.view,
@@ -2025,7 +2028,8 @@ function assertDesktopUnifiedVisitorRecordLandingContract(managementSource) {
         scope: contract.ui.records.scope,
         recordContextMode: contract.ui.recordContextMode,
         formContext: contract.ui.formContext,
-        loadedActivityId: contract.loadRecordsCalls[0] && contract.loadRecordsCalls[0].activityId
+        publishedFormActivityId: contract.loadPublishedFormCalls[0],
+        backgroundActivityId: contract.backgroundLoadCalls[0] && contract.backgroundLoadCalls[0].activityId
     }, {
         id: 'activity-a',
         view: 'workspace',
@@ -2033,11 +2037,13 @@ function assertDesktopUnifiedVisitorRecordLandingContract(managementSource) {
         scope: 'entry',
         recordContextMode: 'visitor',
         formContext: 'visitor',
-        loadedActivityId: 'activity-a'
+        publishedFormActivityId: 'activity-a',
+        backgroundActivityId: 'activity-a'
     }, 'choosing Activity A must enter Activity A Visitor Add Record directly');
 
-    contract.loadRecordsCalls.length = 0;
-    contract.chooseCurrentActivity('activity-b');
+    contract.loadPublishedFormCalls.length = 0;
+    contract.backgroundLoadCalls.length = 0;
+    await contract.chooseCurrentActivity('activity-b');
     assert.deepStrictEqual({
         id: contract.ui.selectedActivityId,
         view: contract.ui.view,
@@ -2045,7 +2051,8 @@ function assertDesktopUnifiedVisitorRecordLandingContract(managementSource) {
         scope: contract.ui.records.scope,
         recordContextMode: contract.ui.recordContextMode,
         formContext: contract.ui.formContext,
-        loadedActivityId: contract.loadRecordsCalls[0] && contract.loadRecordsCalls[0].activityId
+        publishedFormActivityId: contract.loadPublishedFormCalls[0],
+        backgroundActivityId: contract.backgroundLoadCalls[0] && contract.backgroundLoadCalls[0].activityId
     }, {
         id: 'activity-b',
         view: 'workspace',
@@ -2053,7 +2060,8 @@ function assertDesktopUnifiedVisitorRecordLandingContract(managementSource) {
         scope: 'entry',
         recordContextMode: 'visitor',
         formContext: 'visitor',
-        loadedActivityId: 'activity-b'
+        publishedFormActivityId: 'activity-b',
+        backgroundActivityId: 'activity-b'
     }, 'choosing Activity B must enter Activity B Visitor Add Record directly');
 
     contract.state.activities = [];
@@ -2206,7 +2214,9 @@ async function assertOverviewLoadOptimizationContract(managementSource, apiSourc
     assert(!loadOverviewDataSource.includes('refreshOverviewRecords'), 'initial Overview must not call the legacy all-activity full-record refresh');
     assert(!managementSource.includes('Promise.all(activities.map(activity => loadRecordsForActivity(activity.id'), 'NO_INITIAL_ALL_ACTIVITY_FULL_SUBMISSION_FANOUT');
     assert(!managementSource.includes('async function refreshOverviewRecords'), 'legacy all-activity full-record refresh helper must be removed');
-    assert(managementSource.includes("if (ui.tab === 'records' || ui.tab === 'analytics') await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });"), 'Records and Analytics must still load full records on demand');
+    assert(managementSource.includes("if (ui.tab === 'records' && ui.records.scope === 'entry')"), 'Records entry must use the staged published-form path');
+    assert(managementSource.includes("startBackgroundRecordLoadForActivity(ui.selectedActivityId, { includeVoid: true });"), 'Records entry must start background full-record hydration');
+    assert(managementSource.includes("else if (ui.tab === 'records' || ui.tab === 'analytics') await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });"), 'Records history and Analytics must still load full records on demand');
     assert(managementSource.includes("if (ui.tab === 'overview' && ui.view === 'workspace') await loadPublishedFormForActivity(ui.selectedActivityId);"), 'selected activity Overview may load its one published form for field-count display');
 
     const harness = makeHarness();
@@ -3699,7 +3709,7 @@ async function main() {
     assertMobileAnalyticsBreakpointRerenderContract(managementSource);
     assertContextFoundationSqlContract(activityIntelligenceSqlSource);
     assertDualStreamFormBuilderSourceContract(managementSource, apiSource, cssSource);
-    assertRealActiveIntelligenceRuntimeSourceContract(managementSource, cssSource, service);
+    await assertRealActiveIntelligenceRuntimeSourceContract(managementSource, cssSource, service);
     assertAnalyticsChartTypeImplementationContract(managementSource, cssSource);
     assertLongTextPreviewExplicitDesignerStateContract(managementSource);
     assertVisitorRecordPreviewIdentityContract(managementSource);

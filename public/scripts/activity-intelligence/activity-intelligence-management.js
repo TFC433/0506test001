@@ -133,6 +133,8 @@
   let currentUser = null;
   const formBundles = new Map();
   const recordLoadState = new Map();
+  const recordLoadPromises = new Map();
+  const locallyCreatedRecordIds = new Set();
   const overviewSummaries = new Map();
   let rawCards = [];
   let rawCardsLoaded = false;
@@ -239,6 +241,9 @@
     applyInitialLanding({ explicitSelectedActivityId: selectedActivityIdBeforeLoad });
     if (currentUser.authenticated && canManageActivities() && ui.view === 'overview') {
       await loadOverviewData({ force: true });
+    } else if (currentUser.authenticated && ui.selectedActivityId && ui.tab === 'records' && ui.records.scope === 'entry') {
+      await loadPublishedFormForActivity(ui.selectedActivityId);
+      startBackgroundRecordLoadForActivity(ui.selectedActivityId, { includeVoid: true });
     } else if (currentUser.authenticated && ui.selectedActivityId && (ui.tab === 'records' || ui.tab === 'analytics')) {
       await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
     }
@@ -312,6 +317,8 @@
     resetAllQuickStates();
     state.records = [];
     recordLoadState.clear();
+    recordLoadPromises.clear();
+    locallyCreatedRecordIds.clear();
 
     if (!isMobileFormViewport()) return;
 
@@ -333,6 +340,8 @@
     state.selectedActivityId = ui.selectedActivityId || null;
     state.records = [];
     recordLoadState.clear();
+    recordLoadPromises.clear();
+    locallyCreatedRecordIds.clear();
     overviewSummaries.clear();
   }
 
@@ -604,24 +613,77 @@
     const loadKey = `${activityId}:${includeVoid ? 'all' : 'active'}`;
     const current = recordLoadState.get(loadKey);
     if (!force && current === 'loaded') return recordsFor(activityId);
+    if (!force && current === 'loading' && recordLoadPromises.has(loadKey)) {
+      return recordLoadPromises.get(loadKey).catch(() => recordsFor(activityId));
+    }
     if (!force && current === 'loading') return recordsFor(activityId);
 
     recordLoadState.set(loadKey, 'loading');
-    try {
+    const loadPromise = (async () => {
       await loadPublishedFormForActivity(activityId);
       const submissions = await window.ActivityIntelligenceApi.listSubmissions(activityId, {
         state: includeVoid ? 'all' : 'active'
       });
       const normalized = (submissions || []).map(normalizeSubmissionDto);
       const submissionIds = new Set(normalized.map(record => record.id));
-      state.records = state.records.filter(record => record.activityId !== activityId || !submissionIds.has(record.id));
-      state.records = state.records.filter(record => record.activityId !== activityId).concat(normalized);
+      normalized.forEach(record => locallyCreatedRecordIds.delete(record.id));
+      const preservedLocalRecords = state.records.filter(record =>
+        record.activityId === activityId &&
+        locallyCreatedRecordIds.has(record.id) &&
+        !submissionIds.has(record.id)
+      );
+      state.records = state.records.filter(record => record.activityId !== activityId).concat(preservedLocalRecords, normalized);
       recordLoadState.set(loadKey, 'loaded');
       return recordsFor(activityId);
+    })();
+    recordLoadPromises.set(loadKey, loadPromise);
+    try {
+      return await loadPromise;
     } catch (error) {
       recordLoadState.delete(loadKey);
       toast(error.message || 'Submission load failed.');
       return recordsFor(activityId);
+    } finally {
+      if (recordLoadPromises.get(loadKey) === loadPromise) recordLoadPromises.delete(loadKey);
+    }
+  }
+
+  function recordHistoryLoadingForActivity(activityId) {
+    return recordLoadState.get(`${activityId}:all`) === 'loading';
+  }
+
+  function startBackgroundRecordLoadForActivity(activityId, options) {
+    if (!activityId || !window.ActivityIntelligenceApi) return;
+    const targetActivityId = activityId;
+    loadRecordsForActivity(targetActivityId, options)
+      .then(() => {
+        if (shouldRefreshPersonalRecordsPanel(targetActivityId)) refreshPersonalRecordsPanel(targetActivityId);
+      })
+      .catch(() => {});
+  }
+
+  function shouldRefreshPersonalRecordsPanel(activityId) {
+    return currentUser &&
+      currentUser.authenticated &&
+      !isGuestUser() &&
+      ui.selectedActivityId === activityId &&
+      ui.view === 'workspace' &&
+      ui.tab === 'records' &&
+      ui.records.scope === 'entry';
+  }
+
+  function refreshPersonalRecordsPanel(activityId) {
+    const activity = state.activities.find(item => item.id === activityId);
+    const panel = root.querySelector('.aim-personal-records');
+    if (!activity || !panel) return;
+    panel.outerHTML = renderPersonalRecordsAside(activity);
+    const refreshed = root.querySelector('.aim-personal-records');
+    const showVoid = refreshed && refreshed.querySelector('.aim-show-void-records-input[data-context="personal"]');
+    if (showVoid) {
+      showVoid.addEventListener('change', () => {
+        setVoidRecordsVisibility(showVoid.checked);
+        render();
+      });
     }
   }
 
@@ -1579,14 +1641,15 @@
     ui.tab = 'overview';
   }
 
-  function chooseCurrentActivity(activityId) {
+  async function chooseCurrentActivity(activityId) {
     const activity = openActivities().find(item => item.id === activityId);
     if (!canCreateRecord(activity)) {
       applyRoleLanding();
       return;
     }
     enterVisitorRecordEntryState(activity.id);
-    return loadRecordsForActivity(activity.id, { includeVoid: true });
+    await loadPublishedFormForActivity(activity.id);
+    startBackgroundRecordLoadForActivity(activity.id, { includeVoid: true });
   }
 
   function renderOverview() {
@@ -1734,7 +1797,6 @@
   function renderQuickEntry(activity) {
     const status = activityStatus(activity);
     const open = status.key === 'open';
-    const personalRecords = visiblePersonalRecords(activity.id);
     return `
       ${!open ? '<div class="aim-warning">表單目前未開放，無法新增紀錄。</div>' : ''}
       <div class="aim-entry-layout">
@@ -1750,17 +1812,29 @@
             <button class="aim-button aim-button-primary" data-action="quick-save-next" ${open ? '' : 'disabled'} type="button">${ui.recordContextMode === recordContextActiveMode ? '儲存主動情報' : '儲存並繼續新增'}</button>
           </div>
         </div>
-        <aside class="aim-panel aim-entry-context aim-personal-records" aria-live="polite">
-          <div class="aim-personal-records-head">
-            <div><h2>我的紀錄</h2><span class="aim-personal-record-count">${personalRecords.length} 筆</span></div>
-            <div class="aim-personal-records-tools">
-              ${renderVoidRecordsToggle('personal')}
-              ${renderExpansionToggle('personal', personalRecords)}
-            </div>
-          </div>
-          <div class="aim-latest-list aim-personal-record-list aim-record-card-list aim-record-card-list-personal">${personalRecords.map(record => renderRecordCard(record, activity, 'personal', { showActivityName: false })).join('') || '<div class="aim-empty">目前尚無我的紀錄。</div>'}</div>
-        </aside>
+        ${renderPersonalRecordsAside(activity)}
       </div>
+    `;
+  }
+
+  function renderPersonalRecordsAside(activity) {
+    const personalRecords = visiblePersonalRecords(activity.id);
+    const loading = recordHistoryLoadingForActivity(activity.id) && !recordsLoadedForActivity(activity.id);
+    const countLabel = loading && !personalRecords.length ? '讀取中...' : `${personalRecords.length} 筆`;
+    const listHtml = personalRecords.length
+      ? personalRecords.map(record => renderRecordCard(record, activity, 'personal', { showActivityName: false })).join('')
+      : `<div class="aim-empty">${loading ? '紀錄載入中...' : '目前尚無我的紀錄。'}</div>`;
+    return `
+      <aside class="aim-panel aim-entry-context aim-personal-records" aria-live="polite" ${loading ? 'aria-busy="true"' : ''}>
+        <div class="aim-personal-records-head">
+          <div><h2>我的紀錄</h2><span class="aim-personal-record-count">${countLabel}</span></div>
+          <div class="aim-personal-records-tools">
+            ${renderVoidRecordsToggle('personal')}
+            ${renderExpansionToggle('personal', personalRecords)}
+          </div>
+        </div>
+        <div class="aim-latest-list aim-personal-record-list aim-record-card-list aim-record-card-list-personal">${listHtml}</div>
+      </aside>
     `;
   }
 
@@ -5719,7 +5793,10 @@
       selectTab(el.dataset.tab);
       if (ui.tab === 'overview' && ui.view === 'workspace') await loadPublishedFormForActivity(ui.selectedActivityId);
       if (ui.tab === 'form') await loadFormBundleForActivity(ui.selectedActivityId, currentFormContext());
-      if (ui.tab === 'records' || ui.tab === 'analytics') await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
+      if (ui.tab === 'records' && ui.records.scope === 'entry') {
+        await loadPublishedFormForActivity(ui.selectedActivityId);
+        startBackgroundRecordLoadForActivity(ui.selectedActivityId, { includeVoid: true });
+      } else if (ui.tab === 'records' || ui.tab === 'analytics') await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
     }
     if (action === 'sort' && canManageActivities()) sort(el.dataset.key);
     if (action === 'clear-overview' && canManageActivities()) ui.overview = { q: '', status: 'all', sort: 'name', dir: 'asc' };
@@ -5791,12 +5868,21 @@
         ui.view = 'workspace';
         ui.tab = 'records';
         ui.records.scope = el.dataset.scope;
-        await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
+        if (ui.records.scope === 'entry') {
+          await loadPublishedFormForActivity(ui.selectedActivityId);
+          startBackgroundRecordLoadForActivity(ui.selectedActivityId, { includeVoid: true });
+        } else await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
       }
     }
     if (action === 'scope' && (canManageRecords() || isRecorder())) {
       const allowed = ['entry', 'mine', 'all'];
-      if (allowed.includes(el.dataset.scope)) ui.records.scope = el.dataset.scope;
+      if (allowed.includes(el.dataset.scope)) {
+        ui.records.scope = el.dataset.scope;
+        if (ui.records.scope === 'entry') {
+          await loadPublishedFormForActivity(ui.selectedActivityId);
+          startBackgroundRecordLoadForActivity(ui.selectedActivityId, { includeVoid: true });
+        } else await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
+      }
     }
     if (action === 'record-period') setRecordPeriod(el.dataset.period);
     if (action === 'record-context-filter') toggleRecordContextFilter(el.dataset.context);
@@ -8774,8 +8860,10 @@
           supplementalError = error;
         }
       }
-      if (!isGuestUser()) replaceRecord(submission);
-      else recordLoadState.delete(`guest-own:${activity.id}`);
+      if (!isGuestUser()) {
+        const normalizedSubmission = replaceRecord(submission);
+        locallyCreatedRecordIds.add(normalizedSubmission.id);
+      } else recordLoadState.delete(`guest-own:${activity.id}`);
       resetQuickState(formContext);
       resetFormAssistState();
       ui.focusQuickFirst = true;
@@ -8959,6 +9047,7 @@
 
   async function hardDeleteSubmission(submissionId) {
     await window.ActivityIntelligenceApi.hardDeleteSubmission(submissionId);
+    locallyCreatedRecordIds.delete(submissionId);
     state.records = state.records.filter(record => record.id !== submissionId);
     ui.expandedRecords.personal.delete(submissionId);
     ui.expandedRecords.all.delete(submissionId);
@@ -8968,6 +9057,9 @@
 
   async function hardDeleteActivity(activityId) {
     await window.ActivityIntelligenceApi.hardDeleteActivity(activityId);
+    state.records
+      .filter(record => record.activityId === activityId)
+      .forEach(record => locallyCreatedRecordIds.delete(record.id));
     state.activities = state.activities.filter(activity => activity.id !== activityId);
     state.records = state.records.filter(record => record.activityId !== activityId);
     [...formBundles.keys()].forEach(key => {
@@ -8975,6 +9067,9 @@
     });
     [...recordLoadState.keys()].forEach(key => {
       if (String(key).startsWith(`${activityId}:`)) recordLoadState.delete(key);
+    });
+    [...recordLoadPromises.keys()].forEach(key => {
+      if (String(key).startsWith(`${activityId}:`)) recordLoadPromises.delete(key);
     });
     ui.expandedRecords.personal.clear();
     ui.expandedRecords.all.clear();
@@ -9054,6 +9149,8 @@
     ui.expandedRecords.all.clear();
     ui.records.showVoidRecords = false;
     ui.records.state = 'normal';
+    recordLoadPromises.clear();
+    locallyCreatedRecordIds.clear();
     toast('已重設 本階段資料。');
   }
 
