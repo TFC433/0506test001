@@ -2872,6 +2872,11 @@ function assertDriveThumbnailRepresentationContract(sources) {
     const managementSource = sources.managementSource;
     const contactsSource = sources.contactsSource;
     const leadsSource = sources.leadsSource;
+    const fanucCardMainListStart = leadsSource.indexOf('function createCardHTML(lead)');
+    const fanucCardMainListEnd = leadsSource.indexOf('function openPreview(driveLink)', fanucCardMainListStart);
+    const fanucCardMainListSource = fanucCardMainListStart >= 0 && fanucCardMainListEnd > fanucCardMainListStart
+        ? leadsSource.slice(fanucCardMainListStart, fanucCardMainListEnd)
+        : '';
     const thumbnailBranchStart = serviceSource.indexOf('if (representation === DRIVE_THUMBNAIL_REPRESENTATION)');
     const sourceBranchStart = serviceSource.indexOf("const response = await drive.files.get(", thumbnailBranchStart);
     const thumbnailBranch = thumbnailBranchStart >= 0 && sourceBranchStart > thumbnailBranchStart
@@ -2887,9 +2892,12 @@ function assertDriveThumbnailRepresentationContract(sources) {
 
     assert(contactsSource.includes("crmDriveImageProxyUrl(contact.driveLink, 'thumbnail', 'crm')"), 'CRM raw list must request thumbnail representation');
     assert(contactsSource.includes("crmDriveImageProxyUrl(contact.driveLink, 'source')"), 'CRM edit/full preview must request source representation');
-    assert(leadsSource.includes("leadDriveImageProxyUrl(lead.driveLink, 'thumbnail', 'card')"), 'FANUC card list must request thumbnail representation');
+    assert(leadsSource.includes("const LEAD_LIST_PAGE_SIZE = 50;"), 'FANUC card page size must remain 50 records');
+    assert(fanucCardMainListSource.includes("leadDriveImageProxyUrl(lead.driveLink, 'source')"), 'FANUC card main list must request source representation');
+    assert(!fanucCardMainListSource.includes("leadDriveImageProxyUrl(lead.driveLink, 'thumbnail', 'card')"), 'FANUC card main list must not request Drive thumbnail representation');
     assert(leadsSource.includes("leadDriveImageProxyUrl(driveLink, 'source')"), 'FANUC card lightbox must request source representation');
     assert(leadsSource.includes("leadDriveImageProxyUrl(lead.driveLink, 'source')"), 'FANUC card edit preview must request source representation');
+    assert(!leadsSource.includes('IntersectionObserver'), 'FANUC card restore must not introduce near-viewport loading');
 
     assert(managementSource.includes("thumbnailUrl: rawCardImageUrl({ driveLink: card.driveLink || card.drive_link || '', driveFileId }, { representation: 'thumbnail', profile: 'card' })"), 'RAW card normalization must create a card-list thumbnail URL');
     assert(managementSource.includes("sourceUrl: rawCardImageUrl({ driveLink: card.driveLink || card.drive_link || '', driveFileId }, { representation: 'source' })"), 'RAW card normalization must create an original/source URL');

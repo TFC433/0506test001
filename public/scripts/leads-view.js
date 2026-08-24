@@ -1000,7 +1000,7 @@ function createCardHTML(lead) {
         : '';
 
     const imageUrl = lead.driveLink && lead.driveLink !== 'undefined' && lead.driveLink !== 'null'
-        ? leadDriveImageProxyUrl(lead.driveLink, 'thumbnail', 'card')
+        ? leadDriveImageProxyUrl(lead.driveLink, 'source')
         : null;
 
     const imageHtml = imageUrl 
