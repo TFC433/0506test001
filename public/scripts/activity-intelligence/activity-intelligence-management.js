@@ -19,6 +19,15 @@
     ['card_link', '名片連結']
   ];
   const choiceFieldTypes = ['single_choice', 'multiple_choice', 'dropdown'];
+  const analyticsCategoricalFieldTypes = ['yes_no', 'single_choice', 'multiple_choice', 'dropdown'];
+  const analyticsChartTypeValues = ['bar', 'pie', 'trend', 'treemap', 'bubble'];
+  const analyticsChartTypeLabels = Object.freeze({
+    bar: '長條',
+    pie: '圓餅',
+    trend: '趨勢',
+    treemap: 'Treemap',
+    bubble: '氣泡'
+  });
   const recordAdvancedChoiceFieldTypes = new Set(choiceFieldTypes);
   const answerBadgePaletteSize = 10;
   const recordBadgePaletteFieldTypes = new Set(['yes_no', ...choiceFieldTypes]);
@@ -251,7 +260,9 @@
         error: ''
       },
       chartViews: {},
-      mobileChartViews: {}
+      mobileChartViews: {},
+      chartMoreOpen: '',
+      mobileChartMoreOpen: ''
     };
   }
 
@@ -3906,10 +3917,10 @@
     if (!chart) return '';
     const view = chart.kind === 'activityTrend'
       ? analyticsActivityTrendView(chart.chartKey)
-      : analyticsChartView(chart.chartKey, chart.allowPie, chart.allowTrend);
+      : analyticsChartView(chart);
     const controls = chart.kind === 'activityTrend'
       ? renderActivityTrendControls(chart.chartKey, view, true)
-      : renderAnalyticsChartControls(chart.chartKey, view, chart.allowPie, chart.allowTrend);
+      : renderAnalyticsChartControls(chart, view);
     const modalHeight = chart.kind === 'activityTrend'
       ? 420
       : analyticsModalChartHeight(chart, view);
@@ -4067,7 +4078,7 @@
     const formContext = analyticsFormContext();
     const metrics = analyticsMetrics(activity, records, { includeVisitorCount: !activeAnalytics });
     const categorical = analyticFields(activity, records, formContext)
-      .filter(field => ['yes_no', 'single_choice', 'multiple_choice', 'dropdown'].includes(field.type))
+      .filter(field => analyticsCategoricalFieldTypes.includes(field.type))
       .map(field => renderMobileCategoricalAnalyticsChart(categoricalFieldChartData(field, records)))
       .join('');
     return `
@@ -4158,9 +4169,9 @@
   }
 
   function renderMobileCategoricalAnalyticsChart(chart) {
-    const view = mobileAnalyticsChartView(chart.chartKey, chart.allowPie, chart.allowTrend);
+    const view = mobileAnalyticsChartView(chart);
     const hasAnswered = chart.denominator > 0 && chart.rows.some(row => row.count > 0);
-    const controls = renderMobileAnalyticsChartControls(chart.chartKey, view, chart.allowPie, chart.allowTrend);
+    const controls = renderMobileAnalyticsChartControls(chart, view);
     const chartHeight = analyticsChartHeight(chart, view);
     const pieHint = chart.multiChoice && view.type === 'pie'
       ? '<span>圓餅以選項勾選次數占比計算</span>'
@@ -4190,12 +4201,9 @@
     };
   }
 
-  function mobileAnalyticsChartView(chartKey, allowPie, allowTrend) {
-    const saved = (ui.analytics.mobileChartViews && ui.analytics.mobileChartViews[chartKey]) || {};
-    return {
-      type: allowTrend && saved.type === 'trend' ? 'trend' : (allowPie && saved.type === 'pie' ? 'pie' : 'bar'),
-      valueMode: saved.valueMode === 'percentage' ? 'percentage' : 'count'
-    };
+  function mobileAnalyticsChartView(chart) {
+    const saved = (ui.analytics.mobileChartViews && ui.analytics.mobileChartViews[chart.chartKey]) || {};
+    return analyticsValidatedChartView(chart, saved);
   }
 
   function renderMobileActivityTrendControls(chartKey, view) {
@@ -4212,23 +4220,16 @@
     `;
   }
 
-  function renderMobileAnalyticsChartControls(chartKey, view, allowPie, allowTrend) {
-    const typeButtons = [
-      ['bar', '長條'],
-      ['pie', '圓餅'],
-      ['trend', '趨勢']
-    ].filter(([value]) => (value !== 'pie' || allowPie) && (value !== 'trend' || allowTrend));
+  function renderMobileAnalyticsChartControls(chart, view) {
     const modeButtons = [
       ['count', '筆數'],
       ['percentage', '%']
     ];
     return `
       <div class="aim-chart-controls" aria-label="圖表顯示模式">
+        ${renderAnalyticsChartTypeControls(chart, view, 'mobile-analytics-chart-view', 'mobile')}
         <div class="aim-chart-segment">
-          ${typeButtons.map(([value, label]) => `<button data-action="mobile-analytics-chart-view" data-chart-key="${Store.escapeHtml(chartKey)}" data-control="type" data-value="${value}" aria-pressed="${view.type === value}" type="button">${label}</button>`).join('')}
-        </div>
-        <div class="aim-chart-segment">
-          ${modeButtons.map(([value, label]) => `<button data-action="mobile-analytics-chart-view" data-chart-key="${Store.escapeHtml(chartKey)}" data-control="valueMode" data-value="${value}" aria-pressed="${view.valueMode === value}" type="button">${label}</button>`).join('')}
+          ${modeButtons.map(([value, label]) => `<button data-action="mobile-analytics-chart-view" data-chart-key="${Store.escapeHtml(chart.chartKey)}" data-control="valueMode" data-value="${value}" aria-pressed="${view.valueMode === value}" type="button">${label}</button>`).join('')}
         </div>
       </div>
     `;
@@ -4563,7 +4564,7 @@
       series: [{
         name,
         type: 'line',
-        smooth: true,
+        smooth: false,
         symbolSize: options.modal ? 7 : 5,
         data: values,
         lineStyle: { width: 2, color: styles.isDark ? '#7dd3fc' : '#2563eb' },
@@ -4584,7 +4585,7 @@
 
   function choiceCharts(activity, records, formContext) {
     return analyticFields(activity, records, formContext)
-      .filter(f => ['yes_no', 'single_choice', 'multiple_choice', 'dropdown'].includes(f.type))
+      .filter(f => analyticsCategoricalFieldTypes.includes(f.type))
       .map(field => {
         const chart = categoricalFieldChartData(field, records);
         return renderCategoricalAnalyticsChart(chart);
@@ -4644,6 +4645,7 @@
       coverage: `已答 ${answered} / ${records.length}`,
       allowPie: true,
       allowTrend: true,
+      fieldType: field.type,
       multiChoice: field.type === 'multiple_choice',
       rows,
       denominator: answered,
@@ -4737,9 +4739,9 @@
   }
 
   function renderCategoricalAnalyticsChart(chart) {
-    const view = analyticsChartView(chart.chartKey, chart.allowPie, chart.allowTrend);
+    const view = analyticsChartView(chart);
     const hasAnswered = chart.denominator > 0 && chart.rows.some(row => row.count > 0);
-    const controls = renderAnalyticsChartControls(chart.chartKey, view, chart.allowPie, chart.allowTrend);
+    const controls = renderAnalyticsChartControls(chart, view);
     const chartHeight = analyticsChartHeight(chart, view);
     const pieHint = chart.multiChoice && view.type === 'pie'
       ? '<span>圓餅以選項勾選次數占比計算</span>'
@@ -4763,33 +4765,91 @@
     `;
   }
 
-  function analyticsChartView(chartKey, allowPie, allowTrend) {
-    const saved = (ui.analytics.chartViews && ui.analytics.chartViews[chartKey]) || {};
+  function chartCapabilitiesForField(field, chart) {
+    const type = field && field.type ? field.type : (chart && chart.fieldType);
+    const nonZeroRows = ((chart && chart.rows) || []).filter(row => Number(row.count || 0) > 0).length;
+    if (type === 'yes_no') {
+      return { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: [], fallbackType: 'bar' };
+    }
+    if (type === 'multiple_choice') {
+      return { primaryTypes: ['bar', 'bubble', 'trend'], moreTypes: ['pie'], fallbackType: 'bar' };
+    }
+    if (type === 'single_choice' || type === 'dropdown') {
+      return nonZeroRows >= 7
+        ? { primaryTypes: ['bar', 'treemap', 'trend'], moreTypes: ['pie'], fallbackType: 'bar' }
+        : { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: ['treemap'], fallbackType: 'bar' };
+    }
     return {
-      type: allowTrend && saved.type === 'trend' ? 'trend' : (allowPie && saved.type === 'pie' ? 'pie' : 'bar'),
+      primaryTypes: ['bar'].concat(chart && chart.allowPie ? ['pie'] : [], chart && chart.allowTrend ? ['trend'] : []),
+      moreTypes: [],
+      fallbackType: 'bar'
+    };
+  }
+
+  function chartCapabilitiesForChart(chart) {
+    const capabilities = chartCapabilitiesForField(chart, chart);
+    const primaryTypes = capabilities.primaryTypes.filter(type => chartTypeAllowedForChart(chart, type));
+    const moreTypes = capabilities.moreTypes.filter(type => chartTypeAllowedForChart(chart, type) && !primaryTypes.includes(type));
+    const fallbackType = primaryTypes.includes(capabilities.fallbackType) ? capabilities.fallbackType : (primaryTypes[0] || 'bar');
+    return { primaryTypes, moreTypes, fallbackType };
+  }
+
+  function chartTypeAllowedForChart(chart, type) {
+    if (type === 'bar') return true;
+    if (type === 'pie') return chart.allowPie !== false;
+    if (type === 'trend') return chart.allowTrend !== false;
+    if (type === 'treemap') return ['yes_no', 'single_choice', 'dropdown'].includes(chart.fieldType);
+    if (type === 'bubble') return chart.fieldType === 'multiple_choice';
+    return false;
+  }
+
+  function analyticsValidatedChartView(chart, saved) {
+    saved = saved || {};
+    const capabilities = chartCapabilitiesForChart(chart);
+    const allowedTypes = capabilities.primaryTypes.concat(capabilities.moreTypes);
+    return {
+      type: allowedTypes.includes(saved.type) ? saved.type : capabilities.fallbackType,
       valueMode: saved.valueMode === 'percentage' ? 'percentage' : 'count'
     };
   }
 
-  function renderAnalyticsChartControls(chartKey, view, allowPie, allowTrend) {
-    const typeButtons = [
-      ['bar', '長條'],
-      ['pie', '圓餅'],
-      ['trend', '趨勢']
-    ].filter(([value]) => (value !== 'pie' || allowPie) && (value !== 'trend' || allowTrend));
+  function analyticsChartView(chart) {
+    const saved = (ui.analytics.chartViews && ui.analytics.chartViews[chart.chartKey]) || {};
+    return analyticsValidatedChartView(chart, saved);
+  }
+
+  function renderAnalyticsChartControls(chart, view) {
     const modeButtons = [
       ['count', '筆數'],
       ['percentage', '%']
     ];
     return `
       <div class="aim-chart-controls" aria-label="圖表顯示模式">
+        ${renderAnalyticsChartTypeControls(chart, view, 'analytics-chart-view', 'desktop')}
         <div class="aim-chart-segment">
-          ${typeButtons.map(([value, label]) => `<button data-action="analytics-chart-view" data-chart-key="${Store.escapeHtml(chartKey)}" data-control="type" data-value="${value}" aria-pressed="${view.type === value}" type="button">${label}</button>`).join('')}
-        </div>
-        <div class="aim-chart-segment">
-          ${modeButtons.map(([value, label]) => `<button data-action="analytics-chart-view" data-chart-key="${Store.escapeHtml(chartKey)}" data-control="valueMode" data-value="${value}" aria-pressed="${view.valueMode === value}" type="button">${label}</button>`).join('')}
+          ${modeButtons.map(([value, label]) => `<button data-action="analytics-chart-view" data-chart-key="${Store.escapeHtml(chart.chartKey)}" data-control="valueMode" data-value="${value}" aria-pressed="${view.valueMode === value}" type="button">${label}</button>`).join('')}
         </div>
       </div>
+    `;
+  }
+
+  function renderAnalyticsChartTypeControls(chart, view, action, scope) {
+    const capabilities = chartCapabilitiesForChart(chart);
+    const moreActive = capabilities.moreTypes.includes(view.type);
+    const openKey = scope === 'mobile' ? ui.analytics.mobileChartMoreOpen : ui.analytics.chartMoreOpen;
+    const open = openKey === chart.chartKey;
+    return `
+      <div class="aim-chart-segment">
+        ${capabilities.primaryTypes.map(value => `<button data-action="${action}" data-chart-key="${Store.escapeHtml(chart.chartKey)}" data-control="type" data-value="${value}" aria-pressed="${view.type === value}" type="button">${Store.escapeHtml(analyticsChartTypeLabels[value] || value)}</button>`).join('')}
+      </div>
+      ${capabilities.moreTypes.length ? `
+        <div class="aim-chart-more-control">
+          <button class="aim-chart-more-button" data-action="${scope === 'mobile' ? 'mobile-analytics-chart-more' : 'analytics-chart-more'}" data-chart-key="${Store.escapeHtml(chart.chartKey)}" type="button" aria-haspopup="true" aria-expanded="${open}" aria-pressed="${moreActive}">更多</button>
+          ${open ? `<div class="aim-chart-more-menu" role="listbox" aria-label="更多圖表類型">
+            ${capabilities.moreTypes.map(value => `<button data-action="${action}" data-chart-key="${Store.escapeHtml(chart.chartKey)}" data-control="type" data-value="${value}" role="option" aria-selected="${view.type === value}" type="button">${Store.escapeHtml(analyticsChartTypeLabels[value] || value)}${view.type === value ? ' ✓' : ''}</button>`).join('')}
+          </div>` : ''}
+        </div>
+      ` : ''}
     `;
   }
 
@@ -4799,9 +4859,10 @@
 
   function analyticsChartOption(chart, view, options = {}) {
     if (view.type === 'trend' && chart.allowTrend) return analyticsCategoricalTrendOption(chart, view, options);
-    return view.type === 'pie' && chart.allowPie
-      ? analyticsPieOption(chart, view, options)
-      : analyticsBarOption(chart, view, options);
+    if (view.type === 'pie' && chart.allowPie) return analyticsPieOption(chart, view, options);
+    if (view.type === 'treemap' && chartTypeAllowedForChart(chart, 'treemap')) return analyticsTreemapOption(chart, view, options);
+    if (view.type === 'bubble' && chartTypeAllowedForChart(chart, 'bubble')) return analyticsBubbleOption(chart, view, options);
+    return analyticsBarOption(chart, view, options);
   }
 
   function analyticsBarOption(chart, view, options = {}) {
@@ -4890,18 +4951,152 @@
             shadowColor: 'rgba(15, 23, 42, 0.18)'
           }
         },
-        data: chart.rows.filter(row => row.count > 0).map(row => analyticsChartPoint(row, percentage, percentKey))
+        data: chart.rows.filter(row => row.count > 0).map(row => analyticsChartPoint(row, percentage, percentKey, { selectionComposition: chart.multiChoice }))
       }]
     };
   }
 
-  function analyticsChartPoint(row, percentage, percentKey = 'percent') {
+  function analyticsTreemapOption(chart, view, options = {}) {
+    const styles = analyticsChartStyles();
+    const percentage = view.valueMode === 'percentage';
+    const modal = Boolean(options.modal);
+    return {
+      tooltip: { formatter: analyticsTooltipFormatter },
+      series: [{
+        name: chart.title,
+        type: 'treemap',
+        roam: false,
+        nodeClick: false,
+        breadcrumb: { show: false },
+        top: modal ? 14 : 8,
+        right: modal ? 18 : 8,
+        bottom: modal ? 14 : 8,
+        left: modal ? 18 : 8,
+        leafDepth: 1,
+        label: {
+          show: true,
+          color: styles.primary,
+          fontSize: modal ? 13 : 11,
+          overflow: 'truncate',
+          formatter: params => {
+            const data = params.data || {};
+            const value = percentage ? formatAnalyticsPercent(data.realPercent) : `${Number(data.realCount || 0)} 筆`;
+            return `${params.name}\n${value}`;
+          }
+        },
+        upperLabel: { show: false },
+        itemStyle: {
+          borderColor: styles.isDark ? '#0f172a' : '#ffffff',
+          borderWidth: 2,
+          gapWidth: 2
+        },
+        levels: [{
+          color: styles.isDark
+            ? ['#38bdf8', '#22c55e', '#f59e0b', '#a78bfa', '#f472b6', '#94a3b8']
+            : ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#64748b'],
+          colorSaturation: [0.35, 0.72]
+        }],
+        data: chart.rows.filter(row => row.count > 0).map(row => analyticsChartPoint(row, false))
+      }]
+    };
+  }
+
+  function analyticsBubbleOption(chart, view, options = {}) {
+    const styles = analyticsChartStyles();
+    const percentage = view.valueMode === 'percentage';
+    const rows = (Array.isArray(chart.rows) ? chart.rows : []).filter(row => row.count > 0).sort((a, b) => b.count - a.count || String(a.label).localeCompare(String(b.label), 'zh-Hant'));
+    const modal = Boolean(options.modal);
+    const maxCount = Math.max(...rows.map(row => Number(row.count || 0)), 1);
+    const minSize = modal ? 30 : 22;
+    const maxSize = modal ? 92 : 62;
+    const data = analyticsBubblePoints(rows, maxCount, minSize, maxSize);
+    return {
+      legend: { show: false },
+      grid: { top: modal ? 24 : 12, right: modal ? 28 : 12, bottom: modal ? 24 : 12, left: modal ? 28 : 12 },
+      tooltip: { trigger: 'item', formatter: analyticsTooltipFormatter },
+      xAxis: {
+        type: 'value',
+        min: -0.8,
+        max: data.cols - 0.2,
+        show: false
+      },
+      yAxis: {
+        type: 'value',
+        min: -data.rows + 0.2,
+        max: 0.8,
+        show: false
+      },
+      series: [{
+        name: chart.title,
+        type: 'scatter',
+        data: data.points,
+        symbolSize: (value, params) => params && params.data ? params.data.symbolSize : minSize,
+        itemStyle: {
+          color: styles.isDark ? 'rgba(56, 189, 248, 0.72)' : 'rgba(59, 130, 246, 0.72)',
+          borderColor: styles.isDark ? '#bae6fd' : '#1d4ed8',
+          borderWidth: 1
+        },
+        label: {
+          show: true,
+          position: 'inside',
+          color: styles.isDark ? '#0f172a' : '#ffffff',
+          fontSize: modal ? 12 : 10,
+          fontWeight: 700,
+          formatter: params => {
+            const data = params.data || {};
+            if (!modal && Number(data.symbolSize || 0) < 34) return '';
+            return `${params.name}\n${percentage ? formatAnalyticsPercent(data.realPercent) : data.realCount}`;
+          }
+        },
+        emphasis: {
+          focus: 'self',
+          label: {
+            show: true,
+            formatter: params => {
+              const data = params.data || {};
+              return `${params.name}\n${formatAnalyticsPercent(data.realPercent)}`;
+            }
+          }
+        }
+      }]
+    };
+  }
+
+  function analyticsBubblePoints(rows, maxCount, minSize, maxSize) {
+    const count = rows.length || 1;
+    const cols = Math.ceil(Math.sqrt(count));
+    const rowCount = Math.ceil(count / cols);
+    const points = rows.map((row, index) => {
+      const col = index % cols;
+      const line = Math.floor(index / cols);
+      const offset = line % 2 === 1 ? 0.35 : 0;
+      const size = analyticsBubbleSymbolSize(row.count, maxCount, minSize, maxSize);
+      return {
+        ...analyticsChartPoint(row, false),
+        value: [col + offset, -line, row.count],
+        symbolSize: size
+      };
+    });
+    return { points, cols, rows: rowCount };
+  }
+
+  function analyticsBubbleSymbolSize(countValue, maxCount, minSize, maxSize) {
+    const count = Math.max(Number(countValue || 0), 0);
+    const max = Math.max(Number(maxCount || 0), 1);
+    const ratio = Math.sqrt(count) / Math.sqrt(max);
+    return Math.round(minSize + (maxSize - minSize) * ratio);
+  }
+
+  function analyticsChartPoint(row, percentage, percentKey = 'percent', options = {}) {
     const realPercent = Number(row[percentKey] || 0);
     return {
       name: row.label,
       value: percentage ? Number(realPercent.toFixed(1)) : row.count,
       realCount: row.count,
-      realPercent
+      realPercent,
+      respondentPercent: Number(row.percent || 0),
+      selectionPercent: Number(row.selectionPercent || 0),
+      selectionComposition: Boolean(options.selectionComposition)
     };
   }
 
@@ -4918,6 +5113,9 @@
 
   function analyticsTooltipFormatter(params) {
     const data = params.data || {};
+    if (data.selectionComposition) {
+      return `${params.marker || ''}${escapeChartHtml(params.name)}<br/><b>${Number(data.realCount || 0)} 筆選取紀錄</b><br/>填答者選取率：${formatAnalyticsPercent(data.respondentPercent || 0)}<br/>選項組成占比：${formatAnalyticsPercent(data.selectionPercent || data.realPercent || 0)}`;
+    }
     return `${params.marker || ''}${escapeChartHtml(params.name)}<br/><b>${Number(data.realCount || 0)} 筆</b><br/>${formatAnalyticsPercent(data.realPercent || 0)}`;
   }
 
@@ -4946,7 +5144,7 @@
       series: series.map(entry => ({
         name: entry.label,
         type: 'line',
-        smooth: true,
+        smooth: false,
         symbolSize: options.modal ? 6 : 4,
         data: (percentage ? entry.percents : entry.counts).map(value => percentage ? Number(value.toFixed(1)) : value),
         lineStyle: { width: options.modal ? 2 : 1.6 },
@@ -5021,6 +5219,8 @@
 
   function analyticsChartHeight(chart, view) {
     if (view.type === 'pie') return 200;
+    if (view.type === 'treemap') return 220;
+    if (view.type === 'bubble') return 230;
     if (view.type === 'trend') return 210;
     const rows = Array.isArray(chart.rows) ? chart.rows.length : 0;
     return Math.max(170, Math.min(260, 132 + rows * 24));
@@ -5035,6 +5235,8 @@
       const rows = Array.isArray(chart.rows) ? chart.rows.length : 0;
       return Math.max(420, Math.min(700, 150 + rows * 28));
     }
+    if (view.type === 'treemap') return 520;
+    if (view.type === 'bubble') return 540;
     return 460;
   }
 
@@ -5113,6 +5315,19 @@
     return Store.escapeHtml(value);
   }
 
+  function closeAnalyticsChartMoreMenus() {
+    let changed = false;
+    if (ui.analytics.chartMoreOpen) {
+      ui.analytics.chartMoreOpen = '';
+      changed = true;
+    }
+    if (ui.analytics.mobileChartMoreOpen) {
+      ui.analytics.mobileChartMoreOpen = '';
+      changed = true;
+    }
+    return changed;
+  }
+
   function analyticsDateBuckets(records) {
     const activity = selectedActivity();
     const recordDates = records.map(record => String(record.createdAt || '').slice(0, 10)).filter(isIsoDateOnly).sort();
@@ -5157,7 +5372,7 @@
     if (chartKey === 'activity-record-trend') return activityTrendChartData(records);
     if (chartKey === 'recorder-distribution') return recorderDistributionChartData(records);
     return analyticFields(activity, records, formContext)
-      .filter(field => ['yes_no', 'single_choice', 'multiple_choice', 'dropdown'].includes(field.type))
+      .filter(field => analyticsCategoricalFieldTypes.includes(field.type))
       .map(field => categoricalFieldChartData(field, records))
       .find(chart => chart.chartKey === chartKey) || null;
   }
@@ -5327,6 +5542,10 @@
   }
 
   root.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && closeAnalyticsChartMoreMenus()) {
+      render();
+      return;
+    }
     if (event.key === 'Escape' && (ui.formDesignConfirm || ui.analyticsAiConfirm || ui.analyticsChartModal)) {
       ui.formDesignConfirm = null;
       ui.analyticsAiConfirm = null;
@@ -5342,7 +5561,8 @@
 
   window.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
-    if (ui.formDesignConfirm) ui.formDesignConfirm = null;
+    if (closeAnalyticsChartMoreMenus()) {}
+    else if (ui.formDesignConfirm) ui.formDesignConfirm = null;
     else if (ui.analyticsAiConfirm) ui.analyticsAiConfirm = null;
     else if (ui.formAssistCardImportConfirm) ui.formAssistCardImportConfirm = null;
     else if (ui.analyticsChartModal) ui.analyticsChartModal = null;
@@ -5360,8 +5580,13 @@
   });
 
   root.addEventListener('click', async event => {
+    const chartMoreClick = event.target.closest('.aim-chart-more-control');
+    const closedChartMore = !chartMoreClick && closeAnalyticsChartMoreMenus();
     const el = event.target.closest('[data-action]');
-    if (!el) return;
+    if (!el) {
+      if (closedChartMore) render();
+      return;
+    }
     const action = el.dataset.action;
     if (await handleFormDesignAction(action, el, event)) return;
     if (action === 'other-history-suggestion') {
@@ -5537,6 +5762,11 @@
     if (action === 'close-analytics-chart-modal' && canUseAnalytics()) {
       ui.analyticsChartModal = null;
     }
+    if (action === 'analytics-chart-more' && canUseAnalytics()) {
+      const chartKey = el.dataset.chartKey || '';
+      ui.analytics.chartMoreOpen = ui.analytics.chartMoreOpen === chartKey ? '' : chartKey;
+      ui.analytics.mobileChartMoreOpen = '';
+    }
     if (action === 'analytics-chart-view' && canUseAnalytics()) {
       const chartKey = el.dataset.chartKey || '';
       const control = el.dataset.control || '';
@@ -5545,11 +5775,17 @@
         ui.analytics.chartViews = ui.analytics.chartViews || {};
         const current = ui.analytics.chartViews[chartKey] || { type: 'bar', valueMode: 'count', activityMode: 'daily' };
         ui.analytics.chartViews[chartKey] = {
-          type: control === 'type' && ['bar', 'pie', 'trend'].includes(value) ? value : current.type,
+          type: control === 'type' && analyticsChartTypeValues.includes(value) ? value : current.type,
           valueMode: control === 'valueMode' && ['count', 'percentage'].includes(value) ? value : current.valueMode,
           activityMode: control === 'activityMode' && ['daily', 'cumulative'].includes(value) ? value : current.activityMode
         };
+        if (control === 'type') closeAnalyticsChartMoreMenus();
       }
+    }
+    if (action === 'mobile-analytics-chart-more' && canUseAnalytics() && ui.mobileAnalysisMode && isMobileFormViewport()) {
+      const chartKey = el.dataset.chartKey || '';
+      ui.analytics.mobileChartMoreOpen = ui.analytics.mobileChartMoreOpen === chartKey ? '' : chartKey;
+      ui.analytics.chartMoreOpen = '';
     }
     if (action === 'mobile-analytics-chart-view' && canUseAnalytics() && ui.mobileAnalysisMode && isMobileFormViewport()) {
       const chartKey = el.dataset.chartKey || '';
@@ -5559,10 +5795,11 @@
         ui.analytics.mobileChartViews = ui.analytics.mobileChartViews || {};
         const current = ui.analytics.mobileChartViews[chartKey] || { type: 'bar', valueMode: 'count', activityMode: 'daily' };
         ui.analytics.mobileChartViews[chartKey] = {
-          type: control === 'type' && ['bar', 'pie', 'trend'].includes(value) ? value : current.type,
+          type: control === 'type' && analyticsChartTypeValues.includes(value) ? value : current.type,
           valueMode: control === 'valueMode' && ['count', 'percentage'].includes(value) ? value : current.valueMode,
           activityMode: control === 'activityMode' && ['daily', 'cumulative'].includes(value) ? value : current.activityMode
         };
+        if (control === 'type') closeAnalyticsChartMoreMenus();
       }
     }
     if (action === 'save-ai-presets' && canManageActivities()) {

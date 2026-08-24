@@ -4936,6 +4936,67 @@ a:focus-visible {
   color: var(--aim-form-primary-hover);
 }
 
+.aim-chart-more-control {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.aim-chart-more-button {
+  min-width: 42px;
+  min-height: 30px;
+  padding: 4px 9px;
+  border: 1px solid var(--aim-border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--aim-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.aim-chart-more-button[aria-pressed="true"],
+.aim-chart-more-button[aria-expanded="true"] {
+  background: var(--aim-form-primary-soft);
+  color: var(--aim-form-primary-hover);
+}
+
+.aim-chart-more-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 118px;
+  padding: 6px;
+  border: 1px solid var(--aim-border);
+  border-radius: 8px;
+  background: var(--aim-surface);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16);
+}
+
+.aim-chart-more-menu button {
+  display: block;
+  width: 100%;
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--aim-text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.aim-chart-more-menu button[aria-selected="true"],
+.aim-chart-more-menu button:hover,
+.aim-chart-more-menu button:focus-visible {
+  background: var(--aim-form-primary-soft);
+  color: var(--aim-form-primary-hover);
+}
+
 .aim-echart {
   width: 100%;
   height: var(--aim-chart-height, 210px);
@@ -5460,6 +5521,17 @@ a:focus-visible {
     padding: 5px 8px;
     flex: 0 0 auto;
     font-size: 12px;
+  }
+
+  .aim-mobile-analysis .aim-chart-more-button {
+    min-height: 31px;
+    padding: 5px 8px;
+    font-size: 12px;
+  }
+
+  .aim-mobile-analysis .aim-chart-more-menu {
+    right: auto;
+    left: 0;
   }
 
   .aim-mobile-analysis .aim-echart-empty {

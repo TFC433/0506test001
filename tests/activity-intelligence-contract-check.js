@@ -502,7 +502,23 @@ function extractFunctionDeclaration(source, name) {
     const marker = `function ${name}(`;
     const start = source.indexOf(marker);
     assert(start >= 0, `${name} must exist`);
-    const bodyStart = source.indexOf('{', start);
+    const paramsStart = source.indexOf('(', start);
+    assert(paramsStart >= 0, `${name} must have params`);
+    let parenDepth = 0;
+    let paramsEnd = -1;
+    for (let index = paramsStart; index < source.length; index += 1) {
+        const char = source[index];
+        if (char === '(') parenDepth += 1;
+        if (char === ')') {
+            parenDepth -= 1;
+            if (parenDepth === 0) {
+                paramsEnd = index;
+                break;
+            }
+        }
+    }
+    assert(paramsEnd >= 0, `${name} params must close`);
+    const bodyStart = source.indexOf('{', paramsEnd);
     assert(bodyStart >= 0, `${name} must have a body`);
     let depth = 0;
     for (let index = bodyStart; index < source.length; index += 1) {
@@ -1514,6 +1530,96 @@ function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, se
     assert.strictEqual(selectionContract.getRefreshedValue(), '賣玉米', 'rerender/refresh must preserve the selected value');
     selectionContract.applyOtherHistorySuggestion({ dataset: { field: 'field-a', context: 'record', value: 'Record Other' } });
     assert.strictEqual(selectionContract.workingOther['field-a'], 'Record Other', 'desktop/record click path must remain supported by the shared selector action');
+}
+
+function assertAnalyticsChartTypeImplementationContract(managementSource, cssSource) {
+    assert(managementSource.includes("const analyticsCategoricalFieldTypes = ['yes_no', 'single_choice', 'multiple_choice', 'dropdown'];"), 'categorical Analytics types must be centralized');
+    assert(managementSource.includes("const analyticsChartTypeValues = ['bar', 'pie', 'trend', 'treemap', 'bubble'];"), 'chart state must accept treemap and bubble');
+    assert(managementSource.includes('data-action="${scope === \'mobile\' ? \'mobile-analytics-chart-more\' : \'analytics-chart-more\'}"'), 'desktop and mobile More chart selectors must share the local renderer');
+    assert(managementSource.includes('aria-haspopup="true"'), 'More selector must expose popup semantics');
+    assert(managementSource.includes('aria-expanded="${open}"'), 'More selector must expose expanded state');
+    assert(managementSource.includes('aria-selected="${view.type === value}"'), 'More menu must expose selected chart state');
+    assert(cssSource.includes('.aim-chart-more-menu'), 'More menu must have local chart-control styling');
+
+    const source = [
+        'const analyticsChartTypeLabels = { bar: "Bar", pie: "Pie", trend: "Trend", treemap: "Treemap", bubble: "Bubble" };',
+        'const ui = { analytics: { chartMoreOpen: "", mobileChartMoreOpen: "" } };',
+        'const Store = { escapeHtml(value) { return String(value || ""); } };',
+        'function analyticsChartStyles() { return { isDark: false, primary: "#111", secondary: "#333", muted: "#666", border: "#ddd" }; }',
+        'function analyticsTrendXAxis(dates) { return { data: dates }; }',
+        'function analyticsTrendYAxis() { return {}; }',
+        'function formatAnalyticsDateLabel(value) { return String(value || ""); }',
+        'function formatAnalyticsPercent(value) { return `${Math.round(Number(value || 0) * 10) / 10}%`; }',
+        'function escapeChartHtml(value) { return Store.escapeHtml(value); }',
+        extractFunctionDeclaration(managementSource, 'chartCapabilitiesForField'),
+        extractFunctionDeclaration(managementSource, 'chartTypeAllowedForChart'),
+        extractFunctionDeclaration(managementSource, 'chartCapabilitiesForChart'),
+        extractFunctionDeclaration(managementSource, 'analyticsValidatedChartView'),
+        extractFunctionDeclaration(managementSource, 'categoricalChartRow'),
+        extractFunctionDeclaration(managementSource, 'analyticsChartPoint'),
+        extractFunctionDeclaration(managementSource, 'sortedAnalyticsBarRows'),
+        extractFunctionDeclaration(managementSource, 'analyticsTooltipFormatter'),
+        extractFunctionDeclaration(managementSource, 'analyticsBarOption'),
+        extractFunctionDeclaration(managementSource, 'analyticsPieOption'),
+        extractFunctionDeclaration(managementSource, 'analyticsTreemapOption'),
+        extractFunctionDeclaration(managementSource, 'analyticsBubbleSymbolSize'),
+        extractFunctionDeclaration(managementSource, 'analyticsBubblePoints'),
+        extractFunctionDeclaration(managementSource, 'analyticsBubbleOption'),
+        extractFunctionDeclaration(managementSource, 'analyticsVisibleTrendSeries'),
+        extractFunctionDeclaration(managementSource, 'activityTrendOption'),
+        extractFunctionDeclaration(managementSource, 'analyticsCategoricalTrendOption'),
+        '({ ui, chartCapabilitiesForField, chartCapabilitiesForChart, analyticsValidatedChartView, categoricalChartRow, analyticsBarOption, analyticsPieOption, analyticsTreemapOption, analyticsBubbleSymbolSize, analyticsBubbleOption, analyticsTooltipFormatter, activityTrendOption, analyticsCategoricalTrendOption });'
+    ].join('\n');
+    const contract = vm.runInNewContext(source, {});
+    const rows = labels => labels.map(label => ({ label, count: 1, percent: 10, selectionPercent: 10 }));
+    const smallSingle = { chartKey: 'small', fieldType: 'single_choice', allowPie: true, allowTrend: true, rows: rows(['A', 'B', 'C', 'D', 'E', 'F']) };
+    const largeSingle = { chartKey: 'large', fieldType: 'single_choice', allowPie: true, allowTrend: true, rows: rows(['A', 'B', 'C', 'D', 'E', 'F', 'G']) };
+    const largeDropdown = { ...largeSingle, fieldType: 'dropdown' };
+    const multi = { chartKey: 'multi', fieldType: 'multiple_choice', allowPie: true, allowTrend: true, multiChoice: true, rows: [{ label: 'IoT', count: 72, percent: 72 / 102 * 100, selectionPercent: 72 / 155 * 100 }] };
+    const yesNo = { chartKey: 'yes-no', fieldType: 'yes_no', allowPie: true, allowTrend: true, rows: rows(['Yes', 'No']) };
+
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(smallSingle).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(smallSingle).moreTypes), JSON.stringify(['treemap']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeSingle).primaryTypes), JSON.stringify(['bar', 'treemap', 'trend']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeSingle).moreTypes), JSON.stringify(['pie']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeDropdown).primaryTypes), JSON.stringify(['bar', 'treemap', 'trend']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(multi).primaryTypes), JSON.stringify(['bar', 'bubble', 'trend']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(multi).moreTypes), JSON.stringify(['pie']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(yesNo).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(yesNo).moreTypes), JSON.stringify([]));
+    assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'bubble', valueMode: 'percentage' }).type, 'bar', 'unsuitable stored chart type must fall back to the capability fallback');
+    assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'pie' }).type, 'pie', 'More-contained valid chart type must remain selectable');
+
+    const respondentRow = contract.categoricalChartRow('IoT', 72, 102, 155);
+    assert(Math.abs(respondentRow.percent - 70.588) < 0.01, 'row.percent must remain respondent percentage');
+    assert(Math.abs(respondentRow.selectionPercent - 46.451) < 0.01, 'row.selectionPercent must remain selection composition');
+    const barOption = contract.analyticsBarOption({ title: 'Multi', rows: [respondentRow] }, { type: 'bar', valueMode: 'percentage' });
+    assert.strictEqual(barOption.series[0].data[0].value, 70.6, 'Bar percentage must use respondent percentage');
+    const pieOption = contract.analyticsPieOption({ title: 'Multi', rows: [respondentRow], multiChoice: true }, { type: 'pie', valueMode: 'percentage' });
+    assert.strictEqual(pieOption.series[0].data[0].value, 46.5, 'multiple-choice Pie geometry must use selection composition');
+    assert.strictEqual(pieOption.series[0].data[0].selectionComposition, true, 'multiple-choice Pie points must carry composition semantics');
+    assert(pieOption.series[0].data[0].respondentPercent > pieOption.series[0].data[0].selectionPercent, 'Pie point must preserve respondent percent separately');
+    const tooltip = contract.analyticsTooltipFormatter({ marker: '', name: 'IoT', data: pieOption.series[0].data[0] });
+    assert(tooltip.includes('填答者選取率') && tooltip.includes('選項組成占比'), 'multiple-choice Pie tooltip must distinguish respondent rate and selection composition');
+
+    const treemapOption = contract.analyticsTreemapOption({ title: 'Single', rows: [respondentRow] }, { type: 'treemap', valueMode: 'percentage' });
+    assert.strictEqual(treemapOption.series[0].type, 'treemap');
+    assert.strictEqual(treemapOption.series[0].data[0].value, 72, 'Treemap geometry must use count data');
+    assert.strictEqual(contract.analyticsBubbleSymbolSize(25, 100, 20, 60), 40, 'Bubble size must use sqrt-derived area-safe scaling');
+    const bubbleOption = contract.analyticsBubbleOption(multi, { type: 'bubble', valueMode: 'percentage' });
+    assert.strictEqual(bubbleOption.series[0].type, 'scatter', 'Bubble must use ECharts scatter');
+    assert.strictEqual(bubbleOption.series[0].data[0].realCount, 72, 'Bubble must size from respondent count data without backend transformation');
+    assert.strictEqual(Math.round(bubbleOption.series[0].data[0].realPercent * 10) / 10, 70.6, 'Bubble precise percent must remain respondent percentage');
+
+    assert(managementSource.includes('${capabilities.primaryTypes.map(value => `<button data-action="${action}"'), 'primary chart buttons must be rendered from capability order');
+    assert(managementSource.includes('${capabilities.moreTypes.map(value => `<button data-action="${action}"'), 'More chart buttons must be rendered separately without reordering primary buttons');
+    assert(managementSource.includes("${view.type === value ? ' ✓' : ''}"), 'selected More chart must be indicated inside the menu');
+
+    const activityTrend = contract.activityTrendOption({ dates: ['2026-08-01'], dailyCounts: [1], cumulativeCounts: [1] }, { activityMode: 'daily' });
+    assert.strictEqual(activityTrend.series[0].smooth, false, 'Activity Trend must render straight line segments');
+    assert(activityTrend.series[0].areaStyle, 'Activity Trend area fill must remain');
+    const categoricalTrend = contract.analyticsCategoricalTrendOption({ trend: { dates: ['2026-08-01'], answeredByDate: [1], series: [{ label: 'A', total: 1, counts: [1], percents: [100] }] } }, { valueMode: 'percentage' });
+    assert.strictEqual(categoricalTrend.series[0].smooth, false, 'Categorical Trend must render straight line segments');
 }
 
 function assertStableVisualAssetsAndActiveBannerSharingContract(managementSource, service) {
@@ -3481,6 +3587,7 @@ async function main() {
     assertContextFoundationSqlContract(activityIntelligenceSqlSource);
     assertDualStreamFormBuilderSourceContract(managementSource, apiSource, cssSource);
     assertRealActiveIntelligenceRuntimeSourceContract(managementSource, cssSource, service);
+    assertAnalyticsChartTypeImplementationContract(managementSource, cssSource);
     assertLongTextPreviewExplicitDesignerStateContract(managementSource);
     assertVisitorRecordPreviewIdentityContract(managementSource);
     assertRecordCardMetaResponsiveContract(managementSource, cssSource);
