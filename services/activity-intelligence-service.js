@@ -297,6 +297,21 @@ class ActivityIntelligenceService {
         return this._enrichSubmissionSummaries(enriched, user);
     }
 
+    async getOverviewSummary(query = {}, user = {}) {
+        const activities = await this.reader.listActivities();
+        const activityIds = activities.map(activity => activity.id).filter(Boolean);
+        const filters = {};
+        if (user && user.accessClass === 'guest' && user.userId) filters.recorderUserId = user.userId;
+        const submissions = await this.reader.listSubmissionOverviewRows(activityIds, filters);
+        const submissionIds = submissions.map(submission => submission.id).filter(Boolean);
+        const versionIds = [...new Set(submissions.map(submission => submission.formVersionId).filter(Boolean))];
+        const [answerRows, itemsByVersionId] = await Promise.all([
+            this.reader.getOverviewAnswerRowsBySubmissionIds(submissionIds),
+            this.reader.getItemsByVersionIds(versionIds)
+        ]);
+        return this._overviewSummaryDto(activities, submissions, answerRows, itemsByVersionId, query);
+    }
+
     async getFormAssistSuggestions(activityId, query = {}) {
         const activity = await this._requireActivity(activityId);
         const kind = String(query.kind || '').trim();
@@ -991,6 +1006,142 @@ class ActivityIntelligenceService {
             includeVoid: query.includeVoid === 'true' || query.includeVoid === true || state === 'void' || state === 'all',
             search: query.search || query.q || ''
         };
+    }
+
+    _overviewSummaryDto(activities, submissions, answerRows, itemsByVersionId, query = {}) {
+        const activityIds = new Set((activities || []).map(activity => activity.id).filter(Boolean));
+        const summaries = new Map();
+        activityIds.forEach(activityId => {
+            summaries.set(activityId, {
+                activityId,
+                total: 0,
+                active: 0,
+                today: 0,
+                recorders: 0,
+                low: 0,
+                lastRecord: '',
+                recentRecords: []
+            });
+        });
+
+        const timezoneOffsetMinutes = this._overviewTimezoneOffsetMinutes(query.timezoneOffsetMinutes || query.timezone_offset_minutes);
+        const today = this._overviewToday(query.today, timezoneOffsetMinutes);
+        const recordersByActivity = new Map();
+        const answersBySubmissionId = this._overviewAnswersBySubmissionId(answerRows);
+
+        (submissions || []).forEach(submission => {
+            if (!submission || !activityIds.has(submission.activityId)) return;
+            const summary = summaries.get(submission.activityId);
+            summary.total += 1;
+            if (!summary.lastRecord || String(submission.createdAt || '') > summary.lastRecord) {
+                summary.lastRecord = submission.createdAt || '';
+            }
+            if (submission.status === 'void') return;
+
+            summary.active += 1;
+            if (this._overviewLocalDate(submission.createdAt, timezoneOffsetMinutes) === today) summary.today += 1;
+            const recorders = recordersByActivity.get(submission.activityId) || new Set();
+            if (submission.createdByUserId) recorders.add(submission.createdByUserId);
+            recordersByActivity.set(submission.activityId, recorders);
+
+            const expected = this._overviewExpectedAnswerCount(itemsByVersionId.get(submission.formVersionId) || []);
+            const answered = this._overviewAnsweredCount(answersBySubmissionId.get(submission.id) || []);
+            if (answered <= 1) summary.low += 1;
+
+            summary.recentRecords.push(this._overviewRecentRecordDto(submission, answered, expected, answersBySubmissionId.get(submission.id) || []));
+        });
+
+        summaries.forEach(summary => {
+            summary.recorders = (recordersByActivity.get(summary.activityId) || new Set()).size;
+            summary.recentRecords = summary.recentRecords
+                .sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')))
+                .slice(0, 5);
+        });
+
+        return {
+            generatedAt: new Date().toISOString(),
+            activities: Array.from(summaries.values())
+        };
+    }
+
+    _overviewRecentRecordDto(submission, answered, expected, answerRows) {
+        return {
+            id: submission.id,
+            submissionId: submission.id,
+            activityId: submission.activityId,
+            formVersionId: submission.formVersionId,
+            recordContext: submission.recordContext || DEFAULT_FORM_CONTEXT,
+            status: submission.status || 'active',
+            createdByUserId: submission.createdByUserId,
+            createdByDisplayName: submission.createdByDisplayName,
+            createdAt: submission.createdAt,
+            updatedByUserId: submission.updatedByUserId,
+            updatedByDisplayName: submission.updatedByDisplayName,
+            updatedAt: submission.updatedAt,
+            overviewSummaryText: this._overviewSummaryText(answerRows, submission.id),
+            overviewCoverage: { answered, total: expected }
+        };
+    }
+
+    _overviewAnswersBySubmissionId(answerRows) {
+        return (answerRows || []).reduce((acc, row) => {
+            if (!row || !row.submissionId) return acc;
+            const list = acc.get(row.submissionId) || [];
+            list.push(row);
+            acc.set(row.submissionId, list);
+            return acc;
+        }, new Map());
+    }
+
+    _overviewExpectedAnswerCount(items) {
+        return (items || []).filter(item => ANSWER_ITEM_TYPES.has(item.type) && item.visible !== false && !item.retired && !item.removedInDraft).length;
+    }
+
+    _overviewAnsweredCount(answerRows) {
+        return (answerRows || []).filter(row => this._overviewAnswerHasValue(row)).length;
+    }
+
+    _overviewAnswerHasValue(row) {
+        if (!row) return false;
+        if (row.valueBoolean !== null && row.valueBoolean !== undefined) return true;
+        if (row.valueNumber !== null && row.valueNumber !== undefined) return true;
+        if (row.valueText !== null && row.valueText !== undefined && String(row.valueText).trim()) return true;
+        if (row.valueJsonb !== null && row.valueJsonb !== undefined) {
+            if (Array.isArray(row.valueJsonb)) return row.valueJsonb.length > 0;
+            if (typeof row.valueJsonb === 'object') return Object.keys(row.valueJsonb).length > 0;
+            return String(row.valueJsonb).trim().length > 0;
+        }
+        return false;
+    }
+
+    _overviewSummaryText(answerRows, fallback) {
+        const first = (answerRows || []).find(row => this._overviewAnswerHasValue(row));
+        if (!first) return fallback || '';
+        if (first.valueText !== null && first.valueText !== undefined && String(first.valueText).trim()) return String(first.valueText).trim();
+        if (first.valueNumber !== null && first.valueNumber !== undefined) return String(first.valueNumber);
+        if (first.valueBoolean !== null && first.valueBoolean !== undefined) return first.valueBoolean ? '是' : '否';
+        if (first.valueJsonb !== null && first.valueJsonb !== undefined) return this._formAssistAnswerText(first.valueJsonb);
+        return fallback || '';
+    }
+
+    _overviewToday(value, timezoneOffsetMinutes) {
+        const supplied = String(value || '').trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(supplied)) return supplied;
+        return this._overviewLocalDate(new Date().toISOString(), timezoneOffsetMinutes);
+    }
+
+    _overviewLocalDate(value, timezoneOffsetMinutes = 0) {
+        if (!value) return '';
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return String(value).slice(0, 10);
+        const local = new Date(parsed.getTime() - timezoneOffsetMinutes * 60000);
+        return local.toISOString().slice(0, 10);
+    }
+
+    _overviewTimezoneOffsetMinutes(value) {
+        const number = Number(value);
+        if (!Number.isFinite(number)) return 0;
+        return Math.max(-840, Math.min(840, Math.trunc(number)));
     }
 
     _formAssistSemanticForItem(item = {}) {

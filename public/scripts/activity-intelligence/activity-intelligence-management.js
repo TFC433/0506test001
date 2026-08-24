@@ -133,6 +133,7 @@
   let currentUser = null;
   const formBundles = new Map();
   const recordLoadState = new Map();
+  const overviewSummaries = new Map();
   let rawCards = [];
   let rawCardsLoaded = false;
   let writeInFlight = false;
@@ -332,20 +333,67 @@
     state.selectedActivityId = ui.selectedActivityId || null;
     state.records = [];
     recordLoadState.clear();
+    overviewSummaries.clear();
   }
 
   async function loadOverviewData(options) {
     if (!currentUser || !currentUser.authenticated || !canManageActivities()) return;
     if (options && options.refreshActivities) await loadActivitiesFromApi();
-    await refreshOverviewRecords({ force: Boolean(options && options.force) });
+    await refreshOverviewSummary({ force: Boolean(options && options.force) });
   }
 
-  async function refreshOverviewRecords(options) {
-    const activities = state.activities.slice();
-    await Promise.all(activities.map(activity => loadRecordsForActivity(activity.id, {
-      includeVoid: true,
-      force: Boolean(options && options.force)
-    })));
+  async function refreshOverviewSummary(options) {
+    if (!window.ActivityIntelligenceApi || typeof window.ActivityIntelligenceApi.getOverviewSummary !== 'function') return;
+    if (overviewSummaries.size && !(options && options.force)) return;
+    const summary = await window.ActivityIntelligenceApi.getOverviewSummary({
+      today: Store.localToday(),
+      timezoneOffsetMinutes: new Date().getTimezoneOffset()
+    });
+    overviewSummaries.clear();
+    ((summary && summary.activities) || []).forEach(row => {
+      const normalized = normalizeOverviewSummaryDto(row);
+      if (normalized.activityId) overviewSummaries.set(normalized.activityId, normalized);
+    });
+  }
+
+  function normalizeOverviewSummaryDto(row) {
+    const source = row || {};
+    return {
+      activityId: source.activityId || source.activity_id || '',
+      total: Number(source.total || 0),
+      active: Number(source.active || 0),
+      today: Number(source.today || 0),
+      recorders: Number(source.recorders || 0),
+      high: Number(source.high || 0),
+      low: Number(source.low || 0),
+      lastRecord: source.lastRecord || source.last_record || '',
+      recentRecords: ((source.recentRecords || source.recent_records) || []).map(normalizeOverviewRecentRecordDto)
+    };
+  }
+
+  function normalizeOverviewRecentRecordDto(record) {
+    const source = record || {};
+    const summaryText = source.overviewSummaryText || source.summaryText || source.summary_text || source.id || source.submissionId || '';
+    return {
+      id: source.submissionId || source.id || '',
+      submissionId: source.submissionId || source.id || '',
+      activityId: source.activityId || source.activity_id || '',
+      formVersionId: source.formVersionId || source.form_version_id || '',
+      recordContext: source.recordContext || source.record_context || formContextVisitorMode,
+      status: source.status || 'active',
+      answers: { customerName: summaryText },
+      runtimeOtherAnswers: {},
+      supplementalSummary: normalizeSupplementalSummary(null),
+      supplements: normalizeSupplements(null),
+      supplementalDetailsLoaded: false,
+      createdByUserId: source.createdByUserId || source.created_by_user_id || '',
+      createdByDisplayName: source.createdByDisplayName || source.created_by_display_name || '',
+      createdAt: source.createdAt || source.created_at || '',
+      updatedByUserId: source.updatedByUserId || source.updated_by_user_id || '',
+      updatedByDisplayName: source.updatedByDisplayName || source.updated_by_display_name || '',
+      updatedAt: source.updatedAt || source.updated_at || '',
+      overviewCoverage: source.overviewCoverage || source.overview_coverage || null
+    };
   }
 
   function normalizeActivityDto(activity) {
@@ -1651,7 +1699,7 @@
   function renderActivityOverview(activity) {
     const metrics = activityMetrics(activity.id);
     const status = activityStatus(activity);
-    const latest = recordsFor(activity.id).filter(r => r.status !== 'void').sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
+    const latest = overviewRecentRecords(activity.id);
     return `
       <div class="aim-grid-2">
         <div>
@@ -5648,6 +5696,7 @@
     if (action === 'activity-overview' && canManageActivities()) {
       ui.view = 'workspace';
       ui.tab = 'overview';
+      await loadPublishedFormForActivity(ui.selectedActivityId);
     }
     if (action === 'all' && canManageActivities()) {
       ui.view = 'overview';
@@ -5658,7 +5707,7 @@
       ui.selectedActivityId = el.dataset.id;
       ui.view = 'workspace';
       ui.tab = 'overview';
-      await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
+      await loadPublishedFormForActivity(ui.selectedActivityId);
     }
     if (action === 'choose-current-activity' && currentUser && currentUser.authenticated) {
       await chooseCurrentActivity(el.dataset.id);
@@ -5668,6 +5717,7 @@
     }
     if (action === 'tab') {
       selectTab(el.dataset.tab);
+      if (ui.tab === 'overview' && ui.view === 'workspace') await loadPublishedFormForActivity(ui.selectedActivityId);
       if (ui.tab === 'form') await loadFormBundleForActivity(ui.selectedActivityId, currentFormContext());
       if (ui.tab === 'records' || ui.tab === 'analytics') await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
     }
@@ -5755,7 +5805,8 @@
     if (action === 'clear-custom-period') clearCustomPeriod();
     if (action === 'reset-more-filters') resetMoreFilters();
     if (action === 'open-record-inline') {
-      const record = state.records.find(r => r.id === el.dataset.id);
+      let record = state.records.find(r => r.id === el.dataset.id);
+      if (!record && el.dataset.id) record = await fetchRecordDetails(el.dataset.id);
       if (canViewRecord(record, selectedActivity())) {
         ui.tab = 'records';
         ui.records.scope = 'all';
@@ -7350,6 +7401,8 @@
   }
 
   function activityMetrics(activityId) {
+    const overviewSummary = overviewSummaries.get(activityId);
+    if (overviewSummary && !recordsLoadedForActivity(activityId)) return overviewSummary;
     const rows = recordsFor(activityId);
     const active = rows.filter(r => r.status !== 'void');
     const latest = rows.slice().sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
@@ -7367,12 +7420,24 @@
   }
 
   function overviewKpis() {
-    const today = Store.localToday();
+    const metrics = state.activities.map(activity => activityMetrics(activity.id));
     return {
       open: state.activities.filter(a => activityStatus(a).key === 'open').length,
-      activeRecords: state.records.filter(r => r.status !== 'void').length,
-      today: state.records.filter(r => r.status !== 'void' && recordLocalDate(r) === today).length
+      activeRecords: metrics.reduce((sum, item) => sum + Number(item.active || 0), 0),
+      today: metrics.reduce((sum, item) => sum + Number(item.today || 0), 0)
     };
+  }
+
+  function overviewRecentRecords(activityId) {
+    if (recordsLoadedForActivity(activityId)) {
+      return recordsFor(activityId).filter(r => r.status !== 'void').sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5);
+    }
+    const overviewSummary = overviewSummaries.get(activityId);
+    return overviewSummary ? overviewSummary.recentRecords : [];
+  }
+
+  function recordsLoadedForActivity(activityId) {
+    return recordLoadState.get(`${activityId}:all`) === 'loaded';
   }
 
   function recordCoverage(record, activity) {

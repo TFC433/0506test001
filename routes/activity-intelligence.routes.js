@@ -159,6 +159,7 @@ async function requireSubmissionAccess(req, res, next) {
 }
 
 router.get('/activities', (req, res, next) => getController(req).listActivities(req, res, next));
+router.get('/overview-summary', requireSubmissionListAccess, scopeSubmissionList, (req, res, next) => getController(req).getOverviewSummary(req, res, next));
 router.post('/activities', requireRole(ADMIN_ROLES), (req, res, next) => getController(req).createActivity(req, res, next));
 router.get('/activities/:activityId', (req, res, next) => getController(req).getActivity(req, res, next));
 router.patch('/activities/:activityId', requireRole(ADMIN_ROLES), (req, res, next) => getController(req).updateActivity(req, res, next));

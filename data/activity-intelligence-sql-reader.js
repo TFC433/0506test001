@@ -132,6 +132,50 @@ class ActivityIntelligenceSqlReader {
         return this.hydrateSubmissionDetails(submissions, { search: filters.search });
     }
 
+    async listSubmissionOverviewRows(activityIds, filters = {}) {
+        const ids = Array.isArray(activityIds) ? [...new Set(activityIds.filter(Boolean))] : [];
+        if (!ids.length) return [];
+
+        let query = supabase
+            .from(this.submissionsTable)
+            .select('submission_id,activity_id,form_version_id,record_context,status,created_by_user_id,created_by_display_name,created_at,updated_by_user_id,updated_by_display_name,updated_at')
+            .in('activity_id', ids);
+
+        if (filters.recorderUserId) query = query.eq('created_by_user_id', filters.recorderUserId);
+
+        const { data, error } = await query.order('created_at', { ascending: false });
+        if (error) throw this._dbError('listSubmissionOverviewRows', error);
+        return (data || []).map(row => this.mapSubmissionRow(row));
+    }
+
+    async getOverviewAnswerRowsBySubmissionIds(submissionIds) {
+        const ids = Array.isArray(submissionIds) ? [...new Set(submissionIds.filter(Boolean))] : [];
+        if (!ids.length) return [];
+
+        const rows = [];
+        let from = 0;
+
+        while (true) {
+            const to = from + ANSWER_HYDRATION_PAGE_SIZE - 1;
+            const { data, error } = await supabase
+                .from(this.answersTable)
+                .select('submission_id,form_item_id,value_text,value_number,value_boolean,value_jsonb,other_text')
+                .in('submission_id', ids)
+                .order('submission_answer_id', { ascending: true })
+                .range(from, to);
+
+            if (error) throw this._dbError('getOverviewAnswerRowsBySubmissionIds', error);
+
+            const pageRows = data || [];
+            rows.push(...pageRows);
+
+            if (pageRows.length < ANSWER_HYDRATION_PAGE_SIZE) break;
+            from += ANSWER_HYDRATION_PAGE_SIZE;
+        }
+
+        return rows.map(row => this.mapAnswerRow(row));
+    }
+
     async listFormAssistItems() {
         const { data, error } = await supabase
             .from(this.formItemsTable)

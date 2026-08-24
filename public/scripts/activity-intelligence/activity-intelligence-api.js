@@ -62,6 +62,15 @@
       return request('/activities');
     },
 
+    getOverviewSummary(query) {
+      const params = new URLSearchParams();
+      Object.entries(query || {}).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') params.set(key, value);
+      });
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      return request(`/overview-summary${suffix}`);
+    },
+
     createActivity(payload) {
       return jsonRequest('POST', '/activities', payload);
     },

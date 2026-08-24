@@ -10,6 +10,13 @@ class ActivityIntelligenceController {
         });
     };
 
+    getOverviewSummary = async (req, res) => {
+        await this._handle(res, async () => {
+            const data = await this.activityIntelligenceService.getOverviewSummary(req.query, req.user);
+            res.json({ success: true, data });
+        });
+    };
+
     createActivity = async (req, res) => {
         await this._handle(res, async () => {
             const data = await this.activityIntelligenceService.createActivity(req.body, req.user);

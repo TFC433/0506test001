@@ -120,6 +120,31 @@ function makeHarness(options = {}) {
     };
     const versionIdForFormContext = formContext => formContext === 'field_intelligence' ? IDS.activePublishedVersion : IDS.publishedVersion;
     const draftVersionIdForFormContext = formContext => formContext === 'field_intelligence' ? IDS.activeDraftVersion : IDS.draftVersion;
+    const itemsForVersionId = versionId => {
+        if (versionId === IDS.oldVersion) return oldItems;
+        if (versionId === IDS.activePublishedVersion) return activeItems;
+        return publishedItems;
+    };
+    const answerRowsForSubmission = submission => {
+        const items = itemsForVersionId(submission.formVersionId);
+        return Object.entries(submission.answers || {}).map(([fieldId, value]) => {
+            const item = items.find(candidate => candidate.fieldId === fieldId || candidate.itemKey === fieldId);
+            const row = {
+                submissionId: submission.id,
+                formItemId: item && item.formItemId,
+                valueText: null,
+                valueNumber: null,
+                valueBoolean: null,
+                valueJsonb: null,
+                otherText: null
+            };
+            if (typeof value === 'number') row.valueNumber = value;
+            else if (typeof value === 'boolean') row.valueBoolean = value;
+            else if (Array.isArray(value) || (value && typeof value === 'object')) row.valueJsonb = value;
+            else row.valueText = value;
+            return row;
+        });
+    };
     const formBundleForContext = (activityId, formContext = 'visitor') => {
         if (missingFormContexts.has(formContext) && !initializedFormContexts.has(formContext)) {
             return { published: null, draft: null };
@@ -169,6 +194,36 @@ function makeHarness(options = {}) {
                 if (filters.recorderDisplayName && submission.createdByDisplayName !== filters.recorderDisplayName) return false;
                 return true;
             });
+        },
+        async listSubmissionOverviewRows(activityIds, filters = {}) {
+            calls.listSubmissionOverviewRows = { activityIds, filters };
+            const ids = new Set(activityIds || []);
+            return [...submissions.values()].filter(submission => {
+                if (!ids.has(submission.activityId)) return false;
+                if (filters.recorderUserId && submission.createdByUserId !== filters.recorderUserId) return false;
+                return true;
+            }).map(submission => ({
+                id: submission.id,
+                activityId: submission.activityId,
+                formVersionId: submission.formVersionId,
+                recordContext: submission.recordContext,
+                status: submission.status,
+                createdByUserId: submission.createdByUserId,
+                createdByDisplayName: submission.createdByDisplayName,
+                createdAt: submission.createdAt,
+                updatedByUserId: submission.updatedByUserId,
+                updatedByDisplayName: submission.updatedByDisplayName,
+                updatedAt: submission.updatedAt
+            }));
+        },
+        async getOverviewAnswerRowsBySubmissionIds(submissionIds) {
+            calls.getOverviewAnswerRowsBySubmissionIds = submissionIds;
+            const ids = new Set(submissionIds || []);
+            return [...submissions.values()].filter(submission => ids.has(submission.id)).flatMap(answerRowsForSubmission);
+        },
+        async getItemsByVersionIds(versionIds) {
+            calls.getItemsByVersionIds = versionIds;
+            return new Map((versionIds || []).map(versionId => [versionId, itemsForVersionId(versionId)]));
         },
         async getSubmissionById(id) {
             return submissions.get(id) || null;
@@ -2140,6 +2195,37 @@ function assertDesktopUnifiedVisitorRecordLandingContract(managementSource) {
     });
 }
 
+async function assertOverviewLoadOptimizationContract(managementSource, apiSource, routesSource, controllerSource) {
+    assert(apiSource.includes('getOverviewSummary(query)'), 'client API must expose a lightweight Overview summary request');
+    assert(apiSource.includes('return request(`/overview-summary${suffix}`);'), 'Overview summary API must use the single summary endpoint');
+    assert(routesSource.includes("router.get('/overview-summary', requireSubmissionListAccess, scopeSubmissionList"), 'Overview summary route must reuse existing submission-list auth boundaries');
+    assert(controllerSource.includes('getOverviewSummary = async (req, res) =>'), 'controller must expose Overview summary handler');
+
+    const loadOverviewDataSource = extractFunctionDeclaration(managementSource, 'loadOverviewData');
+    assert(loadOverviewDataSource.includes('await refreshOverviewSummary('), 'initial Overview must load summary data');
+    assert(!loadOverviewDataSource.includes('refreshOverviewRecords'), 'initial Overview must not call the legacy all-activity full-record refresh');
+    assert(!managementSource.includes('Promise.all(activities.map(activity => loadRecordsForActivity(activity.id'), 'NO_INITIAL_ALL_ACTIVITY_FULL_SUBMISSION_FANOUT');
+    assert(!managementSource.includes('async function refreshOverviewRecords'), 'legacy all-activity full-record refresh helper must be removed');
+    assert(managementSource.includes("if (ui.tab === 'records' || ui.tab === 'analytics') await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });"), 'Records and Analytics must still load full records on demand');
+    assert(managementSource.includes("if (ui.tab === 'overview' && ui.view === 'workspace') await loadPublishedFormForActivity(ui.selectedActivityId);"), 'selected activity Overview may load its one published form for field-count display');
+
+    const harness = makeHarness();
+    const summary = await harness.service.getOverviewSummary({ today: '2026-08-15', timezoneOffsetMinutes: 0 }, actor());
+    assert.strictEqual(harness.calls.listSubmissions, undefined, 'Overview summary must not call full submission hydration');
+    assert.strictEqual(harness.calls.getPublishedForm, undefined, 'Overview summary must not fetch every published form');
+    assert.deepStrictEqual(harness.calls.listSubmissionOverviewRows.activityIds, [IDS.activity], 'Overview summary must request one lightweight multi-activity row set');
+    assert.strictEqual(harness.calls.getOverviewAnswerRowsBySubmissionIds.length, 4, 'Overview low-count/recent summary may use lightweight answer projection');
+    const activitySummary = summary.activities.find(item => item.activityId === IDS.activity);
+    assert(activitySummary, 'Overview summary must include the activity row');
+    assert.strictEqual(activitySummary.total, 4, 'Overview total must include void records like the previous activity table metric');
+    assert.strictEqual(activitySummary.active, 3, 'Overview active count must exclude void records');
+    assert.strictEqual(activitySummary.today, 1, 'Overview today count must use non-void records for the supplied local day');
+    assert.strictEqual(activitySummary.recorders, 3, 'Overview recorder count must use unique non-void recorder user ids');
+    assert.strictEqual(activitySummary.low, 2, 'Overview low-completeness count must preserve answered <= 1 semantics for non-void records');
+    assert.strictEqual(activitySummary.recentRecords.length, 3, 'Overview recent projection must exclude void records');
+    assert.strictEqual(activitySummary.recentRecords[0].id, IDS.activeAiSubmission, 'Overview recent projection must be newest-first');
+}
+
 function assertCardAssistShortTextMappingBuilderContract(managementSource) {
     const source = [
         "const fieldTypes = [['section_heading', 'Section'], ['information_text', 'Info'], ['short_text', 'Short'], ['long_text', 'Long'], ['number', 'Number'], ['yes_no', 'Yes No'], ['single_choice', 'Single'], ['multiple_choice', 'Multiple'], ['dropdown', 'Dropdown']];",
@@ -3603,6 +3689,8 @@ async function main() {
 
     const managementSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'scripts', 'activity-intelligence', 'activity-intelligence-management.js'), 'utf8');
     const apiSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'scripts', 'activity-intelligence', 'activity-intelligence-api.js'), 'utf8');
+    const routesSource = fs.readFileSync(path.join(__dirname, '..', 'routes', 'activity-intelligence.routes.js'), 'utf8');
+    const controllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'activity-intelligence.controller.js'), 'utf8');
     const cssSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles', 'activity-intelligence', 'activity-intelligence-management.css'), 'utf8');
     const activityIntelligenceSqlSource = fs.readFileSync(path.join(__dirname, '..', 'docs', 'schema', 'activity-intelligence-transactions-v1.sql'), 'utf8');
     assertFormAssistCjkContract(managementSource);
@@ -3617,6 +3705,7 @@ async function main() {
     assertVisitorRecordPreviewIdentityContract(managementSource);
     assertRecordCardMetaResponsiveContract(managementSource, cssSource);
     assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiSource, cssSource, activityIntelligenceSqlSource);
+    await assertOverviewLoadOptimizationContract(managementSource, apiSource, routesSource, controllerSource);
     assert(managementSource.includes("if (ui.analytics.ai.state === 'loading') return;"));
     assert(managementSource.includes("state === 'loading'"));
     assert(!managementSource.includes('FORM_GEMINI_API_KEY'));
