@@ -4906,17 +4906,14 @@
 
   function chartCapabilitiesForField(field, chart) {
     const type = field && field.type ? field.type : (chart && chart.fieldType);
-    const nonZeroRows = ((chart && chart.rows) || []).filter(row => Number(row.count || 0) > 0).length;
     if (type === 'yes_no') {
       return { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: [], fallbackType: 'bar' };
     }
     if (type === 'multiple_choice') {
-      return { primaryTypes: ['bar', 'bubble', 'trend'], moreTypes: ['pie'], fallbackType: 'bar' };
+      return { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: ['bubble'], fallbackType: 'bar' };
     }
     if (type === 'single_choice' || type === 'dropdown') {
-      return nonZeroRows >= 7
-        ? { primaryTypes: ['bar', 'treemap', 'trend'], moreTypes: ['pie'], fallbackType: 'bar' }
-        : { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: ['treemap'], fallbackType: 'bar' };
+      return { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: ['treemap'], fallbackType: 'bar' };
     }
     return {
       primaryTypes: ['bar'].concat(chart && chart.allowPie ? ['pie'] : [], chart && chart.allowTrend ? ['trend'] : []),
@@ -4977,13 +4974,14 @@
     const moreActive = capabilities.moreTypes.includes(view.type);
     const openKey = scope === 'mobile' ? ui.analytics.mobileChartMoreOpen : ui.analytics.chartMoreOpen;
     const open = openKey === chart.chartKey;
+    const moreLabel = moreActive ? `更多：${analyticsChartTypeLabels[view.type] || view.type}` : '更多';
     return `
       <div class="aim-chart-segment">
         ${capabilities.primaryTypes.map(value => `<button data-action="${action}" data-chart-key="${Store.escapeHtml(chart.chartKey)}" data-control="type" data-value="${value}" aria-pressed="${view.type === value}" type="button">${Store.escapeHtml(analyticsChartTypeLabels[value] || value)}</button>`).join('')}
       </div>
       ${capabilities.moreTypes.length ? `
         <div class="aim-chart-more-control">
-          <button class="aim-chart-more-button" data-action="${scope === 'mobile' ? 'mobile-analytics-chart-more' : 'analytics-chart-more'}" data-chart-key="${Store.escapeHtml(chart.chartKey)}" type="button" aria-haspopup="true" aria-expanded="${open}" aria-pressed="${moreActive}">更多</button>
+          <button class="aim-chart-more-button" data-action="${scope === 'mobile' ? 'mobile-analytics-chart-more' : 'analytics-chart-more'}" data-chart-key="${Store.escapeHtml(chart.chartKey)}" type="button" aria-haspopup="true" aria-expanded="${open}" aria-pressed="${moreActive}">${Store.escapeHtml(moreLabel)}</button>
           ${open ? `<div class="aim-chart-more-menu" role="listbox" aria-label="更多圖表類型">
             ${capabilities.moreTypes.map(value => `<button data-action="${action}" data-chart-key="${Store.escapeHtml(chart.chartKey)}" data-control="type" data-value="${value}" role="option" aria-selected="${view.type === value}" type="button">${Store.escapeHtml(analyticsChartTypeLabels[value] || value)}${view.type === value ? ' ✓' : ''}</button>`).join('')}
           </div>` : ''}

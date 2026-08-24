@@ -4925,6 +4925,7 @@ a:focus-visible {
   cursor: pointer;
   font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .aim-chart-segment button:last-child {

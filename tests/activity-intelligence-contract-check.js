@@ -1636,6 +1636,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         extractFunctionDeclaration(managementSource, 'chartTypeAllowedForChart'),
         extractFunctionDeclaration(managementSource, 'chartCapabilitiesForChart'),
         extractFunctionDeclaration(managementSource, 'analyticsValidatedChartView'),
+        extractFunctionDeclaration(managementSource, 'renderAnalyticsChartTypeControls'),
         extractFunctionDeclaration(managementSource, 'categoricalChartRow'),
         extractFunctionDeclaration(managementSource, 'analyticsChartPoint'),
         extractFunctionDeclaration(managementSource, 'sortedAnalyticsBarRows'),
@@ -1649,7 +1650,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         extractFunctionDeclaration(managementSource, 'analyticsVisibleTrendSeries'),
         extractFunctionDeclaration(managementSource, 'activityTrendOption'),
         extractFunctionDeclaration(managementSource, 'analyticsCategoricalTrendOption'),
-        '({ ui, chartCapabilitiesForField, chartCapabilitiesForChart, analyticsValidatedChartView, categoricalChartRow, analyticsBarOption, analyticsPieOption, analyticsTreemapOption, analyticsBubbleSymbolSize, analyticsBubbleOption, analyticsTooltipFormatter, activityTrendOption, analyticsCategoricalTrendOption });'
+        '({ ui, chartCapabilitiesForField, chartCapabilitiesForChart, analyticsValidatedChartView, renderAnalyticsChartTypeControls, categoricalChartRow, analyticsBarOption, analyticsPieOption, analyticsTreemapOption, analyticsBubbleSymbolSize, analyticsBubbleOption, analyticsTooltipFormatter, activityTrendOption, analyticsCategoricalTrendOption });'
     ].join('\n');
     const contract = vm.runInNewContext(source, {});
     const rows = labels => labels.map(label => ({ label, count: 1, percent: 10, selectionPercent: 10 }));
@@ -1661,15 +1662,25 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
 
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(smallSingle).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(smallSingle).moreTypes), JSON.stringify(['treemap']));
-    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeSingle).primaryTypes), JSON.stringify(['bar', 'treemap', 'trend']));
-    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeSingle).moreTypes), JSON.stringify(['pie']));
-    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeDropdown).primaryTypes), JSON.stringify(['bar', 'treemap', 'trend']));
-    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(multi).primaryTypes), JSON.stringify(['bar', 'bubble', 'trend']));
-    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(multi).moreTypes), JSON.stringify(['pie']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeSingle).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeSingle).moreTypes), JSON.stringify(['treemap']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeDropdown).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeDropdown).moreTypes), JSON.stringify(['treemap']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(multi).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(multi).moreTypes), JSON.stringify(['bubble']));
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(yesNo).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(yesNo).moreTypes), JSON.stringify([]));
+    assert.strictEqual(contract.analyticsValidatedChartView(smallSingle, {}).type, 'bar', 'Bar must remain the default chart');
+    assert.strictEqual(contract.analyticsValidatedChartView(multi, {}).type, 'bar', 'multiple-choice must not default to Bubble');
     assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'bubble', valueMode: 'percentage' }).type, 'bar', 'unsuitable stored chart type must fall back to the capability fallback');
-    assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'pie' }).type, 'pie', 'More-contained valid chart type must remain selectable');
+    assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'pie' }).type, 'pie', 'primary Pie chart type must remain selectable');
+    assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'treemap' }).type, 'treemap', 'More-contained Treemap chart type must remain selectable');
+    assert.strictEqual(contract.analyticsValidatedChartView(multi, { type: 'bubble' }).type, 'bubble', 'More-contained Bubble chart type must remain selectable');
+    const yesNoControls = contract.renderAnalyticsChartTypeControls(yesNo, { type: 'bar' }, 'analytics-chart-view', 'desktop');
+    assert(!yesNoControls.includes('analytics-chart-more'), 'empty More control must not render');
+    const treemapControls = contract.renderAnalyticsChartTypeControls(largeSingle, { type: 'treemap' }, 'analytics-chart-view', 'desktop');
+    assert(treemapControls.includes('更多：Treemap') && treemapControls.includes('aria-pressed="true"'), 'active More chart state must be represented on the More trigger');
+    assert(treemapControls.indexOf('data-value="bar"') < treemapControls.indexOf('data-value="pie"') && treemapControls.indexOf('data-value="pie"') < treemapControls.indexOf('data-value="trend"'), 'primary toolbar order must remain Bar, Pie, Trend');
 
     const respondentRow = contract.categoricalChartRow('IoT', 72, 102, 155);
     assert(Math.abs(respondentRow.percent - 70.588) < 0.01, 'row.percent must remain respondent percentage');
