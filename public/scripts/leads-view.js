@@ -32,12 +32,55 @@ let leadPagination = {
     counts: { all: 0, mine: 0, pending: 0, myPending: 0 }
 };
 let leadListRequestId = 0;
+const FANUC_CARD_IMAGE_PRELOAD_ROOT_MARGIN = '900px 0px 900px 0px';
+let leadCardImageObserver = null;
 
 function leadDriveImageProxyUrl(driveLink, representation = 'source', profile = 'card') {
     const params = [`representation=${encodeURIComponent(representation)}`];
     if (representation === 'thumbnail') params.push(`profile=${encodeURIComponent(profile)}`);
     params.push(`link=${encodeURIComponent(driveLink)}`);
     return `/api/drive/thumbnail?${params.join('&')}`;
+}
+
+function disconnectLeadCardImageObserver() {
+    if (!leadCardImageObserver) return;
+    leadCardImageObserver.disconnect();
+    leadCardImageObserver = null;
+}
+
+function activateLeadCardSourceImage(img) {
+    if (!img || img.dataset.sourceLoaded === '1') return;
+    const sourceUrl = img.dataset.sourceUrl;
+    if (!sourceUrl) return;
+    img.dataset.sourceLoaded = '1';
+    img.removeAttribute('data-source-url');
+    img.src = sourceUrl;
+}
+
+function observeLeadCardImages() {
+    const grid = document.getElementById('leads-grid');
+    if (!grid) return;
+    const images = Array.from(grid.querySelectorAll('img[data-source-url]'));
+    if (images.length === 0) return;
+
+    if (!('IntersectionObserver' in window)) {
+        images.forEach(activateLeadCardSourceImage);
+        return;
+    }
+
+    leadCardImageObserver = new IntersectionObserver((entries, observer) => {
+        entries.forEach(entry => {
+            if (!entry.isIntersecting && entry.intersectionRatio <= 0) return;
+            observer.unobserve(entry.target);
+            activateLeadCardSourceImage(entry.target);
+        });
+    }, {
+        root: null,
+        rootMargin: FANUC_CARD_IMAGE_PRELOAD_ROOT_MARGIN,
+        threshold: 0.01
+    });
+
+    images.forEach(img => leadCardImageObserver.observe(img));
 }
 
 // [Phase 8.4 Exhibition UX] Independent filter state and globally stored config
@@ -870,6 +913,7 @@ function renderLeads() {
     const searchTerm = document.getElementById('search-input').value.toLowerCase().trim();
 
     if (!grid) return;
+    disconnectLeadCardImageObserver();
 
     let filtered = allLeads.filter(lead => {
         const hasName = lead.name && lead.name.trim() !== '';
@@ -917,6 +961,7 @@ function renderLeads() {
     grid.style.display = 'flex'; 
     if(emptyState) emptyState.style.display = 'none';
     grid.innerHTML = filtered.map(lead => createCardHTML(lead)).join('');
+    observeLeadCardImages();
 }
 
 function ensurePaginationElement() {
@@ -1004,7 +1049,7 @@ function createCardHTML(lead) {
         : null;
 
     const imageHtml = imageUrl 
-        ? `<img src="${imageUrl}" alt="名片" loading="lazy" onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\\'placeholder\\'>📇</div>';">`
+        ? `<img data-source-url="${imageUrl}" data-source-loaded="0" alt="名片" loading="lazy" onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\\'placeholder\\'>📇</div>';">`
         : `<div class="placeholder">📇</div>`;
 
     const isExhibition = lead.is_exhibition === true || String(lead.is_exhibition).toUpperCase() === 'TRUE';

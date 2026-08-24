@@ -2895,9 +2895,15 @@ function assertDriveThumbnailRepresentationContract(sources) {
     assert(leadsSource.includes("const LEAD_LIST_PAGE_SIZE = 50;"), 'FANUC card page size must remain 50 records');
     assert(fanucCardMainListSource.includes("leadDriveImageProxyUrl(lead.driveLink, 'source')"), 'FANUC card main list must request source representation');
     assert(!fanucCardMainListSource.includes("leadDriveImageProxyUrl(lead.driveLink, 'thumbnail', 'card')"), 'FANUC card main list must not request Drive thumbnail representation');
+    assert(fanucCardMainListSource.includes('data-source-url="${imageUrl}"'), 'FANUC card main list source URL must be deferred until near viewport');
+    assert(!fanucCardMainListSource.includes('<img src="${imageUrl}"'), 'FANUC card main list must not make source images immediately eligible');
+    assert(leadsSource.includes('new IntersectionObserver'), 'FANUC card main list must use IntersectionObserver for near-viewport loading');
+    assert(leadsSource.includes('root: null'), 'FANUC card observer must use the browser viewport root');
+    assert(leadsSource.includes("rootMargin: FANUC_CARD_IMAGE_PRELOAD_ROOT_MARGIN"), 'FANUC card observer must use the declared preload margin');
+    assert(leadsSource.includes('disconnectLeadCardImageObserver();'), 'FANUC card rerender must disconnect stale observed nodes');
+    assert(leadsSource.includes('observeLeadCardImages();'), 'FANUC card rerender must register the current page images');
     assert(leadsSource.includes("leadDriveImageProxyUrl(driveLink, 'source')"), 'FANUC card lightbox must request source representation');
     assert(leadsSource.includes("leadDriveImageProxyUrl(lead.driveLink, 'source')"), 'FANUC card edit preview must request source representation');
-    assert(!leadsSource.includes('IntersectionObserver'), 'FANUC card restore must not introduce near-viewport loading');
 
     assert(managementSource.includes("thumbnailUrl: rawCardImageUrl({ driveLink: card.driveLink || card.drive_link || '', driveFileId }, { representation: 'thumbnail', profile: 'card' })"), 'RAW card normalization must create a card-list thumbnail URL');
     assert(managementSource.includes("sourceUrl: rawCardImageUrl({ driveLink: card.driveLink || card.drive_link || '', driveFileId }, { representation: 'source' })"), 'RAW card normalization must create an original/source URL');
