@@ -1,5 +1,4 @@
 const { supabase } = require('../config/supabase');
-const { performance } = require('perf_hooks');
 
 const ACTIVITY_SELECT = '*';
 const VERSION_SELECT = '*';
@@ -107,10 +106,7 @@ class ActivityIntelligenceSqlReader {
         }, new Map());
     }
 
-    async listSubmissions(activityId, filters = {}, options = {}) {
-        // TEMP SUBMISSIONS PERFORMANCE DIAGNOSTIC
-        const profile = options && options.submissionsProfile;
-        const readerStart = performance.now();
+    async listSubmissions(activityId, filters = {}) {
         let query = supabase
             .from(this.submissionsTable)
             .select(SUBMISSION_SELECT)
@@ -128,22 +124,12 @@ class ActivityIntelligenceSqlReader {
         if (filters.recorderDisplayName) query = query.eq('created_by_display_name', filters.recorderDisplayName);
         if (filters.recordContext) query = query.eq('record_context', filters.recordContext);
 
-        const baseQueryStart = performance.now();
         const { data, error } = await query.order('created_at', { ascending: false });
-        setProfileTiming(profile, 'base_query_ms', elapsedProfileMs(baseQueryStart));
 
         if (error) throw this._dbError('listSubmissions', error);
 
         const submissions = (data || []).map(row => this.mapSubmissionRow(row));
-        setProfileCount(profile, 'submission_count', submissions.length);
-        try {
-            return await this.hydrateSubmissionDetails(submissions, {
-                search: filters.search,
-                submissionsProfile: profile
-            });
-        } finally {
-            setProfileTiming(profile, 'reader_total_ms', elapsedProfileMs(readerStart));
-        }
+        return await this.hydrateSubmissionDetails(submissions, { search: filters.search });
     }
 
     async listSubmissionOverviewRows(activityIds, filters = {}) {
@@ -289,48 +275,32 @@ class ActivityIntelligenceSqlReader {
     }
 
     async hydrateSubmissionDetails(submissions, options = {}) {
-        const profile = options && options.submissionsProfile;
         if (!Array.isArray(submissions) || submissions.length === 0) {
-            setProfileCount(profile, 'answer_row_count', 0);
-            setProfileCount(profile, 'answer_page_count', 0);
-            setProfileCount(profile, 'form_version_count', 0);
-            setProfileCount(profile, 'form_item_count', 0);
             return [];
         }
 
         const submissionIds = submissions.map(submission => submission.id);
         const versionIds = [...new Set(submissions.map(submission => submission.formVersionId).filter(Boolean))];
 
-        const parallelStart = performance.now();
         const [answersBySubmissionId, itemsByVersionId, versionsById] = await Promise.all([
-            timeProfileStage(profile, 'answers_ms', () => this.getAnswersBySubmissionIds(submissionIds, { submissionsProfile: profile })),
-            timeProfileStage(profile, 'form_items_ms', () => this.getItemsByVersionIds(versionIds)),
-            timeProfileStage(profile, 'form_versions_ms', () => this.getVersionsByIds(versionIds))
+            this.getAnswersBySubmissionIds(submissionIds),
+            this.getItemsByVersionIds(versionIds),
+            this.getVersionsByIds(versionIds)
         ]);
-        setProfileTiming(profile, 'hydration_parallel_ms', elapsedProfileMs(parallelStart));
-        setProfileTiming(profile, 'form_schema_ms', Math.max(
-            getProfileTiming(profile, 'form_items_ms'),
-            getProfileTiming(profile, 'form_versions_ms')
-        ));
-        setProfileCount(profile, 'form_version_count', versionsById.size);
-        setProfileCount(profile, 'form_item_count', countMapRows(itemsByVersionId));
 
-        const hydrationStart = performance.now();
         const hydrated = submissions.map(submission => {
             const answers = answersBySubmissionId.get(submission.id) || [];
             const items = itemsByVersionId.get(submission.formVersionId) || [];
             const version = versionsById.get(submission.formVersionId) || null;
             return this.mapSubmissionDto(submission, answers, version, items);
         });
-        setProfileTiming(profile, 'hydration_ms', elapsedProfileMs(hydrationStart));
 
         if (!options.search) return hydrated;
 
         const needle = String(options.search).trim().toLowerCase();
         if (!needle) return hydrated;
 
-        const searchStart = performance.now();
-        const filtered = hydrated.filter(submission => {
+        return hydrated.filter(submission => {
             const haystack = [
                 submission.createdByDisplayName,
                 submission.updatedByDisplayName,
@@ -342,17 +312,13 @@ class ActivityIntelligenceSqlReader {
 
             return haystack.includes(needle);
         });
-        setProfileTiming(profile, 'search_filter_ms', elapsedProfileMs(searchStart));
-        return filtered;
     }
 
-    async getAnswersBySubmissionIds(submissionIds, options = {}) {
-        const profile = options && options.submissionsProfile;
+    async getAnswersBySubmissionIds(submissionIds) {
         if (!Array.isArray(submissionIds) || submissionIds.length === 0) return new Map();
 
         const rows = [];
         let from = 0;
-        let pageCount = 0;
 
         while (true) {
             const to = from + ANSWER_HYDRATION_PAGE_SIZE - 1;
@@ -367,14 +333,10 @@ class ActivityIntelligenceSqlReader {
 
             const pageRows = data || [];
             rows.push(...pageRows);
-            pageCount += 1;
 
             if (pageRows.length < ANSWER_HYDRATION_PAGE_SIZE) break;
             from += ANSWER_HYDRATION_PAGE_SIZE;
         }
-        setProfileCount(profile, 'answer_row_count', rows.length);
-        setProfileCount(profile, 'answer_page_count', pageCount);
-
         return rows.reduce((acc, row) => {
             const answer = this.mapAnswerRow(row);
             const list = acc.get(answer.submissionId) || [];
@@ -621,40 +583,6 @@ class ActivityIntelligenceSqlReader {
     _dbError(method, error) {
         return new Error(`[ActivityIntelligenceSqlReader] ${method} DB Error: ${error.message}`);
     }
-}
-
-function elapsedProfileMs(startedAt) {
-    return Number((performance.now() - startedAt).toFixed(3));
-}
-
-async function timeProfileStage(profile, key, fn) {
-    const startedAt = performance.now();
-    try {
-        return await fn();
-    } finally {
-        setProfileTiming(profile, key, elapsedProfileMs(startedAt));
-    }
-}
-
-function setProfileTiming(profile, key, value) {
-    if (!profile || !profile.timings) return;
-    profile.timings[key] = Number(Number(value || 0).toFixed(3));
-}
-
-function getProfileTiming(profile, key) {
-    return profile && profile.timings && Number.isFinite(profile.timings[key]) ? profile.timings[key] : 0;
-}
-
-function setProfileCount(profile, key, value) {
-    if (!profile || !profile.counts) return;
-    profile.counts[key] = Number(value || 0);
-}
-
-function countMapRows(map) {
-    if (!map || typeof map.values !== 'function') return 0;
-    let count = 0;
-    for (const rows of map.values()) count += Array.isArray(rows) ? rows.length : 0;
-    return count;
 }
 
 module.exports = ActivityIntelligenceSqlReader;

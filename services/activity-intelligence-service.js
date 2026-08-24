@@ -1,5 +1,4 @@
 ﻿const { randomUUID } = require('crypto');
-const { performance } = require('perf_hooks');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { plannerDomainContext, finalizerDomainContext } = require('./form-ai-domain-context');
 const { roleAllows } = require('../middleware/role.middleware');
@@ -290,22 +289,12 @@ class ActivityIntelligenceService {
         });
     }
 
-    async listSubmissions(activityId, query = {}, user = {}, options = {}) {
-        // TEMP SUBMISSIONS PERFORMANCE DIAGNOSTIC
-        const profile = options && options.submissionsProfile;
-        const serviceStart = performance.now();
-        try {
-            const requireActivityStart = performance.now();
-            await this._requireActivity(activityId);
-            setProfileTiming(profile, 'require_activity_ms', elapsedProfileMs(requireActivityStart));
-
-            const filters = this._normalizeSubmissionFilters(query);
-            const submissions = await this.reader.listSubmissions(activityId, filters, { submissionsProfile: profile });
-            const enriched = await this._enrichSubmissionCards(submissions, profile);
-            return await this._enrichSubmissionSummaries(enriched, user, profile);
-        } finally {
-            setProfileTiming(profile, 'service_total_ms', elapsedProfileMs(serviceStart));
-        }
+    async listSubmissions(activityId, query = {}, user = {}) {
+        await this._requireActivity(activityId);
+        const filters = this._normalizeSubmissionFilters(query);
+        const submissions = await this.reader.listSubmissions(activityId, filters);
+        const enriched = await this._enrichSubmissionCards(submissions);
+        return await this._enrichSubmissionSummaries(enriched, user);
     }
 
     async getOverviewSummary(query = {}, user = {}) {
@@ -2724,81 +2713,58 @@ class ActivityIntelligenceService {
         };
     }
 
-    async _enrichSubmissionCards(submissions, profile = null) {
-        const enrichStart = performance.now();
+    async _enrichSubmissionCards(submissions) {
         const cardIds = (submissions || []).map(submission => submission && submission.cardId).filter(Boolean);
         const uniqueCardIds = [...new Set(cardIds.map(cardId => String(cardId)))];
-        let cardDbQueryCount = 0;
-        let cardBatchQueryMs = 0;
-        try {
-            let cardsById = new Map();
-            if (uniqueCardIds.length) {
-                cardDbQueryCount = 1;
-                const lookupStart = performance.now();
-                cardsById = await this.rawContactSqlReader.getRawContactsByCardIds(uniqueCardIds);
-                cardBatchQueryMs = elapsedProfileMs(lookupStart);
-            }
-
-            return (submissions || []).map(submission => {
-                if (!submission.cardId) return submission;
-                const card = cardsById.get(String(submission.cardId));
-                return {
-                    ...submission,
-                    card: card ? {
-                        cardId: card.cardId,
-                        rowIndex: card.rowIndex,
-                        createdTime: card.createdTime,
-                        name: card.name,
-                        company: card.company,
-                        department: card.department,
-                        position: card.position,
-                        jobTitle: card.jobTitle,
-                        email: card.email,
-                        phone: card.phone,
-                        mobile: card.mobile,
-                        fax: card.fax,
-                        website: card.website,
-                        address: card.address,
-                        sourceFilename: card.sourceFilename,
-                        notes: card.notes,
-                        status: card.status,
-                        driveFileId: card.driveFileId,
-                        driveLink: card.driveLink,
-                        driveFilename: card.driveFilename,
-                        thumbnailUrl: card.driveFileId ? `/api/external/thumbnail?fileId=${encodeURIComponent(card.driveFileId)}` : null
-                    } : null
-                };
-            });
-        } finally {
-            setProfileCount(profile, 'card_reference_count', cardIds.length);
-            setProfileCount(profile, 'card_unique_id_count', uniqueCardIds.length);
-            setProfileCount(profile, 'card_db_query_count', cardDbQueryCount);
-            setProfileCount(profile, 'card_lookup_count', cardDbQueryCount);
-            setProfileTiming(profile, 'card_batch_query_ms', cardBatchQueryMs);
-            setProfileTiming(profile, 'card_lookup_total_ms', cardBatchQueryMs);
-            setProfileTiming(profile, 'card_enrichment_ms', elapsedProfileMs(enrichStart));
-            setProfileTiming(profile, 'card_enrich_avg_ms', uniqueCardIds.length ? cardBatchQueryMs / uniqueCardIds.length : 0);
+        let cardsById = new Map();
+        if (uniqueCardIds.length) {
+            cardsById = await this.rawContactSqlReader.getRawContactsByCardIds(uniqueCardIds);
         }
+
+        return (submissions || []).map(submission => {
+            if (!submission.cardId) return submission;
+            const card = cardsById.get(String(submission.cardId));
+            return {
+                ...submission,
+                card: card ? {
+                    cardId: card.cardId,
+                    rowIndex: card.rowIndex,
+                    createdTime: card.createdTime,
+                    name: card.name,
+                    company: card.company,
+                    department: card.department,
+                    position: card.position,
+                    jobTitle: card.jobTitle,
+                    email: card.email,
+                    phone: card.phone,
+                    mobile: card.mobile,
+                    fax: card.fax,
+                    website: card.website,
+                    address: card.address,
+                    sourceFilename: card.sourceFilename,
+                    notes: card.notes,
+                    status: card.status,
+                    driveFileId: card.driveFileId,
+                    driveLink: card.driveLink,
+                    driveFilename: card.driveFilename,
+                    thumbnailUrl: card.driveFileId ? `/api/external/thumbnail?fileId=${encodeURIComponent(card.driveFileId)}` : null
+                } : null
+            };
+        });
     }
 
-    async _enrichSubmissionSummaries(submissions, user = {}, profile = null) {
+    async _enrichSubmissionSummaries(submissions, user = {}) {
         if (!Array.isArray(submissions) || !submissions.length) return submissions || [];
         const actor = this._safeActorFromUser(user);
-        const summaryStart = performance.now();
         const summaries = await this.reader.getSupplementSummariesBySubmissionIds(
             submissions.map(submission => submission.id),
             actor && actor.userId
         );
-        setProfileTiming(profile, 'supplement_summary_ms', elapsedProfileMs(summaryStart));
-        setProfileCount(profile, 'supplement_summary_count', summaries.size);
-        const dtoMappingStart = performance.now();
-        const mapped = submissions.map(submission => ({
+        return submissions.map(submission => ({
             ...submission,
             supplementalSummary: this._supplementSummaryDto(summaries.get(submission.id)),
             supplements: null
         }));
-        setProfileTiming(profile, 'dto_mapping_ms', elapsedProfileMs(dtoMappingStart));
-        return mapped;
     }
 
     async _enrichSubmissionDetails(submissions, user = {}) {
@@ -2993,20 +2959,6 @@ class ActivityIntelligenceService {
             { type: 'long_text', title: '補充紀錄 3', placeholder: '請輸入第三段補充紀錄' }
         ];
     }
-}
-
-function elapsedProfileMs(startedAt) {
-    return Number((performance.now() - startedAt).toFixed(3));
-}
-
-function setProfileTiming(profile, key, value) {
-    if (!profile || !profile.timings) return;
-    profile.timings[key] = Number(Number(value || 0).toFixed(3));
-}
-
-function setProfileCount(profile, key, value) {
-    if (!profile || !profile.counts) return;
-    profile.counts[key] = Number(value || 0);
 }
 
 ActivityIntelligenceService.ActivityIntelligenceError = ActivityIntelligenceError;

@@ -2826,10 +2826,7 @@ async function assertRawCardBatchEnrichmentContract() {
         cardId: IDS.missingCard
     });
 
-    const profile = { timings: {}, counts: {} };
-    const rows = await harness.service.listSubmissions(IDS.activity, { state: 'all' }, actor(), {
-        submissionsProfile: profile
-    });
+    const rows = await harness.service.listSubmissions(IDS.activity, { state: 'all' }, actor());
 
     assert.strictEqual(harness.calls.getRawContactByCardId || 0, 0, 'listSubmissions card enrichment must not use repeated single-card lookups');
     assert.strictEqual(harness.calls.getRawContactsByCardIds.length, 1, 'listSubmissions card enrichment must use one batch lookup');
@@ -2848,10 +2845,6 @@ async function assertRawCardBatchEnrichmentContract() {
     assert.strictEqual(enriched.card.thumbnailUrl, '/api/external/thumbnail?fileId=drive-1');
     assert.strictEqual(rows.find(row => row.id === missingCardSubmissionId).card, null, 'unmatched RAW Contact must preserve null card behavior');
     assert.strictEqual(rows.find(row => row.id === IDS.voidSubmission).card, null, 'submissions without cardId must preserve original card behavior');
-    assert.strictEqual(profile.counts.card_reference_count, 4, 'diagnostic must count logical card references');
-    assert.strictEqual(profile.counts.card_unique_id_count, 2, 'diagnostic must count deduplicated card IDs');
-    assert.strictEqual(profile.counts.card_db_query_count, 1, 'diagnostic must count the single batch DB query');
-    assert.strictEqual(profile.counts.card_lookup_count, 1, 'legacy diagnostic lookup count must now represent DB requests');
 }
 
 function assertRawCardBatchReaderSourceContract(rawContactSqlSource, serviceSource) {
@@ -2864,6 +2857,9 @@ function assertRawCardBatchReaderSourceContract(rawContactSqlSource, serviceSour
     assert(serviceSource.includes('getRawContactsByCardIds(uniqueCardIds)'), 'submission card enrichment must use the RAW card batch reader');
     assert(enrichSource && !enrichSource.includes('getRawContactByCardId'), 'submission card enrichment must not call the single-card reader');
     assert(enrichSource && !enrichSource.includes('Promise.all'), 'submission card enrichment must not substitute parallel N-plus-one requests');
+    assert(!serviceSource.includes('submissions' + 'Profile'), 'temporary submissions profiling service plumbing must be removed');
+    assert(!serviceSource.includes('card_batch' + '_query_ms'), 'temporary card batch timing must be removed');
+    assert(!serviceSource.includes('card_enrichment' + '_ms'), 'temporary card enrichment timing must be removed');
 }
 
 function assertDriveThumbnailRepresentationContract(sources) {

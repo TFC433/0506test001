@@ -1,5 +1,3 @@
-const { performance } = require('perf_hooks');
-
 class ActivityIntelligenceController {
     constructor(activityIntelligenceService) {
         this.activityIntelligenceService = activityIntelligenceService;
@@ -124,22 +122,8 @@ class ActivityIntelligenceController {
 
     listSubmissions = async (req, res) => {
         await this._handle(res, async () => {
-            // TEMP SUBMISSIONS PERFORMANCE DIAGNOSTIC
-            const profile = createSubmissionsProfile(req);
-            try {
-                const data = await this.activityIntelligenceService.listSubmissions(req.params.activityId, req.query, req.user, {
-                    submissionsProfile: profile
-                });
-                profile.counts.response_submission_count = Array.isArray(data) ? data.length : 0;
-                profile.timings.controller_total_ms = elapsedMs(profile.startedAt);
-                logSubmissionsProfile(profile);
-                res.json({ success: true, data });
-            } catch (error) {
-                profile.error = error && error.code ? error.code : 'ACTIVITY_INTELLIGENCE_ERROR';
-                profile.timings.controller_total_ms = elapsedMs(profile.startedAt);
-                logSubmissionsProfile(profile);
-                throw error;
-            }
+            const data = await this.activityIntelligenceService.listSubmissions(req.params.activityId, req.query, req.user);
+            res.json({ success: true, data });
         });
     };
 
@@ -337,67 +321,6 @@ function mediaUploadError(message, code) {
     error.statusCode = 400;
     error.code = code;
     return error;
-}
-
-function createSubmissionsProfile(req) {
-    return {
-        activityId: req.params && req.params.activityId,
-        state: (req.query && req.query.state) || '',
-        startedAt: performance.now(),
-        timings: {},
-        counts: {}
-    };
-}
-
-function elapsedMs(startedAt) {
-    return Number((performance.now() - startedAt).toFixed(3));
-}
-
-function formatProfileNumber(value) {
-    return Number.isFinite(value) ? value.toFixed(3) : '';
-}
-
-function logSubmissionsProfile(profile) {
-    if (!profile) return;
-    const timings = profile.timings || {};
-    const counts = profile.counts || {};
-    const lines = [
-        '[SUBMISSIONS_PROFILE]',
-        `activity_id=${profile.activityId || ''}`,
-        `state=${profile.state || ''}`,
-        `submission_count=${counts.submission_count || 0}`,
-        `response_submission_count=${counts.response_submission_count || 0}`,
-        `answer_row_count=${counts.answer_row_count || 0}`,
-        `answer_page_count=${counts.answer_page_count || 0}`,
-        `form_version_count=${counts.form_version_count || 0}`,
-        `form_item_count=${counts.form_item_count || 0}`,
-        `card_reference_count=${counts.card_reference_count || 0}`,
-        `card_unique_id_count=${counts.card_unique_id_count || 0}`,
-        `card_db_query_count=${counts.card_db_query_count || 0}`,
-        `card_lookup_count=${counts.card_lookup_count || 0}`,
-        `supplement_summary_count=${counts.supplement_summary_count || 0}`,
-        `require_activity_ms=${formatProfileNumber(timings.require_activity_ms)}`,
-        `base_query_ms=${formatProfileNumber(timings.base_query_ms)}`,
-        `answers_ms=${formatProfileNumber(timings.answers_ms)}`,
-        `form_items_ms=${formatProfileNumber(timings.form_items_ms)}`,
-        `form_versions_ms=${formatProfileNumber(timings.form_versions_ms)}`,
-        `form_schema_ms=${formatProfileNumber(timings.form_schema_ms)}`,
-        `hydration_parallel_ms=${formatProfileNumber(timings.hydration_parallel_ms)}`,
-        `hydration_ms=${formatProfileNumber(timings.hydration_ms)}`,
-        `search_filter_ms=${formatProfileNumber(timings.search_filter_ms)}`,
-        `reader_total_ms=${formatProfileNumber(timings.reader_total_ms)}`,
-        `card_batch_query_ms=${formatProfileNumber(timings.card_batch_query_ms)}`,
-        `card_lookup_total_ms=${formatProfileNumber(timings.card_lookup_total_ms)}`,
-        `card_enrichment_ms=${formatProfileNumber(timings.card_enrichment_ms)}`,
-        `card_enrich_avg_ms=${formatProfileNumber(timings.card_enrich_avg_ms)}`,
-        `supplement_summary_ms=${formatProfileNumber(timings.supplement_summary_ms)}`,
-        `dto_mapping_ms=${formatProfileNumber(timings.dto_mapping_ms)}`,
-        `service_total_ms=${formatProfileNumber(timings.service_total_ms)}`,
-        `controller_total_ms=${formatProfileNumber(timings.controller_total_ms)}`,
-        'timing_note=answers/form_items/form_versions are parallel nested timings; hydration_parallel_ms is their wall time; controller_total_ms excludes response write'
-    ];
-    if (profile.error) lines.push(`error=${profile.error}`);
-    console.log(lines.join('\n'));
 }
 
 function formContextFromRequest(req) {
