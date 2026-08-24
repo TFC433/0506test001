@@ -33,6 +33,13 @@ let leadPagination = {
 };
 let leadListRequestId = 0;
 
+function leadDriveImageProxyUrl(driveLink, representation = 'source', profile = 'card') {
+    const params = [`representation=${encodeURIComponent(representation)}`];
+    if (representation === 'thumbnail') params.push(`profile=${encodeURIComponent(profile)}`);
+    params.push(`link=${encodeURIComponent(driveLink)}`);
+    return `/api/drive/thumbnail?${params.join('&')}`;
+}
+
 // [Phase 8.4 Exhibition UX] Independent filter state and globally stored config
 let showExhibitionOnly = false;
 let currentExhibitionConfig = null;
@@ -993,7 +1000,7 @@ function createCardHTML(lead) {
         : '';
 
     const imageUrl = lead.driveLink && lead.driveLink !== 'undefined' && lead.driveLink !== 'null'
-        ? `/api/drive/thumbnail?link=${encodeURIComponent(lead.driveLink)}`
+        ? leadDriveImageProxyUrl(lead.driveLink, 'thumbnail', 'card')
         : null;
 
     const imageHtml = imageUrl 
@@ -1072,7 +1079,7 @@ function openPreview(driveLink) {
     modal.style.display = 'block';
     container.innerHTML = '<div class="spinner"></div>';
     
-    const previewUrl = `/api/drive/thumbnail?link=${encodeURIComponent(driveLink)}`;
+    const previewUrl = leadDriveImageProxyUrl(driveLink, 'source');
     const img = new Image();
     
     img.onload = () => {
@@ -1103,7 +1110,7 @@ function openEdit(lead) {
     }
     
     if (lead.driveLink && lead.driveLink !== 'undefined' && lead.driveLink !== 'null') {
-        const previewUrl = `/api/drive/thumbnail?link=${encodeURIComponent(lead.driveLink)}`;
+        const previewUrl = leadDriveImageProxyUrl(lead.driveLink, 'source');
         const safeLink = (lead.driveLink || '').replace(/"/g, '&quot;');
         // [ITEM 3] Thumbnail explicitly calls openPreview()
         previewContainer.innerHTML = `<img src="${previewUrl}" alt="名片預覽" style="cursor: pointer;" onclick='openPreview("${safeLink}")' title="點擊放大預覽" onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\\'placeholder\\'>📇</div>';">`;

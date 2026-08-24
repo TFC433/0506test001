@@ -2866,6 +2866,39 @@ function assertRawCardBatchReaderSourceContract(rawContactSqlSource, serviceSour
     assert(enrichSource && !enrichSource.includes('Promise.all'), 'submission card enrichment must not substitute parallel N-plus-one requests');
 }
 
+function assertDriveThumbnailRepresentationContract(sources) {
+    const serviceSource = sources.externalServiceSource;
+    const controllerSource = sources.externalControllerSource;
+    const managementSource = sources.managementSource;
+    const contactsSource = sources.contactsSource;
+    const leadsSource = sources.leadsSource;
+    const thumbnailBranchStart = serviceSource.indexOf('if (representation === DRIVE_THUMBNAIL_REPRESENTATION)');
+    const sourceBranchStart = serviceSource.indexOf("const response = await drive.files.get(", thumbnailBranchStart);
+    const thumbnailBranch = thumbnailBranchStart >= 0 && sourceBranchStart > thumbnailBranchStart
+        ? serviceSource.slice(thumbnailBranchStart, sourceBranchStart)
+        : '';
+
+    assert(serviceSource.includes("fields: 'thumbnailLink,mimeType'"), 'Drive thumbnail representation must use Drive thumbnailLink metadata');
+    assert(serviceSource.includes('const auth = await this.googleClientService.getAuthClient();'), 'private Drive thumbnailLink must be fetched with existing Google credentials');
+    assert(serviceSource.includes("alt: 'media'"), 'source representation must preserve the original Drive media stream path');
+    assert(thumbnailBranch && !thumbnailBranch.includes("alt: 'media'"), 'thumbnail representation must not fall back to original media streaming');
+    assert(controllerSource.includes('const { fileId, link, representation, profile } = req.query;'), 'Drive thumbnail controller must pass representation/profile through');
+    assert(controllerSource.includes('X-Drive-Image-Representation'), 'Drive thumbnail controller must expose representation diagnostics');
+
+    assert(contactsSource.includes("crmDriveImageProxyUrl(contact.driveLink, 'thumbnail', 'crm')"), 'CRM raw list must request thumbnail representation');
+    assert(contactsSource.includes("crmDriveImageProxyUrl(contact.driveLink, 'source')"), 'CRM edit/full preview must request source representation');
+    assert(leadsSource.includes("leadDriveImageProxyUrl(lead.driveLink, 'thumbnail', 'card')"), 'FANUC card list must request thumbnail representation');
+    assert(leadsSource.includes("leadDriveImageProxyUrl(driveLink, 'source')"), 'FANUC card lightbox must request source representation');
+    assert(leadsSource.includes("leadDriveImageProxyUrl(lead.driveLink, 'source')"), 'FANUC card edit preview must request source representation');
+
+    assert(managementSource.includes("thumbnailUrl: rawCardImageUrl({ driveLink: card.driveLink || card.drive_link || '', driveFileId }, { representation: 'thumbnail', profile: 'card' })"), 'RAW card normalization must create a card-list thumbnail URL');
+    assert(managementSource.includes("sourceUrl: rawCardImageUrl({ driveLink: card.driveLink || card.drive_link || '', driveFileId }, { representation: 'source' })"), 'RAW card normalization must create an original/source URL');
+    assert(managementSource.includes("thumbnailProfile: 'forms'"), 'Forms linked-card thumbnails must use the compact forms profile');
+    assert(managementSource.includes("const imageUrl = size === 'large'"), 'RAW card visual renderer must branch large viewer images away from thumbnails');
+    assert(managementSource.includes("? (normalized.sourceUrl || rawCardImageUrl(normalized, { representation: 'source' }))"), 'RAW card large viewer must prefer source/original media');
+    assert(managementSource.includes("renderRawCardVisual(card, 'large')"), 'RAW card viewer must keep the large-source render path');
+}
+
 async function main() {
     const { service, calls, publishedItems } = makeHarness();
 
@@ -3788,10 +3821,15 @@ async function main() {
     const routesSource = fs.readFileSync(path.join(__dirname, '..', 'routes', 'activity-intelligence.routes.js'), 'utf8');
     const controllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'activity-intelligence.controller.js'), 'utf8');
     const serviceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'activity-intelligence-service.js'), 'utf8');
+    const externalServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'external-service.js'), 'utf8');
+    const externalControllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'external.controller.js'), 'utf8');
+    const contactsSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'scripts', 'contacts', 'contacts.js'), 'utf8');
+    const leadsSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'scripts', 'leads-view.js'), 'utf8');
     const rawContactSqlSource = fs.readFileSync(path.join(__dirname, '..', 'data', 'raw-contact-sql-reader.js'), 'utf8');
     const cssSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'styles', 'activity-intelligence', 'activity-intelligence-management.css'), 'utf8');
     const activityIntelligenceSqlSource = fs.readFileSync(path.join(__dirname, '..', 'docs', 'schema', 'activity-intelligence-transactions-v1.sql'), 'utf8');
     assertRawCardBatchReaderSourceContract(rawContactSqlSource, serviceSource);
+    assertDriveThumbnailRepresentationContract({ externalServiceSource, externalControllerSource, managementSource, contactsSource, leadsSource });
     assertFormAssistCjkContract(managementSource);
     assertVisitorKpiOtherNumericContract(managementSource);
     await assertVisitorKpiCacheHydrationContract(managementSource);

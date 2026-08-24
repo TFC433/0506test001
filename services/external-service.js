@@ -9,6 +9,14 @@
 const { Readable } = require('stream');
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 
+const DRIVE_SOURCE_REPRESENTATION = 'source';
+const DRIVE_THUMBNAIL_REPRESENTATION = 'thumbnail';
+const DRIVE_THUMBNAIL_PROFILES = Object.freeze({
+    crm: { label: 'crm', cssWidth: 116, cssHeight: 76 },
+    card: { label: 'card', cssWidth: 220, cssHeight: 139 },
+    forms: { label: 'forms', cssWidth: 72, cssHeight: 46 }
+});
+
 class ExternalService {
     /**
      * @param {GoogleClientService} googleClientService - 用於獲取 Drive Client
@@ -93,13 +101,24 @@ class ExternalService {
         }
     }
 
+    _normalizeDriveRepresentation(representation) {
+        return String(representation || DRIVE_SOURCE_REPRESENTATION).toLowerCase() === DRIVE_THUMBNAIL_REPRESENTATION
+            ? DRIVE_THUMBNAIL_REPRESENTATION
+            : DRIVE_SOURCE_REPRESENTATION;
+    }
+
+    _normalizeDriveThumbnailProfile(profile) {
+        return DRIVE_THUMBNAIL_PROFILES[String(profile || '').toLowerCase()] || DRIVE_THUMBNAIL_PROFILES.card;
+    }
+
     /**
      * 取得 Drive 檔案串流與標頭資訊
      * @param {string} fileId 
      * @param {string} link 
+     * @param {{representation?: string, profile?: string}} options
      * @returns {Promise<{data: Stream, headers: Object}>}
      */
-    async getDriveFileStream(fileId, link) {
+    async getDriveFileStream(fileId, link, options = {}) {
         const targetFileId = this._parseFileId(fileId, link);
         if (!targetFileId) {
             throw new Error('Invalid File ID'); // Service 層拋出業務錯誤
@@ -110,8 +129,40 @@ class ExternalService {
         }
 
         const drive = await this.googleClientService.getDriveClient();
+        const representation = this._normalizeDriveRepresentation(options.representation);
 
         try {
+            if (representation === DRIVE_THUMBNAIL_REPRESENTATION) {
+                const profile = this._normalizeDriveThumbnailProfile(options.profile);
+                const metadata = await drive.files.get({
+                    fileId: targetFileId,
+                    fields: 'thumbnailLink,mimeType',
+                    supportsAllDrives: true
+                });
+                const thumbnailLink = metadata && metadata.data && metadata.data.thumbnailLink;
+                if (!thumbnailLink) {
+                    const error = new Error('Drive thumbnailLink not available');
+                    error.code = 404;
+                    throw error;
+                }
+
+                const auth = await this.googleClientService.getAuthClient();
+                const response = await auth.request({
+                    url: thumbnailLink,
+                    method: 'GET',
+                    responseType: 'stream'
+                });
+                return {
+                    data: response.data,
+                    headers: {
+                        ...response.headers,
+                        'x-drive-image-representation': DRIVE_THUMBNAIL_REPRESENTATION,
+                        'x-drive-thumbnail-profile': profile.label,
+                        'x-drive-thumbnail-css-size': `${profile.cssWidth}x${profile.cssHeight}`
+                    }
+                };
+            }
+
             const response = await drive.files.get(
                 { fileId: targetFileId, alt: 'media' },
                 { responseType: 'stream' }
@@ -119,7 +170,10 @@ class ExternalService {
             
             return {
                 data: response.data,
-                headers: response.headers
+                headers: {
+                    ...response.headers,
+                    'x-drive-image-representation': DRIVE_SOURCE_REPRESENTATION
+                }
             };
         } catch (error) {
             console.error(`[Drive Service] 讀取失敗 (ID: ${targetFileId}):`, error.message);

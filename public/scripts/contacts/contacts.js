@@ -526,6 +526,13 @@ function renderCorePagination() {
     `;
 }
 
+function crmDriveImageProxyUrl(driveLink, representation = 'source', profile = 'crm') {
+    const params = [`representation=${encodeURIComponent(representation)}`];
+    if (representation === 'thumbnail') params.push(`profile=${encodeURIComponent(profile)}`);
+    params.push(`link=${encodeURIComponent(driveLink)}`);
+    return `/api/drive/thumbnail?${params.join('&')}`;
+}
+
 // --- Tab 1: \u540d\u7247\u7e3d\u89bd (RAW) ---
 function renderContactsTable(data) {
     if (!data || data.length === 0) {
@@ -833,7 +840,7 @@ function renderContactsTable(data) {
                         : 'crm-raw-state-pending';
         const contactJsonString = JSON.stringify(contact).replace(/'/g, "&apos;").replace(/"/g, '&quot;');
         const safeDriveLink = contact.driveLink ? contact.driveLink.replace(/'/g, "\\'") : '';
-        const thumbUrl = contact.driveLink ? `/api/drive/thumbnail?link=${encodeURIComponent(contact.driveLink)}` : '';
+        const thumbUrl = contact.driveLink ? crmDriveImageProxyUrl(contact.driveLink, 'thumbnail', 'crm') : '';
         const phone = contact.mobile || contact.phone || '';
         const department = String(contact.department || '').trim();
         const title = String(contact.jobTitle || contact.position || '').trim();
@@ -1332,7 +1339,7 @@ function renderEditCardMode(contact) {
 
     let imagePreviewHtml = '';
     if (contact.driveLink) {
-        const proxyUrl = `/api/drive/thumbnail?link=${encodeURIComponent(contact.driveLink)}`;
+        const proxyUrl = crmDriveImageProxyUrl(contact.driveLink, 'source');
         imagePreviewHtml = `
             <a href="${contact.driveLink}" target="_blank" title="\u9ede\u64ca\u958b\u555f\u539f\u59cb\u6a94\u6848 (Google Drive)" style="display: block; text-align: center; cursor: zoom-in;">
                 <img src="${proxyUrl}" alt="\u540d\u7247\u9810\u89bd" style="max-width: 100%; max-height: 60vh; object-fit: contain; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); border: 1px solid var(--border-color);" onerror="this.onerror=null; this.parentElement.innerHTML='<div class=\'alert alert-warning\'>\u9810\u89bd\u8f09\u5165\u5931\u6557\uff0c\u53ef\u9ede\u64ca\u67e5\u770b\u539f\u6a94</div>';">

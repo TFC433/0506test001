@@ -901,16 +901,28 @@
       driveLink: card.driveLink || card.drive_link || '',
       driveFilename: card.driveFilename || card.drive_filename || card.sourceFilename || '',
       createdTime: card.createdTime || card.created_time || card.createdAt || card.created_at || '',
-      thumbnailUrl: rawCardImageUrl({ driveLink: card.driveLink || card.drive_link || '', driveFileId })
+      thumbnailUrl: rawCardImageUrl({ driveLink: card.driveLink || card.drive_link || '', driveFileId }, { representation: 'thumbnail', profile: 'card' }),
+      sourceUrl: rawCardImageUrl({ driveLink: card.driveLink || card.drive_link || '', driveFileId }, { representation: 'source' })
     };
   }
 
-  function rawCardImageUrl(card) {
+  function rawCardImageUrl(card, options) {
     if (!card) return '';
+    options = options || {};
+    const representation = options.representation === 'source' ? 'source' : 'thumbnail';
+    const profile = options.profile || 'card';
+    const params = [`representation=${encodeURIComponent(representation)}`];
+    if (representation === 'thumbnail') params.push(`profile=${encodeURIComponent(profile)}`);
     const driveLink = card.driveLink || card.drive_link || '';
     const driveFileId = card.driveFileId || card.drive_file_id || '';
-    if (driveLink && driveLink !== 'undefined' && driveLink !== 'null') return `/api/drive/thumbnail?link=${encodeURIComponent(driveLink)}`;
-    if (driveFileId && driveFileId !== 'undefined' && driveFileId !== 'null') return `/api/drive/thumbnail?fileId=${encodeURIComponent(driveFileId)}`;
+    if (driveLink && driveLink !== 'undefined' && driveLink !== 'null') {
+      params.push(`link=${encodeURIComponent(driveLink)}`);
+      return `/api/drive/thumbnail?${params.join('&')}`;
+    }
+    if (driveFileId && driveFileId !== 'undefined' && driveFileId !== 'null') {
+      params.push(`fileId=${encodeURIComponent(driveFileId)}`);
+      return `/api/drive/thumbnail?${params.join('&')}`;
+    }
     return '';
   }
 
@@ -2028,7 +2040,7 @@
   function renderRecordCardThumb(record) {
     const link = cardLinkForRecord(record);
     if (!link.linked) return '未連結名片';
-    return `<button class="aim-record-card-thumb-button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(link.cardId || '')}" data-viewer-context="linked" type="button" aria-label="開啟名片預覽">${renderRawCardVisual(link.card, 'thumb')}</button>`;
+    return `<button class="aim-record-card-thumb-button" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(link.cardId || '')}" data-viewer-context="linked" type="button" aria-label="開啟名片預覽">${renderRawCardVisual(link.card, 'thumb', { thumbnailProfile: 'forms' })}</button>`;
   }
 
   function renderRecordCardMeta(record, activity, coverage, options) {
@@ -2907,7 +2919,7 @@
         <h4>${Store.escapeHtml(item.title || '名片連結')}</h4>
         <div class="aim-linked-card-summary-body">
           <button class="aim-form-card-link-thumb" data-action="open-card-lightbox" data-card-id="${Store.escapeHtml(card.cardId || cardLink.cardId || '')}" data-viewer-context="linked" type="button" aria-label="開啟名片預覽">
-            ${renderRawCardVisual(card, 'thumb')}
+            ${renderRawCardVisual(card, 'thumb', { thumbnailProfile: 'forms' })}
           </button>
           <div class="aim-linked-card-summary-info">
             <strong>${Store.escapeHtml(card.name || '已連結名片')}</strong>
@@ -2920,10 +2932,15 @@
     `;
   }
 
-  function renderRawCardVisual(card, size) {
+  function renderRawCardVisual(card, size, options) {
     const normalized = normalizeRawCard(card);
-    if (!normalized || !normalized.thumbnailUrl) return renderBusinessCardVisual(size || 'thumb');
-    return `<img class="aim-raw-card-thumb aim-raw-card-thumb-${Store.escapeHtml(size || 'thumb')}" src="${Store.escapeHtml(normalized.thumbnailUrl)}" alt="${Store.escapeHtml(normalized.driveFilename || normalized.name || 'RAW card')}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'aim-raw-card-placeholder',textContent:'名片'}));">`;
+    if (!normalized) return renderBusinessCardVisual(size || 'thumb');
+    options = options || {};
+    const imageUrl = size === 'large'
+      ? (normalized.sourceUrl || rawCardImageUrl(normalized, { representation: 'source' }))
+      : (rawCardImageUrl(normalized, { representation: 'thumbnail', profile: options.thumbnailProfile || 'card' }) || normalized.thumbnailUrl);
+    if (!imageUrl) return renderBusinessCardVisual(size || 'thumb');
+    return `<img class="aim-raw-card-thumb aim-raw-card-thumb-${Store.escapeHtml(size || 'thumb')}" src="${Store.escapeHtml(imageUrl)}" alt="${Store.escapeHtml(normalized.driveFilename || normalized.name || 'RAW card')}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'aim-raw-card-placeholder',textContent:'名片'}));">`;
   }
 
   function formDesign(activity, formContext) {

@@ -41,13 +41,13 @@ exports.generateCompanyProfile = async (req, res) => {
 
 // GET /api/external/thumbnail
 exports.getDriveThumbnail = async (req, res) => {
-    const { fileId, link } = req.query;
+    const { fileId, link, representation, profile } = req.query;
 
     try {
         const service = getExternalService(req);
         
         // 呼叫 Service 取得串流與標頭
-        const { data: stream, headers } = await service.getDriveFileStream(fileId, link);
+        const { data: stream, headers } = await service.getDriveFileStream(fileId, link, { representation, profile });
 
         // 設定回應標頭 (Controller 職責: HTTP Protocol)
         if (headers['content-type']) {
@@ -55,6 +55,15 @@ exports.getDriveThumbnail = async (req, res) => {
         }
         if (headers['content-length']) {
             res.setHeader('Content-Length', headers['content-length']);
+        }
+        if (headers['x-drive-image-representation']) {
+            res.setHeader('X-Drive-Image-Representation', headers['x-drive-image-representation']);
+        }
+        if (headers['x-drive-thumbnail-profile']) {
+            res.setHeader('X-Drive-Thumbnail-Profile', headers['x-drive-thumbnail-profile']);
+        }
+        if (headers['x-drive-thumbnail-css-size']) {
+            res.setHeader('X-Drive-Thumbnail-Css-Size', headers['x-drive-thumbnail-css-size']);
         }
 
         // Pipe 串流
