@@ -1541,6 +1541,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert(managementSource.includes('aria-selected="${view.type === value}"'), 'More menu must expose selected chart state');
     assert(cssSource.includes('.aim-chart-more-menu'), 'More menu must have local chart-control styling');
 
+    const bubblePointsSource = extractFunctionDeclaration(managementSource, 'analyticsBubblePoints');
     const source = [
         'const analyticsChartTypeLabels = { bar: "Bar", pie: "Pie", trend: "Trend", treemap: "Treemap", bubble: "Bubble" };',
         'const ui = { analytics: { chartMoreOpen: "", mobileChartMoreOpen: "" } };',
@@ -1563,7 +1564,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         extractFunctionDeclaration(managementSource, 'analyticsPieOption'),
         extractFunctionDeclaration(managementSource, 'analyticsTreemapOption'),
         extractFunctionDeclaration(managementSource, 'analyticsBubbleSymbolSize'),
-        extractFunctionDeclaration(managementSource, 'analyticsBubblePoints'),
+        bubblePointsSource,
         extractFunctionDeclaration(managementSource, 'analyticsBubbleOption'),
         extractFunctionDeclaration(managementSource, 'analyticsVisibleTrendSeries'),
         extractFunctionDeclaration(managementSource, 'activityTrendOption'),
@@ -1605,11 +1606,35 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     const treemapOption = contract.analyticsTreemapOption({ title: 'Single', rows: [respondentRow] }, { type: 'treemap', valueMode: 'percentage' });
     assert.strictEqual(treemapOption.series[0].type, 'treemap');
     assert.strictEqual(treemapOption.series[0].data[0].value, 72, 'Treemap geometry must use count data');
+    const treemapTooltip = contract.analyticsTooltipFormatter({ marker: '', name: 'IoT', data: treemapOption.series[0].data[0] });
+    assert(treemapTooltip.includes('72 筆') && treemapTooltip.includes('70.6%'), 'Treemap tooltip must preserve exact respondent count and percent');
     assert.strictEqual(contract.analyticsBubbleSymbolSize(25, 100, 20, 60), 40, 'Bubble size must use sqrt-derived area-safe scaling');
-    const bubbleOption = contract.analyticsBubbleOption(multi, { type: 'bubble', valueMode: 'percentage' });
+    assert(!bubblePointsSource.includes('Math.random'), 'Bubble layout must be deterministic and must not use Math.random');
+    const bubbleChart = {
+        title: 'Bubble',
+        rows: [
+            respondentRow,
+            contract.categoricalChartRow('Long CJK Label A', 36, 102, 155),
+            contract.categoricalChartRow('Long CJK Label B', 24, 102, 155),
+            contract.categoricalChartRow('Long CJK Label C', 12, 102, 155)
+        ]
+    };
+    const bubbleOption = contract.analyticsBubbleOption(bubbleChart, { type: 'bubble', valueMode: 'percentage' });
+    const repeatedBubbleOption = contract.analyticsBubbleOption(bubbleChart, { type: 'bubble', valueMode: 'percentage' });
     assert.strictEqual(bubbleOption.series[0].type, 'scatter', 'Bubble must use ECharts scatter');
     assert.strictEqual(bubbleOption.series[0].data[0].realCount, 72, 'Bubble must size from respondent count data without backend transformation');
     assert.strictEqual(Math.round(bubbleOption.series[0].data[0].realPercent * 10) / 10, 70.6, 'Bubble precise percent must remain respondent percentage');
+    assert.deepStrictEqual(
+        bubbleOption.series[0].data.map(point => point.value),
+        repeatedBubbleOption.series[0].data.map(point => point.value),
+        'Bubble packed coordinates must be deterministic across repeated renders'
+    );
+    assert(
+        bubbleOption.series[0].data.some((point, index) => index > 0 && (Math.abs(point.value[0] - Math.round(point.value[0])) > 0.001 || Math.abs(point.value[1] - Math.round(point.value[1])) > 0.001)),
+        'Bubble layout must use packed coordinates rather than grid cells'
+    );
+    const bubbleTooltip = contract.analyticsTooltipFormatter({ marker: '', name: 'IoT', data: bubbleOption.series[0].data[0] });
+    assert(bubbleTooltip.includes('72 筆') && bubbleTooltip.includes('70.6%'), 'Bubble tooltip must preserve exact respondent count and percent');
 
     assert(managementSource.includes('${capabilities.primaryTypes.map(value => `<button data-action="${action}"'), 'primary chart buttons must be rendered from capability order');
     assert(managementSource.includes('${capabilities.moreTypes.map(value => `<button data-action="${action}"'), 'More chart buttons must be rendered separately without reordering primary buttons');
@@ -1619,7 +1644,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.strictEqual(activityTrend.series[0].smooth, false, 'Activity Trend must render straight line segments');
     assert(activityTrend.series[0].areaStyle, 'Activity Trend area fill must remain');
     const categoricalTrend = contract.analyticsCategoricalTrendOption({ trend: { dates: ['2026-08-01'], answeredByDate: [1], series: [{ label: 'A', total: 1, counts: [1], percents: [100] }] } }, { valueMode: 'percentage' });
-    assert.strictEqual(categoricalTrend.series[0].smooth, false, 'Categorical Trend must render straight line segments');
+    assert.strictEqual(categoricalTrend.series[0].smooth, true, 'Categorical Trend must restore smooth line segments');
 }
 
 function assertStableVisualAssetsAndActiveBannerSharingContract(managementSource, service) {

@@ -4960,6 +4960,9 @@
     const styles = analyticsChartStyles();
     const percentage = view.valueMode === 'percentage';
     const modal = Boolean(options.modal);
+    const palette = styles.isDark
+      ? ['#60a5fa', '#2dd4bf', '#94a3b8', '#34d399', '#fbbf24', '#818cf8']
+      : ['#2563eb', '#0f766e', '#64748b', '#059669', '#d97706', '#4f46e5'];
     return {
       tooltip: { formatter: analyticsTooltipFormatter },
       series: [{
@@ -4976,10 +4979,14 @@
         label: {
           show: true,
           color: styles.primary,
-          fontSize: modal ? 13 : 11,
+          fontSize: modal ? 12 : 10,
+          lineHeight: modal ? 17 : 14,
           overflow: 'truncate',
+          width: modal ? 142 : 86,
           formatter: params => {
             const data = params.data || {};
+            const rect = params.rect || {};
+            if ((rect.width || rect.height) && (Number(rect.width || 0) < (modal ? 58 : 42) || Number(rect.height || 0) < (modal ? 38 : 30))) return '';
             const value = percentage ? formatAnalyticsPercent(data.realPercent) : `${Number(data.realCount || 0)} 筆`;
             return `${params.name}\n${value}`;
           }
@@ -4987,14 +4994,17 @@
         upperLabel: { show: false },
         itemStyle: {
           borderColor: styles.isDark ? '#0f172a' : '#ffffff',
-          borderWidth: 2,
-          gapWidth: 2
+          borderWidth: modal ? 3 : 2,
+          gapWidth: modal ? 3 : 2
         },
         levels: [{
-          color: styles.isDark
-            ? ['#38bdf8', '#22c55e', '#f59e0b', '#a78bfa', '#f472b6', '#94a3b8']
-            : ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#64748b'],
-          colorSaturation: [0.35, 0.72]
+          color: palette,
+          colorSaturation: [0.28, 0.5],
+          itemStyle: {
+            borderColor: styles.isDark ? '#111827' : '#ffffff',
+            borderWidth: modal ? 3 : 2,
+            gapWidth: modal ? 3 : 2
+          }
         }],
         data: chart.rows.filter(row => row.count > 0).map(row => analyticsChartPoint(row, false))
       }]
@@ -5009,21 +5019,24 @@
     const maxCount = Math.max(...rows.map(row => Number(row.count || 0)), 1);
     const minSize = modal ? 30 : 22;
     const maxSize = modal ? 92 : 62;
-    const data = analyticsBubblePoints(rows, maxCount, minSize, maxSize);
+    const data = analyticsBubblePoints(rows, maxCount, minSize, maxSize, modal ? 10 : 7);
+    const palette = styles.isDark
+      ? ['rgba(96, 165, 250, 0.78)', 'rgba(45, 212, 191, 0.74)', 'rgba(148, 163, 184, 0.72)', 'rgba(52, 211, 153, 0.72)', 'rgba(251, 191, 36, 0.72)']
+      : ['rgba(37, 99, 235, 0.76)', 'rgba(15, 118, 110, 0.72)', 'rgba(100, 116, 139, 0.70)', 'rgba(5, 150, 105, 0.70)', 'rgba(217, 119, 6, 0.70)'];
     return {
       legend: { show: false },
       grid: { top: modal ? 24 : 12, right: modal ? 28 : 12, bottom: modal ? 24 : 12, left: modal ? 28 : 12 },
       tooltip: { trigger: 'item', formatter: analyticsTooltipFormatter },
       xAxis: {
         type: 'value',
-        min: -0.8,
-        max: data.cols - 0.2,
+        min: data.minX,
+        max: data.maxX,
         show: false
       },
       yAxis: {
         type: 'value',
-        min: -data.rows + 0.2,
-        max: 0.8,
+        min: data.minY,
+        max: data.maxY,
         show: false
       },
       series: [{
@@ -5032,8 +5045,8 @@
         data: data.points,
         symbolSize: (value, params) => params && params.data ? params.data.symbolSize : minSize,
         itemStyle: {
-          color: styles.isDark ? 'rgba(56, 189, 248, 0.72)' : 'rgba(59, 130, 246, 0.72)',
-          borderColor: styles.isDark ? '#bae6fd' : '#1d4ed8',
+          color: params => palette[(params.dataIndex || 0) % palette.length],
+          borderColor: styles.isDark ? 'rgba(226, 232, 240, 0.82)' : 'rgba(255, 255, 255, 0.92)',
           borderWidth: 1
         },
         label: {
@@ -5044,8 +5057,13 @@
           fontWeight: 700,
           formatter: params => {
             const data = params.data || {};
-            if (!modal && Number(data.symbolSize || 0) < 34) return '';
-            return `${params.name}\n${percentage ? formatAnalyticsPercent(data.realPercent) : data.realCount}`;
+            const size = Number(data.symbolSize || 0);
+            if (size < (modal ? 34 : 40)) return '';
+            const label = String(params.name || '');
+            const limit = size >= (modal ? 72 : 54) ? (modal ? 10 : 7) : (modal ? 7 : 5);
+            const shortLabel = label.length > limit ? `${label.slice(0, limit)}...` : label;
+            if (size < (modal ? 50 : 48)) return shortLabel;
+            return `${shortLabel}\n${percentage ? formatAnalyticsPercent(data.realPercent) : data.realCount}`;
           }
         },
         emphasis: {
@@ -5062,22 +5080,52 @@
     };
   }
 
-  function analyticsBubblePoints(rows, maxCount, minSize, maxSize) {
-    const count = rows.length || 1;
-    const cols = Math.ceil(Math.sqrt(count));
-    const rowCount = Math.ceil(count / cols);
+  function analyticsBubblePoints(rows, maxCount, minSize, maxSize, spacing = 7) {
+    const placed = [];
     const points = rows.map((row, index) => {
-      const col = index % cols;
-      const line = Math.floor(index / cols);
-      const offset = line % 2 === 1 ? 0.35 : 0;
       const size = analyticsBubbleSymbolSize(row.count, maxCount, minSize, maxSize);
+      const radius = size / 2;
+      let x = 0;
+      let y = 0;
+      if (index > 0) {
+        let candidate = null;
+        const angleStep = Math.PI * (3 - Math.sqrt(5));
+        const ringStep = Math.max(minSize * 0.42, 10);
+        for (let ring = 1; ring <= 80 && !candidate; ring += 1) {
+          const distance = ring * ringStep;
+          const steps = Math.max(10, Math.ceil((Math.PI * 2 * distance) / Math.max(radius + spacing, 12)));
+          for (let step = 0; step < steps; step += 1) {
+            const angle = (step / steps) * Math.PI * 2 + ring * angleStep;
+            const testX = Math.cos(angle) * distance;
+            const testY = Math.sin(angle) * distance;
+            const fits = placed.every(point => Math.hypot(testX - point.x, testY - point.y) >= radius + point.radius + spacing);
+            if (fits) {
+              candidate = { x: testX, y: testY };
+              break;
+            }
+          }
+        }
+        if (!candidate) {
+          const angle = index * Math.PI * (3 - Math.sqrt(5));
+          const distance = (Math.sqrt(index) + 1) * (maxSize + spacing);
+          candidate = { x: Math.cos(angle) * distance, y: Math.sin(angle) * distance };
+        }
+        x = Number(candidate.x.toFixed(3));
+        y = Number(candidate.y.toFixed(3));
+      }
+      placed.push({ x, y, radius });
       return {
         ...analyticsChartPoint(row, false),
-        value: [col + offset, -line, row.count],
+        value: [x, y, row.count],
         symbolSize: size
       };
     });
-    return { points, cols, rows: rowCount };
+    const padding = Math.max(maxSize * 0.28, 12);
+    const minX = placed.length ? Math.min(...placed.map(point => point.x - point.radius)) - padding : -1;
+    const maxX = placed.length ? Math.max(...placed.map(point => point.x + point.radius)) + padding : 1;
+    const minY = placed.length ? Math.min(...placed.map(point => point.y - point.radius)) - padding : -1;
+    const maxY = placed.length ? Math.max(...placed.map(point => point.y + point.radius)) + padding : 1;
+    return { points, minX, maxX, minY, maxY };
   }
 
   function analyticsBubbleSymbolSize(countValue, maxCount, minSize, maxSize) {
@@ -5144,7 +5192,7 @@
       series: series.map(entry => ({
         name: entry.label,
         type: 'line',
-        smooth: false,
+        smooth: true,
         symbolSize: options.modal ? 6 : 4,
         data: (percentage ? entry.percents : entry.counts).map(value => percentage ? Number(value.toFixed(1)) : value),
         lineStyle: { width: options.modal ? 2 : 1.6 },
