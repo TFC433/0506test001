@@ -1647,11 +1647,17 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         extractFunctionDeclaration(managementSource, 'analyticsMagnitudeTier'),
         extractFunctionDeclaration(managementSource, 'analyticsTreemapVisualValue'),
         extractFunctionDeclaration(managementSource, 'analyticsTreemapLabelFormatter'),
-        extractFunctionDeclaration(managementSource, 'analyticsTreemapLabelLayout'),
         extractFunctionDeclaration(managementSource, 'analyticsTreemapOption'),
         extractFunctionDeclaration(managementSource, 'analyticsBubbleSymbolSize'),
         extractFunctionDeclaration(managementSource, 'analyticsBubbleExternalLabels'),
-        extractFunctionDeclaration(managementSource, 'analyticsBubbleExternalLabelSeries'),
+        extractFunctionDeclaration(managementSource, 'analyticsApplyExpandedExternalLabelOverlay'),
+        extractFunctionDeclaration(managementSource, 'analyticsTreemapRenderedTileGeometries'),
+        extractFunctionDeclaration(managementSource, 'analyticsNormalizeTreemapLayout'),
+        extractFunctionDeclaration(managementSource, 'analyticsTreemapExternalLabelGraphicElements'),
+        extractFunctionDeclaration(managementSource, 'analyticsBubbleExternalLabelGraphicElements'),
+        extractFunctionDeclaration(managementSource, 'analyticsSplitAnnotationSides'),
+        extractFunctionDeclaration(managementSource, 'analyticsExternalLabelGraphicElements'),
+        extractFunctionDeclaration(managementSource, 'analyticsAssignExternalLabelRows'),
         extractFunctionDeclaration(managementSource, 'analyticsReadableLabelColor'),
         extractFunctionDeclaration(managementSource, 'analyticsShortChartLabel'),
         bubblePointsSource,
@@ -1659,7 +1665,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         extractFunctionDeclaration(managementSource, 'analyticsVisibleTrendSeries'),
         extractFunctionDeclaration(managementSource, 'activityTrendOption'),
         extractFunctionDeclaration(managementSource, 'analyticsCategoricalTrendOption'),
-        '({ ui, chartCapabilitiesForField, chartCapabilitiesForChart, analyticsValidatedChartView, renderAnalyticsChartTypeControls, categoricalChartRow, analyticsBarOption, analyticsPieOption, analyticsTierSourceValues, analyticsMagnitudeTier, analyticsTreemapVisualValue, analyticsTreemapOption, analyticsBubbleSymbolSize, analyticsBubbleOption, analyticsTooltipFormatter, activityTrendOption, analyticsCategoricalTrendOption });'
+        '({ ui, chartCapabilitiesForField, chartCapabilitiesForChart, analyticsValidatedChartView, renderAnalyticsChartTypeControls, categoricalChartRow, analyticsBarOption, analyticsPieOption, analyticsTierSourceValues, analyticsMagnitudeTier, analyticsTreemapVisualValue, analyticsTreemapOption, analyticsBubbleSymbolSize, analyticsBubbleOption, analyticsApplyExpandedExternalLabelOverlay, analyticsTreemapRenderedTileGeometries, analyticsAssignExternalLabelRows, analyticsTooltipFormatter, activityTrendOption, analyticsCategoricalTrendOption });'
     ].join('\n');
     const contract = vm.runInNewContext(source, {});
     const rows = labels => labels.map(label => ({ label, count: 1, percent: 10, selectionPercent: 10 }));
@@ -1728,10 +1734,41 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         assert(treemapVisualValues[index - 1] >= treemapVisualValues[index], 'Treemap tiered visual values must remain monotonic');
     }
     const treemapModal = contract.analyticsTreemapOption({ title: 'Skewed', rows: skewedRows }, { type: 'treemap', valueMode: 'percentage' }, { modal: true });
-    assert.strictEqual(treemapModal.series[0].labelLine.show, true, 'expanded Treemap must enable the external-label path');
-    assert.strictEqual(typeof treemapModal.series[0].labelLayout, 'function', 'expanded Treemap must provide deterministic label layout hook');
+    assert.strictEqual(treemapModal.series[0].labelLine.show, false, 'expanded Treemap must not treat native labelLine as the external-label implementation');
+    assert.strictEqual(treemapModal.__aimExternalLabelOverlay.type, 'treemap', 'expanded Treemap must request the geometry-driven graphic overlay');
     assert(treemapModal.series[0].data.some(point => point.externalLabelCandidate), 'expanded Treemap must mark small categories for external labels');
-    assert.strictEqual(typeof treemapSkewed.series[0].labelLayout, 'object', 'thumbnail Treemap must remain lower-density without external layout hook');
+    assert.strictEqual(treemapSkewed.__aimExternalLabelOverlay, null, 'thumbnail Treemap must remain internal-label-first without graphic overlay');
+    const treemapLayouts = treemapModal.series[0].data.map((point, index) => {
+        const x = index < 4 ? 70 + index * 84 : (index % 2 ? 72 : 500);
+        const y = index < 4 ? 24 : 82 + index * 28;
+        const width = index < 4 ? 74 : 22;
+        const height = index < 4 ? 92 : 18;
+        return { x, y, width, height };
+    });
+    const treemapLayoutCalls = [];
+    const treemapChart = {
+        getWidth: () => 640,
+        getHeight: () => 520,
+        getModel: () => ({
+            getSeriesByIndex: () => ({
+                getData: () => ({
+                    getItemLayout: index => {
+                        treemapLayoutCalls.push(index);
+                        return treemapLayouts[index];
+                    }
+                })
+            })
+        }),
+        setOption(option) {
+            this.appliedOption = option;
+        }
+    };
+    const treemapGeometries = contract.analyticsTreemapRenderedTileGeometries(treemapChart, treemapModal);
+    assert(treemapGeometries.some(tile => tile.width === 22 && tile.height === 18), 'Treemap overlay must read final tile width and height from live ECharts geometry');
+    assert.strictEqual(contract.analyticsApplyExpandedExternalLabelOverlay(treemapChart, treemapModal), true, 'expanded Treemap must apply a geometry-driven graphic overlay');
+    assert(treemapLayoutCalls.length >= treemapModal.series[0].data.length, 'Treemap overlay must request final layout for each tile');
+    assert(treemapChart.appliedOption.graphic.elements.some(element => element.type === 'polyline'), 'Treemap graphic overlay must include leader lines');
+    assert(treemapChart.appliedOption.graphic.elements.some(element => element.type === 'text'), 'Treemap graphic overlay must include external text labels');
 
     const smallestBubble = contract.analyticsBubbleSymbolSize(1, 73, 19, 86, tierValues);
     const largestBubble = contract.analyticsBubbleSymbolSize(73, 73, 19, 86, tierValues);
@@ -1760,8 +1797,34 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         'Bubble layout must use packed coordinates rather than grid cells'
     );
     const bubbleModal = contract.analyticsBubbleOption(bubbleChart, { type: 'bubble', valueMode: 'percentage' }, { modal: true });
-    assert(bubbleModal.series.some(series => series.name === 'external-label-lines'), 'expanded Bubble must include leader lines for small-category labels');
-    assert(bubbleModal.series.some(series => series.name === 'external-left-labels' || series.name === 'external-right-labels'), 'expanded Bubble must include external small-category labels');
+    assert.strictEqual(bubbleModal.series.length, 1, 'expanded Bubble must not use the previous ruler-like external label series');
+    assert.strictEqual(bubbleModal.__aimExternalLabelOverlay.type, 'bubble', 'expanded Bubble must request the geometry-driven graphic overlay');
+    assert(bubbleModal.series[0].data.some(point => point.externalLabelCandidate), 'expanded Bubble must mark small unreadable bubbles for external labels');
+    const labelRows = contract.analyticsAssignExternalLabelRows([
+        { anchorY: 70, label: 'B' },
+        { anchorY: 30, label: 'A' },
+        { anchorY: 33, label: 'C' }
+    ], 10, 100, 18);
+    assert.deepStrictEqual(
+        labelRows.map(item => ({ label: item.label, y: item.labelY })),
+        contract.analyticsAssignExternalLabelRows([{ anchorY: 70, label: 'B' }, { anchorY: 30, label: 'A' }, { anchorY: 33, label: 'C' }], 10, 100, 18).map(item => ({ label: item.label, y: item.labelY })),
+        'external annotation row assignment must be deterministic'
+    );
+    assert(labelRows.every((item, index) => index === 0 || item.labelY - labelRows[index - 1].labelY >= 14), 'external labels must keep readable deterministic spacing');
+    const bubbleChartMock = {
+        getWidth: () => 640,
+        getHeight: () => 520,
+        convertToPixel: (finder, value) => [320 + Number(value[0] || 0), 260 - Number(value[1] || 0)],
+        setOption(option) {
+            this.appliedOption = option;
+        }
+    };
+    assert.strictEqual(contract.analyticsApplyExpandedExternalLabelOverlay(bubbleChartMock, bubbleModal), true, 'expanded Bubble must apply a graphic annotation overlay');
+    const bubbleGraphicElements = bubbleChartMock.appliedOption.graphic.elements;
+    assert(bubbleGraphicElements.some(element => element.type === 'polyline'), 'Bubble graphic overlay must include leader lines');
+    assert(bubbleGraphicElements.some(element => element.type === 'text'), 'Bubble graphic overlay must include external text labels');
+    const bubbleLines = bubbleGraphicElements.filter(element => element.type === 'polyline');
+    assert(bubbleLines.every(element => Math.abs(element.shape.points[2][0] - element.shape.points[0][0]) <= 90), 'Bubble leader lines must remain short instead of ruler-like');
     const bubbleTooltip = contract.analyticsTooltipFormatter({ marker: '', name: 'Tier 0', data: bubbleOption.series[0].data[0] });
     assert(bubbleTooltip.includes('73 筆') && bubbleTooltip.includes('73%'), 'Bubble tooltip must preserve exact respondent count and percent');
 

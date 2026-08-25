@@ -5103,6 +5103,7 @@
       ? ['#60a5fa', '#2dd4bf', '#94a3b8', '#34d399', '#fbbf24', '#818cf8']
       : ['#2563eb', '#0f766e', '#64748b', '#059669', '#d97706', '#4f46e5'];
     return {
+      __aimExternalLabelOverlay: modal ? { type: 'treemap' } : null,
       tooltip: { formatter: analyticsTooltipFormatter },
       series: [{
         name: chart.title,
@@ -5124,8 +5125,8 @@
           width: modal ? 142 : 86,
           formatter: params => analyticsTreemapLabelFormatter(params, percentage, modal)
         },
-        labelLine: { show: modal, lineStyle: { color: styles.border, width: 1, opacity: styles.isDark ? 0.62 : 0.58 } },
-        labelLayout: modal ? analyticsTreemapLabelLayout : { hideOverlap: true },
+        labelLine: { show: false },
+        labelLayout: { hideOverlap: true },
         upperLabel: { show: false },
         itemStyle: {
           borderColor: styles.isDark ? '#0f172a' : '#ffffff',
@@ -5174,6 +5175,7 @@
       point.labelColor = analyticsReadableLabelColor(color, styles);
     });
     return {
+      __aimExternalLabelOverlay: modal ? { type: 'bubble' } : null,
       legend: { show: false },
       grid: { top: modal ? 32 : 10, right: modal ? 70 : 10, bottom: modal ? 32 : 10, left: modal ? 70 : 10 },
       tooltip: { trigger: 'item', formatter: analyticsTooltipFormatter },
@@ -5208,6 +5210,7 @@
           formatter: params => {
             const data = params.data || {};
             const size = Number(data.symbolSize || 0);
+            if (modal && data.externalLabelCandidate) return '';
             if (size < (modal ? 34 : 40)) return '';
             const label = String(params.name || '');
             const limit = size >= (modal ? 72 : 54) ? (modal ? 10 : 7) : (modal ? 7 : 5);
@@ -5226,7 +5229,7 @@
             }
           }
         }
-      }].concat(modal ? analyticsBubbleExternalLabelSeries(data.externalLabels, styles) : [])
+      }]
     };
   }
 
@@ -5270,7 +5273,8 @@
         ...analyticsChartPoint(row, false),
         value: [x, y, row.count],
         symbolSize: size,
-        visualTier
+        visualTier,
+        externalLabelCandidate: visualTier <= 3 || size < 50
       };
     });
     const bubbleBounds = {
@@ -5281,12 +5285,10 @@
     };
     const externalLabels = options.externalLabels ? analyticsBubbleExternalLabels(points, bubbleBounds, maxSize) : [];
     const padding = Math.max(maxSize * (options.externalLabels ? 0.18 : 0.2), 10);
-    const labelXs = externalLabels.map(label => label.value[0]);
-    const labelYs = externalLabels.map(label => label.value[1]);
-    const minX = Math.min(bubbleBounds.minX, ...labelXs, 0) - padding;
-    const maxX = Math.max(bubbleBounds.maxX, ...labelXs, 0) + padding;
-    const minY = Math.min(bubbleBounds.minY, ...labelYs, 0) - padding;
-    const maxY = Math.max(bubbleBounds.maxY, ...labelYs, 0) + padding;
+    const minX = Math.min(bubbleBounds.minX, 0) - padding;
+    const maxX = Math.max(bubbleBounds.maxX, 0) + padding;
+    const minY = Math.min(bubbleBounds.minY, 0) - padding;
+    const maxY = Math.max(bubbleBounds.maxY, 0) + padding;
     return { points, externalLabels, minX, maxX, minY, maxY };
   }
 
@@ -5330,34 +5332,13 @@
     const smallTile = data.externalLabelCandidate || ((width || height) && (width < (modal ? 80 : 52) || height < (modal ? 46 : 30)));
     if (smallTile && !modal) return '';
     const label = analyticsShortChartLabel(params.name, smallTile ? 18 : (modal ? 24 : 12));
-    if (smallTile) return label;
+    if (smallTile) return modal ? '' : label;
     const value = percentage ? formatAnalyticsPercent(data.realPercent) : `${Number(data.realCount || 0)} 筆`;
     return `${label}\n${value}`;
   }
 
-  function analyticsTreemapLabelLayout(params) {
-    const data = params.data || {};
-    const rect = params.rect || {};
-    const width = Number(rect.width || 0);
-    const height = Number(rect.height || 0);
-    const needsExternal = data.externalLabelCandidate || ((width || height) && (width < 80 || height < 46));
-    if (!needsExternal || !width || !height) return {};
-    const centerX = rect.x + width / 2;
-    const centerY = rect.y + height / 2;
-    const side = rect.x < 280 ? 1 : -1;
-    const elbowX = centerX + side * Math.max(width / 2 + 10, 18);
-    const labelX = elbowX + side * 18;
-    return {
-      x: labelX,
-      y: centerY,
-      align: side > 0 ? 'left' : 'right',
-      verticalAlign: 'middle',
-      labelLinePoints: [[centerX, centerY], [elbowX, centerY], [labelX - side * 4, centerY]]
-    };
-  }
-
   function analyticsBubbleExternalLabels(points, bounds, maxSize) {
-    const candidates = points.filter(point => Number(point.visualTier || 0) <= 4);
+    const candidates = points.filter(point => point.externalLabelCandidate);
     if (!candidates.length) return [];
     const centerX = (bounds.minX + bounds.maxX) / 2;
     const labelOffset = Math.max(maxSize * 0.28, 28);
@@ -5394,44 +5375,217 @@
     return layoutGroup(left, -1).concat(layoutGroup(right, 1));
   }
 
-  function analyticsBubbleExternalLabelSeries(labels, styles) {
-    if (!labels.length) return [];
-    const lineData = [];
-    labels.forEach(label => {
-      lineData.push(label.anchor, label.elbow, label.value, null);
+  function analyticsApplyExpandedExternalLabelOverlay(chart, optionConfig) {
+    const overlay = optionConfig && optionConfig.__aimExternalLabelOverlay;
+    if (!chart || !overlay || !overlay.type) return false;
+    const styles = analyticsChartStyles();
+    const elements = overlay.type === 'treemap'
+      ? analyticsTreemapExternalLabelGraphicElements(chart, optionConfig, styles)
+      : analyticsBubbleExternalLabelGraphicElements(chart, optionConfig, styles);
+    if (!elements.length) return false;
+    chart.setOption({ graphic: { elements } }, { notMerge: false, lazyUpdate: false, silent: true });
+    return true;
+  }
+
+  function analyticsScheduleExpandedExternalLabelOverlay(chart, optionConfig) {
+    const overlay = optionConfig && optionConfig.__aimExternalLabelOverlay;
+    if (!chart || !overlay || !overlay.type) return;
+    let applied = false;
+    const tryApply = () => {
+      if (applied) return;
+      applied = analyticsApplyExpandedExternalLabelOverlay(chart, optionConfig);
+    };
+    if (typeof chart.on === 'function') {
+      chart.on('finished', tryApply);
+    }
+    window.requestAnimationFrame(() => window.requestAnimationFrame(tryApply));
+  }
+
+  function analyticsTreemapRenderedTileGeometries(chart, optionConfig) {
+    const optionData = optionConfig && optionConfig.series && optionConfig.series[0] && Array.isArray(optionConfig.series[0].data)
+      ? optionConfig.series[0].data
+      : [];
+    if (!optionData.length || !chart || typeof chart.getModel !== 'function') return [];
+    const model = chart.getModel();
+    const series = model && typeof model.getSeriesByIndex === 'function' ? model.getSeriesByIndex(0) : null;
+    const data = series && typeof series.getData === 'function' ? series.getData() : null;
+    if (!data || typeof data.getItemLayout !== 'function') return [];
+    return optionData.map((item, index) => {
+      const rect = analyticsNormalizeTreemapLayout(data.getItemLayout(index));
+      if (!rect) return null;
+      return {
+        data: item,
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height,
+        centerX: rect.x + rect.width / 2,
+        centerY: rect.y + rect.height / 2
+      };
+    }).filter(Boolean);
+  }
+
+  function analyticsNormalizeTreemapLayout(layout) {
+    if (!layout) return null;
+    const x = Number(Array.isArray(layout) ? layout[0] : layout.x);
+    const y = Number(Array.isArray(layout) ? layout[1] : layout.y);
+    const width = Number(Array.isArray(layout) ? layout[2] : layout.width);
+    const height = Number(Array.isArray(layout) ? layout[3] : layout.height);
+    if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return null;
+    return { x, y, width, height };
+  }
+
+  function analyticsTreemapExternalLabelGraphicElements(chart, optionConfig, styles) {
+    const tiles = analyticsTreemapRenderedTileGeometries(chart, optionConfig)
+      .filter(tile => {
+        const data = tile.data || {};
+        return data.externalLabelCandidate || tile.width < 80 || tile.height < 46;
+      });
+    if (!tiles.length) return [];
+    const width = typeof chart.getWidth === 'function' ? chart.getWidth() : 0;
+    const height = typeof chart.getHeight === 'function' ? chart.getHeight() : 0;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return [];
+    const groups = analyticsSplitAnnotationSides(tiles.map(tile => ({
+      ...tile,
+      anchorX: tile.centerX < width / 2 ? tile.x : tile.x + tile.width,
+      anchorY: tile.centerY,
+      label: analyticsShortChartLabel(tile.data && tile.data.name, 18)
+    })), width / 2);
+    return analyticsExternalLabelGraphicElements(groups, {
+      width,
+      height,
+      leftX: 12,
+      rightX: width - 12,
+      minY: 18,
+      maxY: height - 18,
+      lineColor: styles.border,
+      textColor: styles.primary,
+      lineOpacity: styles.isDark ? 0.66 : 0.58,
+      elbow: 12
     });
-    const labelSeries = side => ({
-      name: side === 'left' ? 'external-left-labels' : 'external-right-labels',
-      type: 'scatter',
-      data: labels.filter(label => label.side === side),
-      symbolSize: 1,
-      silent: true,
-      tooltip: { show: false },
-      itemStyle: { opacity: 0 },
-      label: {
-        show: true,
-        position: side === 'left' ? 'left' : 'right',
-        color: styles.primary,
-        fontSize: 12,
-        fontWeight: 700,
-        formatter: params => (params.data && params.data.externalLabel) || params.name
-      },
-      labelLayout: { hideOverlap: false, moveOverlap: 'shiftY' },
-      emphasis: { disabled: true },
-      clip: false
+  }
+
+  function analyticsBubbleExternalLabelGraphicElements(chart, optionConfig, styles) {
+    const points = optionConfig && optionConfig.series && optionConfig.series[0] && Array.isArray(optionConfig.series[0].data)
+      ? optionConfig.series[0].data.filter(point => point.externalLabelCandidate)
+      : [];
+    if (!points.length || !chart || typeof chart.convertToPixel !== 'function') return [];
+    const width = typeof chart.getWidth === 'function' ? chart.getWidth() : 0;
+    const height = typeof chart.getHeight === 'function' ? chart.getHeight() : 0;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return [];
+    const annotations = points.map(point => {
+      const coord = Array.isArray(point.value) ? point.value : [0, 0];
+      const pixel = chart.convertToPixel({ xAxisIndex: 0, yAxisIndex: 0 }, [coord[0], coord[1]]);
+      if (!Array.isArray(pixel) || !pixel.every(Number.isFinite)) return null;
+      const radius = Number(point.symbolSize || 0) / 2;
+      const side = pixel[0] < width / 2 ? 'left' : 'right';
+      const sign = side === 'left' ? -1 : 1;
+      return {
+        data: point,
+        side,
+        anchorX: pixel[0] + sign * radius,
+        anchorY: pixel[1],
+        label: analyticsShortChartLabel(point.name, 18)
+      };
+    }).filter(Boolean);
+    if (!annotations.length) return [];
+    const left = annotations.filter(item => item.side === 'left');
+    const right = annotations.filter(item => item.side === 'right');
+    const leftX = left.length ? Math.max(12, Math.min(...left.map(item => item.anchorX)) - 46) : 12;
+    const rightX = right.length ? Math.min(width - 12, Math.max(...right.map(item => item.anchorX)) + 46) : width - 12;
+    return analyticsExternalLabelGraphicElements({ left, right }, {
+      width,
+      height,
+      leftX,
+      rightX,
+      minY: 18,
+      maxY: height - 18,
+      lineColor: styles.border,
+      textColor: styles.primary,
+      lineOpacity: styles.isDark ? 0.68 : 0.6,
+      elbow: 12
     });
-    return [{
-      name: 'external-label-lines',
-      type: 'line',
-      data: lineData,
-      symbol: 'none',
-      silent: true,
-      tooltip: { show: false },
-      lineStyle: { color: styles.border, width: 1, opacity: styles.isDark ? 0.66 : 0.58 },
-      emphasis: { disabled: true },
-      animation: false,
-      clip: false
-    }, labelSeries('left'), labelSeries('right')];
+  }
+
+  function analyticsSplitAnnotationSides(items, centerX) {
+    const left = [];
+    const right = [];
+    items.forEach((item, index) => {
+      const side = item.centerX < centerX || (item.centerX === centerX && index % 2 === 0) ? 'left' : 'right';
+      (side === 'left' ? left : right).push({ ...item, side });
+    });
+    return { left, right };
+  }
+
+  function analyticsExternalLabelGraphicElements(groups, options) {
+    const elements = [];
+    const buildSide = (items, side) => {
+      const sign = side === 'left' ? -1 : 1;
+      const labelX = side === 'left' ? options.leftX : options.rightX;
+      const ordered = analyticsAssignExternalLabelRows(items, options.minY, options.maxY, 18);
+      ordered.forEach((item, index) => {
+        const labelY = item.labelY;
+        const elbowX = item.anchorX + sign * options.elbow;
+        const textX = labelX;
+        const lineEndX = textX - sign * 4;
+        const points = [[item.anchorX, item.anchorY], [elbowX, labelY], [lineEndX, labelY]];
+        elements.push({
+          id: `aim-external-label-line-${side}-${index}`,
+          type: 'polyline',
+          z: 20,
+          silent: true,
+          shape: { points },
+          style: {
+            stroke: options.lineColor,
+            lineWidth: 1,
+            opacity: options.lineOpacity,
+            fill: null
+          }
+        });
+        elements.push({
+          id: `aim-external-label-text-${side}-${index}`,
+          type: 'text',
+          z: 21,
+          silent: true,
+          x: textX,
+          y: labelY,
+          style: {
+            text: item.label,
+            fill: options.textColor,
+            font: '700 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+            align: side === 'left' ? 'right' : 'left',
+            verticalAlign: 'middle'
+          }
+        });
+      });
+    };
+    buildSide((groups && groups.left) || [], 'left');
+    buildSide((groups && groups.right) || [], 'right');
+    return elements;
+  }
+
+  function analyticsAssignExternalLabelRows(items, minY, maxY, desiredGap) {
+    const ordered = (Array.isArray(items) ? items : [])
+      .slice()
+      .sort((a, b) => Number(a.anchorY || 0) - Number(b.anchorY || 0) || String(a.label).localeCompare(String(b.label), 'zh-Hant'));
+    if (!ordered.length) return [];
+    const gap = ordered.length > 1 ? Math.max(14, Math.min(desiredGap, (maxY - minY) / (ordered.length - 1))) : desiredGap;
+    let lastY = minY - gap;
+    ordered.forEach(item => {
+      item.labelY = Math.max(minY, Number(item.anchorY || 0), lastY + gap);
+      lastY = item.labelY;
+    });
+    const overflow = ordered[ordered.length - 1].labelY - maxY;
+    if (overflow > 0) {
+      for (let index = ordered.length - 1; index >= 0; index -= 1) {
+        const nextY = index === ordered.length - 1 ? maxY : ordered[index + 1].labelY - gap;
+        ordered[index].labelY = Math.min(ordered[index].labelY - overflow, nextY);
+      }
+    }
+    ordered.forEach(item => {
+      item.labelY = Number(Math.max(minY, Math.min(maxY, item.labelY)).toFixed(3));
+    });
+    return ordered;
   }
 
   function analyticsReadableLabelColor(color, styles) {
@@ -5632,7 +5786,8 @@
       if (renderToken !== analyticsChartRenderToken) return;
       configs.forEach(config => {
         if (!document.getElementById(config.id)) return;
-        createEChartsThemedChart(config.id, config.option);
+        const chart = createEChartsThemedChart(config.id, config.option);
+        analyticsScheduleExpandedExternalLabelOverlay(chart, config.option);
         activityAnalyticsChartIds.add(config.id);
       });
     });
