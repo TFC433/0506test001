@@ -4980,18 +4980,18 @@
   function chartCapabilitiesForField(field, chart) {
     const type = field && field.type ? field.type : (chart && chart.fieldType);
     if (type === 'yes_no') {
-      return { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: ['rose', 'polarBar'], fallbackType: 'bar' };
+      return { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: ['rose', 'polarBar', 'treemap', 'bubble'], fallbackType: 'bar' };
     }
     if (type === 'multiple_choice') {
-      return { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: ['rose', 'polarBar', 'bubble'], fallbackType: 'bar' };
+      return { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: ['rose', 'polarBar', 'treemap', 'bubble'], fallbackType: 'bar' };
     }
     if (type === 'single_choice' || type === 'dropdown') {
-      return { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: ['rose', 'polarBar', 'treemap'], fallbackType: 'bar' };
+      return { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: ['rose', 'polarBar', 'treemap', 'bubble'], fallbackType: 'bar' };
     }
     if (analyticsChartHasCategoricalRows(chart)) {
       return {
         primaryTypes: ['bar'].concat(chart && chart.allowPie ? ['pie'] : [], chart && chart.allowTrend ? ['trend'] : []),
-        moreTypes: ['rose', 'polarBar'],
+        moreTypes: ['rose', 'polarBar', 'treemap', 'bubble'],
         fallbackType: 'bar'
       };
     }
@@ -5006,6 +5006,10 @@
     return Boolean(chart && Array.isArray(chart.rows) && chart.rows.length && chart.allowPie !== false);
   }
 
+  function analyticsChartRoseAvailable(chart) {
+    return Boolean(chart && (analyticsCategoricalFieldTypes.includes(chart.fieldType) || analyticsChartHasCategoricalRows(chart)) && chart.allowPie !== false);
+  }
+
   function chartCapabilitiesForChart(chart) {
     const capabilities = chartCapabilitiesForField(chart, chart);
     const primaryTypes = capabilities.primaryTypes.filter(type => chartTypeAllowedForChart(chart, type));
@@ -5018,10 +5022,10 @@
     if (type === 'bar') return true;
     if (type === 'pie') return chart.allowPie !== false;
     if (type === 'trend') return chart.allowTrend !== false;
-    if (type === 'rose') return (analyticsCategoricalFieldTypes.includes(chart.fieldType) || analyticsChartHasCategoricalRows(chart)) && chart.allowPie !== false;
+    if (type === 'rose') return analyticsChartRoseAvailable(chart);
     if (type === 'polarBar') return analyticsCategoricalFieldTypes.includes(chart.fieldType) || analyticsChartHasCategoricalRows(chart);
-    if (type === 'treemap') return ['yes_no', 'single_choice', 'dropdown'].includes(chart.fieldType);
-    if (type === 'bubble') return chart.fieldType === 'multiple_choice';
+    if (type === 'treemap') return analyticsChartRoseAvailable(chart);
+    if (type === 'bubble') return analyticsChartRoseAvailable(chart);
     return false;
   }
 

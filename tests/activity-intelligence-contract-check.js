@@ -1658,6 +1658,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         extractFunctionDeclaration(managementSource, 'renderAnalyticsChartReadingSizeControl'),
         extractFunctionDeclaration(managementSource, 'chartCapabilitiesForField'),
         extractFunctionDeclaration(managementSource, 'analyticsChartHasCategoricalRows'),
+        extractFunctionDeclaration(managementSource, 'analyticsChartRoseAvailable'),
         extractFunctionDeclaration(managementSource, 'chartTypeAllowedForChart'),
         extractFunctionDeclaration(managementSource, 'chartCapabilitiesForChart'),
         extractFunctionDeclaration(managementSource, 'analyticsValidatedChartView'),
@@ -1709,17 +1710,30 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     const recorder = { chartKey: 'recorder-distribution', allowPie: true, allowTrend: false, rows: [{ label: 'Recorder A', count: 3, percent: 60, selectionPercent: 60 }, { label: 'Recorder B', count: 2, percent: 40, selectionPercent: 40 }] };
 
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(smallSingle).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
-    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(smallSingle).moreTypes), JSON.stringify(['rose', 'polarBar', 'treemap']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(smallSingle).moreTypes), JSON.stringify(['rose', 'polarBar', 'treemap', 'bubble']));
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeSingle).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
-    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeSingle).moreTypes), JSON.stringify(['rose', 'polarBar', 'treemap']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeSingle).moreTypes), JSON.stringify(['rose', 'polarBar', 'treemap', 'bubble']));
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeDropdown).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
-    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeDropdown).moreTypes), JSON.stringify(['rose', 'polarBar', 'treemap']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeDropdown).moreTypes), JSON.stringify(['rose', 'polarBar', 'treemap', 'bubble']));
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(multi).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
-    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(multi).moreTypes), JSON.stringify(['rose', 'polarBar', 'bubble']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(multi).moreTypes), JSON.stringify(['rose', 'polarBar', 'treemap', 'bubble']));
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(yesNo).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
-    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(yesNo).moreTypes), JSON.stringify(['rose', 'polarBar']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(yesNo).moreTypes), JSON.stringify(['rose', 'polarBar', 'treemap', 'bubble']));
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(recorder).primaryTypes), JSON.stringify(['bar', 'pie']));
-    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(recorder).moreTypes), JSON.stringify(['rose', 'polarBar']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(recorder).moreTypes), JSON.stringify(['rose', 'polarBar', 'treemap', 'bubble']));
+    [smallSingle, largeSingle, largeDropdown, multi, yesNo, recorder].forEach(chart => {
+        const capabilities = contract.chartCapabilitiesForChart(chart);
+        assert.strictEqual(new Set(capabilities.moreTypes).size, capabilities.moreTypes.length, 'More chart types must not include duplicates');
+        if (capabilities.moreTypes.includes('rose')) {
+            assert(capabilities.moreTypes.includes('treemap'), 'Rose availability must imply Treemap availability');
+            assert(capabilities.moreTypes.includes('bubble'), 'Rose availability must imply Bubble availability');
+            assert.strictEqual(
+                JSON.stringify(capabilities.moreTypes.filter(type => ['rose', 'polarBar', 'treemap', 'bubble'].includes(type))),
+                JSON.stringify(['rose', 'polarBar', 'treemap', 'bubble']),
+                'Rose-capable More charts must keep stable Rose, Polar Bar, Treemap, Bubble ordering'
+            );
+        }
+    });
     assert.deepStrictEqual(
         contract.chartCapabilitiesForChart(smallSingle).moreTypes.filter(type => type === 'rose' || type === 'polarBar'),
         contract.chartCapabilitiesForChart(largeSingle).moreTypes.filter(type => type === 'rose' || type === 'polarBar'),
@@ -1727,7 +1741,8 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     );
     assert.strictEqual(contract.analyticsValidatedChartView(smallSingle, {}).type, 'bar', 'Bar must remain the default chart');
     assert.strictEqual(contract.analyticsValidatedChartView(multi, {}).type, 'bar', 'multiple-choice must not default to Bubble');
-    assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'bubble', valueMode: 'percentage' }).type, 'bar', 'unsuitable stored chart type must fall back to the capability fallback');
+    assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'bubble', valueMode: 'percentage' }).type, 'bubble', 'Bubble must now be selectable wherever Rose is available');
+    assert.strictEqual(contract.analyticsValidatedChartView(multi, { type: 'treemap', valueMode: 'percentage' }).type, 'treemap', 'Treemap must now be selectable wherever Rose is available');
     assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'pie' }).type, 'pie', 'primary Pie chart type must remain selectable');
     assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'rose' }).type, 'rose', 'More-contained Rose chart type must remain selectable');
     assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'polarBar' }).type, 'polarBar', 'More-contained Polar Bar chart type must remain selectable');
@@ -1737,10 +1752,11 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.strictEqual(contract.analyticsValidatedChartView(multi, { type: 'bubble' }).type, 'bubble', 'More-contained Bubble chart type must remain selectable');
     const fallbackControls = contract.renderAnalyticsChartTypeControls({ chartKey: 'fallback', fieldType: 'short_text', allowPie: false, allowTrend: false, rows: [] }, { type: 'bar' }, 'analytics-chart-view', 'desktop');
     assert(!fallbackControls.includes('analytics-chart-more'), 'empty More control must not render');
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart({ chartKey: 'number', fieldType: 'number', allowPie: false, allowTrend: false, rows: [] }).moreTypes), JSON.stringify([]), 'non-Rose non-categorical charts must not receive Treemap or Bubble');
     contract.ui.analytics.chartMoreOpen = 'yes-no';
     const yesNoControls = contract.renderAnalyticsChartTypeControls(yesNo, { type: 'polarBar' }, 'analytics-chart-view', 'desktop');
     contract.ui.analytics.chartMoreOpen = '';
-    assert(yesNoControls.includes('data-value="rose"') && yesNoControls.includes('data-value="polarBar"'), 'Rose and Polar Bar must render in More for yes-no categorical charts');
+    assert(yesNoControls.includes('data-value="rose"') && yesNoControls.includes('data-value="polarBar"') && yesNoControls.includes('data-value="treemap"') && yesNoControls.includes('data-value="bubble"'), 'Rose-capable charts must render the unified More chart set');
     const treemapControls = contract.renderAnalyticsChartTypeControls(largeSingle, { type: 'treemap' }, 'analytics-chart-view', 'desktop');
     assert(treemapControls.includes('更多：Treemap') && treemapControls.includes('aria-pressed="true"'), 'active More chart state must be represented on the More trigger');
     assert(treemapControls.indexOf('data-value="bar"') < treemapControls.indexOf('data-value="pie"') && treemapControls.indexOf('data-value="pie"') < treemapControls.indexOf('data-value="trend"'), 'primary toolbar order must remain Bar, Pie, Trend');
