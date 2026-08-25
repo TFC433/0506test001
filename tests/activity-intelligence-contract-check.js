@@ -1641,6 +1641,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         extractFunctionDeclaration(managementSource, 'renderAnalyticsChartTypeControls'),
         extractFunctionDeclaration(managementSource, 'categoricalChartRow'),
         extractFunctionDeclaration(managementSource, 'analyticsChartPoint'),
+        extractFunctionDeclaration(managementSource, 'analyticsSortedCategoricalRows'),
         extractFunctionDeclaration(managementSource, 'sortedAnalyticsBarRows'),
         extractFunctionDeclaration(managementSource, 'analyticsTooltipFormatter'),
         extractFunctionDeclaration(managementSource, 'analyticsBarOption'),
@@ -1733,13 +1734,29 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     const roseOption = contract.analyticsRoseOption({ title: 'Multi', rows: [respondentRow], multiChoice: true }, { type: 'rose', valueMode: 'percentage' });
     assert.strictEqual(roseOption.series[0].type, 'pie', 'Rose must use native ECharts pie renderer');
     assert.strictEqual(roseOption.series[0].roseType, 'area', 'Rose must use native ECharts Nightingale area mode');
+    assert.strictEqual(roseOption.series[0].startAngle, 90, 'Rose must start descending categories from the conventional top position');
+    assert.strictEqual(roseOption.series[0].clockwise, true, 'Rose must proceed clockwise through descending categories');
     assert.strictEqual(roseOption.series[0].data[0].value, 46.5, 'multiple-choice Rose geometry must preserve existing Pie selection-composition semantics');
     assert.strictEqual(roseOption.series[0].data[0].selectionComposition, true, 'multiple-choice Rose points must preserve tooltip semantic distinction');
     assert.strictEqual(roseOption.series[0].label.formatter({ name: 'Full Category Name', data: { realPercent: 45.9, realCount: 22 } }), 'Full Category Name 45.9%', 'Rose percent label must show canonical category plus current selected metric only');
+    assert.strictEqual(roseOption.series[0].label.fontWeight, 'normal', 'Rose labels must align to Bar/Pie normal label hierarchy');
+    assert.strictEqual(roseOption.series[0].label.color, barOption.series[0].label.color, 'Rose labels must reuse the accepted Bar label color hierarchy');
     const roseCountOption = contract.analyticsRoseOption({ title: 'Single', rows: [respondentRow] }, { type: 'rose', valueMode: 'count' });
     assert.strictEqual(roseCountOption.series[0].label.formatter({ name: 'Full Category Name', data: { realPercent: 45.9, realCount: 22 } }), 'Full Category Name 22筆', 'Rose count label must show canonical category plus current selected metric only');
     assert(Number(roseCountOption.series[0].itemStyle.borderRadius) > 0, 'Rose must use restrained native sector border radius');
     assert(Number(roseCountOption.series[0].data[0].itemStyle.borderRadius) > 0, 'Rose sector data colors must preserve native border radius');
+    const unsortedRows = [
+        { label: 'First', count: 5, percent: 90, selectionPercent: 10 },
+        { label: 'Second', count: 2, percent: 20, selectionPercent: 60 },
+        { label: 'Third', count: 9, percent: 50, selectionPercent: 60 },
+        { label: 'Fourth', count: 1, percent: 10, selectionPercent: 5 }
+    ];
+    const originalOrder = unsortedRows.map(row => row.label);
+    const sortedRosePercent = contract.analyticsRoseOption({ title: 'Unsorted', rows: unsortedRows, multiChoice: true }, { type: 'rose', valueMode: 'percentage' });
+    assert.deepStrictEqual(sortedRosePercent.series[0].data.map(point => point.name), ['Second', 'Third', 'First', 'Fourth'], 'Rose percentage ordering must descend by the displayed selection-composition metric with stable ties');
+    const sortedRoseCount = contract.analyticsRoseOption({ title: 'Unsorted', rows: unsortedRows }, { type: 'rose', valueMode: 'count' });
+    assert.deepStrictEqual(sortedRoseCount.series[0].data.map(point => point.name), ['Third', 'First', 'Second', 'Fourth'], 'Rose count ordering must descend by displayed count');
+    assert.deepStrictEqual(unsortedRows.map(row => row.label), originalOrder, 'Rose and Polar ordering must not mutate shared source rows');
     const polarOption = contract.analyticsPolarBarOption({ title: 'Single', rows: [respondentRow] }, { type: 'polarBar', valueMode: 'percentage' });
     assert(polarOption.polar && polarOption.angleAxis && polarOption.radiusAxis, 'Polar Bar must use native polar coordinate components');
     assert.strictEqual(polarOption.series[0].type, 'bar', 'Polar Bar must use native ECharts bar renderer');
@@ -1751,12 +1768,23 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.notStrictEqual(polarOption.angleAxis.type, 'value', 'Polar Bar must not use the previous progress-ring numeric angle axis');
     assert.strictEqual(polarOption.series[0].data[0].value, 70.6, 'Polar Bar percentage must use respondent percentage like Bar');
     assert.strictEqual(polarOption.series[0].label.formatter({ data: { realPercent: 45.9, realCount: 22 } }), '45.9%', 'Polar Bar mark labels must show the selected metric without progress wording');
+    assert.strictEqual(polarOption.angleAxis.axisLabel.fontWeight, 'normal', 'Polar category labels must align to Bar/Pie normal label hierarchy');
+    assert.strictEqual(polarOption.series[0].label.fontWeight, 'normal', 'Polar value labels must align to Bar/Pie normal label hierarchy');
+    const sortedPolarPercent = contract.analyticsPolarBarOption({ title: 'Unsorted', rows: unsortedRows }, { type: 'polarBar', valueMode: 'percentage' });
+    assert.deepStrictEqual(sortedPolarPercent.angleAxis.data, ['First', 'Third', 'Second', 'Fourth'], 'Polar Bar percentage ordering must descend by displayed respondent percentage');
+    const sortedPolarCount = contract.analyticsPolarBarOption({ title: 'Unsorted', rows: unsortedRows }, { type: 'polarBar', valueMode: 'count' });
+    assert.deepStrictEqual(sortedPolarCount.angleAxis.data, ['Third', 'First', 'Second', 'Fourth'], 'Polar Bar count ordering must descend by displayed count');
     const polarTooltip = contract.analyticsTooltipFormatter({ marker: '', name: 'IoT', data: polarOption.series[0].data[0] });
     assert(polarTooltip.includes('72 筆') && polarTooltip.includes('70.6%'), 'Polar Bar tooltip must preserve exact respondent count and percent');
     const recorderRose = contract.analyticsRoseOption(recorder, { type: 'rose', valueMode: 'count' });
     assert.strictEqual(recorderRose.series[0].data[0].name, 'Recorder A', 'Recorder Rose must preserve recorder names as canonical labels');
     const recorderPolar = contract.analyticsPolarBarOption(recorder, { type: 'polarBar', valueMode: 'count' });
     assert.deepStrictEqual(recorderPolar.angleAxis.data, ['Recorder A', 'Recorder B'], 'Recorder Polar Bar must preserve recorder names on category angle axis');
+    const recorderUnsorted = { chartKey: 'recorder-distribution', allowPie: true, allowTrend: false, rows: [{ label: 'Recorder A', count: 2, percent: 20, selectionPercent: 20 }, { label: 'Recorder B', count: 5, percent: 50, selectionPercent: 50 }, { label: 'Recorder C', count: 5, percent: 50, selectionPercent: 50 }] };
+    assert.deepStrictEqual(contract.analyticsRoseOption(recorderUnsorted, { type: 'rose', valueMode: 'count' }).series[0].data.map(point => point.name), ['Recorder B', 'Recorder C', 'Recorder A'], 'Recorder Rose must use the same stable descending categorical order');
+    assert.deepStrictEqual(contract.analyticsPolarBarOption(recorderUnsorted, { type: 'polarBar', valueMode: 'count' }).angleAxis.data, ['Recorder B', 'Recorder C', 'Recorder A'], 'Recorder Polar Bar must use the same stable descending categorical order');
+    assert.deepStrictEqual(contract.analyticsBarOption({ title: 'Unsorted', rows: unsortedRows }, { type: 'bar', valueMode: 'percentage' }).yAxis.data, ['First', 'Third', 'Second', 'Fourth'], 'Bar ordering behavior must remain the existing descending respondent-percent baseline');
+    assert.deepStrictEqual(contract.analyticsPieOption({ title: 'Unsorted', rows: unsortedRows }, { type: 'pie', valueMode: 'percentage' }).series[0].data.map(point => point.name), originalOrder, 'Pie ordering must remain unchanged source order');
 
     const skewedRows = [73, 31, 20, 12, 12, 8, 5, 3, 2, 1, 1, 1].map((count, index) => contract.categoricalChartRow(`Tier ${index}`, count, 100, 120));
     const tierValues = contract.analyticsTierSourceValues(skewedRows);

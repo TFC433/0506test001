@@ -5115,7 +5115,7 @@
     const percentage = view.valueMode === 'percentage';
     const percentKey = chart.multiChoice ? 'selectionPercent' : 'percent';
     const modal = Boolean(options.modal);
-    const rows = (Array.isArray(chart.rows) ? chart.rows : []).filter(row => row.count > 0);
+    const rows = analyticsSortedCategoricalRows((Array.isArray(chart.rows) ? chart.rows : []).filter(row => row.count > 0), percentage, percentKey);
     return {
       legend: { show: false },
       tooltip: { formatter: analyticsTooltipFormatter },
@@ -5123,6 +5123,8 @@
         name: chart.title,
         type: 'pie',
         roseType: 'area',
+        startAngle: 90,
+        clockwise: true,
         radius: modal ? ['18%', '64%'] : ['18%', '72%'],
         center: modal ? ['50%', '54%'] : ['50%', '52%'],
         minAngle: 4,
@@ -5131,7 +5133,8 @@
         label: {
           show: true,
           position: 'outer',
-          color: styles.primary,
+          color: styles.secondary,
+          fontWeight: 'normal',
           alignTo: modal ? 'edge' : 'none',
           edgeDistance: modal ? 18 : '22%',
           bleedMargin: modal ? 8 : 5,
@@ -5171,7 +5174,7 @@
     const styles = analyticsChartStyles();
     const percentage = view.valueMode === 'percentage';
     const modal = Boolean(options.modal);
-    const rows = sortedAnalyticsBarRows((Array.isArray(chart.rows) ? chart.rows : []).filter(row => row.count > 0), percentage);
+    const rows = analyticsSortedCategoricalRows((Array.isArray(chart.rows) ? chart.rows : []).filter(row => row.count > 0), percentage);
     const values = rows.map(row => percentage ? Number(Number(row.percent || 0).toFixed(1)) : Number(row.count || 0));
     const maxValue = percentage ? 100 : Math.max(...values, 1);
     return {
@@ -5190,7 +5193,7 @@
         axisLabel: {
           color: styles.primary,
           fontSize: modal ? 12 : 10,
-          fontWeight: 700,
+          fontWeight: 'normal',
           interval: modal ? 0 : 'auto',
           hideOverlap: true,
           margin: modal ? 14 : 8
@@ -5228,7 +5231,7 @@
           position: 'middle',
           color: '#ffffff',
           fontSize: modal ? 12 : 10,
-          fontWeight: 700,
+          fontWeight: 'normal',
           formatter: params => percentage ? formatAnalyticsPercent(params.data.realPercent) : `${params.data.realCount}`,
           textBorderColor: 'rgba(15, 23, 42, 0.28)',
           textBorderWidth: 2
@@ -5779,11 +5782,15 @@
   }
 
   function sortedAnalyticsBarRows(rows, percentage) {
+    return analyticsSortedCategoricalRows(rows, percentage);
+  }
+
+  function analyticsSortedCategoricalRows(rows, percentage, percentKey = 'percent') {
     return (Array.isArray(rows) ? rows : [])
       .map((row, index) => ({ row, index }))
       .sort((a, b) => {
-        const aValue = percentage ? Number(a.row.percent || 0) : Number(a.row.count || 0);
-        const bValue = percentage ? Number(b.row.percent || 0) : Number(b.row.count || 0);
+        const aValue = percentage ? Number(a.row[percentKey] || 0) : Number(a.row.count || 0);
+        const bValue = percentage ? Number(b.row[percentKey] || 0) : Number(b.row.count || 0);
         return bValue - aValue || a.index - b.index;
       })
       .map(entry => entry.row);
