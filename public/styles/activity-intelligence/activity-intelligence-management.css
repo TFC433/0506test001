@@ -5034,6 +5034,10 @@ a:focus-visible {
 }
 
 .aim-chart-modal-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   margin-bottom: 10px;
 }
 
@@ -5045,7 +5049,6 @@ a:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 6px;
 }
 
 .aim-chart-reading-group {
@@ -5065,6 +5068,18 @@ a:focus-visible {
 .aim-chart-reading-segment button {
   min-width: 31px;
   font-weight: 600;
+}
+
+.aim-chart-reading-icon-button {
+  width: 31px;
+  min-width: 31px;
+  padding: 4px;
+}
+
+.aim-chart-reading-icon {
+  display: block;
+  width: 15px;
+  height: 15px;
 }
 
 .aim-chart-reading-segment button:disabled {

@@ -4125,15 +4125,22 @@
     const state = sanitizeAnalyticsChartReadingState(reading);
     return `
       <div class="aim-chart-reading-controls" aria-label="圖表閱讀調整">
-        ${renderAnalyticsChartReadingSizeControl('labelSize', '標籤大小', state.labelSize)}
-        ${renderAnalyticsChartReadingSizeControl('valueSize', '數值大小', state.valueSize)}
+        ${renderAnalyticsChartReadingSizeControl('labelSize', '標籤', state.labelSize)}
+        ${renderAnalyticsChartReadingSizeControl('valueSize', '數值', state.valueSize)}
         <div class="aim-chart-reading-group" role="group" aria-label="圖表主題">
           <div class="aim-chart-segment aim-chart-reading-segment">
-            ${['light', 'dark'].map(value => `<button data-action="analytics-chart-reading" data-control="theme" data-value="${value}" aria-pressed="${state.theme === value}" type="button">${value === 'light' ? 'Light' : 'Dark'}</button>`).join('')}
+            ${['light', 'dark'].map(value => `<button class="aim-chart-reading-icon-button" data-action="analytics-chart-reading" data-control="theme" data-value="${value}" aria-label="${value === 'light' ? 'Light chart' : 'Dark chart'}" title="${value === 'light' ? 'Light chart' : 'Dark chart'}" aria-pressed="${state.theme === value}" type="button">${analyticsChartReadingThemeIcon(value)}</button>`).join('')}
           </div>
         </div>
       </div>
     `;
+  }
+
+  function analyticsChartReadingThemeIcon(value) {
+    if (value === 'dark') {
+      return '<svg class="aim-chart-reading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+    }
+    return '<svg class="aim-chart-reading-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
   }
 
   function renderAnalyticsChartReadingSizeControl(control, label, value) {
@@ -5197,8 +5204,8 @@
         roseType: 'area',
         startAngle: 90,
         clockwise: true,
-        radius: modal ? ['18%', '64%'] : ['18%', '72%'],
-        center: modal ? ['50%', '54%'] : ['50%', '52%'],
+        radius: modal ? ['16%', '70%'] : ['18%', '72%'],
+        center: modal ? ['50%', '51%'] : ['50%', '52%'],
         minAngle: 4,
         minShowLabelAngle: modal ? 0 : 8,
         avoidLabelOverlap: true,
@@ -5208,7 +5215,7 @@
           color: styles.secondary,
           fontWeight: 'normal',
           alignTo: modal ? 'edge' : 'none',
-          edgeDistance: modal ? 18 : '22%',
+          edgeDistance: modal ? 14 : '22%',
           bleedMargin: modal ? 8 : 5,
           formatter: params => analyticsRoseLabelFormatter(params, percentage, reading),
           overflow: 'break',
@@ -5218,8 +5225,8 @@
         labelLine: {
           show: true,
           showAbove: true,
-          length: modal ? 22 : 13,
-          length2: modal ? 18 : 8,
+          length: modal ? 18 : 13,
+          length2: modal ? 14 : 8,
           minTurnAngle: 45,
           lineStyle: { color: styles.border }
         },

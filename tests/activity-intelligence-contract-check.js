@@ -1628,6 +1628,8 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert(managementSource.includes("valueMode: control === 'valueMode' && ['count', 'percentage'].includes(value) ? value : current.valueMode"), 'metric switching must keep using chart view state without replacing modal reading state');
     assert(!/localStorage|sessionStorage|document\.cookie|history\.pushState/.test(extractFunctionDeclaration(managementSource, 'renderAnalyticsChartModal')), 'expanded reading controls must not persist through browser storage or URL state');
     assert(cssSource.includes('.aim-chart-reading-controls') && cssSource.includes('.aim-chart-reading-segment button:disabled'), 'expanded reading controls must have scoped lightweight disabled-state styling');
+    assert(cssSource.includes('.aim-chart-modal-controls') && cssSource.includes('display: flex;') && cssSource.includes('flex-wrap: wrap;') && cssSource.includes('.aim-chart-reading-controls'), 'expanded modal toolbar controls must be composed as one wrapping flex row');
+    assert(cssSource.includes('.aim-chart-reading-icon-button') && cssSource.includes('.aim-chart-reading-icon'), 'icon-only chart theme buttons must have lightweight scoped styling');
 
     const bubblePointsSource = extractFunctionDeclaration(managementSource, 'analyticsBubblePoints');
     const source = [
@@ -1652,6 +1654,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         extractFunctionDeclaration(managementSource, 'analyticsSplitLabelRichStyles'),
         extractFunctionDeclaration(managementSource, 'analyticsChartReadingControlsSupported'),
         extractFunctionDeclaration(managementSource, 'renderAnalyticsChartReadingControls'),
+        extractFunctionDeclaration(managementSource, 'analyticsChartReadingThemeIcon'),
         extractFunctionDeclaration(managementSource, 'renderAnalyticsChartReadingSizeControl'),
         extractFunctionDeclaration(managementSource, 'chartCapabilitiesForField'),
         extractFunctionDeclaration(managementSource, 'analyticsChartHasCategoricalRows'),
@@ -1751,7 +1754,11 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.strictEqual(JSON.stringify(contract.defaultAnalyticsChartReadingState()), JSON.stringify({ labelSize: 0, valueSize: 0, theme: 'light' }), 'new expanded chart sessions must start at Light and baseline sizes');
     assert.strictEqual(JSON.stringify(contract.sanitizeAnalyticsChartReadingState({ labelSize: 9, valueSize: -8, theme: 'dark' })), JSON.stringify({ labelSize: 3, valueSize: -1, theme: 'dark' }), 'expanded reading size controls must be bounded');
     const baselineReadingControls = contract.renderAnalyticsChartReadingControls(contract.defaultAnalyticsChartReadingState());
-    assert(baselineReadingControls.includes('標籤大小') && baselineReadingControls.includes('數值大小') && baselineReadingControls.includes('A−') && baselineReadingControls.includes('A+') && baselineReadingControls.includes('Light') && baselineReadingControls.includes('Dark'), 'expanded reading controls must render exact approved copy');
+    assert(baselineReadingControls.includes('>標籤<') && baselineReadingControls.includes('>數值<') && baselineReadingControls.includes('A−') && baselineReadingControls.includes('A+'), 'expanded reading controls must render compact approved size-control copy');
+    assert(!baselineReadingControls.includes('>標籤大小<') && !baselineReadingControls.includes('>數值大小<'), 'expanded reading controls must not visibly render old verbose size copy');
+    assert(!baselineReadingControls.includes('>Light<') && !baselineReadingControls.includes('>Dark<'), 'expanded reading theme controls must be icon-only without visible Light/Dark words');
+    assert(baselineReadingControls.includes('<svg') && baselineReadingControls.includes('stroke="currentColor"'), 'expanded reading theme controls must use currentColor inline SVG icons');
+    assert(baselineReadingControls.includes('aria-label="Light chart"') && baselineReadingControls.includes('aria-label="Dark chart"'), 'icon-only chart theme buttons must preserve accessible Light/Dark meaning');
     assert(baselineReadingControls.includes('data-action="analytics-chart-reading"') && baselineReadingControls.includes('aria-pressed="true"'), 'expanded reading controls must expose active button state');
     const boundedReadingControls = contract.renderAnalyticsChartReadingControls({ labelSize: -1, valueSize: 3, theme: 'dark' });
     assert(boundedReadingControls.includes('data-control="labelSize" data-delta="-1" type="button" disabled'), 'label decrease must disable at minimum bound');
@@ -1785,6 +1792,10 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.strictEqual(roseOption.series[0].roseType, 'area', 'Rose must use native ECharts Nightingale area mode');
     assert.strictEqual(roseOption.series[0].startAngle, 90, 'Rose must start descending categories from the conventional top position');
     assert.strictEqual(roseOption.series[0].clockwise, true, 'Rose must proceed clockwise through descending categories');
+    assert.strictEqual(JSON.stringify(roseOption.series[0].radius), JSON.stringify(['18%', '72%']), 'Rose thumbnail radius must remain unchanged');
+    assert.strictEqual(JSON.stringify(roseOption.series[0].center), JSON.stringify(['50%', '52%']), 'Rose thumbnail center must remain unchanged');
+    assert.strictEqual(roseOption.series[0].labelLine.length, 13, 'Rose thumbnail labelLine length must remain unchanged');
+    assert.strictEqual(roseOption.series[0].labelLine.length2, 8, 'Rose thumbnail labelLine length2 must remain unchanged');
     assert.strictEqual(roseOption.series[0].data[0].value, 46.5, 'multiple-choice Rose geometry must preserve existing Pie selection-composition semantics');
     assert.strictEqual(roseOption.series[0].data[0].selectionComposition, true, 'multiple-choice Rose points must preserve tooltip semantic distinction');
     assert.strictEqual(roseOption.series[0].label.formatter({ name: 'Full Category Name', data: { realPercent: 45.9, realCount: 22 } }), 'Full Category Name 45.9%', 'Rose percent label must show canonical category plus current selected metric only');
@@ -1795,6 +1806,10 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.strictEqual(readingRoseOption.series[0].label.formatter({ name: 'Full Category Name', data: { realPercent: 45.9, realCount: 22 } }), '{label|Full Category Name} {value|45.9%}', 'expanded Rose labels must use ECharts rich text for split category/value sizing');
     assert.strictEqual(readingRoseOption.series[0].label.rich.label.fontSize, 13, 'Rose category label portion must respond to label size control');
     assert.strictEqual(readingRoseOption.series[0].label.rich.value.fontSize, 15, 'Rose current metric portion must respond to value size control independently');
+    assert(parseFloat(readingRoseOption.series[0].radius[1]) >= 68, 'expanded Rose must use more of the available canvas without changing value mapping');
+    assert(parseFloat(readingRoseOption.series[0].center[1]) <= 52, 'expanded Rose must reduce unnecessary top whitespace using native center placement');
+    assert(readingRoseOption.series[0].labelLine.length < 22 && readingRoseOption.series[0].labelLine.length2 < 18, 'expanded Rose label lines must stay compact enough for the adjusted canvas use');
+    assert.strictEqual(readingRoseOption.series[0].data[0].value, roseOption.series[0].data[0].value, 'expanded Rose layout changes must not alter native value-to-shape data');
     const roseCountOption = contract.analyticsRoseOption({ title: 'Single', rows: [respondentRow] }, { type: 'rose', valueMode: 'count' });
     assert.strictEqual(roseCountOption.series[0].label.formatter({ name: 'Full Category Name', data: { realPercent: 45.9, realCount: 22 } }), 'Full Category Name 22筆', 'Rose count label must show canonical category plus current selected metric only');
     assert(Number(roseCountOption.series[0].itemStyle.borderRadius) > 0, 'Rose must use restrained native sector border radius');
