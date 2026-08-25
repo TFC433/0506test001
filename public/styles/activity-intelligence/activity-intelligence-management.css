@@ -5041,6 +5041,37 @@ a:focus-visible {
   justify-content: flex-start;
 }
 
+.aim-chart-reading-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.aim-chart-reading-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.aim-chart-reading-label {
+  color: var(--aim-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.aim-chart-reading-segment button {
+  min-width: 31px;
+  font-weight: 600;
+}
+
+.aim-chart-reading-segment button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .aim-chart-modal-footnote {
   margin: 8px 0 0;
   color: var(--aim-muted);

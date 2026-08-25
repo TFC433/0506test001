@@ -1620,19 +1620,39 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert(managementSource.includes('aria-expanded="${open}"'), 'More selector must expose expanded state');
     assert(managementSource.includes('aria-selected="${view.type === value}"'), 'More menu must expose selected chart state');
     assert(cssSource.includes('.aim-chart-more-menu'), 'More menu must have local chart-control styling');
+    assert(managementSource.includes("ui.analyticsChartModal = { chartKey: el.dataset.chartKey || '', reading: defaultAnalyticsChartReadingState() };"), 'opening an expanded chart must reset reading controls to non-persisted defaults');
+    assert(managementSource.includes("ui.analyticsChartModal = null;"), 'closing an expanded chart must discard modal reading state');
+    assert(managementSource.includes("action === 'analytics-chart-reading'"), 'expanded reading controls must use a frontend-only action');
+    assert(managementSource.includes("ui.analyticsChartModal.reading = reading;"), 'expanded reading adjustments must stay on the open modal session');
+    assert(managementSource.includes("type: control === 'type' && analyticsChartTypeValues.includes(value) ? value : current.type"), 'chart switching must keep using chart view state without replacing modal reading state');
+    assert(managementSource.includes("valueMode: control === 'valueMode' && ['count', 'percentage'].includes(value) ? value : current.valueMode"), 'metric switching must keep using chart view state without replacing modal reading state');
+    assert(!/localStorage|sessionStorage|document\.cookie|history\.pushState/.test(extractFunctionDeclaration(managementSource, 'renderAnalyticsChartModal')), 'expanded reading controls must not persist through browser storage or URL state');
+    assert(cssSource.includes('.aim-chart-reading-controls') && cssSource.includes('.aim-chart-reading-segment button:disabled'), 'expanded reading controls must have scoped lightweight disabled-state styling');
 
     const bubblePointsSource = extractFunctionDeclaration(managementSource, 'analyticsBubblePoints');
     const source = [
         'const analyticsCategoricalFieldTypes = ["yes_no", "single_choice", "multiple_choice", "dropdown"];',
         'const analyticsChartTypeLabels = { bar: "Bar", pie: "Pie", trend: "Trend", rose: "Rose", polarBar: "Polar Bar", treemap: "Treemap", bubble: "Bubble" };',
+        'const analyticsChartReadingSizeBounds = Object.freeze({ min: -1, max: 3, step: 2 });',
         'const ui = { analytics: { chartMoreOpen: "", mobileChartMoreOpen: "" } };',
         'const Store = { escapeHtml(value) { return String(value || ""); } };',
-        'function analyticsChartStyles() { return { isDark: false, primary: "#111", secondary: "#333", muted: "#666", border: "#ddd" }; }',
+        'function analyticsChartStyles(options = {}) { const dark = Boolean(options.modal && options.reading && options.reading.theme === "dark"); const controlled = Boolean(options.modal && options.reading); return { isDark: dark, chartThemeControlled: controlled, primary: dark ? "#f8fafc" : "#111", secondary: dark ? "#cbd5e1" : "#333", muted: dark ? "#94a3b8" : "#666", border: dark ? "#334155" : "#ddd", background: dark ? "#111827" : "#ffffff", tooltipBackground: dark ? "rgba(15, 23, 42, 0.96)" : "rgba(255, 255, 255, 0.98)" }; }',
         'function analyticsTrendXAxis(dates) { return { data: dates }; }',
         'function analyticsTrendYAxis() { return {}; }',
         'function formatAnalyticsDateLabel(value) { return String(value || ""); }',
         'function formatAnalyticsPercent(value) { return `${Math.round(Number(value || 0) * 10) / 10}%`; }',
         'function escapeChartHtml(value) { return Store.escapeHtml(value); }',
+        extractFunctionDeclaration(managementSource, 'defaultAnalyticsChartReadingState'),
+        extractFunctionDeclaration(managementSource, 'sanitizeAnalyticsChartReadingState'),
+        extractFunctionDeclaration(managementSource, 'clampAnalyticsChartReadingSize'),
+        extractFunctionDeclaration(managementSource, 'analyticsChartReadingFromOptions'),
+        extractFunctionDeclaration(managementSource, 'analyticsReadingFontSize'),
+        extractFunctionDeclaration(managementSource, 'analyticsChartAppearanceOption'),
+        extractFunctionDeclaration(managementSource, 'analyticsChartTooltipOption'),
+        extractFunctionDeclaration(managementSource, 'analyticsSplitLabelRichStyles'),
+        extractFunctionDeclaration(managementSource, 'analyticsChartReadingControlsSupported'),
+        extractFunctionDeclaration(managementSource, 'renderAnalyticsChartReadingControls'),
+        extractFunctionDeclaration(managementSource, 'renderAnalyticsChartReadingSizeControl'),
         extractFunctionDeclaration(managementSource, 'chartCapabilitiesForField'),
         extractFunctionDeclaration(managementSource, 'analyticsChartHasCategoricalRows'),
         extractFunctionDeclaration(managementSource, 'chartTypeAllowedForChart'),
@@ -1647,6 +1667,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         extractFunctionDeclaration(managementSource, 'analyticsBarOption'),
         extractFunctionDeclaration(managementSource, 'analyticsPieOption'),
         extractFunctionDeclaration(managementSource, 'analyticsCategoryColor'),
+        extractFunctionDeclaration(managementSource, 'analyticsPieLabelFormatter'),
         extractFunctionDeclaration(managementSource, 'analyticsRoseLabelFormatter'),
         extractFunctionDeclaration(managementSource, 'analyticsRoseOption'),
         extractFunctionDeclaration(managementSource, 'analyticsPolarBarOption'),
@@ -1672,7 +1693,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         extractFunctionDeclaration(managementSource, 'analyticsVisibleTrendSeries'),
         extractFunctionDeclaration(managementSource, 'activityTrendOption'),
         extractFunctionDeclaration(managementSource, 'analyticsCategoricalTrendOption'),
-        '({ ui, chartCapabilitiesForField, chartCapabilitiesForChart, analyticsValidatedChartView, renderAnalyticsChartTypeControls, categoricalChartRow, analyticsBarOption, analyticsPieOption, analyticsRoseOption, analyticsPolarBarOption, analyticsTierSourceValues, analyticsMagnitudeTier, analyticsTreemapVisualValue, analyticsTreemapOption, analyticsBubbleSymbolSize, analyticsBubbleOption, analyticsApplyExpandedExternalLabelOverlay, analyticsTreemapRenderedTileGeometries, analyticsAssignExternalLabelRows, analyticsTooltipFormatter, activityTrendOption, analyticsCategoricalTrendOption });'
+        '({ ui, defaultAnalyticsChartReadingState, sanitizeAnalyticsChartReadingState, analyticsChartReadingControlsSupported, renderAnalyticsChartReadingControls, chartCapabilitiesForField, chartCapabilitiesForChart, analyticsValidatedChartView, renderAnalyticsChartTypeControls, categoricalChartRow, analyticsBarOption, analyticsPieOption, analyticsRoseOption, analyticsPolarBarOption, analyticsTierSourceValues, analyticsMagnitudeTier, analyticsTreemapVisualValue, analyticsTreemapOption, analyticsBubbleSymbolSize, analyticsBubbleOption, analyticsApplyExpandedExternalLabelOverlay, analyticsTreemapRenderedTileGeometries, analyticsAssignExternalLabelRows, analyticsTooltipFormatter, activityTrendOption, analyticsCategoricalTrendOption });'
     ].join('\n');
     const contract = vm.runInNewContext(source, {});
     const rows = labels => labels.map(label => ({ label, count: 1, percent: 10, selectionPercent: 10 }));
@@ -1719,16 +1740,44 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     const treemapControls = contract.renderAnalyticsChartTypeControls(largeSingle, { type: 'treemap' }, 'analytics-chart-view', 'desktop');
     assert(treemapControls.includes('更多：Treemap') && treemapControls.includes('aria-pressed="true"'), 'active More chart state must be represented on the More trigger');
     assert(treemapControls.indexOf('data-value="bar"') < treemapControls.indexOf('data-value="pie"') && treemapControls.indexOf('data-value="pie"') < treemapControls.indexOf('data-value="trend"'), 'primary toolbar order must remain Bar, Pie, Trend');
+    assert(!treemapControls.includes('標籤大小') && !treemapControls.includes('數值大小'), 'thumbnail chart controls must not render expanded reading controls');
+    assert(contract.analyticsChartReadingControlsSupported(smallSingle, { type: 'bar' }), 'Bar must support expanded reading controls');
+    assert(contract.analyticsChartReadingControlsSupported(smallSingle, { type: 'pie' }), 'Pie must support expanded reading controls');
+    assert(contract.analyticsChartReadingControlsSupported(smallSingle, { type: 'trend' }), 'Trend must support expanded reading controls');
+    assert(contract.analyticsChartReadingControlsSupported(smallSingle, { type: 'rose' }), 'Rose must support expanded reading controls');
+    assert(contract.analyticsChartReadingControlsSupported(smallSingle, { type: 'polarBar' }), 'Polar Bar must support expanded reading controls');
+    assert(!contract.analyticsChartReadingControlsSupported(smallSingle, { type: 'treemap' }), 'Treemap must remain outside expanded reading controls V1');
+    assert(!contract.analyticsChartReadingControlsSupported(multi, { type: 'bubble' }), 'Bubble must remain outside expanded reading controls V1');
+    assert.strictEqual(JSON.stringify(contract.defaultAnalyticsChartReadingState()), JSON.stringify({ labelSize: 0, valueSize: 0, theme: 'light' }), 'new expanded chart sessions must start at Light and baseline sizes');
+    assert.strictEqual(JSON.stringify(contract.sanitizeAnalyticsChartReadingState({ labelSize: 9, valueSize: -8, theme: 'dark' })), JSON.stringify({ labelSize: 3, valueSize: -1, theme: 'dark' }), 'expanded reading size controls must be bounded');
+    const baselineReadingControls = contract.renderAnalyticsChartReadingControls(contract.defaultAnalyticsChartReadingState());
+    assert(baselineReadingControls.includes('標籤大小') && baselineReadingControls.includes('數值大小') && baselineReadingControls.includes('A−') && baselineReadingControls.includes('A+') && baselineReadingControls.includes('Light') && baselineReadingControls.includes('Dark'), 'expanded reading controls must render exact approved copy');
+    assert(baselineReadingControls.includes('data-action="analytics-chart-reading"') && baselineReadingControls.includes('aria-pressed="true"'), 'expanded reading controls must expose active button state');
+    const boundedReadingControls = contract.renderAnalyticsChartReadingControls({ labelSize: -1, valueSize: 3, theme: 'dark' });
+    assert(boundedReadingControls.includes('data-control="labelSize" data-delta="-1" type="button" disabled'), 'label decrease must disable at minimum bound');
+    assert(boundedReadingControls.includes('data-control="valueSize" data-delta="1" type="button" disabled'), 'value increase must disable at maximum bound');
 
     const respondentRow = contract.categoricalChartRow('IoT', 72, 102, 155);
     assert(Math.abs(respondentRow.percent - 70.588) < 0.01, 'row.percent must remain respondent percentage');
     assert(Math.abs(respondentRow.selectionPercent - 46.451) < 0.01, 'row.selectionPercent must remain selection composition');
     const barOption = contract.analyticsBarOption({ title: 'Multi', rows: [respondentRow] }, { type: 'bar', valueMode: 'percentage' });
     assert.strictEqual(barOption.series[0].data[0].value, 70.6, 'Bar percentage must use respondent percentage');
+    const readingState = { labelSize: 2, valueSize: 1, theme: 'dark' };
+    const readingBarOption = contract.analyticsBarOption({ title: 'Multi', rows: [respondentRow] }, { type: 'bar', valueMode: 'percentage' }, { modal: true, reading: readingState });
+    assert.strictEqual(readingBarOption.backgroundColor, '#111827', 'expanded Dark chart theme must be scoped to the ECharts option');
+    assert.strictEqual(readingBarOption.tooltip.backgroundColor, 'rgba(15, 23, 42, 0.96)', 'expanded Dark chart tooltip must be chart-local and readable');
+    assert.strictEqual(readingBarOption.yAxis.axisLabel.fontSize, 16, 'Bar category labels must respond to label size control');
+    assert.strictEqual(readingBarOption.series[0].label.fontSize, 14, 'Bar value labels must respond to value size control independently');
+    assert.strictEqual(readingBarOption.xAxis.axisLabel.fontSize, undefined, 'Bar numeric axis ticks must not be controlled as category labels');
     const pieOption = contract.analyticsPieOption({ title: 'Multi', rows: [respondentRow], multiChoice: true }, { type: 'pie', valueMode: 'percentage' });
     assert.strictEqual(pieOption.series[0].data[0].value, 46.5, 'multiple-choice Pie geometry must use selection composition');
     assert.strictEqual(pieOption.series[0].data[0].selectionComposition, true, 'multiple-choice Pie points must carry composition semantics');
     assert(pieOption.series[0].data[0].respondentPercent > pieOption.series[0].data[0].selectionPercent, 'Pie point must preserve respondent percent separately');
+    assert.strictEqual(pieOption.series[0].label.rich, undefined, 'thumbnail Pie labels must keep the existing non-reading label shape');
+    const readingPieOption = contract.analyticsPieOption({ title: 'Multi', rows: [respondentRow], multiChoice: true }, { type: 'pie', valueMode: 'percentage' }, { modal: true, reading: { labelSize: 1, valueSize: 3, theme: 'light' } });
+    assert.strictEqual(readingPieOption.series[0].label.formatter({ name: 'Full Category Name', data: { realPercent: 45.9, realCount: 22 } }), '{label|Full Category Name}\n{value|45.9%}', 'expanded Pie labels must use ECharts rich text for split category/value sizing');
+    assert.strictEqual(readingPieOption.series[0].label.rich.label.fontSize, 13, 'Pie category label portion must respond to label size control');
+    assert.strictEqual(readingPieOption.series[0].label.rich.value.fontSize, 17, 'Pie value label portion must respond to value size control independently');
     const tooltip = contract.analyticsTooltipFormatter({ marker: '', name: 'IoT', data: pieOption.series[0].data[0] });
     assert(tooltip.includes('填答者選取率') && tooltip.includes('選項組成占比'), 'multiple-choice Pie tooltip must distinguish respondent rate and selection composition');
     const roseOption = contract.analyticsRoseOption({ title: 'Multi', rows: [respondentRow], multiChoice: true }, { type: 'rose', valueMode: 'percentage' });
@@ -1741,6 +1790,11 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.strictEqual(roseOption.series[0].label.formatter({ name: 'Full Category Name', data: { realPercent: 45.9, realCount: 22 } }), 'Full Category Name 45.9%', 'Rose percent label must show canonical category plus current selected metric only');
     assert.strictEqual(roseOption.series[0].label.fontWeight, 'normal', 'Rose labels must align to Bar/Pie normal label hierarchy');
     assert.strictEqual(roseOption.series[0].label.color, barOption.series[0].label.color, 'Rose labels must reuse the accepted Bar label color hierarchy');
+    assert.strictEqual(roseOption.series[0].label.rich, undefined, 'thumbnail Rose labels must keep the existing non-reading label shape');
+    const readingRoseOption = contract.analyticsRoseOption({ title: 'Multi', rows: [respondentRow], multiChoice: true }, { type: 'rose', valueMode: 'percentage' }, { modal: true, reading: { labelSize: 1, valueSize: 2, theme: 'dark' } });
+    assert.strictEqual(readingRoseOption.series[0].label.formatter({ name: 'Full Category Name', data: { realPercent: 45.9, realCount: 22 } }), '{label|Full Category Name} {value|45.9%}', 'expanded Rose labels must use ECharts rich text for split category/value sizing');
+    assert.strictEqual(readingRoseOption.series[0].label.rich.label.fontSize, 13, 'Rose category label portion must respond to label size control');
+    assert.strictEqual(readingRoseOption.series[0].label.rich.value.fontSize, 15, 'Rose current metric portion must respond to value size control independently');
     const roseCountOption = contract.analyticsRoseOption({ title: 'Single', rows: [respondentRow] }, { type: 'rose', valueMode: 'count' });
     assert.strictEqual(roseCountOption.series[0].label.formatter({ name: 'Full Category Name', data: { realPercent: 45.9, realCount: 22 } }), 'Full Category Name 22筆', 'Rose count label must show canonical category plus current selected metric only');
     assert(Number(roseCountOption.series[0].itemStyle.borderRadius) > 0, 'Rose must use restrained native sector border radius');
@@ -1770,6 +1824,10 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.strictEqual(polarOption.series[0].label.formatter({ data: { realPercent: 45.9, realCount: 22 } }), '45.9%', 'Polar Bar mark labels must show the selected metric without progress wording');
     assert.strictEqual(polarOption.angleAxis.axisLabel.fontWeight, 'normal', 'Polar category labels must align to Bar/Pie normal label hierarchy');
     assert.strictEqual(polarOption.series[0].label.fontWeight, 'normal', 'Polar value labels must align to Bar/Pie normal label hierarchy');
+    const readingPolarOption = contract.analyticsPolarBarOption({ title: 'Single', rows: [respondentRow] }, { type: 'polarBar', valueMode: 'percentage' }, { modal: true, reading: { labelSize: 1, valueSize: 2, theme: 'dark' } });
+    assert.strictEqual(readingPolarOption.angleAxis.axisLabel.fontSize, 14, 'Polar category labels must respond to label size control');
+    assert.strictEqual(readingPolarOption.series[0].label.fontSize, 16, 'Polar value labels must respond to value size control independently');
+    assert.strictEqual(readingPolarOption.radiusAxis.axisLabel.fontSize, undefined, 'Polar numeric radius ticks must not be controlled as category or value labels');
     const sortedPolarPercent = contract.analyticsPolarBarOption({ title: 'Unsorted', rows: unsortedRows }, { type: 'polarBar', valueMode: 'percentage' });
     assert.deepStrictEqual(sortedPolarPercent.angleAxis.data, ['First', 'Third', 'Second', 'Fourth'], 'Polar Bar percentage ordering must descend by displayed respondent percentage');
     const sortedPolarCount = contract.analyticsPolarBarOption({ title: 'Unsorted', rows: unsortedRows }, { type: 'polarBar', valueMode: 'count' });
@@ -1785,6 +1843,12 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.deepStrictEqual(contract.analyticsPolarBarOption(recorderUnsorted, { type: 'polarBar', valueMode: 'count' }).angleAxis.data, ['Recorder B', 'Recorder C', 'Recorder A'], 'Recorder Polar Bar must use the same stable descending categorical order');
     assert.deepStrictEqual(contract.analyticsBarOption({ title: 'Unsorted', rows: unsortedRows }, { type: 'bar', valueMode: 'percentage' }).yAxis.data, ['First', 'Third', 'Second', 'Fourth'], 'Bar ordering behavior must remain the existing descending respondent-percent baseline');
     assert.deepStrictEqual(contract.analyticsPieOption({ title: 'Unsorted', rows: unsortedRows }, { type: 'pie', valueMode: 'percentage' }).series[0].data.map(point => point.name), originalOrder, 'Pie ordering must remain unchanged source order');
+    const readingTrendOption = contract.analyticsCategoricalTrendOption({
+        trend: { dates: ['2026-08-01'], answeredByDate: [1], series: [{ label: 'A', total: 1, counts: [1], percents: [100] }] }
+    }, { type: 'trend', valueMode: 'percentage' }, { modal: true, reading: { labelSize: 2, valueSize: 3, theme: 'dark' } });
+    assert.strictEqual(readingTrendOption.legend.textStyle.fontSize, 16, 'Trend identity legend text must respond to label size control');
+    assert.strictEqual(readingTrendOption.backgroundColor, '#111827', 'Trend expanded Dark chart must use chart-local ECharts appearance');
+    assert.strictEqual(readingTrendOption.series[0].label, undefined, 'Trend value size control must not invent permanent point value labels');
 
     const skewedRows = [73, 31, 20, 12, 12, 8, 5, 3, 2, 1, 1, 1].map((count, index) => contract.categoricalChartRow(`Tier ${index}`, count, 100, 120));
     const tierValues = contract.analyticsTierSourceValues(skewedRows);

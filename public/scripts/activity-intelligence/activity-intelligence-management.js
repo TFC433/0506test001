@@ -30,6 +30,7 @@
     treemap: 'Treemap',
     bubble: '氣泡'
   });
+  const analyticsChartReadingSizeBounds = Object.freeze({ min: -1, max: 3, step: 2 });
   const recordAdvancedChoiceFieldTypes = new Set(choiceFieldTypes);
   const answerBadgePaletteSize = 10;
   const recordBadgePaletteFieldTypes = new Set(['yes_no', ...choiceFieldTypes]);
@@ -4056,9 +4057,12 @@
     const records = analyticsRecords(activity);
     const chart = analyticsChartForKey(activity, records, ui.analyticsChartModal.chartKey, analyticsFormContext());
     if (!chart) return '';
+    const reading = analyticsChartModalReadingState();
     const view = chart.kind === 'activityTrend'
       ? analyticsActivityTrendView(chart.chartKey)
       : analyticsChartView(chart);
+    const readingSupported = analyticsChartReadingControlsSupported(chart, view);
+    const chartOptions = { modal: true, reading: readingSupported ? reading : null };
     const controls = chart.kind === 'activityTrend'
       ? renderActivityTrendControls(chart.chartKey, view, true)
       : renderAnalyticsChartControls(chart, view);
@@ -4066,8 +4070,8 @@
       ? 420
       : analyticsModalChartHeight(chart, view);
     const option = chart.kind === 'activityTrend'
-      ? activityTrendOption(chart, view, { modal: true })
-      : analyticsChartOption(chart, view, { modal: true });
+      ? activityTrendOption(chart, view, chartOptions)
+      : analyticsChartOption(chart, view, chartOptions);
     return `
       <div class="aim-dialog-backdrop aim-chart-modal-backdrop" data-action="close-analytics-chart-modal"></div>
       <section class="aim-dialog aim-chart-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="aim-chart-modal-title">
@@ -4079,11 +4083,70 @@
           <button class="aim-button aim-icon-button" data-action="close-analytics-chart-modal" type="button" aria-label="關閉">×</button>
         </div>
         <div class="aim-dialog-body">
-          <div class="aim-chart-modal-controls">${controls}</div>
+          <div class="aim-chart-modal-controls">${controls}${readingSupported ? renderAnalyticsChartReadingControls(reading) : ''}</div>
           ${renderActivityAnalyticsChartContainer(`modal-${chart.chartKey}`, option, modalHeight)}
           ${chart.coverage ? `<p class="aim-chart-modal-footnote">${Store.escapeHtml(chart.coverage)}</p>` : ''}
         </div>
       </section>
+    `;
+  }
+
+  function defaultAnalyticsChartReadingState() {
+    return { labelSize: 0, valueSize: 0, theme: 'light' };
+  }
+
+  function analyticsChartModalReadingState() {
+    if (!ui.analyticsChartModal) return defaultAnalyticsChartReadingState();
+    ui.analyticsChartModal.reading = sanitizeAnalyticsChartReadingState(ui.analyticsChartModal.reading);
+    return ui.analyticsChartModal.reading;
+  }
+
+  function sanitizeAnalyticsChartReadingState(reading) {
+    const defaults = defaultAnalyticsChartReadingState();
+    return {
+      labelSize: clampAnalyticsChartReadingSize(reading && reading.labelSize),
+      valueSize: clampAnalyticsChartReadingSize(reading && reading.valueSize),
+      theme: reading && reading.theme === 'dark' ? 'dark' : defaults.theme
+    };
+  }
+
+  function clampAnalyticsChartReadingSize(value) {
+    const number = Number(value || 0);
+    if (!Number.isFinite(number)) return 0;
+    return Math.max(analyticsChartReadingSizeBounds.min, Math.min(analyticsChartReadingSizeBounds.max, Math.round(number)));
+  }
+
+  function analyticsChartReadingControlsSupported(chart, view) {
+    if (chart && chart.kind === 'activityTrend') return true;
+    return ['bar', 'pie', 'trend', 'rose', 'polarBar'].includes(view && view.type);
+  }
+
+  function renderAnalyticsChartReadingControls(reading) {
+    const state = sanitizeAnalyticsChartReadingState(reading);
+    return `
+      <div class="aim-chart-reading-controls" aria-label="圖表閱讀調整">
+        ${renderAnalyticsChartReadingSizeControl('labelSize', '標籤大小', state.labelSize)}
+        ${renderAnalyticsChartReadingSizeControl('valueSize', '數值大小', state.valueSize)}
+        <div class="aim-chart-reading-group" role="group" aria-label="圖表主題">
+          <div class="aim-chart-segment aim-chart-reading-segment">
+            ${['light', 'dark'].map(value => `<button data-action="analytics-chart-reading" data-control="theme" data-value="${value}" aria-pressed="${state.theme === value}" type="button">${value === 'light' ? 'Light' : 'Dark'}</button>`).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderAnalyticsChartReadingSizeControl(control, label, value) {
+    const atMin = value <= analyticsChartReadingSizeBounds.min;
+    const atMax = value >= analyticsChartReadingSizeBounds.max;
+    return `
+      <div class="aim-chart-reading-group" role="group" aria-label="${Store.escapeHtml(label)}">
+        <div class="aim-chart-reading-label">${Store.escapeHtml(label)}</div>
+        <div class="aim-chart-segment aim-chart-reading-segment">
+          <button data-action="analytics-chart-reading" data-control="${control}" data-delta="-1" type="button"${atMin ? ' disabled' : ''}>A−</button>
+          <button data-action="analytics-chart-reading" data-control="${control}" data-delta="1" type="button"${atMax ? ' disabled' : ''}>A+</button>
+        </div>
+      </div>
     `;
   }
 
@@ -4693,13 +4756,14 @@
   }
 
   function activityTrendOption(chart, view, options = {}) {
-    const styles = analyticsChartStyles();
+    const styles = analyticsChartStyles(options);
     const values = view.activityMode === 'cumulative' ? chart.cumulativeCounts : chart.dailyCounts;
     const name = view.activityMode === 'cumulative' ? '累積紀錄' : '每日新增';
     return {
+      ...analyticsChartAppearanceOption(styles),
       legend: { show: false },
       grid: { top: 20, right: options.modal ? 28 : 18, bottom: 30, left: 10, containLabel: true },
-      tooltip: { trigger: 'axis' },
+      tooltip: analyticsChartTooltipOption(styles, { trigger: 'axis' }),
       xAxis: analyticsTrendXAxis(chart.dates, styles, options),
       yAxis: analyticsTrendYAxis(false, styles),
       series: [{
@@ -5020,10 +5084,11 @@
   }
 
   function analyticsBarOption(chart, view, options = {}) {
-    const styles = analyticsChartStyles();
+    const styles = analyticsChartStyles(options);
     const percentage = view.valueMode === 'percentage';
     const rows = sortedAnalyticsBarRows(chart.rows, percentage);
     return {
+      ...analyticsChartAppearanceOption(styles),
       legend: { show: false },
       grid: { top: 12, right: options.modal ? 40 : 28, bottom: 26, left: 8, containLabel: true },
       xAxis: {
@@ -5045,9 +5110,9 @@
         data: rows.map(row => row.label),
         axisTick: { show: false },
         axisLine: { lineStyle: { color: styles.border } },
-        axisLabel: { width: options.modal ? 190 : 104, overflow: 'truncate', color: styles.secondary }
+        axisLabel: { width: options.modal ? 190 : 104, overflow: 'truncate', color: styles.secondary, fontSize: analyticsReadingFontSize(12, options, 'labelSize') }
       },
-      tooltip: { trigger: 'item', formatter: analyticsTooltipFormatter },
+      tooltip: analyticsChartTooltipOption(styles, { trigger: 'item', formatter: analyticsTooltipFormatter }),
       series: [{
         name: chart.title,
         type: 'bar',
@@ -5066,6 +5131,7 @@
           show: true,
           position: 'right',
           color: styles.secondary,
+          fontSize: analyticsReadingFontSize(12, options, 'valueSize'),
           formatter: params => percentage ? formatAnalyticsPercent(params.data.realPercent) : `${params.data.realCount}`
         }
       }]
@@ -5073,12 +5139,15 @@
   }
 
   function analyticsPieOption(chart, view, options = {}) {
+    const styles = analyticsChartStyles(options);
     const percentage = view.valueMode === 'percentage';
     const percentKey = chart.multiChoice ? 'selectionPercent' : 'percent';
     const modal = Boolean(options.modal);
+    const reading = analyticsChartReadingFromOptions(options);
     return {
+      ...analyticsChartAppearanceOption(styles),
       legend: { show: false },
-      tooltip: { formatter: analyticsTooltipFormatter },
+      tooltip: analyticsChartTooltipOption(styles, { formatter: analyticsTooltipFormatter }),
       series: [{
         name: chart.title,
         type: 'pie',
@@ -5093,11 +5162,12 @@
           alignTo: modal ? 'edge' : 'none',
           edgeDistance: modal ? 16 : '25%',
           bleedMargin: modal ? 8 : 5,
-          formatter: params => `${params.name}\n${percentage ? formatAnalyticsPercent(params.data.realPercent) : params.data.realCount}`,
+          formatter: params => reading ? analyticsPieLabelFormatter(params, percentage) : `${params.name}\n${percentage ? formatAnalyticsPercent(params.data.realPercent) : params.data.realCount}`,
           overflow: 'break',
-          width: modal ? 190 : 86
+          width: modal ? 190 : 86,
+          rich: reading ? analyticsSplitLabelRichStyles(styles, options, 11, 11) : undefined
         },
-        labelLine: { show: true, showAbove: modal, length: modal ? 20 : 14, length2: modal ? 20 : 10, minTurnAngle: 45 },
+        labelLine: { show: true, showAbove: modal, length: modal ? 20 : 14, length2: modal ? 20 : 10, minTurnAngle: 45, lineStyle: styles.chartThemeControlled ? { color: styles.border } : undefined },
         labelLayout: modal ? { hideOverlap: false, moveOverlap: 'shiftY' } : { hideOverlap: true },
         emphasis: {
           itemStyle: {
@@ -5111,14 +5181,16 @@
   }
 
   function analyticsRoseOption(chart, view, options = {}) {
-    const styles = analyticsChartStyles();
+    const styles = analyticsChartStyles(options);
     const percentage = view.valueMode === 'percentage';
     const percentKey = chart.multiChoice ? 'selectionPercent' : 'percent';
     const modal = Boolean(options.modal);
+    const reading = analyticsChartReadingFromOptions(options);
     const rows = analyticsSortedCategoricalRows((Array.isArray(chart.rows) ? chart.rows : []).filter(row => row.count > 0), percentage, percentKey);
     return {
+      ...analyticsChartAppearanceOption(styles),
       legend: { show: false },
-      tooltip: { formatter: analyticsTooltipFormatter },
+      tooltip: analyticsChartTooltipOption(styles, { formatter: analyticsTooltipFormatter }),
       series: [{
         name: chart.title,
         type: 'pie',
@@ -5138,9 +5210,10 @@
           alignTo: modal ? 'edge' : 'none',
           edgeDistance: modal ? 18 : '22%',
           bleedMargin: modal ? 8 : 5,
-          formatter: params => analyticsRoseLabelFormatter(params, percentage),
+          formatter: params => analyticsRoseLabelFormatter(params, percentage, reading),
           overflow: 'break',
-          width: modal ? 210 : 108
+          width: modal ? 210 : 108,
+          rich: reading ? analyticsSplitLabelRichStyles(styles, options, 11, 11) : undefined
         },
         labelLine: {
           show: true,
@@ -5171,15 +5244,16 @@
   }
 
   function analyticsPolarBarOption(chart, view, options = {}) {
-    const styles = analyticsChartStyles();
+    const styles = analyticsChartStyles(options);
     const percentage = view.valueMode === 'percentage';
     const modal = Boolean(options.modal);
     const rows = analyticsSortedCategoricalRows((Array.isArray(chart.rows) ? chart.rows : []).filter(row => row.count > 0), percentage);
     const values = rows.map(row => percentage ? Number(Number(row.percent || 0).toFixed(1)) : Number(row.count || 0));
     const maxValue = percentage ? 100 : Math.max(...values, 1);
     return {
+      ...analyticsChartAppearanceOption(styles),
       legend: { show: false },
-      tooltip: { trigger: 'item', formatter: analyticsTooltipFormatter },
+      tooltip: analyticsChartTooltipOption(styles, { trigger: 'item', formatter: analyticsTooltipFormatter }),
       polar: {
         radius: modal ? ['10%', '78%'] : ['8%', '70%'],
         center: ['50%', modal ? '54%' : '53%']
@@ -5192,7 +5266,7 @@
         axisTick: { show: false },
         axisLabel: {
           color: styles.primary,
-          fontSize: modal ? 12 : 10,
+          fontSize: analyticsReadingFontSize(modal ? 12 : 10, options, 'labelSize') || (modal ? 12 : 10),
           fontWeight: 'normal',
           interval: modal ? 0 : 'auto',
           hideOverlap: true,
@@ -5230,7 +5304,7 @@
           show: modal,
           position: 'middle',
           color: '#ffffff',
-          fontSize: modal ? 12 : 10,
+          fontSize: analyticsReadingFontSize(modal ? 12 : 10, options, 'valueSize') || (modal ? 12 : 10),
           fontWeight: 'normal',
           formatter: params => percentage ? formatAnalyticsPercent(params.data.realPercent) : `${params.data.realCount}`,
           textBorderColor: 'rgba(15, 23, 42, 0.28)',
@@ -5241,10 +5315,16 @@
     };
   }
 
-  function analyticsRoseLabelFormatter(params, percentage) {
+  function analyticsPieLabelFormatter(params, percentage) {
+    const data = params.data || {};
+    const value = percentage ? formatAnalyticsPercent(data.realPercent) : `${Number(data.realCount || 0)}`;
+    return `{label|${params.name}}\n{value|${value}}`;
+  }
+
+  function analyticsRoseLabelFormatter(params, percentage, reading) {
     const data = params.data || {};
     const value = percentage ? formatAnalyticsPercent(data.realPercent) : `${Number(data.realCount || 0)}筆`;
-    return `${params.name} ${value}`;
+    return reading ? `{label|${params.name}} {value|${value}}` : `${params.name} ${value}`;
   }
 
   function analyticsTreemapOption(chart, view, options = {}) {
@@ -5805,10 +5885,11 @@
   }
 
   function analyticsCategoricalTrendOption(chart, view, options = {}) {
-    const styles = analyticsChartStyles();
+    const styles = analyticsChartStyles(options);
     const percentage = view.valueMode === 'percentage';
     const series = analyticsVisibleTrendSeries(chart, options.modal);
     return {
+      ...analyticsChartAppearanceOption(styles),
       legend: {
         type: options.modal ? 'scroll' : 'plain',
         selectedMode: true,
@@ -5817,13 +5898,13 @@
         right: 0,
         itemWidth: 9,
         itemHeight: 9,
-        textStyle: { color: styles.secondary, fontSize: options.modal ? 12 : 11 }
+        textStyle: { color: styles.secondary, fontSize: analyticsReadingFontSize(options.modal ? 12 : 11, options, 'labelSize') || (options.modal ? 12 : 11) }
       },
       grid: { top: options.modal ? 54 : 44, right: options.modal ? 34 : 18, bottom: 30, left: 10, containLabel: true },
-      tooltip: {
+      tooltip: analyticsChartTooltipOption(styles, {
         trigger: 'axis',
         formatter: params => analyticsTrendTooltipFormatter(params, percentage)
-      },
+      }),
       xAxis: analyticsTrendXAxis(chart.trend.dates, styles, options),
       yAxis: analyticsTrendYAxis(percentage, styles),
       series: series.map(entry => ({
@@ -5990,15 +6071,68 @@
     activityAnalyticsChartIds.clear();
   }
 
-  function analyticsChartStyles() {
+  function analyticsChartStyles(options = {}) {
     const rootStyle = getComputedStyle(document.documentElement);
-    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const reading = analyticsChartReadingFromOptions(options);
+    const documentDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const isDark = reading ? reading.theme === 'dark' : documentDark;
+    const chartThemeControlled = Boolean(reading);
     return {
       isDark,
-      primary: rootStyle.getPropertyValue('--text-primary').trim() || rootStyle.getPropertyValue('--aim-text').trim() || (isDark ? '#f8fafc' : '#0f172a'),
-      secondary: rootStyle.getPropertyValue('--text-secondary').trim() || rootStyle.getPropertyValue('--aim-muted').trim() || (isDark ? '#cbd5e1' : '#475569'),
-      muted: rootStyle.getPropertyValue('--text-muted').trim() || rootStyle.getPropertyValue('--aim-muted').trim() || (isDark ? '#94a3b8' : '#64748b'),
-      border: rootStyle.getPropertyValue('--border-color').trim() || rootStyle.getPropertyValue('--aim-border').trim() || (isDark ? '#334155' : '#cbd5e1')
+      chartThemeControlled,
+      primary: chartThemeControlled ? (isDark ? '#f8fafc' : '#0f172a') : (rootStyle.getPropertyValue('--text-primary').trim() || rootStyle.getPropertyValue('--aim-text').trim() || (isDark ? '#f8fafc' : '#0f172a')),
+      secondary: chartThemeControlled ? (isDark ? '#cbd5e1' : '#475569') : (rootStyle.getPropertyValue('--text-secondary').trim() || rootStyle.getPropertyValue('--aim-muted').trim() || (isDark ? '#cbd5e1' : '#475569')),
+      muted: chartThemeControlled ? (isDark ? '#94a3b8' : '#64748b') : (rootStyle.getPropertyValue('--text-muted').trim() || rootStyle.getPropertyValue('--aim-muted').trim() || (isDark ? '#94a3b8' : '#64748b')),
+      border: chartThemeControlled ? (isDark ? '#334155' : '#cbd5e1') : (rootStyle.getPropertyValue('--border-color').trim() || rootStyle.getPropertyValue('--aim-border').trim() || (isDark ? '#334155' : '#cbd5e1')),
+      background: isDark ? '#111827' : '#ffffff',
+      tooltipBackground: isDark ? 'rgba(15, 23, 42, 0.96)' : 'rgba(255, 255, 255, 0.98)'
+    };
+  }
+
+  function analyticsChartReadingFromOptions(options = {}) {
+    if (!options.modal || !options.reading) return null;
+    return sanitizeAnalyticsChartReadingState(options.reading);
+  }
+
+  function analyticsReadingFontSize(baseSize, options, control) {
+    const reading = analyticsChartReadingFromOptions(options);
+    if (!reading) return undefined;
+    const delta = reading ? Number(reading[control] || 0) * analyticsChartReadingSizeBounds.step : 0;
+    return Math.max(8, Number(baseSize || 12) + delta);
+  }
+
+  function analyticsChartAppearanceOption(styles) {
+    return styles.chartThemeControlled ? { backgroundColor: styles.background } : {};
+  }
+
+  function analyticsChartTooltipOption(styles, config = {}) {
+    if (!styles.chartThemeControlled) return config;
+    return {
+      ...config,
+      backgroundColor: styles.tooltipBackground,
+      borderColor: styles.border,
+      borderWidth: 1,
+      textStyle: { ...(config.textStyle || {}), color: styles.primary },
+      extraCssText: 'box-shadow:none;border-radius:6px;'
+    };
+  }
+
+  function analyticsSplitLabelRichStyles(styles, options, labelBaseSize, valueBaseSize) {
+    const labelSize = analyticsReadingFontSize(labelBaseSize, options, 'labelSize');
+    const valueSize = analyticsReadingFontSize(valueBaseSize, options, 'valueSize');
+    return {
+      label: {
+        color: styles.secondary,
+        fontSize: labelSize,
+        fontWeight: 'normal',
+        lineHeight: labelSize ? labelSize + 4 : undefined
+      },
+      value: {
+        color: styles.secondary,
+        fontSize: valueSize,
+        fontWeight: 'normal',
+        lineHeight: valueSize ? valueSize + 4 : undefined
+      }
     };
   }
 
@@ -6468,10 +6602,21 @@
       await submitAnalyticsAiQuestion({ question, confirmed: true });
     }
     if (action === 'open-analytics-chart-modal' && canUseAnalytics() && !isMobileFormViewport()) {
-      ui.analyticsChartModal = { chartKey: el.dataset.chartKey || '' };
+      ui.analyticsChartModal = { chartKey: el.dataset.chartKey || '', reading: defaultAnalyticsChartReadingState() };
     }
     if (action === 'close-analytics-chart-modal' && canUseAnalytics()) {
       ui.analyticsChartModal = null;
+    }
+    if (action === 'analytics-chart-reading' && canUseAnalytics() && ui.analyticsChartModal) {
+      const reading = analyticsChartModalReadingState();
+      const control = el.dataset.control || '';
+      if (control === 'labelSize' || control === 'valueSize') {
+        reading[control] = clampAnalyticsChartReadingSize(reading[control] + Number(el.dataset.delta || 0));
+      }
+      if (control === 'theme' && (el.dataset.value === 'light' || el.dataset.value === 'dark')) {
+        reading.theme = el.dataset.value;
+      }
+      ui.analyticsChartModal.reading = reading;
     }
     if (action === 'analytics-chart-more' && canUseAnalytics()) {
       const chartKey = el.dataset.chartKey || '';
