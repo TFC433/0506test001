@@ -1880,6 +1880,14 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
 
     const treemapOption = contract.analyticsTreemapOption({ title: 'Single', rows: [respondentRow] }, { type: 'treemap', valueMode: 'percentage' });
     assert.strictEqual(treemapOption.series[0].type, 'treemap');
+    assert.strictEqual(treemapOption.series[0].label.overflow, 'truncate', 'Treemap labels must use native truncation');
+    assert.strictEqual(treemapOption.series[0].label.ellipsis, '...', 'Treemap labels must expose native ellipsis text');
+    assert.strictEqual(treemapOption.series[0].labelLayout, undefined, 'Treemap must not use hideOverlap label suppression');
+    assert.notStrictEqual(
+        treemapOption.series[0].label.formatter({ name: 'Very Long Category Name', data: { realPercent: 12.3, realCount: 4 } }),
+        '',
+        'Treemap positive leaf formatter must always attempt a visible category label'
+    );
     assert.strictEqual(treemapOption.series[0].data[0].value, 70.6, 'Treemap percentage geometry must use the raw current respondent percentage metric');
     assert.strictEqual(treemapOption.series[0].data[0].realCount, 72, 'Treemap must preserve raw count data');
     assert.strictEqual(treemapOption.series[0].data[0].rawValue, 72, 'Treemap must carry the original count beside the selected metric value');
@@ -1893,6 +1901,8 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.deepStrictEqual(skewedRows.map(row => row.count), [73, 31, 20, 12, 12, 8, 5, 3, 2, 1, 1, 1], 'Treemap rendering must not mutate source rows');
     const treemapModal = contract.analyticsTreemapOption({ title: 'Skewed', rows: skewedRows }, { type: 'treemap', valueMode: 'percentage' }, { modal: true });
     assert.strictEqual(treemapModal.series[0].labelLine.show, false, 'expanded Treemap must not treat native labelLine as the external-label implementation');
+    assert.strictEqual(treemapModal.series[0].label.overflow, 'truncate', 'expanded Treemap labels must keep native truncation');
+    assert.strictEqual(treemapModal.series[0].labelLayout, undefined, 'expanded Treemap must not use hideOverlap label suppression');
     assert.strictEqual(treemapModal.__aimExternalLabelOverlay, undefined, 'expanded Treemap must not request the geometry-driven graphic overlay');
     assert(!treemapModal.series[0].data.some(point => point.externalLabelCandidate), 'expanded Treemap must not mark categories for external labels');
     assert.strictEqual(treemapSkewed.__aimExternalLabelOverlay, undefined, 'thumbnail Treemap must remain native without graphic overlay');

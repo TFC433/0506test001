@@ -5364,6 +5364,7 @@
           fontWeight: 'normal',
           lineHeight: modal ? 18 : 14,
           overflow: 'truncate',
+          ellipsis: '...',
           width: modal ? 160 : 88,
           textBorderColor: 'rgba(15, 23, 42, 0.34)',
           textBorderWidth: 2,
@@ -5371,7 +5372,6 @@
           rich: reading ? analyticsTreemapLabelRichStyles(styles, options, modal ? 12 : 10, modal ? 12 : 10) : undefined
         },
         labelLine: { show: false },
-        labelLayout: { hideOverlap: true },
         upperLabel: { show: false },
         itemStyle: {
           borderColor: styles.isDark ? '#0f172a' : '#ffffff',
