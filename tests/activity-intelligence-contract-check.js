@@ -1614,7 +1614,7 @@ function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, se
 
 function assertAnalyticsChartTypeImplementationContract(managementSource, cssSource) {
     assert(managementSource.includes("const analyticsCategoricalFieldTypes = ['yes_no', 'single_choice', 'multiple_choice', 'dropdown'];"), 'categorical Analytics types must be centralized');
-    assert(managementSource.includes("const analyticsChartTypeValues = ['bar', 'pie', 'trend', 'treemap', 'bubble'];"), 'chart state must accept treemap and bubble');
+    assert(managementSource.includes("const analyticsChartTypeValues = ['bar', 'pie', 'trend', 'rose', 'polarBar', 'treemap', 'bubble'];"), 'chart state must accept Rose and Polar Bar alongside existing More charts');
     assert(managementSource.includes('data-action="${scope === \'mobile\' ? \'mobile-analytics-chart-more\' : \'analytics-chart-more\'}"'), 'desktop and mobile More chart selectors must share the local renderer');
     assert(managementSource.includes('aria-haspopup="true"'), 'More selector must expose popup semantics');
     assert(managementSource.includes('aria-expanded="${open}"'), 'More selector must expose expanded state');
@@ -1623,7 +1623,8 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
 
     const bubblePointsSource = extractFunctionDeclaration(managementSource, 'analyticsBubblePoints');
     const source = [
-        'const analyticsChartTypeLabels = { bar: "Bar", pie: "Pie", trend: "Trend", treemap: "Treemap", bubble: "Bubble" };',
+        'const analyticsCategoricalFieldTypes = ["yes_no", "single_choice", "multiple_choice", "dropdown"];',
+        'const analyticsChartTypeLabels = { bar: "Bar", pie: "Pie", trend: "Trend", rose: "Rose", polarBar: "Polar Bar", treemap: "Treemap", bubble: "Bubble" };',
         'const ui = { analytics: { chartMoreOpen: "", mobileChartMoreOpen: "" } };',
         'const Store = { escapeHtml(value) { return String(value || ""); } };',
         'function analyticsChartStyles() { return { isDark: false, primary: "#111", secondary: "#333", muted: "#666", border: "#ddd" }; }',
@@ -1643,6 +1644,9 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         extractFunctionDeclaration(managementSource, 'analyticsTooltipFormatter'),
         extractFunctionDeclaration(managementSource, 'analyticsBarOption'),
         extractFunctionDeclaration(managementSource, 'analyticsPieOption'),
+        extractFunctionDeclaration(managementSource, 'analyticsCategoryColor'),
+        extractFunctionDeclaration(managementSource, 'analyticsRoseOption'),
+        extractFunctionDeclaration(managementSource, 'analyticsPolarBarOption'),
         extractFunctionDeclaration(managementSource, 'analyticsTierSourceValues'),
         extractFunctionDeclaration(managementSource, 'analyticsMagnitudeTier'),
         extractFunctionDeclaration(managementSource, 'analyticsTreemapVisualValue'),
@@ -1665,7 +1669,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         extractFunctionDeclaration(managementSource, 'analyticsVisibleTrendSeries'),
         extractFunctionDeclaration(managementSource, 'activityTrendOption'),
         extractFunctionDeclaration(managementSource, 'analyticsCategoricalTrendOption'),
-        '({ ui, chartCapabilitiesForField, chartCapabilitiesForChart, analyticsValidatedChartView, renderAnalyticsChartTypeControls, categoricalChartRow, analyticsBarOption, analyticsPieOption, analyticsTierSourceValues, analyticsMagnitudeTier, analyticsTreemapVisualValue, analyticsTreemapOption, analyticsBubbleSymbolSize, analyticsBubbleOption, analyticsApplyExpandedExternalLabelOverlay, analyticsTreemapRenderedTileGeometries, analyticsAssignExternalLabelRows, analyticsTooltipFormatter, activityTrendOption, analyticsCategoricalTrendOption });'
+        '({ ui, chartCapabilitiesForField, chartCapabilitiesForChart, analyticsValidatedChartView, renderAnalyticsChartTypeControls, categoricalChartRow, analyticsBarOption, analyticsPieOption, analyticsRoseOption, analyticsPolarBarOption, analyticsTierSourceValues, analyticsMagnitudeTier, analyticsTreemapVisualValue, analyticsTreemapOption, analyticsBubbleSymbolSize, analyticsBubbleOption, analyticsApplyExpandedExternalLabelOverlay, analyticsTreemapRenderedTileGeometries, analyticsAssignExternalLabelRows, analyticsTooltipFormatter, activityTrendOption, analyticsCategoricalTrendOption });'
     ].join('\n');
     const contract = vm.runInNewContext(source, {});
     const rows = labels => labels.map(label => ({ label, count: 1, percent: 10, selectionPercent: 10 }));
@@ -1676,23 +1680,34 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     const yesNo = { chartKey: 'yes-no', fieldType: 'yes_no', allowPie: true, allowTrend: true, rows: rows(['Yes', 'No']) };
 
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(smallSingle).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
-    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(smallSingle).moreTypes), JSON.stringify(['treemap']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(smallSingle).moreTypes), JSON.stringify(['rose', 'polarBar', 'treemap']));
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeSingle).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
-    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeSingle).moreTypes), JSON.stringify(['treemap']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeSingle).moreTypes), JSON.stringify(['rose', 'polarBar', 'treemap']));
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeDropdown).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
-    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeDropdown).moreTypes), JSON.stringify(['treemap']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(largeDropdown).moreTypes), JSON.stringify(['rose', 'polarBar', 'treemap']));
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(multi).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
-    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(multi).moreTypes), JSON.stringify(['bubble']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(multi).moreTypes), JSON.stringify(['rose', 'polarBar', 'bubble']));
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(yesNo).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
-    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(yesNo).moreTypes), JSON.stringify([]));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(yesNo).moreTypes), JSON.stringify(['rose', 'polarBar']));
+    assert.deepStrictEqual(
+        contract.chartCapabilitiesForChart(smallSingle).moreTypes.filter(type => type === 'rose' || type === 'polarBar'),
+        contract.chartCapabilitiesForChart(largeSingle).moreTypes.filter(type => type === 'rose' || type === 'polarBar'),
+        'Rose and Polar Bar must not depend on category-count recommendation branching'
+    );
     assert.strictEqual(contract.analyticsValidatedChartView(smallSingle, {}).type, 'bar', 'Bar must remain the default chart');
     assert.strictEqual(contract.analyticsValidatedChartView(multi, {}).type, 'bar', 'multiple-choice must not default to Bubble');
     assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'bubble', valueMode: 'percentage' }).type, 'bar', 'unsuitable stored chart type must fall back to the capability fallback');
     assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'pie' }).type, 'pie', 'primary Pie chart type must remain selectable');
+    assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'rose' }).type, 'rose', 'More-contained Rose chart type must remain selectable');
+    assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'polarBar' }).type, 'polarBar', 'More-contained Polar Bar chart type must remain selectable');
     assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'treemap' }).type, 'treemap', 'More-contained Treemap chart type must remain selectable');
     assert.strictEqual(contract.analyticsValidatedChartView(multi, { type: 'bubble' }).type, 'bubble', 'More-contained Bubble chart type must remain selectable');
-    const yesNoControls = contract.renderAnalyticsChartTypeControls(yesNo, { type: 'bar' }, 'analytics-chart-view', 'desktop');
-    assert(!yesNoControls.includes('analytics-chart-more'), 'empty More control must not render');
+    const fallbackControls = contract.renderAnalyticsChartTypeControls({ chartKey: 'fallback', fieldType: 'short_text', allowPie: false, allowTrend: false, rows: [] }, { type: 'bar' }, 'analytics-chart-view', 'desktop');
+    assert(!fallbackControls.includes('analytics-chart-more'), 'empty More control must not render');
+    contract.ui.analytics.chartMoreOpen = 'yes-no';
+    const yesNoControls = contract.renderAnalyticsChartTypeControls(yesNo, { type: 'polarBar' }, 'analytics-chart-view', 'desktop');
+    contract.ui.analytics.chartMoreOpen = '';
+    assert(yesNoControls.includes('data-value="rose"') && yesNoControls.includes('data-value="polarBar"'), 'Rose and Polar Bar must render in More for yes-no categorical charts');
     const treemapControls = contract.renderAnalyticsChartTypeControls(largeSingle, { type: 'treemap' }, 'analytics-chart-view', 'desktop');
     assert(treemapControls.includes('更多：Treemap') && treemapControls.includes('aria-pressed="true"'), 'active More chart state must be represented on the More trigger');
     assert(treemapControls.indexOf('data-value="bar"') < treemapControls.indexOf('data-value="pie"') && treemapControls.indexOf('data-value="pie"') < treemapControls.indexOf('data-value="trend"'), 'primary toolbar order must remain Bar, Pie, Trend');
@@ -1708,6 +1723,20 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert(pieOption.series[0].data[0].respondentPercent > pieOption.series[0].data[0].selectionPercent, 'Pie point must preserve respondent percent separately');
     const tooltip = contract.analyticsTooltipFormatter({ marker: '', name: 'IoT', data: pieOption.series[0].data[0] });
     assert(tooltip.includes('填答者選取率') && tooltip.includes('選項組成占比'), 'multiple-choice Pie tooltip must distinguish respondent rate and selection composition');
+    const roseOption = contract.analyticsRoseOption({ title: 'Multi', rows: [respondentRow], multiChoice: true }, { type: 'rose', valueMode: 'percentage' });
+    assert.strictEqual(roseOption.series[0].type, 'pie', 'Rose must use native ECharts pie renderer');
+    assert.strictEqual(roseOption.series[0].roseType, 'area', 'Rose must use native ECharts Nightingale area mode');
+    assert.strictEqual(roseOption.series[0].data[0].value, 46.5, 'multiple-choice Rose geometry must preserve existing Pie selection-composition semantics');
+    assert.strictEqual(roseOption.series[0].data[0].selectionComposition, true, 'multiple-choice Rose points must preserve tooltip semantic distinction');
+    assert.strictEqual(roseOption.series[0].label.formatter({ name: 'Full Category Name' }), 'Full Category Name', 'Rose labels must use canonical category names');
+    const polarOption = contract.analyticsPolarBarOption({ title: 'Single', rows: [respondentRow] }, { type: 'polarBar', valueMode: 'percentage' });
+    assert(polarOption.polar && polarOption.angleAxis && polarOption.radiusAxis, 'Polar Bar must use native polar coordinate components');
+    assert.strictEqual(polarOption.series[0].type, 'bar', 'Polar Bar must use native ECharts bar renderer');
+    assert.strictEqual(polarOption.series[0].coordinateSystem, 'polar', 'Polar Bar must use native ECharts polar coordinate system');
+    assert.strictEqual(polarOption.series[0].data[0].value, 70.6, 'Polar Bar percentage must use respondent percentage like Bar');
+    assert.strictEqual(polarOption.series[0].label.formatter({ name: 'Full Category Name' }), 'Full Category Name', 'Polar Bar labels must use canonical category names');
+    const polarTooltip = contract.analyticsTooltipFormatter({ marker: '', name: 'IoT', data: polarOption.series[0].data[0] });
+    assert(polarTooltip.includes('72 筆') && polarTooltip.includes('70.6%'), 'Polar Bar tooltip must preserve exact respondent count and percent');
 
     const skewedRows = [73, 31, 20, 12, 12, 8, 5, 3, 2, 1, 1, 1].map((count, index) => contract.categoricalChartRow(`Tier ${index}`, count, 100, 120));
     const tierValues = contract.analyticsTierSourceValues(skewedRows);

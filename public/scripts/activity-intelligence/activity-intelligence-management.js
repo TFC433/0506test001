@@ -20,11 +20,13 @@
   ];
   const choiceFieldTypes = ['single_choice', 'multiple_choice', 'dropdown'];
   const analyticsCategoricalFieldTypes = ['yes_no', 'single_choice', 'multiple_choice', 'dropdown'];
-  const analyticsChartTypeValues = ['bar', 'pie', 'trend', 'treemap', 'bubble'];
+  const analyticsChartTypeValues = ['bar', 'pie', 'trend', 'rose', 'polarBar', 'treemap', 'bubble'];
   const analyticsChartTypeLabels = Object.freeze({
     bar: '長條',
     pie: '圓餅',
     trend: '趨勢',
+    rose: 'Rose',
+    polarBar: 'Polar Bar',
     treemap: 'Treemap',
     bubble: '氣泡'
   });
@@ -4907,13 +4909,13 @@
   function chartCapabilitiesForField(field, chart) {
     const type = field && field.type ? field.type : (chart && chart.fieldType);
     if (type === 'yes_no') {
-      return { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: [], fallbackType: 'bar' };
+      return { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: ['rose', 'polarBar'], fallbackType: 'bar' };
     }
     if (type === 'multiple_choice') {
-      return { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: ['bubble'], fallbackType: 'bar' };
+      return { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: ['rose', 'polarBar', 'bubble'], fallbackType: 'bar' };
     }
     if (type === 'single_choice' || type === 'dropdown') {
-      return { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: ['treemap'], fallbackType: 'bar' };
+      return { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: ['rose', 'polarBar', 'treemap'], fallbackType: 'bar' };
     }
     return {
       primaryTypes: ['bar'].concat(chart && chart.allowPie ? ['pie'] : [], chart && chart.allowTrend ? ['trend'] : []),
@@ -4934,6 +4936,8 @@
     if (type === 'bar') return true;
     if (type === 'pie') return chart.allowPie !== false;
     if (type === 'trend') return chart.allowTrend !== false;
+    if (type === 'rose') return analyticsCategoricalFieldTypes.includes(chart.fieldType) && chart.allowPie !== false;
+    if (type === 'polarBar') return analyticsCategoricalFieldTypes.includes(chart.fieldType);
     if (type === 'treemap') return ['yes_no', 'single_choice', 'dropdown'].includes(chart.fieldType);
     if (type === 'bubble') return chart.fieldType === 'multiple_choice';
     return false;
@@ -4997,6 +5001,8 @@
   function analyticsChartOption(chart, view, options = {}) {
     if (view.type === 'trend' && chart.allowTrend) return analyticsCategoricalTrendOption(chart, view, options);
     if (view.type === 'pie' && chart.allowPie) return analyticsPieOption(chart, view, options);
+    if (view.type === 'rose' && chartTypeAllowedForChart(chart, 'rose')) return analyticsRoseOption(chart, view, options);
+    if (view.type === 'polarBar' && chartTypeAllowedForChart(chart, 'polarBar')) return analyticsPolarBarOption(chart, view, options);
     if (view.type === 'treemap' && chartTypeAllowedForChart(chart, 'treemap')) return analyticsTreemapOption(chart, view, options);
     if (view.type === 'bubble' && chartTypeAllowedForChart(chart, 'bubble')) return analyticsBubbleOption(chart, view, options);
     return analyticsBarOption(chart, view, options);
@@ -5089,6 +5095,109 @@
           }
         },
         data: chart.rows.filter(row => row.count > 0).map(row => analyticsChartPoint(row, percentage, percentKey, { selectionComposition: chart.multiChoice }))
+      }]
+    };
+  }
+
+  function analyticsRoseOption(chart, view, options = {}) {
+    const styles = analyticsChartStyles();
+    const percentage = view.valueMode === 'percentage';
+    const percentKey = chart.multiChoice ? 'selectionPercent' : 'percent';
+    const modal = Boolean(options.modal);
+    const rows = (Array.isArray(chart.rows) ? chart.rows : []).filter(row => row.count > 0);
+    return {
+      legend: { show: false },
+      tooltip: { formatter: analyticsTooltipFormatter },
+      series: [{
+        name: chart.title,
+        type: 'pie',
+        roseType: 'area',
+        radius: modal ? ['18%', '64%'] : ['18%', '72%'],
+        center: modal ? ['50%', '54%'] : ['50%', '52%'],
+        minAngle: 4,
+        minShowLabelAngle: modal ? 0 : 8,
+        avoidLabelOverlap: true,
+        label: {
+          show: true,
+          position: 'outer',
+          color: styles.primary,
+          alignTo: modal ? 'edge' : 'none',
+          edgeDistance: modal ? 18 : '22%',
+          bleedMargin: modal ? 8 : 5,
+          formatter: params => params.name,
+          overflow: 'break',
+          width: modal ? 190 : 88
+        },
+        labelLine: {
+          show: true,
+          showAbove: true,
+          length: modal ? 22 : 13,
+          length2: modal ? 18 : 8,
+          minTurnAngle: 45,
+          lineStyle: { color: styles.border }
+        },
+        labelLayout: modal ? { hideOverlap: false, moveOverlap: 'shiftY' } : { hideOverlap: true },
+        emphasis: { focus: 'self' },
+        data: rows.map((row, index) => ({
+          ...analyticsChartPoint(row, percentage, percentKey, { selectionComposition: chart.multiChoice }),
+          itemStyle: { color: analyticsCategoryColor(index, styles) }
+        }))
+      }]
+    };
+  }
+
+  function analyticsPolarBarOption(chart, view, options = {}) {
+    const styles = analyticsChartStyles();
+    const percentage = view.valueMode === 'percentage';
+    const modal = Boolean(options.modal);
+    const rows = sortedAnalyticsBarRows((Array.isArray(chart.rows) ? chart.rows : []).filter(row => row.count > 0), percentage);
+    const values = rows.map(row => percentage ? Number(Number(row.percent || 0).toFixed(1)) : Number(row.count || 0));
+    const maxValue = percentage ? 100 : Math.max(...values, 1);
+    return {
+      legend: { show: false },
+      tooltip: { trigger: 'item', formatter: analyticsTooltipFormatter },
+      polar: {
+        radius: modal ? ['14%', '82%'] : ['10%', '78%'],
+        center: ['50%', modal ? '52%' : '50%']
+      },
+      angleAxis: {
+        type: 'value',
+        min: 0,
+        max: maxValue,
+        show: false
+      },
+      radiusAxis: {
+        type: 'category',
+        data: rows.map(row => row.label),
+        inverse: true,
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { show: false }
+      },
+      series: [{
+        name: chart.title,
+        type: 'bar',
+        coordinateSystem: 'polar',
+        roundCap: true,
+        colorBy: 'data',
+        barWidth: modal ? '54%' : '48%',
+        data: rows.map((row, index) => {
+          const point = analyticsChartPoint(row, percentage);
+          return {
+            ...point,
+            value: values[index],
+            itemStyle: { color: analyticsCategoryColor(index, styles) }
+          };
+        }),
+        label: {
+          show: true,
+          position: 'start',
+          color: styles.primary,
+          fontSize: modal ? 12 : 10,
+          fontWeight: 700,
+          formatter: params => params.name
+        },
+        emphasis: { focus: 'self' }
       }]
     };
   }
@@ -5607,6 +5716,13 @@
     return label.length > limit ? `${label.slice(0, limit)}...` : label;
   }
 
+  function analyticsCategoryColor(index, styles) {
+    const palette = styles && styles.isDark
+      ? ['#60a5fa', '#2dd4bf', '#94a3b8', '#34d399', '#fbbf24', '#818cf8', '#f472b6', '#22c55e', '#fb7185', '#38bdf8']
+      : ['#2563eb', '#0f766e', '#64748b', '#059669', '#d97706', '#4f46e5', '#db2777', '#16a34a', '#e11d48', '#0284c7'];
+    return palette[Math.abs(Number(index || 0)) % palette.length];
+  }
+
   function analyticsChartPoint(row, percentage, percentKey = 'percent', options = {}) {
     const realPercent = Number(row[percentKey] || 0);
     return {
@@ -5739,6 +5855,8 @@
 
   function analyticsChartHeight(chart, view) {
     if (view.type === 'pie') return 200;
+    if (view.type === 'rose') return 210;
+    if (view.type === 'polarBar') return 220;
     if (view.type === 'treemap') return 220;
     if (view.type === 'bubble') return 230;
     if (view.type === 'trend') return 210;
@@ -5750,6 +5868,14 @@
     if (view.type === 'pie') {
       const rows = Array.isArray(chart.rows) ? chart.rows.filter(row => row.count > 0).length : 0;
       return Math.max(460, Math.min(720, 300 + rows * 24));
+    }
+    if (view.type === 'rose') {
+      const rows = Array.isArray(chart.rows) ? chart.rows.filter(row => row.count > 0).length : 0;
+      return Math.max(480, Math.min(720, 320 + rows * 24));
+    }
+    if (view.type === 'polarBar') {
+      const rows = Array.isArray(chart.rows) ? chart.rows.filter(row => row.count > 0).length : 0;
+      return Math.max(480, Math.min(720, 320 + rows * 22));
     }
     if (view.type === 'bar') {
       const rows = Array.isArray(chart.rows) ? chart.rows.length : 0;
