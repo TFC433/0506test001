@@ -4118,7 +4118,7 @@
 
   function analyticsChartReadingControlsSupported(chart, view) {
     if (chart && chart.kind === 'activityTrend') return true;
-    return ['bar', 'pie', 'trend', 'rose', 'polarBar'].includes(view && view.type);
+    return ['bar', 'pie', 'trend', 'rose', 'polarBar', 'treemap'].includes(view && view.type);
   }
 
   function renderAnalyticsChartReadingControls(reading) {
@@ -5335,17 +5335,17 @@
   }
 
   function analyticsTreemapOption(chart, view, options = {}) {
-    const styles = analyticsChartStyles();
+    const styles = analyticsChartStyles(options);
     const percentage = view.valueMode === 'percentage';
     const modal = Boolean(options.modal);
+    const reading = analyticsChartReadingFromOptions(options);
     const rows = (Array.isArray(chart.rows) ? chart.rows : []).filter(row => row.count > 0);
-    const tierValues = analyticsTierSourceValues(rows);
     const palette = styles.isDark
       ? ['#60a5fa', '#2dd4bf', '#94a3b8', '#34d399', '#fbbf24', '#818cf8']
       : ['#2563eb', '#0f766e', '#64748b', '#059669', '#d97706', '#4f46e5'];
     return {
-      __aimExternalLabelOverlay: modal ? { type: 'treemap' } : null,
-      tooltip: { formatter: analyticsTooltipFormatter },
+      ...analyticsChartAppearanceOption(styles),
+      tooltip: analyticsChartTooltipOption(styles, { trigger: 'item', formatter: analyticsTooltipFormatter }),
       series: [{
         name: chart.title,
         type: 'treemap',
@@ -5359,12 +5359,16 @@
         leafDepth: 1,
         label: {
           show: true,
-          color: styles.primary,
-          fontSize: modal ? 12 : 10,
-          lineHeight: modal ? 17 : 14,
+          color: '#ffffff',
+          fontSize: analyticsReadingFontSize(modal ? 12 : 10, options, 'labelSize') || (modal ? 12 : 10),
+          fontWeight: 'normal',
+          lineHeight: modal ? 18 : 14,
           overflow: 'truncate',
-          width: modal ? 142 : 86,
-          formatter: params => analyticsTreemapLabelFormatter(params, percentage, modal)
+          width: modal ? 160 : 88,
+          textBorderColor: 'rgba(15, 23, 42, 0.34)',
+          textBorderWidth: 2,
+          formatter: params => analyticsTreemapLabelFormatter(params, percentage, reading),
+          rich: reading ? analyticsTreemapLabelRichStyles(styles, options, modal ? 12 : 10, modal ? 12 : 10) : undefined
         },
         labelLine: { show: false },
         labelLayout: { hideOverlap: true },
@@ -5384,14 +5388,11 @@
           }
         }],
         data: rows.map(row => {
-          const point = analyticsChartPoint(row, false);
-          const visualTier = analyticsMagnitudeTier(row.count, tierValues);
+          const point = analyticsChartPoint(row, percentage);
           return {
             ...point,
-            value: analyticsTreemapVisualValue(row.count, tierValues),
-            rawValue: row.count,
-            visualTier,
-            externalLabelCandidate: visualTier <= 3
+            value: percentage ? Number(Number(row.percent || 0).toFixed(1)) : Number(row.count || 0),
+            rawValue: row.count
           };
         })
       }]
@@ -5565,17 +5566,23 @@
     return tier * tier + 2;
   }
 
-  function analyticsTreemapLabelFormatter(params, percentage, modal) {
+  function analyticsTreemapLabelFormatter(params, percentage, reading) {
     const data = params.data || {};
-    const rect = params.rect || {};
-    const width = Number(rect.width || 0);
-    const height = Number(rect.height || 0);
-    const smallTile = data.externalLabelCandidate || ((width || height) && (width < (modal ? 80 : 52) || height < (modal ? 46 : 30)));
-    if (smallTile && !modal) return '';
-    const label = analyticsShortChartLabel(params.name, smallTile ? 18 : (modal ? 24 : 12));
-    if (smallTile) return modal ? '' : label;
+    const label = analyticsShortChartLabel(params.name, reading ? 24 : 12);
     const value = percentage ? formatAnalyticsPercent(data.realPercent) : `${Number(data.realCount || 0)} 筆`;
-    return `${label}\n${value}`;
+    return reading ? `{label|${label}}\n{value|${value}}` : `${label}\n${value}`;
+  }
+
+  function analyticsTreemapLabelRichStyles(styles, options, labelBaseSize, valueBaseSize) {
+    const rich = analyticsSplitLabelRichStyles(styles, options, labelBaseSize, valueBaseSize);
+    rich.label.color = '#ffffff';
+    rich.label.textBorderColor = 'rgba(15, 23, 42, 0.34)';
+    rich.label.textBorderWidth = 2;
+    rich.value.color = '#ffffff';
+    rich.value.fontWeight = 700;
+    rich.value.textBorderColor = 'rgba(15, 23, 42, 0.34)';
+    rich.value.textBorderWidth = 2;
+    return rich;
   }
 
   function analyticsBubbleExternalLabels(points, bounds, maxSize) {

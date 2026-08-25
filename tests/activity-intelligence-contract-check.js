@@ -1678,6 +1678,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         extractFunctionDeclaration(managementSource, 'analyticsMagnitudeTier'),
         extractFunctionDeclaration(managementSource, 'analyticsTreemapVisualValue'),
         extractFunctionDeclaration(managementSource, 'analyticsTreemapLabelFormatter'),
+        extractFunctionDeclaration(managementSource, 'analyticsTreemapLabelRichStyles'),
         extractFunctionDeclaration(managementSource, 'analyticsTreemapOption'),
         extractFunctionDeclaration(managementSource, 'analyticsBubbleSymbolSize'),
         extractFunctionDeclaration(managementSource, 'analyticsBubbleExternalLabels'),
@@ -1749,7 +1750,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert(contract.analyticsChartReadingControlsSupported(smallSingle, { type: 'trend' }), 'Trend must support expanded reading controls');
     assert(contract.analyticsChartReadingControlsSupported(smallSingle, { type: 'rose' }), 'Rose must support expanded reading controls');
     assert(contract.analyticsChartReadingControlsSupported(smallSingle, { type: 'polarBar' }), 'Polar Bar must support expanded reading controls');
-    assert(!contract.analyticsChartReadingControlsSupported(smallSingle, { type: 'treemap' }), 'Treemap must remain outside expanded reading controls V1');
+    assert(contract.analyticsChartReadingControlsSupported(smallSingle, { type: 'treemap' }), 'Treemap must use the existing expanded reading controls');
     assert(!contract.analyticsChartReadingControlsSupported(multi, { type: 'bubble' }), 'Bubble must remain outside expanded reading controls V1');
     assert.strictEqual(JSON.stringify(contract.defaultAnalyticsChartReadingState()), JSON.stringify({ labelSize: 0, valueSize: 0, theme: 'light' }), 'new expanded chart sessions must start at Light and baseline sizes');
     assert.strictEqual(JSON.stringify(contract.sanitizeAnalyticsChartReadingState({ labelSize: 9, valueSize: -8, theme: 'dark' })), JSON.stringify({ labelSize: 3, valueSize: -1, theme: 'dark' }), 'expanded reading size controls must be bounded');
@@ -1879,28 +1880,22 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
 
     const treemapOption = contract.analyticsTreemapOption({ title: 'Single', rows: [respondentRow] }, { type: 'treemap', valueMode: 'percentage' });
     assert.strictEqual(treemapOption.series[0].type, 'treemap');
+    assert.strictEqual(treemapOption.series[0].data[0].value, 70.6, 'Treemap percentage geometry must use the raw current respondent percentage metric');
     assert.strictEqual(treemapOption.series[0].data[0].realCount, 72, 'Treemap must preserve raw count data');
-    assert.strictEqual(treemapOption.series[0].data[0].rawValue, 72, 'Treemap must carry the original value beside tiered visual value');
+    assert.strictEqual(treemapOption.series[0].data[0].rawValue, 72, 'Treemap must carry the original count beside the selected metric value');
     const treemapTooltip = contract.analyticsTooltipFormatter({ marker: '', name: 'IoT', data: treemapOption.series[0].data[0] });
     assert(treemapTooltip.includes('72 筆') && treemapTooltip.includes('70.6%'), 'Treemap tooltip must preserve exact respondent count and percent');
+    const treemapCountOption = contract.analyticsTreemapOption({ title: 'Single', rows: [respondentRow] }, { type: 'treemap', valueMode: 'count' });
+    assert.strictEqual(treemapCountOption.series[0].data[0].value, 72, 'Treemap count geometry must use the raw count metric');
     const treemapSkewed = contract.analyticsTreemapOption({ title: 'Skewed', rows: skewedRows }, { type: 'treemap', valueMode: 'percentage' });
     const treemapVisualValues = treemapSkewed.series[0].data.map(point => point.value);
-    assert(treemapVisualValues.every(value => Number.isFinite(value) && value > 0), 'Treemap tiered visual values must be finite and visible');
-    for (let index = 1; index < treemapVisualValues.length; index += 1) {
-        assert(treemapVisualValues[index - 1] >= treemapVisualValues[index], 'Treemap tiered visual values must remain monotonic');
-    }
+    assert.deepStrictEqual(treemapVisualValues, skewedRows.map(row => Number(row.percent.toFixed(1))), 'Treemap percentage values must use raw row percentages without tiering');
+    assert.deepStrictEqual(skewedRows.map(row => row.count), [73, 31, 20, 12, 12, 8, 5, 3, 2, 1, 1, 1], 'Treemap rendering must not mutate source rows');
     const treemapModal = contract.analyticsTreemapOption({ title: 'Skewed', rows: skewedRows }, { type: 'treemap', valueMode: 'percentage' }, { modal: true });
     assert.strictEqual(treemapModal.series[0].labelLine.show, false, 'expanded Treemap must not treat native labelLine as the external-label implementation');
-    assert.strictEqual(treemapModal.__aimExternalLabelOverlay.type, 'treemap', 'expanded Treemap must request the geometry-driven graphic overlay');
-    assert(treemapModal.series[0].data.some(point => point.externalLabelCandidate), 'expanded Treemap must mark small categories for external labels');
-    assert.strictEqual(treemapSkewed.__aimExternalLabelOverlay, null, 'thumbnail Treemap must remain internal-label-first without graphic overlay');
-    const treemapLayouts = treemapModal.series[0].data.map((point, index) => {
-        const x = index < 4 ? 70 + index * 84 : (index % 2 ? 72 : 500);
-        const y = index < 4 ? 24 : 82 + index * 28;
-        const width = index < 4 ? 74 : 22;
-        const height = index < 4 ? 92 : 18;
-        return { x, y, width, height };
-    });
+    assert.strictEqual(treemapModal.__aimExternalLabelOverlay, undefined, 'expanded Treemap must not request the geometry-driven graphic overlay');
+    assert(!treemapModal.series[0].data.some(point => point.externalLabelCandidate), 'expanded Treemap must not mark categories for external labels');
+    assert.strictEqual(treemapSkewed.__aimExternalLabelOverlay, undefined, 'thumbnail Treemap must remain native without graphic overlay');
     const treemapLayoutCalls = [];
     const treemapChart = {
         getWidth: () => 640,
@@ -1910,7 +1905,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
                 getData: () => ({
                     getItemLayout: index => {
                         treemapLayoutCalls.push(index);
-                        return treemapLayouts[index];
+                        return { x: 0, y: 0, width: 10, height: 10 };
                     }
                 })
             })
@@ -1919,12 +1914,14 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
             this.appliedOption = option;
         }
     };
-    const treemapGeometries = contract.analyticsTreemapRenderedTileGeometries(treemapChart, treemapModal);
-    assert(treemapGeometries.some(tile => tile.width === 22 && tile.height === 18), 'Treemap overlay must read final tile width and height from live ECharts geometry');
-    assert.strictEqual(contract.analyticsApplyExpandedExternalLabelOverlay(treemapChart, treemapModal), true, 'expanded Treemap must apply a geometry-driven graphic overlay');
-    assert(treemapLayoutCalls.length >= treemapModal.series[0].data.length, 'Treemap overlay must request final layout for each tile');
-    assert(treemapChart.appliedOption.graphic.elements.some(element => element.type === 'polyline'), 'Treemap graphic overlay must include leader lines');
-    assert(treemapChart.appliedOption.graphic.elements.some(element => element.type === 'text'), 'Treemap graphic overlay must include external text labels');
+    assert.strictEqual(contract.analyticsApplyExpandedExternalLabelOverlay(treemapChart, treemapModal), false, 'expanded Treemap must not apply a graphic annotation overlay');
+    assert.strictEqual(treemapLayoutCalls.length, 0, 'expanded Treemap must not request final tile layout for annotation');
+    assert.strictEqual(treemapChart.appliedOption, undefined, 'expanded Treemap must not create graphic leader lines or text labels');
+    const readingTreemapOption = contract.analyticsTreemapOption({ title: 'Single', rows: [respondentRow] }, { type: 'treemap', valueMode: 'percentage' }, { modal: true, reading: { labelSize: 1, valueSize: 2, theme: 'dark' } });
+    assert.strictEqual(readingTreemapOption.backgroundColor, '#111827', 'Treemap expanded Dark chart must use chart-local ECharts appearance');
+    assert.strictEqual(readingTreemapOption.tooltip.backgroundColor, 'rgba(15, 23, 42, 0.96)', 'Treemap expanded Dark tooltip must use existing chart-local tooltip styling');
+    assert.strictEqual(readingTreemapOption.series[0].label.fontSize, 14, 'Treemap category labels must respond to label size control');
+    assert.strictEqual(readingTreemapOption.series[0].label.rich.value.fontSize, 16, 'Treemap value labels must respond to value size control');
 
     const smallestBubble = contract.analyticsBubbleSymbolSize(1, 73, 19, 86, tierValues);
     const largestBubble = contract.analyticsBubbleSymbolSize(73, 73, 19, 86, tierValues);
