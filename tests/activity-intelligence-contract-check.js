@@ -1643,14 +1643,23 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         extractFunctionDeclaration(managementSource, 'analyticsTooltipFormatter'),
         extractFunctionDeclaration(managementSource, 'analyticsBarOption'),
         extractFunctionDeclaration(managementSource, 'analyticsPieOption'),
+        extractFunctionDeclaration(managementSource, 'analyticsTierSourceValues'),
+        extractFunctionDeclaration(managementSource, 'analyticsMagnitudeTier'),
+        extractFunctionDeclaration(managementSource, 'analyticsTreemapVisualValue'),
+        extractFunctionDeclaration(managementSource, 'analyticsTreemapLabelFormatter'),
+        extractFunctionDeclaration(managementSource, 'analyticsTreemapLabelLayout'),
         extractFunctionDeclaration(managementSource, 'analyticsTreemapOption'),
         extractFunctionDeclaration(managementSource, 'analyticsBubbleSymbolSize'),
+        extractFunctionDeclaration(managementSource, 'analyticsBubbleExternalLabels'),
+        extractFunctionDeclaration(managementSource, 'analyticsBubbleExternalLabelSeries'),
+        extractFunctionDeclaration(managementSource, 'analyticsReadableLabelColor'),
+        extractFunctionDeclaration(managementSource, 'analyticsShortChartLabel'),
         bubblePointsSource,
         extractFunctionDeclaration(managementSource, 'analyticsBubbleOption'),
         extractFunctionDeclaration(managementSource, 'analyticsVisibleTrendSeries'),
         extractFunctionDeclaration(managementSource, 'activityTrendOption'),
         extractFunctionDeclaration(managementSource, 'analyticsCategoricalTrendOption'),
-        '({ ui, chartCapabilitiesForField, chartCapabilitiesForChart, analyticsValidatedChartView, renderAnalyticsChartTypeControls, categoricalChartRow, analyticsBarOption, analyticsPieOption, analyticsTreemapOption, analyticsBubbleSymbolSize, analyticsBubbleOption, analyticsTooltipFormatter, activityTrendOption, analyticsCategoricalTrendOption });'
+        '({ ui, chartCapabilitiesForField, chartCapabilitiesForChart, analyticsValidatedChartView, renderAnalyticsChartTypeControls, categoricalChartRow, analyticsBarOption, analyticsPieOption, analyticsTierSourceValues, analyticsMagnitudeTier, analyticsTreemapVisualValue, analyticsTreemapOption, analyticsBubbleSymbolSize, analyticsBubbleOption, analyticsTooltipFormatter, activityTrendOption, analyticsCategoricalTrendOption });'
     ].join('\n');
     const contract = vm.runInNewContext(source, {});
     const rows = labels => labels.map(label => ({ label, count: 1, percent: 10, selectionPercent: 10 }));
@@ -1694,27 +1703,53 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     const tooltip = contract.analyticsTooltipFormatter({ marker: '', name: 'IoT', data: pieOption.series[0].data[0] });
     assert(tooltip.includes('填答者選取率') && tooltip.includes('選項組成占比'), 'multiple-choice Pie tooltip must distinguish respondent rate and selection composition');
 
+    const skewedRows = [73, 31, 20, 12, 12, 8, 5, 3, 2, 1, 1, 1].map((count, index) => contract.categoricalChartRow(`Tier ${index}`, count, 100, 120));
+    const tierValues = contract.analyticsTierSourceValues(skewedRows);
+    const tiers = skewedRows.map(row => contract.analyticsMagnitudeTier(row.count, tierValues));
+    assert.deepStrictEqual(tiers, skewedRows.map(row => contract.analyticsMagnitudeTier(row.count, tierValues)), 'tier assignment must be deterministic');
+    assert(tiers.every(tier => Number.isInteger(tier) && tier >= 1 && tier <= 10), 'tier assignment must stay inside an approx-10-tier system');
+    assert(new Set(tiers).size <= 10, 'tier assignment must be finite and capped at 10 levels');
+    for (let index = 1; index < skewedRows.length; index += 1) {
+        assert(tiers[index - 1] >= tiers[index], 'larger source values must never receive smaller tiers');
+    }
+    assert.strictEqual(tiers[0], 10, 'largest category must reach the dominant tier');
+    assert.strictEqual(tiers[tiers.length - 1], 1, 'smallest category must remain visible as tier 1');
+
     const treemapOption = contract.analyticsTreemapOption({ title: 'Single', rows: [respondentRow] }, { type: 'treemap', valueMode: 'percentage' });
     assert.strictEqual(treemapOption.series[0].type, 'treemap');
-    assert.strictEqual(treemapOption.series[0].data[0].value, 72, 'Treemap geometry must use count data');
+    assert.strictEqual(treemapOption.series[0].data[0].realCount, 72, 'Treemap must preserve raw count data');
+    assert.strictEqual(treemapOption.series[0].data[0].rawValue, 72, 'Treemap must carry the original value beside tiered visual value');
     const treemapTooltip = contract.analyticsTooltipFormatter({ marker: '', name: 'IoT', data: treemapOption.series[0].data[0] });
     assert(treemapTooltip.includes('72 筆') && treemapTooltip.includes('70.6%'), 'Treemap tooltip must preserve exact respondent count and percent');
-    assert.strictEqual(contract.analyticsBubbleSymbolSize(25, 100, 20, 60), 40, 'Bubble size must use sqrt-derived area-safe scaling');
+    const treemapSkewed = contract.analyticsTreemapOption({ title: 'Skewed', rows: skewedRows }, { type: 'treemap', valueMode: 'percentage' });
+    const treemapVisualValues = treemapSkewed.series[0].data.map(point => point.value);
+    assert(treemapVisualValues.every(value => Number.isFinite(value) && value > 0), 'Treemap tiered visual values must be finite and visible');
+    for (let index = 1; index < treemapVisualValues.length; index += 1) {
+        assert(treemapVisualValues[index - 1] >= treemapVisualValues[index], 'Treemap tiered visual values must remain monotonic');
+    }
+    const treemapModal = contract.analyticsTreemapOption({ title: 'Skewed', rows: skewedRows }, { type: 'treemap', valueMode: 'percentage' }, { modal: true });
+    assert.strictEqual(treemapModal.series[0].labelLine.show, true, 'expanded Treemap must enable the external-label path');
+    assert.strictEqual(typeof treemapModal.series[0].labelLayout, 'function', 'expanded Treemap must provide deterministic label layout hook');
+    assert(treemapModal.series[0].data.some(point => point.externalLabelCandidate), 'expanded Treemap must mark small categories for external labels');
+    assert.strictEqual(typeof treemapSkewed.series[0].labelLayout, 'object', 'thumbnail Treemap must remain lower-density without external layout hook');
+
+    const smallestBubble = contract.analyticsBubbleSymbolSize(1, 73, 19, 86, tierValues);
+    const largestBubble = contract.analyticsBubbleSymbolSize(73, 73, 19, 86, tierValues);
+    assert(smallestBubble >= 19, 'Bubble smallest tier must remain visible and hoverable');
+    assert(largestBubble <= 86, 'Bubble largest tier must stay capped in thumbnail mode');
+    assert(largestBubble - smallestBubble >= 55, 'Bubble tier mapping must make dominant categories visually distinct');
     assert(!bubblePointsSource.includes('Math.random'), 'Bubble layout must be deterministic and must not use Math.random');
     const bubbleChart = {
         title: 'Bubble',
-        rows: [
-            respondentRow,
-            contract.categoricalChartRow('Long CJK Label A', 36, 102, 155),
-            contract.categoricalChartRow('Long CJK Label B', 24, 102, 155),
-            contract.categoricalChartRow('Long CJK Label C', 12, 102, 155)
-        ]
+        rows: skewedRows
     };
     const bubbleOption = contract.analyticsBubbleOption(bubbleChart, { type: 'bubble', valueMode: 'percentage' });
     const repeatedBubbleOption = contract.analyticsBubbleOption(bubbleChart, { type: 'bubble', valueMode: 'percentage' });
     assert.strictEqual(bubbleOption.series[0].type, 'scatter', 'Bubble must use ECharts scatter');
-    assert.strictEqual(bubbleOption.series[0].data[0].realCount, 72, 'Bubble must size from respondent count data without backend transformation');
-    assert.strictEqual(Math.round(bubbleOption.series[0].data[0].realPercent * 10) / 10, 70.6, 'Bubble precise percent must remain respondent percentage');
+    assert.strictEqual(bubbleOption.series[0].data[0].realCount, 73, 'Bubble must size from respondent count data without backend transformation');
+    assert.strictEqual(Math.round(bubbleOption.series[0].data[0].realPercent * 10) / 10, 73, 'Bubble precise percent must remain respondent percentage');
+    assert.strictEqual(bubbleOption.series.length, 1, 'thumbnail Bubble must not force all external labels');
+    assert(bubbleOption.series[0].data.every(point => Number.isInteger(point.visualTier) && point.visualTier >= 1 && point.visualTier <= 10), 'Bubble data points must carry finite visual tiers');
     assert.deepStrictEqual(
         bubbleOption.series[0].data.map(point => point.value),
         repeatedBubbleOption.series[0].data.map(point => point.value),
@@ -1724,8 +1759,11 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         bubbleOption.series[0].data.some((point, index) => index > 0 && (Math.abs(point.value[0] - Math.round(point.value[0])) > 0.001 || Math.abs(point.value[1] - Math.round(point.value[1])) > 0.001)),
         'Bubble layout must use packed coordinates rather than grid cells'
     );
-    const bubbleTooltip = contract.analyticsTooltipFormatter({ marker: '', name: 'IoT', data: bubbleOption.series[0].data[0] });
-    assert(bubbleTooltip.includes('72 筆') && bubbleTooltip.includes('70.6%'), 'Bubble tooltip must preserve exact respondent count and percent');
+    const bubbleModal = contract.analyticsBubbleOption(bubbleChart, { type: 'bubble', valueMode: 'percentage' }, { modal: true });
+    assert(bubbleModal.series.some(series => series.name === 'external-label-lines'), 'expanded Bubble must include leader lines for small-category labels');
+    assert(bubbleModal.series.some(series => series.name === 'external-left-labels' || series.name === 'external-right-labels'), 'expanded Bubble must include external small-category labels');
+    const bubbleTooltip = contract.analyticsTooltipFormatter({ marker: '', name: 'Tier 0', data: bubbleOption.series[0].data[0] });
+    assert(bubbleTooltip.includes('73 筆') && bubbleTooltip.includes('73%'), 'Bubble tooltip must preserve exact respondent count and percent');
 
     assert(managementSource.includes('${capabilities.primaryTypes.map(value => `<button data-action="${action}"'), 'primary chart buttons must be rendered from capability order');
     assert(managementSource.includes('${capabilities.moreTypes.map(value => `<button data-action="${action}"'), 'More chart buttons must be rendered separately without reordering primary buttons');

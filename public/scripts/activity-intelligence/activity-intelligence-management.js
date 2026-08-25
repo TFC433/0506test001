@@ -5097,6 +5097,8 @@
     const styles = analyticsChartStyles();
     const percentage = view.valueMode === 'percentage';
     const modal = Boolean(options.modal);
+    const rows = (Array.isArray(chart.rows) ? chart.rows : []).filter(row => row.count > 0);
+    const tierValues = analyticsTierSourceValues(rows);
     const palette = styles.isDark
       ? ['#60a5fa', '#2dd4bf', '#94a3b8', '#34d399', '#fbbf24', '#818cf8']
       : ['#2563eb', '#0f766e', '#64748b', '#059669', '#d97706', '#4f46e5'];
@@ -5109,9 +5111,9 @@
         nodeClick: false,
         breadcrumb: { show: false },
         top: modal ? 14 : 8,
-        right: modal ? 18 : 8,
+        right: modal ? 96 : 8,
         bottom: modal ? 14 : 8,
-        left: modal ? 18 : 8,
+        left: modal ? 58 : 8,
         leafDepth: 1,
         label: {
           show: true,
@@ -5120,14 +5122,10 @@
           lineHeight: modal ? 17 : 14,
           overflow: 'truncate',
           width: modal ? 142 : 86,
-          formatter: params => {
-            const data = params.data || {};
-            const rect = params.rect || {};
-            if ((rect.width || rect.height) && (Number(rect.width || 0) < (modal ? 58 : 42) || Number(rect.height || 0) < (modal ? 38 : 30))) return '';
-            const value = percentage ? formatAnalyticsPercent(data.realPercent) : `${Number(data.realCount || 0)} 筆`;
-            return `${params.name}\n${value}`;
-          }
+          formatter: params => analyticsTreemapLabelFormatter(params, percentage, modal)
         },
+        labelLine: { show: modal, lineStyle: { color: styles.border, width: 1, opacity: styles.isDark ? 0.62 : 0.58 } },
+        labelLayout: modal ? analyticsTreemapLabelLayout : { hideOverlap: true },
         upperLabel: { show: false },
         itemStyle: {
           borderColor: styles.isDark ? '#0f172a' : '#ffffff',
@@ -5143,7 +5141,17 @@
             gapWidth: modal ? 3 : 2
           }
         }],
-        data: chart.rows.filter(row => row.count > 0).map(row => analyticsChartPoint(row, false))
+        data: rows.map(row => {
+          const point = analyticsChartPoint(row, false);
+          const visualTier = analyticsMagnitudeTier(row.count, tierValues);
+          return {
+            ...point,
+            value: analyticsTreemapVisualValue(row.count, tierValues),
+            rawValue: row.count,
+            visualTier,
+            externalLabelCandidate: visualTier <= 3
+          };
+        })
       }]
     };
   }
@@ -5154,15 +5162,20 @@
     const rows = (Array.isArray(chart.rows) ? chart.rows : []).filter(row => row.count > 0).sort((a, b) => b.count - a.count || String(a.label).localeCompare(String(b.label), 'zh-Hant'));
     const modal = Boolean(options.modal);
     const maxCount = Math.max(...rows.map(row => Number(row.count || 0)), 1);
-    const minSize = modal ? 30 : 22;
-    const maxSize = modal ? 92 : 62;
-    const data = analyticsBubblePoints(rows, maxCount, minSize, maxSize, modal ? 10 : 7);
+    const minSize = modal ? 24 : 19;
+    const maxSize = modal ? (rows.length > 14 ? 128 : 146) : (rows.length > 14 ? 74 : 86);
+    const data = analyticsBubblePoints(rows, maxCount, minSize, maxSize, modal ? 12 : 8, { externalLabels: modal });
     const palette = styles.isDark
       ? ['rgba(96, 165, 250, 0.78)', 'rgba(45, 212, 191, 0.74)', 'rgba(148, 163, 184, 0.72)', 'rgba(52, 211, 153, 0.72)', 'rgba(251, 191, 36, 0.72)']
       : ['rgba(37, 99, 235, 0.76)', 'rgba(15, 118, 110, 0.72)', 'rgba(100, 116, 139, 0.70)', 'rgba(5, 150, 105, 0.70)', 'rgba(217, 119, 6, 0.70)'];
+    data.points.forEach((point, index) => {
+      const color = palette[index % palette.length];
+      point.itemStyle = { color };
+      point.labelColor = analyticsReadableLabelColor(color, styles);
+    });
     return {
       legend: { show: false },
-      grid: { top: modal ? 24 : 12, right: modal ? 28 : 12, bottom: modal ? 24 : 12, left: modal ? 28 : 12 },
+      grid: { top: modal ? 32 : 10, right: modal ? 70 : 10, bottom: modal ? 32 : 10, left: modal ? 70 : 10 },
       tooltip: { trigger: 'item', formatter: analyticsTooltipFormatter },
       xAxis: {
         type: 'value',
@@ -5180,16 +5193,16 @@
         name: chart.title,
         type: 'scatter',
         data: data.points,
+        clip: false,
         symbolSize: (value, params) => params && params.data ? params.data.symbolSize : minSize,
         itemStyle: {
-          color: params => palette[(params.dataIndex || 0) % palette.length],
           borderColor: styles.isDark ? 'rgba(226, 232, 240, 0.82)' : 'rgba(255, 255, 255, 0.92)',
           borderWidth: 1
         },
         label: {
           show: true,
           position: 'inside',
-          color: styles.isDark ? '#0f172a' : '#ffffff',
+          color: params => (params.data && params.data.labelColor) || (styles.isDark ? '#0f172a' : '#ffffff'),
           fontSize: modal ? 12 : 10,
           fontWeight: 700,
           formatter: params => {
@@ -5213,14 +5226,16 @@
             }
           }
         }
-      }]
+      }].concat(modal ? analyticsBubbleExternalLabelSeries(data.externalLabels, styles) : [])
     };
   }
 
-  function analyticsBubblePoints(rows, maxCount, minSize, maxSize, spacing = 7) {
+  function analyticsBubblePoints(rows, maxCount, minSize, maxSize, spacing = 7, options = {}) {
+    const tierValues = analyticsTierSourceValues(rows);
     const placed = [];
     const points = rows.map((row, index) => {
-      const size = analyticsBubbleSymbolSize(row.count, maxCount, minSize, maxSize);
+      const visualTier = analyticsMagnitudeTier(row.count, tierValues);
+      const size = analyticsBubbleSymbolSize(row.count, maxCount, minSize, maxSize, tierValues);
       const radius = size / 2;
       let x = 0;
       let y = 0;
@@ -5254,22 +5269,188 @@
       return {
         ...analyticsChartPoint(row, false),
         value: [x, y, row.count],
-        symbolSize: size
+        symbolSize: size,
+        visualTier
       };
     });
-    const padding = Math.max(maxSize * 0.28, 12);
-    const minX = placed.length ? Math.min(...placed.map(point => point.x - point.radius)) - padding : -1;
-    const maxX = placed.length ? Math.max(...placed.map(point => point.x + point.radius)) + padding : 1;
-    const minY = placed.length ? Math.min(...placed.map(point => point.y - point.radius)) - padding : -1;
-    const maxY = placed.length ? Math.max(...placed.map(point => point.y + point.radius)) + padding : 1;
-    return { points, minX, maxX, minY, maxY };
+    const bubbleBounds = {
+      minX: placed.length ? Math.min(...placed.map(point => point.x - point.radius)) : -1,
+      maxX: placed.length ? Math.max(...placed.map(point => point.x + point.radius)) : 1,
+      minY: placed.length ? Math.min(...placed.map(point => point.y - point.radius)) : -1,
+      maxY: placed.length ? Math.max(...placed.map(point => point.y + point.radius)) : 1
+    };
+    const externalLabels = options.externalLabels ? analyticsBubbleExternalLabels(points, bubbleBounds, maxSize) : [];
+    const padding = Math.max(maxSize * (options.externalLabels ? 0.18 : 0.2), 10);
+    const labelXs = externalLabels.map(label => label.value[0]);
+    const labelYs = externalLabels.map(label => label.value[1]);
+    const minX = Math.min(bubbleBounds.minX, ...labelXs, 0) - padding;
+    const maxX = Math.max(bubbleBounds.maxX, ...labelXs, 0) + padding;
+    const minY = Math.min(bubbleBounds.minY, ...labelYs, 0) - padding;
+    const maxY = Math.max(bubbleBounds.maxY, ...labelYs, 0) + padding;
+    return { points, externalLabels, minX, maxX, minY, maxY };
   }
 
-  function analyticsBubbleSymbolSize(countValue, maxCount, minSize, maxSize) {
+  function analyticsBubbleSymbolSize(countValue, maxCount, minSize, maxSize, tierValues) {
+    const values = Array.isArray(tierValues) && tierValues.length ? tierValues : [countValue, maxCount];
+    const tier = analyticsMagnitudeTier(countValue, values);
+    return Math.round(minSize + ((tier - 1) / 9) * (maxSize - minSize));
+  }
+
+  function analyticsTierSourceValues(rows) {
+    return (Array.isArray(rows) ? rows : [])
+      .map(row => Number(row && row.count || 0))
+      .filter(value => value > 0)
+      .sort((a, b) => a - b);
+  }
+
+  function analyticsMagnitudeTier(countValue, sourceValues) {
+    const values = (Array.isArray(sourceValues) ? sourceValues : [])
+      .map(value => Number(value || 0))
+      .filter(value => value > 0);
     const count = Math.max(Number(countValue || 0), 0);
-    const max = Math.max(Number(maxCount || 0), 1);
-    const ratio = Math.sqrt(count) / Math.sqrt(max);
-    return Math.round(minSize + (maxSize - minSize) * ratio);
+    if (!values.length || count <= 0) return 1;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    if (max <= min) return values.length <= 1 ? 10 : 6;
+    const clamped = Math.max(min, Math.min(count, max));
+    const ratio = Math.log(clamped / min) / Math.log(max / min);
+    return Math.max(1, Math.min(10, 1 + Math.round(ratio * 9)));
+  }
+
+  function analyticsTreemapVisualValue(countValue, tierValues) {
+    const tier = analyticsMagnitudeTier(countValue, tierValues);
+    return tier * tier + 2;
+  }
+
+  function analyticsTreemapLabelFormatter(params, percentage, modal) {
+    const data = params.data || {};
+    const rect = params.rect || {};
+    const width = Number(rect.width || 0);
+    const height = Number(rect.height || 0);
+    const smallTile = data.externalLabelCandidate || ((width || height) && (width < (modal ? 80 : 52) || height < (modal ? 46 : 30)));
+    if (smallTile && !modal) return '';
+    const label = analyticsShortChartLabel(params.name, smallTile ? 18 : (modal ? 24 : 12));
+    if (smallTile) return label;
+    const value = percentage ? formatAnalyticsPercent(data.realPercent) : `${Number(data.realCount || 0)} 筆`;
+    return `${label}\n${value}`;
+  }
+
+  function analyticsTreemapLabelLayout(params) {
+    const data = params.data || {};
+    const rect = params.rect || {};
+    const width = Number(rect.width || 0);
+    const height = Number(rect.height || 0);
+    const needsExternal = data.externalLabelCandidate || ((width || height) && (width < 80 || height < 46));
+    if (!needsExternal || !width || !height) return {};
+    const centerX = rect.x + width / 2;
+    const centerY = rect.y + height / 2;
+    const side = rect.x < 280 ? 1 : -1;
+    const elbowX = centerX + side * Math.max(width / 2 + 10, 18);
+    const labelX = elbowX + side * 18;
+    return {
+      x: labelX,
+      y: centerY,
+      align: side > 0 ? 'left' : 'right',
+      verticalAlign: 'middle',
+      labelLinePoints: [[centerX, centerY], [elbowX, centerY], [labelX - side * 4, centerY]]
+    };
+  }
+
+  function analyticsBubbleExternalLabels(points, bounds, maxSize) {
+    const candidates = points.filter(point => Number(point.visualTier || 0) <= 4);
+    if (!candidates.length) return [];
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    const labelOffset = Math.max(maxSize * 0.28, 28);
+    const left = [];
+    const right = [];
+    candidates.forEach((point, index) => {
+      const x = Number(point.value && point.value[0] || 0);
+      const target = x < centerX || (x === centerX && index % 2 === 0) ? left : right;
+      target.push(point);
+    });
+    const layoutGroup = (group, side) => {
+      const ordered = group.slice().sort((a, b) => Number(a.value[1] || 0) - Number(b.value[1] || 0) || String(a.name).localeCompare(String(b.name), 'zh-Hant'));
+      const minGap = 18;
+      let lastY = -Infinity;
+      return ordered.map(point => {
+        const x = Number(point.value[0] || 0);
+        const y = Number(point.value[1] || 0);
+        const radius = Number(point.symbolSize || 0) / 2;
+        const adjustedY = Math.max(y, lastY + minGap);
+        lastY = adjustedY;
+        const anchorX = x + side * radius;
+        const labelX = side < 0 ? bounds.minX - labelOffset : bounds.maxX + labelOffset;
+        const elbowX = x + side * (radius + 10);
+        return {
+          ...point,
+          value: [Number(labelX.toFixed(3)), Number(adjustedY.toFixed(3)), point.realCount],
+          anchor: [Number(anchorX.toFixed(3)), y],
+          elbow: [Number(elbowX.toFixed(3)), Number(adjustedY.toFixed(3))],
+          side: side < 0 ? 'left' : 'right',
+          externalLabel: analyticsShortChartLabel(point.name, 18)
+        };
+      });
+    };
+    return layoutGroup(left, -1).concat(layoutGroup(right, 1));
+  }
+
+  function analyticsBubbleExternalLabelSeries(labels, styles) {
+    if (!labels.length) return [];
+    const lineData = [];
+    labels.forEach(label => {
+      lineData.push(label.anchor, label.elbow, label.value, null);
+    });
+    const labelSeries = side => ({
+      name: side === 'left' ? 'external-left-labels' : 'external-right-labels',
+      type: 'scatter',
+      data: labels.filter(label => label.side === side),
+      symbolSize: 1,
+      silent: true,
+      tooltip: { show: false },
+      itemStyle: { opacity: 0 },
+      label: {
+        show: true,
+        position: side === 'left' ? 'left' : 'right',
+        color: styles.primary,
+        fontSize: 12,
+        fontWeight: 700,
+        formatter: params => (params.data && params.data.externalLabel) || params.name
+      },
+      labelLayout: { hideOverlap: false, moveOverlap: 'shiftY' },
+      emphasis: { disabled: true },
+      clip: false
+    });
+    return [{
+      name: 'external-label-lines',
+      type: 'line',
+      data: lineData,
+      symbol: 'none',
+      silent: true,
+      tooltip: { show: false },
+      lineStyle: { color: styles.border, width: 1, opacity: styles.isDark ? 0.66 : 0.58 },
+      emphasis: { disabled: true },
+      animation: false,
+      clip: false
+    }, labelSeries('left'), labelSeries('right')];
+  }
+
+  function analyticsReadableLabelColor(color, styles) {
+    const text = String(color || '');
+    const rgba = text.match(/rgba?\(([^)]+)\)/i);
+    let parts = null;
+    if (rgba) {
+      parts = rgba[1].split(',').slice(0, 3).map(value => Number(value.trim()));
+    } else if (/^#[0-9a-f]{6}$/i.test(text)) {
+      parts = [parseInt(text.slice(1, 3), 16), parseInt(text.slice(3, 5), 16), parseInt(text.slice(5, 7), 16)];
+    }
+    if (!parts || parts.some(value => !Number.isFinite(value))) return styles.isDark ? '#0f172a' : '#ffffff';
+    const luminance = (0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2]) / 255;
+    return luminance < 0.48 ? '#ffffff' : '#0f172a';
+  }
+
+  function analyticsShortChartLabel(value, limit) {
+    const label = String(value || '');
+    return label.length > limit ? `${label.slice(0, limit)}...` : label;
   }
 
   function analyticsChartPoint(row, percentage, percentKey = 'percent', options = {}) {
