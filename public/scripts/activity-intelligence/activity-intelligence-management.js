@@ -4917,11 +4917,22 @@
     if (type === 'single_choice' || type === 'dropdown') {
       return { primaryTypes: ['bar', 'pie', 'trend'], moreTypes: ['rose', 'polarBar', 'treemap'], fallbackType: 'bar' };
     }
+    if (analyticsChartHasCategoricalRows(chart)) {
+      return {
+        primaryTypes: ['bar'].concat(chart && chart.allowPie ? ['pie'] : [], chart && chart.allowTrend ? ['trend'] : []),
+        moreTypes: ['rose', 'polarBar'],
+        fallbackType: 'bar'
+      };
+    }
     return {
       primaryTypes: ['bar'].concat(chart && chart.allowPie ? ['pie'] : [], chart && chart.allowTrend ? ['trend'] : []),
       moreTypes: [],
       fallbackType: 'bar'
     };
+  }
+
+  function analyticsChartHasCategoricalRows(chart) {
+    return Boolean(chart && Array.isArray(chart.rows) && chart.rows.length && chart.allowPie !== false);
   }
 
   function chartCapabilitiesForChart(chart) {
@@ -4936,8 +4947,8 @@
     if (type === 'bar') return true;
     if (type === 'pie') return chart.allowPie !== false;
     if (type === 'trend') return chart.allowTrend !== false;
-    if (type === 'rose') return analyticsCategoricalFieldTypes.includes(chart.fieldType) && chart.allowPie !== false;
-    if (type === 'polarBar') return analyticsCategoricalFieldTypes.includes(chart.fieldType);
+    if (type === 'rose') return (analyticsCategoricalFieldTypes.includes(chart.fieldType) || analyticsChartHasCategoricalRows(chart)) && chart.allowPie !== false;
+    if (type === 'polarBar') return analyticsCategoricalFieldTypes.includes(chart.fieldType) || analyticsChartHasCategoricalRows(chart);
     if (type === 'treemap') return ['yes_no', 'single_choice', 'dropdown'].includes(chart.fieldType);
     if (type === 'bubble') return chart.fieldType === 'multiple_choice';
     return false;
@@ -5124,9 +5135,9 @@
           alignTo: modal ? 'edge' : 'none',
           edgeDistance: modal ? 18 : '22%',
           bleedMargin: modal ? 8 : 5,
-          formatter: params => params.name,
+          formatter: params => analyticsRoseLabelFormatter(params, percentage),
           overflow: 'break',
-          width: modal ? 190 : 88
+          width: modal ? 210 : 108
         },
         labelLine: {
           show: true,
@@ -5137,10 +5148,20 @@
           lineStyle: { color: styles.border }
         },
         labelLayout: modal ? { hideOverlap: false, moveOverlap: 'shiftY' } : { hideOverlap: true },
+        itemStyle: {
+          borderRadius: modal ? 5 : 4,
+          borderColor: styles.isDark ? '#0f172a' : '#ffffff',
+          borderWidth: 1
+        },
         emphasis: { focus: 'self' },
         data: rows.map((row, index) => ({
           ...analyticsChartPoint(row, percentage, percentKey, { selectionComposition: chart.multiChoice }),
-          itemStyle: { color: analyticsCategoryColor(index, styles) }
+          itemStyle: {
+            color: analyticsCategoryColor(index, styles),
+            borderRadius: modal ? 5 : 4,
+            borderColor: styles.isDark ? '#0f172a' : '#ffffff',
+            borderWidth: 1
+          }
         }))
       }]
     };
@@ -5157,30 +5178,43 @@
       legend: { show: false },
       tooltip: { trigger: 'item', formatter: analyticsTooltipFormatter },
       polar: {
-        radius: modal ? ['14%', '82%'] : ['10%', '78%'],
-        center: ['50%', modal ? '52%' : '50%']
+        radius: modal ? ['10%', '78%'] : ['8%', '70%'],
+        center: ['50%', modal ? '54%' : '53%']
       },
       angleAxis: {
+        type: 'category',
+        data: rows.map(row => row.label),
+        startAngle: 90,
+        axisLine: { lineStyle: { color: styles.border } },
+        axisTick: { show: false },
+        axisLabel: {
+          color: styles.primary,
+          fontSize: modal ? 12 : 10,
+          fontWeight: 700,
+          interval: modal ? 0 : 'auto',
+          hideOverlap: true,
+          margin: modal ? 14 : 8
+        }
+      },
+      radiusAxis: {
         type: 'value',
         min: 0,
         max: maxValue,
-        show: false
-      },
-      radiusAxis: {
-        type: 'category',
-        data: rows.map(row => row.label),
-        inverse: true,
-        axisLine: { show: false },
+        axisLine: { lineStyle: { color: styles.border } },
         axisTick: { show: false },
-        axisLabel: { show: false }
+        axisLabel: {
+          color: styles.muted,
+          formatter: value => percentage ? `${Number(value).toFixed(0)}%` : Number(value).toFixed(0)
+        },
+        splitLine: { lineStyle: { color: styles.border, type: 'dashed', opacity: styles.isDark ? 0.22 : 0.32 } }
       },
       series: [{
         name: chart.title,
         type: 'bar',
         coordinateSystem: 'polar',
-        roundCap: true,
+        roundCap: false,
         colorBy: 'data',
-        barWidth: modal ? '54%' : '48%',
+        barWidth: modal ? '62%' : '56%',
         data: rows.map((row, index) => {
           const point = analyticsChartPoint(row, percentage);
           return {
@@ -5190,16 +5224,24 @@
           };
         }),
         label: {
-          show: true,
-          position: 'start',
-          color: styles.primary,
+          show: modal,
+          position: 'middle',
+          color: '#ffffff',
           fontSize: modal ? 12 : 10,
           fontWeight: 700,
-          formatter: params => params.name
+          formatter: params => percentage ? formatAnalyticsPercent(params.data.realPercent) : `${params.data.realCount}`,
+          textBorderColor: 'rgba(15, 23, 42, 0.28)',
+          textBorderWidth: 2
         },
         emphasis: { focus: 'self' }
       }]
     };
+  }
+
+  function analyticsRoseLabelFormatter(params, percentage) {
+    const data = params.data || {};
+    const value = percentage ? formatAnalyticsPercent(data.realPercent) : `${Number(data.realCount || 0)}筆`;
+    return `${params.name} ${value}`;
   }
 
   function analyticsTreemapOption(chart, view, options = {}) {

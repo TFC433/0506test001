@@ -1634,6 +1634,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         'function formatAnalyticsPercent(value) { return `${Math.round(Number(value || 0) * 10) / 10}%`; }',
         'function escapeChartHtml(value) { return Store.escapeHtml(value); }',
         extractFunctionDeclaration(managementSource, 'chartCapabilitiesForField'),
+        extractFunctionDeclaration(managementSource, 'analyticsChartHasCategoricalRows'),
         extractFunctionDeclaration(managementSource, 'chartTypeAllowedForChart'),
         extractFunctionDeclaration(managementSource, 'chartCapabilitiesForChart'),
         extractFunctionDeclaration(managementSource, 'analyticsValidatedChartView'),
@@ -1645,6 +1646,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         extractFunctionDeclaration(managementSource, 'analyticsBarOption'),
         extractFunctionDeclaration(managementSource, 'analyticsPieOption'),
         extractFunctionDeclaration(managementSource, 'analyticsCategoryColor'),
+        extractFunctionDeclaration(managementSource, 'analyticsRoseLabelFormatter'),
         extractFunctionDeclaration(managementSource, 'analyticsRoseOption'),
         extractFunctionDeclaration(managementSource, 'analyticsPolarBarOption'),
         extractFunctionDeclaration(managementSource, 'analyticsTierSourceValues'),
@@ -1678,6 +1680,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     const largeDropdown = { ...largeSingle, fieldType: 'dropdown' };
     const multi = { chartKey: 'multi', fieldType: 'multiple_choice', allowPie: true, allowTrend: true, multiChoice: true, rows: [{ label: 'IoT', count: 72, percent: 72 / 102 * 100, selectionPercent: 72 / 155 * 100 }] };
     const yesNo = { chartKey: 'yes-no', fieldType: 'yes_no', allowPie: true, allowTrend: true, rows: rows(['Yes', 'No']) };
+    const recorder = { chartKey: 'recorder-distribution', allowPie: true, allowTrend: false, rows: [{ label: 'Recorder A', count: 3, percent: 60, selectionPercent: 60 }, { label: 'Recorder B', count: 2, percent: 40, selectionPercent: 40 }] };
 
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(smallSingle).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(smallSingle).moreTypes), JSON.stringify(['rose', 'polarBar', 'treemap']));
@@ -1689,6 +1692,8 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(multi).moreTypes), JSON.stringify(['rose', 'polarBar', 'bubble']));
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(yesNo).primaryTypes), JSON.stringify(['bar', 'pie', 'trend']));
     assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(yesNo).moreTypes), JSON.stringify(['rose', 'polarBar']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(recorder).primaryTypes), JSON.stringify(['bar', 'pie']));
+    assert.strictEqual(JSON.stringify(contract.chartCapabilitiesForChart(recorder).moreTypes), JSON.stringify(['rose', 'polarBar']));
     assert.deepStrictEqual(
         contract.chartCapabilitiesForChart(smallSingle).moreTypes.filter(type => type === 'rose' || type === 'polarBar'),
         contract.chartCapabilitiesForChart(largeSingle).moreTypes.filter(type => type === 'rose' || type === 'polarBar'),
@@ -1700,6 +1705,8 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'pie' }).type, 'pie', 'primary Pie chart type must remain selectable');
     assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'rose' }).type, 'rose', 'More-contained Rose chart type must remain selectable');
     assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'polarBar' }).type, 'polarBar', 'More-contained Polar Bar chart type must remain selectable');
+    assert.strictEqual(contract.analyticsValidatedChartView(recorder, { type: 'rose' }).type, 'rose', 'Recorder distribution Rose must remain selectable');
+    assert.strictEqual(contract.analyticsValidatedChartView(recorder, { type: 'polarBar' }).type, 'polarBar', 'Recorder distribution Polar Bar must remain selectable');
     assert.strictEqual(contract.analyticsValidatedChartView(largeSingle, { type: 'treemap' }).type, 'treemap', 'More-contained Treemap chart type must remain selectable');
     assert.strictEqual(contract.analyticsValidatedChartView(multi, { type: 'bubble' }).type, 'bubble', 'More-contained Bubble chart type must remain selectable');
     const fallbackControls = contract.renderAnalyticsChartTypeControls({ chartKey: 'fallback', fieldType: 'short_text', allowPie: false, allowTrend: false, rows: [] }, { type: 'bar' }, 'analytics-chart-view', 'desktop');
@@ -1728,15 +1735,28 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.strictEqual(roseOption.series[0].roseType, 'area', 'Rose must use native ECharts Nightingale area mode');
     assert.strictEqual(roseOption.series[0].data[0].value, 46.5, 'multiple-choice Rose geometry must preserve existing Pie selection-composition semantics');
     assert.strictEqual(roseOption.series[0].data[0].selectionComposition, true, 'multiple-choice Rose points must preserve tooltip semantic distinction');
-    assert.strictEqual(roseOption.series[0].label.formatter({ name: 'Full Category Name' }), 'Full Category Name', 'Rose labels must use canonical category names');
+    assert.strictEqual(roseOption.series[0].label.formatter({ name: 'Full Category Name', data: { realPercent: 45.9, realCount: 22 } }), 'Full Category Name 45.9%', 'Rose percent label must show canonical category plus current selected metric only');
+    const roseCountOption = contract.analyticsRoseOption({ title: 'Single', rows: [respondentRow] }, { type: 'rose', valueMode: 'count' });
+    assert.strictEqual(roseCountOption.series[0].label.formatter({ name: 'Full Category Name', data: { realPercent: 45.9, realCount: 22 } }), 'Full Category Name 22筆', 'Rose count label must show canonical category plus current selected metric only');
+    assert(Number(roseCountOption.series[0].itemStyle.borderRadius) > 0, 'Rose must use restrained native sector border radius');
+    assert(Number(roseCountOption.series[0].data[0].itemStyle.borderRadius) > 0, 'Rose sector data colors must preserve native border radius');
     const polarOption = contract.analyticsPolarBarOption({ title: 'Single', rows: [respondentRow] }, { type: 'polarBar', valueMode: 'percentage' });
     assert(polarOption.polar && polarOption.angleAxis && polarOption.radiusAxis, 'Polar Bar must use native polar coordinate components');
     assert.strictEqual(polarOption.series[0].type, 'bar', 'Polar Bar must use native ECharts bar renderer');
     assert.strictEqual(polarOption.series[0].coordinateSystem, 'polar', 'Polar Bar must use native ECharts polar coordinate system');
+    assert.strictEqual(polarOption.angleAxis.type, 'category', 'Polar Bar must use category-angle architecture');
+    assert.strictEqual(polarOption.radiusAxis.type, 'value', 'Polar Bar must use numeric value-radius architecture');
+    assert.deepStrictEqual(polarOption.angleAxis.data, ['IoT'], 'Polar Bar category labels must live on the angular category axis');
+    assert.notStrictEqual(polarOption.radiusAxis.type, 'category', 'Polar Bar must not use the previous concentric progress-ring radius categories');
+    assert.notStrictEqual(polarOption.angleAxis.type, 'value', 'Polar Bar must not use the previous progress-ring numeric angle axis');
     assert.strictEqual(polarOption.series[0].data[0].value, 70.6, 'Polar Bar percentage must use respondent percentage like Bar');
-    assert.strictEqual(polarOption.series[0].label.formatter({ name: 'Full Category Name' }), 'Full Category Name', 'Polar Bar labels must use canonical category names');
+    assert.strictEqual(polarOption.series[0].label.formatter({ data: { realPercent: 45.9, realCount: 22 } }), '45.9%', 'Polar Bar mark labels must show the selected metric without progress wording');
     const polarTooltip = contract.analyticsTooltipFormatter({ marker: '', name: 'IoT', data: polarOption.series[0].data[0] });
     assert(polarTooltip.includes('72 筆') && polarTooltip.includes('70.6%'), 'Polar Bar tooltip must preserve exact respondent count and percent');
+    const recorderRose = contract.analyticsRoseOption(recorder, { type: 'rose', valueMode: 'count' });
+    assert.strictEqual(recorderRose.series[0].data[0].name, 'Recorder A', 'Recorder Rose must preserve recorder names as canonical labels');
+    const recorderPolar = contract.analyticsPolarBarOption(recorder, { type: 'polarBar', valueMode: 'count' });
+    assert.deepStrictEqual(recorderPolar.angleAxis.data, ['Recorder A', 'Recorder B'], 'Recorder Polar Bar must preserve recorder names on category angle axis');
 
     const skewedRows = [73, 31, 20, 12, 12, 8, 5, 3, 2, 1, 1, 1].map((count, index) => contract.categoricalChartRow(`Tier ${index}`, count, 100, 120));
     const tierValues = contract.analyticsTierSourceValues(skewedRows);
