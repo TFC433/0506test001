@@ -1615,6 +1615,8 @@ function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, se
 function assertAnalyticsChartTypeImplementationContract(managementSource, cssSource) {
     assert(managementSource.includes("const analyticsCategoricalFieldTypes = ['yes_no', 'single_choice', 'multiple_choice', 'dropdown'];"), 'categorical Analytics types must be centralized');
     assert(managementSource.includes("const analyticsChartTypeValues = ['bar', 'pie', 'trend', 'rose', 'polarBar', 'treemap', 'bubble'];"), 'chart state must accept Rose and Polar Bar alongside existing More charts');
+    assert(managementSource.includes("bubble: 'Bubble'"), 'Bubble chart type label must use English chart terminology');
+    assert(!managementSource.includes("bubble: '氣泡'"), 'Bubble chart type label must not use the old Chinese display name');
     assert(managementSource.includes('data-action="${scope === \'mobile\' ? \'mobile-analytics-chart-more\' : \'analytics-chart-more\'}"'), 'desktop and mobile More chart selectors must share the local renderer');
     assert(managementSource.includes('aria-haspopup="true"'), 'More selector must expose popup semantics');
     assert(managementSource.includes('aria-expanded="${open}"'), 'More selector must expose expanded state');
@@ -1703,7 +1705,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         extractFunctionDeclaration(managementSource, 'analyticsVisibleTrendSeries'),
         extractFunctionDeclaration(managementSource, 'activityTrendOption'),
         extractFunctionDeclaration(managementSource, 'analyticsCategoricalTrendOption'),
-        '({ ui, defaultAnalyticsChartReadingState, sanitizeAnalyticsChartReadingState, analyticsChartReadingControlsSupported, renderAnalyticsChartReadingControls, chartCapabilitiesForField, chartCapabilitiesForChart, analyticsValidatedChartView, renderAnalyticsChartTypeControls, categoricalChartRow, analyticsBarOption, analyticsPieOption, analyticsRoseOption, analyticsPolarBarOption, analyticsTierSourceValues, analyticsMagnitudeTier, analyticsTreemapVisualValue, analyticsTreemapOption, analyticsBubbleMetricValue, analyticsBubbleContinuousSymbolSize, analyticsBubbleOption, analyticsApplyExpandedExternalLabelOverlay, analyticsTreemapRenderedTileGeometries, analyticsAssignExternalLabelRows, analyticsTooltipFormatter, activityTrendOption, analyticsCategoricalTrendOption });'
+        '({ ui, defaultAnalyticsChartReadingState, sanitizeAnalyticsChartReadingState, analyticsChartReadingControlsSupported, renderAnalyticsChartReadingControls, chartCapabilitiesForField, chartCapabilitiesForChart, analyticsValidatedChartView, renderAnalyticsChartTypeControls, categoricalChartRow, analyticsBarOption, analyticsPieOption, analyticsRoseOption, analyticsPolarBarOption, analyticsTierSourceValues, analyticsMagnitudeTier, analyticsTreemapVisualValue, analyticsTreemapOption, analyticsBubbleMetricValue, analyticsBubbleContinuousSymbolSize, analyticsBubbleOption, analyticsReadableLabelColor, analyticsApplyExpandedExternalLabelOverlay, analyticsTreemapRenderedTileGeometries, analyticsAssignExternalLabelRows, analyticsTooltipFormatter, activityTrendOption, analyticsCategoricalTrendOption });'
     ].join('\n');
     const contract = vm.runInNewContext(source, {});
     const rows = labels => labels.map(label => ({ label, count: 1, percent: 10, selectionPercent: 10 }));
@@ -1970,6 +1972,11 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.strictEqual(bubbleOption.series[0].type, 'scatter', 'Bubble must use ECharts scatter');
     assert.strictEqual(bubbleOption.xAxis.type, 'category', 'Bubble X axis must represent categories');
     assert.strictEqual(bubbleOption.yAxis.type, 'value', 'Bubble Y axis must represent the current metric');
+    assert.strictEqual(bubbleOption.xAxis.axisLabel.rotate, 30, 'Bubble X-axis labels must use fixed 30-degree rotation');
+    assert.strictEqual(bubbleOption.xAxis.axisLabel.fontSize, 9, 'Bubble thumbnail X-axis labels must use compact readable text');
+    assert.strictEqual(bubbleOption.xAxis.axisLabel.overflow, 'truncate', 'Bubble X-axis labels must use native truncation');
+    assert.strictEqual(bubbleOption.xAxis.axisLabel.ellipsis, '...', 'Bubble X-axis labels must use explicit ellipsis text');
+    assert.strictEqual(bubbleOption.grid.bottom, 64, 'Bubble thumbnail grid must reserve room for rotated X-axis labels');
     assert.strictEqual(bubbleOption.series[0].data[0].value[0], 'Tier 0', 'Bubble X values must use category identity');
     assert.strictEqual(bubbleOption.series[0].data[0].value[1], 73, 'Bubble percent-mode Y value must use respondent percent');
     assert.strictEqual(bubbleOption.series[0].data[0].symbolSize, 50, 'Bubble percent-mode symbol size must follow the current metric');
@@ -1977,6 +1984,10 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.strictEqual(Math.round(bubbleOption.series[0].data[0].realPercent * 10) / 10, 73, 'Bubble precise percent must remain respondent percentage');
     assert.strictEqual(bubbleOption.series.length, 1, 'thumbnail Bubble must use one native scatter series');
     assert(!bubbleOption.series[0].data.some(point => point.visualTier || point.externalLabelCandidate), 'Bubble data points must not carry packed-layout tier or annotation state');
+    assert.strictEqual(bubbleOption.series[0].label.fontWeight, 600, 'Bubble labels must use semibold typography');
+    assert.strictEqual(contract.analyticsReadableLabelColor('rgba(15, 23, 42, 0.92)', { isDark: false }), '#ffffff', 'Bubble label color must use light text on dark resolved fills');
+    assert.strictEqual(contract.analyticsReadableLabelColor('rgba(251, 191, 36, 0.72)', { isDark: false }), '#0f172a', 'Bubble label color must use dark text on light resolved fills');
+    assert(bubbleOption.series[0].data.some(point => point.labelColor === '#ffffff') && bubbleOption.series[0].data.some(point => point.labelColor === '#0f172a'), 'Bubble point labels must resolve adaptive fill-based contrast');
     const countBubbleOption = contract.analyticsBubbleOption(bubbleChart, { type: 'bubble', valueMode: 'count' });
     assert.strictEqual(countBubbleOption.series[0].data[0].value[1], 73, 'Bubble count-mode Y value must use count');
     assert.strictEqual(countBubbleOption.series[0].data[0].symbolSize, 50, 'Bubble count-mode symbol size must follow count');
@@ -2000,6 +2011,9 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.strictEqual(bubbleModal.series.length, 1, 'expanded Bubble must not use the previous ruler-like external label series');
     assert.strictEqual(bubbleModal.__aimExternalLabelOverlay, undefined, 'expanded Bubble must not request the geometry-driven graphic overlay');
     assert.strictEqual(bubbleModal.series[0].data[0].symbolSize, 76, 'expanded Bubble must use the larger native scatter size range');
+    assert.strictEqual(bubbleModal.xAxis.axisLabel.rotate, 30, 'expanded Bubble X-axis labels must use fixed 30-degree rotation');
+    assert.strictEqual(bubbleModal.xAxis.axisLabel.fontSize, 10, 'expanded Bubble X-axis labels must use compact readable text');
+    assert.strictEqual(bubbleModal.grid.bottom, 72, 'expanded Bubble grid must reserve room for rotated X-axis labels');
     const bubbleChartMock = {
         getWidth: () => 640,
         getHeight: () => 520,
@@ -2019,6 +2033,8 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.strictEqual(readingBubbleOption.tooltip.backgroundColor, 'rgba(15, 23, 42, 0.96)', 'Bubble expanded Dark tooltip must use existing chart-local tooltip styling');
     assert.strictEqual(readingBubbleOption.series[0].label.fontSize, 13, 'Bubble labels must respond to label size control');
     assert.strictEqual(readingBubbleOption.series[0].label.rich.value.fontSize, 16, 'Bubble value labels must respond to value size control');
+    assert.strictEqual(readingBubbleOption.series[0].label.rich.label.fontWeight, 600, 'Bubble rich category labels must remain semibold');
+    assert.strictEqual(readingBubbleOption.series[0].label.rich.value.fontWeight, 600, 'Bubble rich value labels must remain semibold');
     const bubbleTooltip = contract.analyticsTooltipFormatter({ marker: '', name: 'Tier 0', data: bubbleOption.series[0].data[0] });
     assert(bubbleTooltip.includes('73 筆') && bubbleTooltip.includes('73%'), 'Bubble tooltip must preserve exact respondent count and percent');
 

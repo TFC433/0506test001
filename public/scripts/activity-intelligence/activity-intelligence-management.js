@@ -28,7 +28,7 @@
     rose: 'Rose',
     polarBar: 'Polar Bar',
     treemap: 'Treemap',
-    bubble: '氣泡'
+    bubble: 'Bubble'
   });
   const analyticsChartReadingSizeBounds = Object.freeze({ min: -1, max: 3, step: 2 });
   const recordAdvancedChoiceFieldTypes = new Set(choiceFieldTypes);
@@ -5444,7 +5444,7 @@
     return {
       ...analyticsChartAppearanceOption(styles),
       legend: { show: false },
-      grid: { top: modal ? 28 : 18, right: modal ? 26 : 16, bottom: modal ? 58 : 50, left: 10, containLabel: true },
+      grid: { top: modal ? 28 : 18, right: modal ? 26 : 16, bottom: modal ? 72 : 64, left: 10, containLabel: true },
       tooltip: analyticsChartTooltipOption(styles, { trigger: 'item', formatter: analyticsTooltipFormatter }),
       xAxis: {
         type: 'category',
@@ -5453,8 +5453,9 @@
         axisLine: { lineStyle: { color: styles.border } },
         axisLabel: {
           color: styles.secondary,
-          fontSize: analyticsReadingFontSize(modal ? 11 : 10, options, 'labelSize') || (modal ? 11 : 10),
+          fontSize: analyticsReadingFontSize(modal ? 10 : 9, options, 'labelSize') || (modal ? 10 : 9),
           interval: 0,
+          rotate: 30,
           width: modal ? 92 : 54,
           overflow: 'truncate',
           ellipsis: '...'
@@ -5488,7 +5489,7 @@
           position: 'inside',
           color: params => (params.data && params.data.labelColor) || (styles.isDark ? '#0f172a' : '#ffffff'),
           fontSize: analyticsReadingFontSize(modal ? 11 : 10, options, 'labelSize') || (modal ? 11 : 10),
-          fontWeight: 700,
+          fontWeight: 600,
           overflow: 'truncate',
           ellipsis: '...',
           formatter: params => analyticsBubbleLabelFormatter(params, percentage, reading, modal),
@@ -5540,12 +5541,12 @@
     return {
       label: {
         fontSize: labelSize,
-        fontWeight: 700,
+        fontWeight: 600,
         lineHeight: labelSize ? labelSize + 4 : undefined
       },
       value: {
         fontSize: valueSize,
-        fontWeight: 700,
+        fontWeight: 600,
         lineHeight: valueSize ? valueSize + 4 : undefined
       }
     };
@@ -5916,14 +5917,19 @@
     const text = String(color || '');
     const rgba = text.match(/rgba?\(([^)]+)\)/i);
     let parts = null;
+    let alpha = 1;
     if (rgba) {
-      parts = rgba[1].split(',').slice(0, 3).map(value => Number(value.trim()));
+      const values = rgba[1].split(',').map(value => Number(value.trim()));
+      parts = values.slice(0, 3);
+      if (Number.isFinite(values[3])) alpha = Math.max(0, Math.min(1, values[3]));
     } else if (/^#[0-9a-f]{6}$/i.test(text)) {
       parts = [parseInt(text.slice(1, 3), 16), parseInt(text.slice(3, 5), 16), parseInt(text.slice(5, 7), 16)];
     }
     if (!parts || parts.some(value => !Number.isFinite(value))) return styles.isDark ? '#0f172a' : '#ffffff';
-    const luminance = (0.2126 * parts[0] + 0.7152 * parts[1] + 0.0722 * parts[2]) / 255;
-    return luminance < 0.48 ? '#ffffff' : '#0f172a';
+    const background = styles && styles.isDark ? [17, 24, 39] : [255, 255, 255];
+    const composited = parts.map((value, index) => value * alpha + background[index] * (1 - alpha));
+    const luminance = (0.2126 * composited[0] + 0.7152 * composited[1] + 0.0722 * composited[2]) / 255;
+    return luminance < 0.56 ? '#ffffff' : '#0f172a';
   }
 
   function analyticsShortChartLabel(value, limit) {
