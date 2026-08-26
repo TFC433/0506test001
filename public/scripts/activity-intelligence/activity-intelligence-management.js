@@ -9040,6 +9040,10 @@
     return ui.analyticsScope === recordContextActiveMode;
   }
 
+  function analyticsScopeIsTracking() {
+    return ui.analyticsScope === analyticsScopeTrackingMode;
+  }
+
   function analyticsFormContext() {
     return analyticsScopeIsActive() ? formContextFieldIntelligenceMode : formContextVisitorMode;
   }

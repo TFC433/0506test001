@@ -1459,6 +1459,20 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     assert(managementSource.includes("ui.followUp = defaultFollowUpState()") || managementSource.includes('followUp: defaultFollowUpState()'), 'Follow-up controls must use runtime UI state');
     assert(managementSource.includes('data-action="follow-up-sort"'), 'Follow-up table must expose sortable headers');
     assert(managementSource.includes('data-action="open-record-inline"'), 'Follow-up view must reuse the existing inline record detail action');
+    const trackingScopeSource = [
+        'const recordContextVisitorMode = "visitor";',
+        'const recordContextActiveMode = "active-intelligence";',
+        'const analyticsScopeTrackingMode = "follow-up";',
+        'let ui = { analyticsScope: recordContextVisitorMode };',
+        extractFunctionDeclaration(managementSource, 'analyticsScopeIsTracking'),
+        '({ ui, analyticsScopeIsTracking })'
+    ].join('\n');
+    const trackingScopeContract = vm.runInNewContext(trackingScopeSource, {});
+    assert.strictEqual(trackingScopeContract.analyticsScopeIsTracking(), false, 'Visitor Analytics entry must not be treated as Follow-up scope');
+    trackingScopeContract.ui.analyticsScope = 'active-intelligence';
+    assert.strictEqual(trackingScopeContract.analyticsScopeIsTracking(), false, 'Active Analytics entry must not be treated as Follow-up scope');
+    trackingScopeContract.ui.analyticsScope = 'follow-up';
+    assert.strictEqual(trackingScopeContract.analyticsScopeIsTracking(), true, 'Follow-up Analytics entry must have a callable scope guard');
     assert(cssSource.includes('.aim-analytics-scope-tabs .aim-mode-tab[data-mode="follow-up"][aria-selected="true"]'), 'Follow-up selected tab state must be styled');
     assert(cssSource.includes('grid-template-columns: repeat(3, minmax(0, 1fr));'), 'Mobile Analytics scope tabs must support three tabs');
     assert(cssSource.includes('.aim-follow-up-table-wrap') && cssSource.includes('overflow-x: auto'), 'Follow-up table must be contained by an overflow-safe wrapper');
