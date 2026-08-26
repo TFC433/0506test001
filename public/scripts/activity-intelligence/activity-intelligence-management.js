@@ -119,6 +119,7 @@
   const followUpPriorityFieldTitle = '後續追蹤優先度';
   const followUpPriorityValues = Object.freeze(['高', '中', '低', '暫不追蹤']);
   const followUpWorklistPriorityValues = Object.freeze(['高', '中', '低']);
+  const followUpDefaultVisiblePriorityValues = Object.freeze(['高', '中']);
   const followUpPriorityRank = Object.freeze({ '高': 0, '中': 1, '低': 2 });
   const followUpEmailSourceCard = '名片';
   const followUpEmailSourceForm = '表單內容';
@@ -286,16 +287,10 @@
 
   function defaultFollowUpState() {
     return {
-      q: '',
-      priorities: [...followUpWorklistPriorityValues],
-      email: 'all',
-      emailSource: 'all',
-      card: 'all',
-      mailSent: 'all',
-      opportunityCreated: 'all',
-      recorder: 'all',
+      priorities: [...followUpDefaultVisiblePriorityValues],
       sortKey: '',
       sortDirection: '',
+      priorityFilterOpen: false,
       manualState: {}
     };
   }
@@ -4495,12 +4490,12 @@
   }
 
   function renderAnalytics(activity) {
-    if (analyticsScopeIsTracking()) return `${renderTrackingScopeSelector()}${renderAnalyticsTracking(activity)}`;
     const records = analyticsRecords(activity);
     const activeAnalytics = analyticsScopeIsActive();
     const formContext = analyticsFormContext();
     const assistant = !isMobileFormViewport() ? renderAnalyticsAiPanel(activity, records) : '';
     const scopeSelector = renderAnalyticsScopeSelector();
+    if (analyticsScopeIsTracking()) return `${assistant}${scopeSelector}${renderAnalyticsTracking(activity)}`;
     const metrics = analyticsMetrics(activity, records, { includeVisitorCount: !activeAnalytics });
     const companyKpi = companyKpiDerivation(activity, records, formContext);
     const visitorKpi = metrics.visitorCount !== null
@@ -4516,15 +4511,17 @@
   }
 
   function renderMobileAnalysis(activity) {
+    const records = analyticsRecords(activity);
+    const mobileAssistant = `${renderMobileAnalyticsAiPanel(activity, records)}`;
     if (analyticsScopeIsTracking()) {
       return `
         <section class="aim-mobile-analysis" aria-label="行動數據分析">
-          ${renderTrackingScopeSelector()}
+          ${mobileAssistant}
+          ${renderAnalyticsScopeSelector()}
           ${renderAnalyticsTracking(activity)}
         </section>
       `;
     }
-    const records = analyticsRecords(activity);
     const activeAnalytics = analyticsScopeIsActive();
     const formContext = analyticsFormContext();
     const metrics = analyticsMetrics(activity, records, { includeVisitorCount: !activeAnalytics });
@@ -4535,7 +4532,7 @@
       .join('');
     return `
       <section class="aim-mobile-analysis" aria-label="行動數據分析">
-        ${renderMobileAnalyticsAiPanel(activity, records)}
+        ${mobileAssistant}
         ${renderAnalyticsScopeSelector()}
         ${renderMobileAnalyticsKpis(metrics, { includeVisitorCount: !activeAnalytics, companyKpi })}
         <div class="aim-mobile-analysis-chart-feed">
@@ -4557,54 +4554,32 @@
     `;
   }
 
-  function renderTrackingScopeSelector() {
-    return renderAnalyticsScopeSelector();
-  }
-
   function renderAnalyticsTracking(activity) {
     const data = followUpAnalyticsData(activity);
-    const controls = ui.followUp || defaultFollowUpState();
     const rows = data.rows;
     const allRows = data.allRows;
-    const recorderOptions = ['all', ...unique(allRows.map(row => row.recorder).filter(Boolean))];
-    const emptyText = allRows.length ? '沒有符合搜尋或篩選條件的後續追蹤紀錄。' : '目前沒有高、中、低後續追蹤紀錄。';
+    const emptyText = allRows.length ? '目前沒有符合優先度顯示條件的後續追蹤紀錄。' : '目前沒有高、中、低後續追蹤紀錄。';
     return `
       <section class="aim-follow-up-view" aria-label="後續追蹤">
         <div class="aim-kpi-grid aim-follow-up-kpi-row">
           ${followUpPriorityValues.map(priority => `<div class="aim-kpi"><span>${Store.escapeHtml(priority)}</span><strong>${data.kpis[priority] || 0}</strong></div>`).join('')}
         </div>
-        <div class="aim-follow-up-controls">
-          <label class="aim-field aim-follow-up-search"><span>搜尋</span><input class="aim-input" id="aim-follow-up-q" value="${Store.escapeHtml(controls.q || '')}" placeholder="公司、聯絡人、紀錄者、Email"></label>
-          <fieldset class="aim-follow-up-priority-filter">
-            <legend>優先度</legend>
-            ${followUpWorklistPriorityValues.map(priority => `
-              <label><input class="aim-follow-up-priority" type="checkbox" value="${Store.escapeHtml(priority)}" ${followUpSelectedPriorities().includes(priority) ? 'checked' : ''}>${Store.escapeHtml(priority)}</label>
-            `).join('')}
-          </fieldset>
-          <label class="aim-field"><span>Email</span><select class="aim-select" id="aim-follow-up-email">${option('all', '全部', controls.email)}${option('present', '有 Email', controls.email)}${option('absent', '無 Email', controls.email)}</select></label>
-          <label class="aim-field"><span>Email來源</span><select class="aim-select" id="aim-follow-up-email-source">${option('all', '全部', controls.emailSource)}${option('card', followUpEmailSourceCard, controls.emailSource)}${option('form', followUpEmailSourceForm, controls.emailSource)}</select></label>
-          <label class="aim-field"><span>名片</span><select class="aim-select" id="aim-follow-up-card">${option('all', '全部', controls.card)}${option('has', '有', controls.card)}${option('none', '無', controls.card)}</select></label>
-          <label class="aim-field"><span>已寄 Mail</span><select class="aim-select" id="aim-follow-up-mail-sent">${option('all', '全部', controls.mailSent)}${option('sent', '已寄', controls.mailSent)}${option('unsent', '未寄', controls.mailSent)}</select></label>
-          <label class="aim-field"><span>已建機會</span><select class="aim-select" id="aim-follow-up-opportunity-created">${option('all', '全部', controls.opportunityCreated)}${option('created', '已建', controls.opportunityCreated)}${option('uncreated', '未建', controls.opportunityCreated)}</select></label>
-          <label class="aim-field"><span>紀錄者</span><select class="aim-select" id="aim-follow-up-recorder">${recorderOptions.map(value => option(value, value === 'all' ? '全部' : value, controls.recorder)).join('')}</select></label>
-        </div>
         <div class="aim-follow-up-table-wrap">
           <table class="aim-table aim-follow-up-table">
             <thead><tr>
               <th class="aim-follow-up-row-number">項次</th>
-              ${renderFollowUpHeaderCell('priority', '優先度')}
+              ${renderFollowUpPriorityHeaderCell()}
               ${renderFollowUpHeaderCell('company', '公司名稱')}
-              <th>聯絡人</th>
-              ${renderFollowUpHeaderCell('recorder', '紀錄者')}
+              ${renderFollowUpHeaderCell('contact', '聯絡人')}
               ${renderFollowUpHeaderCell('email', 'Email')}
               <th>Email來源</th>
-              ${renderFollowUpHeaderCell('card', '名片')}
               ${renderFollowUpHeaderCell('mailSent', '已寄 Mail')}
               ${renderFollowUpHeaderCell('opportunityCreated', '已建機會')}
-              <th>查看</th>
+              ${renderFollowUpHeaderCell('recorder', '紀錄者', 'aim-follow-up-meta-head')}
+              ${renderFollowUpHeaderCell('createdAt', '表單時間', 'aim-follow-up-meta-head')}
             </tr></thead>
             <tbody>
-              ${rows.length ? rows.map(row => renderFollowUpRow(row, activity)).join('') : `<tr><td colspan="11"><div class="aim-empty">${Store.escapeHtml(emptyText)}</div></td></tr>`}
+              ${rows.length ? rows.map(row => renderFollowUpRow(row)).join('') : `<tr><td colspan="10"><div class="aim-empty">${Store.escapeHtml(emptyText)}</div></td></tr>`}
             </tbody>
           </table>
         </div>
@@ -4612,15 +4587,36 @@
     `;
   }
 
-  function renderFollowUpHeaderCell(key, label) {
+  function renderFollowUpPriorityHeaderCell() {
+    const followUp = ui.followUp || defaultFollowUpState();
+    const selected = followUpSelectedPriorities();
+    const active = followUp.sortKey === 'priority';
+    const indicator = active ? (followUp.sortDirection === 'asc' ? ' ↑' : ' ↓') : '';
+    return `
+      <th class="aim-follow-up-priority-head">
+        <div class="aim-follow-up-head-tools">
+          <button class="aim-follow-up-sort-header" data-action="follow-up-sort" data-sort-key="priority" type="button">優先度${indicator}</button>
+          <button class="aim-follow-up-priority-filter-button" data-action="toggle-follow-up-priority-menu" type="button" aria-expanded="${followUp.priorityFilterOpen ? 'true' : 'false'}">篩選</button>
+        </div>
+        ${followUp.priorityFilterOpen ? `
+          <div class="aim-follow-up-priority-popover">
+            ${followUpWorklistPriorityValues.map(priority => `
+              <label><input class="aim-follow-up-priority" type="checkbox" value="${Store.escapeHtml(priority)}" ${selected.includes(priority) ? 'checked' : ''}>${Store.escapeHtml(priority)}</label>
+            `).join('')}
+          </div>
+        ` : ''}
+      </th>
+    `;
+  }
+
+  function renderFollowUpHeaderCell(key, label, className) {
     const followUp = ui.followUp || defaultFollowUpState();
     const active = followUp.sortKey === key;
     const indicator = active ? (followUp.sortDirection === 'asc' ? ' ↑' : ' ↓') : '';
-    return `<th><button class="aim-follow-up-sort-header" data-action="follow-up-sort" data-sort-key="${Store.escapeHtml(key)}" type="button">${Store.escapeHtml(label)}${indicator}</button></th>`;
+    return `<th${className ? ` class="${Store.escapeHtml(className)}"` : ''}><button class="aim-follow-up-sort-header" data-action="follow-up-sort" data-sort-key="${Store.escapeHtml(key)}" type="button">${Store.escapeHtml(label)}${indicator}</button></th>`;
   }
 
-  function renderFollowUpRow(row, activity) {
-    const viewDisabled = canViewRecord(row.record, activity) ? '' : 'disabled';
+  function renderFollowUpRow(row) {
     const emailHtml = row.emails.length
       ? row.emails.map(entry => `<div class="aim-follow-up-email-entry">${Store.escapeHtml(entry.email)}</div>`).join('')
       : '<span class="aim-muted-dash">—</span>';
@@ -4633,13 +4629,12 @@
         <td>${priorityPill(row.priority)}</td>
         <td title="${Store.escapeHtml(row.company || '—')}">${Store.escapeHtml(row.company || '—')}</td>
         <td title="${Store.escapeHtml(row.contact || '—')}">${Store.escapeHtml(row.contact || '—')}</td>
-        <td title="${Store.escapeHtml(row.recorder || '—')}">${Store.escapeHtml(row.recorder || '—')}</td>
         <td><div class="aim-follow-up-email-list">${emailHtml}</div></td>
         <td><div class="aim-follow-up-email-list">${sourceHtml}</div></td>
-        <td>${row.hasCard ? '<span class="aim-pill">有</span>' : '<span class="aim-muted-dash">—</span>'}</td>
         <td><label class="aim-follow-up-check"><input class="aim-follow-up-manual" data-id="${Store.escapeHtml(row.id)}" data-field="mailSent" type="checkbox" ${row.mailSent ? 'checked' : ''}>已寄</label></td>
         <td><label class="aim-follow-up-check"><input class="aim-follow-up-manual" data-id="${Store.escapeHtml(row.id)}" data-field="opportunityCreated" type="checkbox" ${row.opportunityCreated ? 'checked' : ''}>已建</label></td>
-        <td><button class="aim-button" data-action="open-record-inline" data-id="${Store.escapeHtml(row.id)}" type="button" ${viewDisabled}>查看</button></td>
+        <td class="aim-follow-up-meta-cell" title="${Store.escapeHtml(row.recorder || '—')}">${Store.escapeHtml(row.recorder || '—')}</td>
+        <td class="aim-follow-up-meta-cell" title="${Store.escapeHtml(Store.formatDateTime(row.createdAt) || '—')}">${Store.escapeHtml(Store.formatDateTime(row.createdAt) || '—')}</td>
       </tr>
     `;
   }
@@ -6956,7 +6951,7 @@
       ui.analyticsScope = el.dataset.mode === recordContextActiveMode ? recordContextActiveMode : (el.dataset.mode === analyticsScopeTrackingMode ? analyticsScopeTrackingMode : recordContextVisitorMode);
     }
     if (action === 'follow-up-sort') {
-      const allowed = ['priority', 'company', 'recorder', 'email', 'card', 'mailSent', 'opportunityCreated'];
+      const allowed = ['priority', 'company', 'contact', 'email', 'mailSent', 'opportunityCreated', 'recorder', 'createdAt'];
       const key = allowed.includes(el.dataset.sortKey) ? el.dataset.sortKey : '';
       if (key) {
         if (!ui.followUp) ui.followUp = defaultFollowUpState();
@@ -6964,6 +6959,10 @@
         ui.followUp.sortKey = key;
         ui.followUp.sortDirection = sameKey && ui.followUp.sortDirection === 'asc' ? 'desc' : 'asc';
       }
+    }
+    if (action === 'toggle-follow-up-priority-menu') {
+      if (!ui.followUp) ui.followUp = defaultFollowUpState();
+      ui.followUp.priorityFilterOpen = !ui.followUp.priorityFilterOpen;
     }
     if (action === 'open-company-kpi-modal' && canUseAnalytics()) {
       ui.companyKpiModal = {
@@ -7713,30 +7712,6 @@
 
   function bindFollowUpInputs() {
     if (!ui.followUp) ui.followUp = defaultFollowUpState();
-    const rerender = () => {
-      clearTimeout(ui.timer);
-      ui.timer = setTimeout(render, 120);
-    };
-    const q = document.getElementById('aim-follow-up-q');
-    if (q) q.addEventListener('input', () => {
-      ui.followUp.q = q.value;
-      rerender();
-    });
-    [
-      ['aim-follow-up-email', 'email'],
-      ['aim-follow-up-email-source', 'emailSource'],
-      ['aim-follow-up-card', 'card'],
-      ['aim-follow-up-mail-sent', 'mailSent'],
-      ['aim-follow-up-opportunity-created', 'opportunityCreated'],
-      ['aim-follow-up-recorder', 'recorder']
-    ].forEach(([id, key]) => {
-      const node = document.getElementById(id);
-      if (!node) return;
-      node.addEventListener('change', () => {
-        ui.followUp[key] = node.value;
-        render();
-      });
-    });
     document.querySelectorAll('.aim-follow-up-priority').forEach(node => node.addEventListener('change', () => {
       ui.followUp.priorities = Array.from(document.querySelectorAll('.aim-follow-up-priority:checked')).map(input => input.value).filter(priority => followUpWorklistPriorityValues.includes(priority));
       render();
@@ -8821,7 +8796,7 @@
   function followUpSelectedPriorities() {
     const followUp = ui.followUp || defaultFollowUpState();
     const selected = Array.isArray(followUp.priorities) ? followUp.priorities.filter(priority => followUpWorklistPriorityValues.includes(priority)) : [];
-    return selected.length ? selected : [...followUpWorklistPriorityValues];
+    return Array.isArray(followUp.priorities) ? selected : [...followUpDefaultVisiblePriorityValues];
   }
 
   function followUpVisitorRecords(activity) {
@@ -8909,7 +8884,6 @@
     const priority = followUpPriorityValue(record, activity);
     if (!followUpWorklistPriorityValues.includes(priority)) return null;
     const preview = recordPreview(record, activity);
-    const cardLink = cardLinkForRecord(record);
     const manual = followUpManualStateForRecord(record.id);
     const emails = followUpSubmissionEmails(record, activity);
     return {
@@ -8922,7 +8896,6 @@
       emails,
       emailText: emails.map(entry => entry.email).join(' / '),
       emailSourceText: emails.map(entry => entry.sourceLabel).join(' / '),
-      hasCard: Boolean(cardLink && cardLink.linked && (cardLink.cardId || cardLink.card)),
       mailSent: Boolean(manual.mailSent),
       opportunityCreated: Boolean(manual.opportunityCreated),
       createdAt: record.createdAt || '',
@@ -8942,35 +8915,9 @@
     return counts;
   }
 
-  function followUpSearchText(row) {
-    return [
-      row.priority,
-      row.company,
-      row.contact,
-      row.recorder,
-      row.emailText,
-      row.emailSourceText,
-      row.hasCard ? '名片 有' : '名片 無'
-    ].filter(hasValue).join(' ').toLowerCase();
-  }
-
   function followUpRowMatchesFilters(row) {
-    const followUp = ui.followUp || defaultFollowUpState();
     const selectedPriorities = followUpSelectedPriorities();
-    if (!selectedPriorities.includes(row.priority)) return false;
-    if (followUp.email === 'present' && !row.emails.length) return false;
-    if (followUp.email === 'absent' && row.emails.length) return false;
-    if (followUp.emailSource === 'card' && !row.emails.some(entry => entry.sources.includes(followUpEmailSourceCard))) return false;
-    if (followUp.emailSource === 'form' && !row.emails.some(entry => entry.sources.includes(followUpEmailSourceForm))) return false;
-    if (followUp.card === 'has' && !row.hasCard) return false;
-    if (followUp.card === 'none' && row.hasCard) return false;
-    if (followUp.mailSent === 'sent' && !row.mailSent) return false;
-    if (followUp.mailSent === 'unsent' && row.mailSent) return false;
-    if (followUp.opportunityCreated === 'created' && !row.opportunityCreated) return false;
-    if (followUp.opportunityCreated === 'uncreated' && row.opportunityCreated) return false;
-    if (followUp.recorder !== 'all' && row.recorder !== followUp.recorder) return false;
-    const q = String(followUp.q || '').trim().toLowerCase();
-    return !q || followUpSearchText(row).includes(q);
+    return selectedPriorities.includes(row.priority);
   }
 
   function followUpDefaultCompare(a, b) {
@@ -8986,11 +8933,12 @@
   function followUpSortValue(row, key) {
     if (key === 'priority') return followUpPriorityRank[row.priority];
     if (key === 'company') return row.company || '';
+    if (key === 'contact') return row.contact || '';
     if (key === 'recorder') return row.recorder || '';
     if (key === 'email') return row.emailText || '';
-    if (key === 'card') return row.hasCard ? 1 : 0;
     if (key === 'mailSent') return row.mailSent ? 1 : 0;
     if (key === 'opportunityCreated') return row.opportunityCreated ? 1 : 0;
+    if (key === 'createdAt') return row.createdAt || '';
     return '';
   }
 
