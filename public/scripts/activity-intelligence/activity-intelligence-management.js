@@ -4102,11 +4102,7 @@
     const records = analyticsRecords(activity);
     const data = companyKpiDerivation(activity, records, analyticsFormContext());
     if (!data.capable) return '';
-    const title = {
-      unique: '來拜訪公司數（去重）',
-      duplicate: '同公司重複紀錄數',
-      invalid: '無公司名稱'
-    }[mode];
+    const title = data.copy.modalTitles[mode];
     const body = mode === 'unique'
       ? renderCompanyKpiUniqueDetail(data)
       : (mode === 'duplicate' ? renderCompanyKpiDuplicateDetail(data) : renderCompanyKpiInvalidDetail(data));
@@ -4128,86 +4124,44 @@
   }
 
   function renderCompanyKpiUniqueDetail(data) {
-    const displayGroups = companyKpiFilteredSortedUniqueGroups(data);
+    const displayGroups = companyKpiSortedUniqueGroups(data);
     const rows = displayGroups.map((group, index) => `
       <tr>
         <td class="aim-company-kpi-row-number">${index + 1}</td>
-        <td class="aim-company-kpi-company-name">${Store.escapeHtml(group.displayName)}</td>
-        <td>${Store.escapeHtml(companyKpiTypeDisplay(group.companyTypes))}</td>
+        <td class="aim-company-kpi-identity" title="${Store.escapeHtml(group.displayName)}">${Store.escapeHtml(group.displayName)}</td>
+        <td class="aim-company-kpi-company-type" title="${Store.escapeHtml(companyKpiTypeDisplay(group.companyTypes))}">${Store.escapeHtml(companyKpiTypeDisplay(group.companyTypes))}</td>
         <td class="aim-company-kpi-number">${group.records.length}</td>
       </tr>
     `).join('');
-    const controls = renderCompanyKpiUniqueControls(data);
-    const advisory = renderCompanyKpiSimilarNameAdvisory(data.similarNamePairs, data.uniqueCompanyCount);
-    return `${controls}${renderCompanyKpiTable(['#', '公司名稱', '公司類型', '總紀錄'], rows, '目前沒有符合條件的公司。', 'unique')}${advisory}`;
+    const advisory = renderCompanyKpiSimilarNameAdvisory(data.similarNamePairs, data.uniqueCompanyCount, data.context);
+    return `${renderCompanyKpiTable(['#', data.copy.identityLabel, '公司類型', '總紀錄'], rows, '目前沒有可列出的資料。', 'unique')}${advisory}`;
   }
 
-  function renderCompanyKpiUniqueControls(data) {
-    const state = companyKpiUniqueControlState();
-    const typeOptions = companyKpiUniqueTypeFilterOptions(data.uniqueGroups);
-    const typeOptionsHtml = typeOptions.map(option => `<option value="${Store.escapeHtml(option.value)}" ${state.companyType === option.value ? 'selected' : ''}>${Store.escapeHtml(option.label)}</option>`).join('');
-    const sortOptions = [
-      ['original', '原始順序'],
-      ['total-desc', '總紀錄：多 → 少'],
-      ['total-asc', '總紀錄：少 → 多']
-    ];
-    return `
-      <div class="aim-company-kpi-controls">
-        <label>
-          <span>公司類型</span>
-          <select class="aim-select" data-action="company-kpi-type-filter">${typeOptionsHtml}</select>
-        </label>
-        <label>
-          <span>排序</span>
-          <select class="aim-select" data-action="company-kpi-sort">
-            ${sortOptions.map(([value, label]) => `<option value="${Store.escapeHtml(value)}" ${state.sort === value ? 'selected' : ''}>${Store.escapeHtml(label)}</option>`).join('')}
-          </select>
-        </label>
-      </div>
-    `;
-  }
-
-  function companyKpiUniqueControlState() {
+  function companyKpiUniqueSortState() {
     const modal = ui.companyKpiModal || {};
-    const sort = ['original', 'total-desc', 'total-asc'].includes(modal.uniqueSort) ? modal.uniqueSort : 'original';
+    const key = ['companyType', 'total'].includes(modal.sortKey) ? modal.sortKey : '';
+    const direction = ['asc', 'desc'].includes(modal.sortDirection) ? modal.sortDirection : '';
     return {
-      companyType: modal.companyTypeFilter || 'all',
-      sort
+      key,
+      direction: key ? direction : ''
     };
   }
 
-  function companyKpiUniqueTypeFilterOptions(groups) {
-    const values = new Set();
-    let hasUnavailable = false;
-    (groups || []).forEach(group => {
-      const types = Array.isArray(group.companyTypes) ? group.companyTypes.filter(Boolean) : [];
-      if (!types.length) hasUnavailable = true;
-      types.forEach(value => values.add(value));
-    });
-    const options = [{ value: 'all', label: '全部' }];
-    Array.from(values).sort((a, b) => String(a).localeCompare(String(b), 'zh-Hant')).forEach(value => {
-      options.push({ value, label: value });
-    });
-    if (hasUnavailable) options.push({ value: '__unavailable__', label: '—' });
-    return options;
-  }
-
-  function companyKpiFilteredSortedUniqueGroups(data) {
-    const state = companyKpiUniqueControlState();
+  function companyKpiSortedUniqueGroups(data) {
+    const state = companyKpiUniqueSortState();
     const groups = (data.uniqueGroups || []).slice();
-    const filtered = state.companyType === 'all'
-      ? groups
-      : groups.filter(group => {
-        const types = Array.isArray(group.companyTypes) ? group.companyTypes.filter(Boolean) : [];
-        if (state.companyType === '__unavailable__') return !types.length;
-        return types.includes(state.companyType);
-      });
-    if (state.sort === 'original') return filtered;
-    return filtered
+    if (!state.key) return groups;
+    return groups
       .map((group, index) => ({ group, index }))
       .sort((a, b) => {
-        const diff = a.group.records.length - b.group.records.length;
-        if (diff) return state.sort === 'total-desc' ? -diff : diff;
+        if (state.key === 'total') {
+          const diff = a.group.records.length - b.group.records.length;
+          if (diff) return state.direction === 'desc' ? -diff : diff;
+        }
+        if (state.key === 'companyType') {
+          const diff = companyKpiTypeDisplay(a.group.companyTypes).localeCompare(companyKpiTypeDisplay(b.group.companyTypes), 'zh-Hant');
+          if (diff) return state.direction === 'desc' ? -diff : diff;
+        }
         return a.index - b.index;
       })
       .map(entry => entry.group);
@@ -4217,41 +4171,52 @@
     const rows = data.duplicateGroups.map((group, index) => `
       <tr>
         <td class="aim-company-kpi-row-number">${index + 1}</td>
-        <td class="aim-company-kpi-company-name">${Store.escapeHtml(group.displayName)}</td>
+        <td class="aim-company-kpi-identity" title="${Store.escapeHtml(group.displayName)}">${Store.escapeHtml(group.displayName)}</td>
         <td class="aim-company-kpi-number">${group.records.length}</td>
         <td class="aim-company-kpi-number">${group.duplicateRecords.length}</td>
       </tr>
     `).join('');
-    return renderCompanyKpiTable(['#', '公司名稱', '總紀錄', '重複筆數'], rows, '目前沒有重複紀錄。', 'duplicate');
+    return renderCompanyKpiTable(['#', data.copy.identityLabel, '總紀錄', '重複筆數'], rows, '目前沒有重複紀錄。', 'duplicate');
   }
 
   function renderCompanyKpiInvalidDetail(data) {
     const rows = data.invalidRecords.map((entry, index) => `
       <tr>
         <td class="aim-company-kpi-row-number">${index + 1}</td>
-        <td>${Store.escapeHtml(companyKpiBlankDisplay(entry.rawCompany))}</td>
-        <td>${Store.escapeHtml(entry.companyType || '—')}</td>
-        <td>${Store.escapeHtml(entry.record.createdByDisplayName || entry.record.createdByUserId || '—')}</td>
-        <td>${Store.escapeHtml(Store.formatDateTime(entry.record.createdAt) || '—')}</td>
+        <td class="aim-company-kpi-invalid-identity" title="${Store.escapeHtml(companyKpiBlankDisplay(entry.rawCompany))}">${Store.escapeHtml(companyKpiBlankDisplay(entry.rawCompany))}</td>
+        <td class="aim-company-kpi-company-type" title="${Store.escapeHtml(entry.companyType || '—')}">${Store.escapeHtml(entry.companyType || '—')}</td>
+        <td title="${Store.escapeHtml(entry.record.createdByDisplayName || entry.record.createdByUserId || '—')}">${Store.escapeHtml(entry.record.createdByDisplayName || entry.record.createdByUserId || '—')}</td>
+        <td title="${Store.escapeHtml(Store.formatDateTime(entry.record.createdAt) || '—')}">${Store.escapeHtml(Store.formatDateTime(entry.record.createdAt) || '—')}</td>
       </tr>
     `).join('');
-    return renderCompanyKpiTable(['#', '原始公司名稱', '公司類型', '填表人', '時間'], rows, '目前沒有無效紀錄。', 'invalid');
+    return renderCompanyKpiTable(['#', data.copy.invalidIdentityLabel, '公司類型', '填表人', '時間'], rows, '目前沒有無效紀錄。', 'invalid');
   }
 
   function renderCompanyKpiTable(headers, rows, emptyText, mode) {
     if (!rows) return `<div class="aim-empty">${Store.escapeHtml(emptyText)}</div>`;
     const tableMode = mode ? ` aim-company-kpi-table-${Store.escapeHtml(mode)}` : '';
+    const sortState = mode === 'unique' ? companyKpiUniqueSortState() : null;
     return `
       <div class="aim-company-kpi-table-wrap">
         <table class="aim-table aim-company-kpi-table${tableMode}">
-          <thead><tr>${headers.map(header => `<th${header === '#' ? ' class="aim-company-kpi-row-number"' : ''}>${Store.escapeHtml(header)}</th>`).join('')}</tr></thead>
+          <thead><tr>${headers.map(header => renderCompanyKpiHeaderCell(header, sortState)).join('')}</tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
     `;
   }
 
-  function renderCompanyKpiSimilarNameAdvisory(pairs, officialUniqueCount) {
+  function renderCompanyKpiHeaderCell(header, sortState) {
+    if (header === '#') return `<th class="aim-company-kpi-row-number">${Store.escapeHtml(header)}</th>`;
+    const sortable = sortState && (header === '公司類型' || header === '總紀錄');
+    if (!sortable) return `<th>${Store.escapeHtml(header)}</th>`;
+    const sortKey = header === '公司類型' ? 'companyType' : 'total';
+    const active = sortState.key === sortKey;
+    const indicator = active ? (sortState.direction === 'asc' ? ' ↑' : ' ↓') : '';
+    return `<th><button class="aim-company-kpi-sort-header" data-action="company-kpi-header-sort" data-sort-key="${sortKey}" type="button">${Store.escapeHtml(header)}${indicator}</button></th>`;
+  }
+
+  function renderCompanyKpiSimilarNameAdvisory(pairs, officialUniqueCount, formContext) {
     if (!Array.isArray(pairs) || !pairs.length) return '';
     const groups = companyKpiSimilarNameGroups(pairs);
     if (!groups.length) return '';
@@ -4259,13 +4224,19 @@
     return `
       <section class="aim-company-kpi-advisory">
         <h3>名稱相近，請人工確認</h3>
-        <p class="aim-company-kpi-advisory-estimate">若以下相近名稱皆視為同公司，推估來拜訪公司數：${Store.escapeHtml(estimate)} 家</p>
+        <p class="aim-company-kpi-advisory-estimate">${Store.escapeHtml(companyKpiAdvisoryEstimateText(estimate, formContext))}</p>
         <p class="aim-company-kpi-advisory-note">正式統計仍以目前紀錄內容為準。</p>
         <div class="aim-company-kpi-advisory-list">
           ${groups.map(group => `<div class="aim-company-kpi-advisory-pair"><span>${Store.escapeHtml(group.names.join(' / '))}：${group.size} → 1，少 ${group.reduction} 家</span></div>`).join('')}
         </div>
       </section>
     `;
+  }
+
+  function companyKpiAdvisoryEstimateText(estimate, formContext) {
+    return normalizeFormContext(formContext) === formContextFieldIntelligenceMode
+      ? `若以下相近名稱皆視為同一情報來源，推估情報來源數：${estimate} 家`
+      : `若以下相近名稱皆視為同公司，推估來拜訪公司數：${estimate} 家`;
   }
 
   function companyKpiSimilarNameGroups(pairs) {
@@ -6748,19 +6719,6 @@
     applyOtherHistorySuggestion(el);
   });
 
-  root.addEventListener('change', event => {
-    const el = event.target.closest('[data-action]');
-    if (!el || !ui.companyKpiModal || ui.companyKpiModal.mode !== 'unique') return;
-    if (el.dataset.action === 'company-kpi-type-filter') {
-      ui.companyKpiModal.companyTypeFilter = el.value || 'all';
-      render();
-    }
-    if (el.dataset.action === 'company-kpi-sort') {
-      ui.companyKpiModal.uniqueSort = ['original', 'total-desc', 'total-asc'].includes(el.value) ? el.value : 'original';
-      render();
-    }
-  });
-
   root.addEventListener('click', async event => {
     const chartMoreClick = event.target.closest('.aim-chart-more-control');
     const closedChartMore = !chartMoreClick && closeAnalyticsChartMoreMenus();
@@ -6771,7 +6729,6 @@
     }
     const action = el.dataset.action;
     if (await handleFormDesignAction(action, el, event)) return;
-    if (action === 'company-kpi-type-filter' || action === 'company-kpi-sort') return;
     if (action === 'other-history-suggestion') {
       applyOtherHistorySuggestion(el);
       return;
@@ -6872,12 +6829,24 @@
     if (action === 'open-company-kpi-modal' && canUseAnalytics()) {
       ui.companyKpiModal = {
         mode: ['unique', 'duplicate', 'invalid'].includes(el.dataset.mode) ? el.dataset.mode : 'unique',
-        companyTypeFilter: 'all',
-        uniqueSort: 'original'
+        sortKey: '',
+        sortDirection: ''
       };
     }
     if (action === 'close-company-kpi-modal') {
       ui.companyKpiModal = null;
+    }
+    if (action === 'company-kpi-header-sort' && ui.companyKpiModal && ui.companyKpiModal.mode === 'unique') {
+      const key = ['companyType', 'total'].includes(el.dataset.sortKey) ? el.dataset.sortKey : '';
+      if (key) {
+        const sameKey = ui.companyKpiModal.sortKey === key;
+        const defaultDirection = key === 'total' ? 'desc' : 'asc';
+        const nextDirection = sameKey
+          ? (ui.companyKpiModal.sortDirection === 'asc' ? 'desc' : 'asc')
+          : defaultDirection;
+        ui.companyKpiModal.sortKey = key;
+        ui.companyKpiModal.sortDirection = nextDirection;
+      }
     }
     if (action === 'add-field' && canDesignForm()) addField();
     if (action === 'select-field' && canDesignForm()) ui.selectedFieldId = el.dataset.id;
@@ -8706,10 +8675,11 @@
 
   function renderCompanyKpiCards(data) {
     if (!data || !data.capable) return '';
+    const labels = data.copy && data.copy.cardLabels ? data.copy.cardLabels : companyKpiCopy(formContextVisitorMode).cardLabels;
     return [
-      ['unique', '來拜訪公司數（去重）', `${data.uniqueCompanyCount} 家`],
-      ['duplicate', '同公司重複紀錄數', `${data.duplicateRecordCount} 筆`],
-      ['invalid', '無公司名稱', `${data.invalidRecordCount} 筆`]
+      ['unique', labels.unique, `${data.uniqueCompanyCount} 家`],
+      ['duplicate', labels.duplicate, `${data.duplicateRecordCount} 筆`],
+      ['invalid', labels.invalid, `${data.invalidRecordCount} 筆`]
     ].map(([mode, label, value]) => `
       <button class="aim-kpi aim-company-kpi-card" data-action="open-company-kpi-modal" data-mode="${mode}" type="button">
         <span>${Store.escapeHtml(label)}</span>
@@ -8720,11 +8690,15 @@
 
   function companyKpiDerivation(activity, records, formContext) {
     const total = Array.isArray(records) ? records.length : 0;
-    const fields = currentCompanyKpiFields(activity, formContext);
+    const context = normalizeFormContext(formContext || formContextVisitorMode);
+    const fields = currentCompanyKpiFields(activity, context);
+    const copy = companyKpiCopy(context);
     const base = {
       capable: false,
       reason: fields.reason,
       fields,
+      context,
+      copy,
       total,
       uniqueCompanyCount: 0,
       duplicateRecordCount: 0,
@@ -8788,8 +8762,11 @@
   }
 
   function currentCompanyKpiFields(activity, formContext) {
-    const companyName = currentCompanyNameField(activity, formContext);
-    const companyType = currentCompanyTypeField(activity, formContext);
+    const context = normalizeFormContext(formContext || formContextVisitorMode);
+    const companyName = context === formContextFieldIntelligenceMode
+      ? currentFieldIntelligenceSourceField(activity, context)
+      : currentCompanyNameField(activity, context);
+    const companyType = currentCompanyTypeField(activity, context);
     return {
       capable: Boolean(companyName.field),
       reason: companyName.reason || '',
@@ -8797,6 +8774,37 @@
       companyTypeField: companyType.field,
       companyName,
       companyType
+    };
+  }
+
+  function companyKpiCopy(formContext) {
+    const activeContext = normalizeFormContext(formContext) === formContextFieldIntelligenceMode;
+    return activeContext ? {
+      identityLabel: '情報來源',
+      invalidIdentityLabel: '原始情報來源',
+      cardLabels: {
+        unique: '情報來源數（去重）',
+        duplicate: '同來源重複紀錄數',
+        invalid: '無情報來源'
+      },
+      modalTitles: {
+        unique: '情報來源數（去重）',
+        duplicate: '同來源重複紀錄數',
+        invalid: '無情報來源'
+      }
+    } : {
+      identityLabel: '公司名稱',
+      invalidIdentityLabel: '原始公司名稱',
+      cardLabels: {
+        unique: '來拜訪公司數（去重）',
+        duplicate: '同公司重複紀錄數',
+        invalid: '無公司名稱'
+      },
+      modalTitles: {
+        unique: '來拜訪公司數（去重）',
+        duplicate: '同公司重複紀錄數',
+        invalid: '無公司名稱'
+      }
     };
   }
 
@@ -8810,6 +8818,13 @@
     if (legacy.length === 1) return { field: legacy[0], reason: '', candidates: legacy };
     if (legacy.length > 1) return { field: null, reason: 'COMPANY_NAME_FIELD=AMBIGUOUS', candidates: legacy };
     return { field: null, reason: 'COMPANY_NAME_FIELD=ABSENT', candidates: [] };
+  }
+
+  function currentFieldIntelligenceSourceField(activity, formContext) {
+    const fields = answerProducingItems(publishedRecordItems(activity, formContext)).filter(field => String(field && field.title || '').trim() === '情報來源');
+    if (fields.length === 1) return { field: fields[0], reason: '', candidates: fields };
+    if (fields.length > 1) return { field: null, reason: 'FIELD_INTELLIGENCE_SOURCE_FIELD=AMBIGUOUS', candidates: fields };
+    return { field: null, reason: 'FIELD_INTELLIGENCE_SOURCE_FIELD=ABSENT', candidates: [] };
   }
 
   function currentCompanyTypeField(activity, formContext) {

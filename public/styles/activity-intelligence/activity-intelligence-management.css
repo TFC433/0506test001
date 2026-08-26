@@ -5139,29 +5139,6 @@ a:focus-visible {
   overflow: auto;
 }
 
-.aim-company-kpi-controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-}
-
-.aim-company-kpi-controls label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--aim-muted);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.aim-company-kpi-controls .aim-select {
-  min-width: 136px;
-  height: 34px;
-  padding: 6px 30px 6px 10px;
-  font-size: 13px;
-}
-
 .aim-company-kpi-table {
   min-width: 0;
   table-layout: fixed;
@@ -5172,15 +5149,33 @@ a:focus-visible {
   padding: 8px 8px;
   font-size: 13px;
   line-height: 1.35;
-  vertical-align: top;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .aim-company-kpi-table th {
   font-size: 12px;
   line-height: 1.25;
   white-space: nowrap;
+}
+
+.aim-company-kpi-sort-header {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 0;
+}
+
+.aim-company-kpi-sort-header:hover,
+.aim-company-kpi-sort-header:focus-visible {
+  color: var(--aim-primary);
+  outline: none;
 }
 
 .aim-company-kpi-row-number {
@@ -5190,8 +5185,16 @@ a:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-.aim-company-kpi-company-name {
+.aim-company-kpi-identity {
   width: auto;
+}
+
+.aim-company-kpi-invalid-identity {
+  width: 92px;
+}
+
+.aim-company-kpi-company-type {
+  white-space: nowrap;
 }
 
 .aim-company-kpi-number {
@@ -5202,7 +5205,7 @@ a:focus-visible {
 
 .aim-company-kpi-table-unique th:nth-child(3),
 .aim-company-kpi-table-unique td:nth-child(3) {
-  width: 220px;
+  width: 260px;
   white-space: nowrap;
   overflow-wrap: normal;
 }
@@ -5218,11 +5221,17 @@ a:focus-visible {
 .aim-company-kpi-table-duplicate th:nth-child(4),
 .aim-company-kpi-table-duplicate td:nth-child(4) {
   width: 78px;
+  text-align: right;
+}
+
+.aim-company-kpi-table-invalid th:nth-child(2),
+.aim-company-kpi-table-invalid td:nth-child(2) {
+  width: 110px;
 }
 
 .aim-company-kpi-table-invalid th:nth-child(3),
 .aim-company-kpi-table-invalid td:nth-child(3) {
-  width: 120px;
+  width: 260px;
 }
 
 .aim-company-kpi-table-invalid th:nth-child(4),
