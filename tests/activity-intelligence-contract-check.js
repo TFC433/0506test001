@@ -1455,11 +1455,10 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     assert(managementSource.includes('data-mode="${analyticsScopeTrackingMode}"') && managementSource.includes('>後續追蹤</button>'), 'Analytics selector must expose 訪客分析 / 主動情報 / 後續追蹤');
     assert(managementSource.includes("const followUpPriorityFieldTitle = '後續追蹤優先度';"), 'Follow-up priority must use the approved exact title');
     assert(managementSource.includes("const followUpPriorityValues = Object.freeze(['高', '中', '低', '暫不追蹤']);"), 'Follow-up KPIs must use the four approved priority values only');
-    assert(managementSource.includes("const followUpWorklistPriorityValues = Object.freeze(['高', '中', '低']);"), 'Follow-up worklist must include only high, medium, and low priorities');
     assert(managementSource.includes("const followUpDefaultVisiblePriorityValues = Object.freeze(['高', '中']);"), 'Follow-up worklist must default to high and medium visible only');
     assert(managementSource.includes("ui.followUp = defaultFollowUpState()") || managementSource.includes('followUp: defaultFollowUpState()'), 'Follow-up controls must use runtime UI state');
     assert(managementSource.includes('data-action="follow-up-sort"'), 'Follow-up table must expose sortable headers');
-    assert(managementSource.includes('data-action="toggle-follow-up-priority-menu"'), 'Follow-up priority filtering must be exposed from the priority header');
+    assert(managementSource.includes('data-action="toggle-follow-up-priority"'), 'Follow-up KPI cards must be interactive priority toggles');
     const trackingScopeSource = [
         'const recordContextVisitorMode = "visitor";',
         'const recordContextActiveMode = "active-intelligence";',
@@ -1477,22 +1476,31 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     assert(cssSource.includes('.aim-analytics-scope-tabs .aim-mode-tab[data-mode="follow-up"][aria-selected="true"]'), 'Follow-up selected tab state must be styled');
     assert(cssSource.includes('grid-template-columns: repeat(3, minmax(0, 1fr));'), 'Mobile Analytics scope tabs must support three tabs');
     assert(cssSource.includes('.aim-follow-up-table-wrap') && cssSource.includes('overflow-x: auto'), 'Follow-up table must be contained by an overflow-safe wrapper');
-    assert(cssSource.includes('.aim-follow-up-priority-popover'), 'Follow-up priority visibility must use a lightweight header popover');
-    assert(cssSource.includes('.aim-follow-up-meta-cell') && cssSource.includes('color: var(--aim-muted)') && cssSource.includes('font-size: 12px'), 'Follow-up metadata columns must use subdued table styling');
+    assert(cssSource.includes('.aim-follow-up-kpi-card[aria-pressed="true"]') && cssSource.includes('background: #ecfdf5'), 'Active Follow-up KPI cards must use subtle green treatment');
+    assert(cssSource.includes('.aim-follow-up-meta-cell') && cssSource.includes('font-size: 11px'), 'Follow-up metadata columns must use lighter table styling');
+    assert(cssSource.includes('.aim-follow-up-attention') && cssSource.includes('border-top: 1px solid var(--aim-border)'), 'Attention Records must be separated below the main table with a subtle divider');
+    assert(cssSource.includes('.aim-follow-up-reasons'), 'Attention reasons must render as compact tags inside the table');
 
     const renderAnalyticsSource = extractFunctionDeclaration(managementSource, 'renderAnalytics');
     const renderMobileAnalysisSource = extractFunctionDeclaration(managementSource, 'renderMobileAnalysis');
     assert(renderAnalyticsSource.includes('if (analyticsScopeIsTracking()) return `${assistant}${scopeSelector}${renderAnalyticsTracking(activity)}`;'), 'Follow-up desktop Analytics must remain under the shared assistant shell');
     assert(renderMobileAnalysisSource.includes('${renderMobileAnalyticsAiPanel(activity, records)}') && renderMobileAnalysisSource.includes('${renderAnalyticsTracking(activity)}'), 'Follow-up mobile Analytics must remain under the shared assistant shell');
     const renderTrackingSource = extractFunctionDeclaration(managementSource, 'renderAnalyticsTracking');
-    ['項次', '優先度', '公司名稱', '聯絡人', 'Email', 'Email來源', '已寄 Mail', '已建機會', '紀錄者', '表單時間'].forEach(label => {
-        assert(renderTrackingSource.includes(label), `Follow-up table must render ${label}`);
-    });
-    assert(!['搜尋', 'aim-follow-up-q', 'aim-follow-up-controls', 'aim-follow-up-card', 'aim-follow-up-recorder', '查看', 'data-action="open-record-inline"'].some(text => renderTrackingSource.includes(text)), 'Follow-up renderer must not expose the heavy toolbar, card column, or view action');
+    assert(renderTrackingSource.indexOf('renderFollowUpTable(rows, emptyText)') < renderTrackingSource.indexOf('renderFollowUpAttentionSection(attentionRows)'), 'Attention Records must render after the main Follow-up table');
+    assert(!['搜尋', 'aim-follow-up-q', 'aim-follow-up-controls', 'aim-follow-up-card', 'aim-follow-up-recorder', '查看', 'data-action="open-record-inline"', '篩選', 'aim-follow-up-priority-popover'].some(text => renderTrackingSource.includes(text)), 'Follow-up renderer must not expose the heavy toolbar, card/view columns, or old priority header filter');
     assert(!renderTrackingSource.includes("renderFollowUpHeaderCell('card', '名片')"), 'Follow-up table must not render a visible standalone business-card column');
     assert(!/renderAnalyticsAiPanel|renderMobileAnalyticsAiPanel|exportCsv|CSV|localStorage|sessionStorage|document\.cookie|activity\.settings|submission\.status/.test(renderTrackingSource), 'Follow-up renderer must not add AI, export, storage, settings, or status-write behavior');
-    assert(extractFunctionDeclaration(managementSource, 'renderFollowUpPriorityHeaderCell').includes('aim-follow-up-priority-popover'), 'Priority filter must live in the 優先度 header');
+    assert(!managementSource.includes('function renderFollowUpPriorityHeaderCell'), 'Old 優先度 header filter helper must be removed');
     assert(extractFunctionDeclaration(managementSource, 'renderFollowUpHeaderCell').includes('data-action="follow-up-sort"'), 'Follow-up sorting must stay on lightweight table headers');
+    const tableSource = extractFunctionDeclaration(managementSource, 'renderFollowUpTable');
+    ['項次', '優先度', '公司名稱', '聯絡人', 'Email', 'Email來源', '已寄 Mail', '已進CRM', '紀錄者', '表單時間'].forEach(label => {
+        assert(tableSource.includes(label), `Shared Follow-up table must include ${label}`);
+    });
+    assert(!/已建機會|>已寄<|>已建<|>已進</.test(tableSource + extractFunctionDeclaration(managementSource, 'renderFollowUpRow')), 'Manual checkbox cells must not render redundant row text or old opportunity wording');
+    const attentionSource = extractFunctionDeclaration(managementSource, 'renderFollowUpAttentionSection');
+    assert(attentionSource.includes('需注意紀錄'), 'Attention section must render below the main table');
+    assert(attentionSource.includes('以下紀錄存在 Email 缺漏或重複情況，寄送前請先確認。'), 'Attention section must include the approved explanatory copy');
+    assert(attentionSource.includes('目前沒有需要特別確認的 Email 紀錄。'), 'Attention section must include a lightweight empty state');
     assert(!extractFunctionDeclaration(managementSource, 'followUpPriorityField').includes('/優先/'), 'Follow-up priority resolver must not use broad priority-title fuzziness');
     assert(!/optionNotesForRecord|JSON\.stringify|field_intelligence/.test(extractFunctionDeclaration(managementSource, 'followUpTextualAnswerValues')), 'Form-content email extraction must stay limited to textual answer values');
 
@@ -1501,9 +1509,8 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
         'const formContextFieldIntelligenceMode = "field_intelligence";',
         'const followUpPriorityFieldTitle = "後續追蹤優先度";',
         'const followUpPriorityValues = Object.freeze(["高", "中", "低", "暫不追蹤"]);',
-        'const followUpWorklistPriorityValues = Object.freeze(["高", "中", "低"]);',
         'const followUpDefaultVisiblePriorityValues = Object.freeze(["高", "中"]);',
-        'const followUpPriorityRank = Object.freeze({ "高": 0, "中": 1, "低": 2 });',
+        'const followUpPriorityRank = Object.freeze({ "高": 0, "中": 1, "低": 2, "暫不追蹤": 3 });',
         'const followUpEmailSourceCard = "名片";',
         'const followUpEmailSourceForm = "表單內容";',
         'const Store = { answerText(value) { if (Array.isArray(value)) return value.join("、"); return String(value == null ? "" : value); } };',
@@ -1536,6 +1543,9 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
         extractFunctionDeclaration(managementSource, 'followUpDefaultCompare'),
         extractFunctionDeclaration(managementSource, 'followUpSortValue'),
         extractFunctionDeclaration(managementSource, 'followUpSortedRows'),
+        extractFunctionDeclaration(managementSource, 'followUpNormalizedEmail'),
+        extractFunctionDeclaration(managementSource, 'followUpDuplicateEmailKeys'),
+        extractFunctionDeclaration(managementSource, 'followUpAttentionRows'),
         extractFunctionDeclaration(managementSource, 'followUpAnalyticsData'),
         '({ state, ui, followUpVisitorRecords, followUpPriorityField, followUpPriorityValue, extractEmailsFromText, followUpSubmissionEmails, followUpAnalyticsData });'
     ].join('\n');
@@ -1580,11 +1590,13 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
         record('r5', { priority: '', notes: 'blank@example.com' }),
         record('r6', { 'broad-priority': '高', notes: 'broad@example.com' }, { formRuntimeSnapshot: { items: broadItems } }),
         record('r7', { fld_priority: '中', notes: 'fallback@example.com' }, { formRuntimeSnapshot: { items: fallbackItems }, createdAt: '2026-08-16T01:00:00.000Z', companyName: 'Fallback Co', personName: 'Fallback' }),
+        record('r8', { priority: '中', company: 'Gamma', person: 'Gina', notes: 'JOHN@example.com' }, { createdAt: '2026-08-16T02:30:00.000Z', companyName: 'Gamma', personName: 'Gina' }),
+        record('r9', { priority: '高', company: 'Delta', person: 'Dana', notes: '' }, { createdAt: '2026-08-16T03:30:00.000Z', companyName: 'Delta', personName: 'Dana' }),
         record('active-1', { priority: '高', notes: 'active@example.com' }, { recordContext: 'field_intelligence' }),
         record('void-1', { priority: '高', notes: 'void@example.com' }, { status: 'void' })
     ];
 
-    assertJsonEqual(contract.followUpVisitorRecords(activity).map(item => item.id), ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7'], 'Follow-up dataset must use only non-void Visitor records');
+    assertJsonEqual(contract.followUpVisitorRecords(activity).map(item => item.id), ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9'], 'Follow-up dataset must use only non-void Visitor records');
     assert.strictEqual(contract.followUpPriorityValue(contract.state.records.find(item => item.id === 'r6'), activity), '', 'Broad priority-like titles must not resolve as the Follow-up priority');
     assert.strictEqual(contract.followUpPriorityField(contract.state.records.find(item => item.id === 'r7'), activity).fieldId, 'fld_priority', 'Narrow fld_priority fallback must remain available');
     const beforeEmailRead = JSON.stringify(contract.state.records[0]);
@@ -1596,27 +1608,48 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     assertJsonEqual(contract.extractEmailsFromText('a@test invalid@@example.com ok.person@example.co.jp bad@x.c'), ['ok.person@example.co.jp'], 'Email extractor must stay conservative');
 
     let data = contract.followUpAnalyticsData(activity);
-    assertJsonEqual(data.kpis, { '高': 1, '中': 2, '低': 1, '暫不追蹤': 1 }, 'KPIs must count known priorities only, including no-follow KPI-only rows');
-    assertJsonEqual(data.rows.map(row => row.id), ['r1', 'r2', 'r7'], 'Default Follow-up visibility must show high and medium only');
-    assert.strictEqual(data.allRows.filter(row => row.company === 'Acme').length, 2, 'Worklist must keep one row per submission without company dedupe');
-    assertJsonEqual(data.rows.map(row => row.rowNumber), [1, 2, 3], 'Row numbers must be display-derived after sorting and priority visibility');
+    assertJsonEqual(data.kpis, { '高': 2, '中': 3, '低': 1, '暫不追蹤': 1 }, 'KPIs must count known priorities only and remain independent of active card state');
+    assertJsonEqual(data.rows.map(row => row.id), ['r1', 'r9', 'r2', 'r8', 'r7'], 'Default Follow-up visibility must show high and medium only');
+    assert.strictEqual(data.allRows.filter(row => row.company === 'Acme').length, 3, 'Worklist must keep one row per submission without company dedupe');
+    assertJsonEqual(data.rows.map(row => row.rowNumber), [1, 2, 3, 4, 5], 'Row numbers must be display-derived after sorting and priority visibility');
     assert.strictEqual(data.rows.some(row => row.id === 'r3'), false, 'Low-priority rows must be hidden by default');
+    assert.strictEqual(data.rows.some(row => row.id === 'r4'), false, 'No-follow rows must be hidden by default');
+    assertJsonEqual(data.attentionRows.map(row => row.id), ['r1', 'r9', 'r8'], 'Attention Records must be derived from the current active priority scope');
+    assertJsonEqual(data.attentionRows.map(row => row.rowNumber), [1, 2, 3], 'Attention Records must have independent display row numbers');
+    assertJsonEqual(data.attentionRows.find(row => row.id === 'r9').attentionReasons, ['無 Email'], 'Current-scope records with no Email must be attention records');
+    assertJsonEqual(data.attentionRows.find(row => row.id === 'r1').attentionReasons, ['重複 Email'], 'Duplicate Email must be detected case-insensitively across distinct submissions');
+    assertJsonEqual(data.attentionRows.find(row => row.id === 'r8').attentionReasons, ['重複 Email'], 'All records sharing a duplicate Email must be attention records');
+    assert(!data.attentionRows.some(row => row.id === 'r2'), 'Same company with distinct Email must not create an attention record');
+    assert(!data.attentionRows.some(row => row.id === 'r3'), 'Duplicate/no-email detection outside active KPI scope must not influence visible Attention Records');
 
     contract.ui.followUp.priorities = ['低'];
     data = contract.followUpAnalyticsData(activity);
     assertJsonEqual(data.rows.map(row => row.id), ['r3'], 'Low-priority rows must be available through lightweight priority visibility');
-    assertJsonEqual(data.kpis, { '高': 1, '中': 2, '低': 1, '暫不追蹤': 1 }, 'KPI counts must not be affected by visible priority filtering');
+    assertJsonEqual(data.attentionRows.map(row => row.id), ['r3'], 'Toggling KPI scope must recompute Attention Records');
+    assertJsonEqual(data.kpis, { '高': 2, '中': 3, '低': 1, '暫不追蹤': 1 }, 'KPI counts must not be affected by visible priority filtering');
+    contract.ui.followUp.priorities = ['暫不追蹤'];
+    data = contract.followUpAnalyticsData(activity);
+    assertJsonEqual(data.rows.map(row => row.id), ['r4'], 'No-follow rows must be available when the no-follow KPI is active');
+    contract.ui.followUp.priorities = [];
+    data = contract.followUpAnalyticsData(activity);
+    assertJsonEqual(data.rows.map(row => row.id), [], 'All KPI cards off must produce an empty visible main list');
+    assertJsonEqual(data.attentionRows.map(row => row.id), [], 'All KPI cards off must produce an empty Attention Records list');
+    assertJsonEqual(data.kpis, { '高': 2, '中': 3, '低': 1, '暫不追蹤': 1 }, 'All KPI cards off must not change KPI counts');
     contract.ui.followUp.priorities = ['高', '中'];
-    assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.id), ['r1', 'r2', 'r7'], 'Priority filter must support high/medium combinations');
+    assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.id), ['r1', 'r9', 'r2', 'r8', 'r7'], 'KPI priority scope must support high/medium combinations');
     contract.ui.followUp.priorities = ['高', '中', '低'];
     contract.ui.followUp.manualState.r2 = { mailSent: true, opportunityCreated: false };
     assert.strictEqual(contract.followUpAnalyticsData(activity).rows.find(row => row.id === 'r2').mailSent, true, '已寄 Mail must remain runtime-only manual state');
+    contract.ui.followUp.manualState.r1 = { mailSent: true, opportunityCreated: true };
+    data = contract.followUpAnalyticsData(activity);
+    assert.strictEqual(data.rows.find(row => row.id === 'r1').opportunityCreated, true, '已進CRM must keep the existing runtime state semantics');
+    assert.strictEqual(data.attentionRows.find(row => row.id === 'r1').opportunityCreated, true, 'Manual checkbox state must be shared across Main and Attention rows by submission');
     contract.ui.followUp.sortKey = 'company';
     contract.ui.followUp.sortDirection = 'desc';
-    assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.rowNumber), [1, 2, 3, 4], 'Row numbers must recompute after explicit sorting');
+    assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.rowNumber), [1, 2, 3, 4, 5, 6], 'Row numbers must recompute after explicit sorting');
     contract.ui.followUp.sortKey = 'createdAt';
     contract.ui.followUp.sortDirection = 'asc';
-    assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.id), ['r7', 'r3', 'r2', 'r1'], '表單時間 table-header sorting must remain functional');
+    assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.id), ['r7', 'r3', 'r8', 'r2', 'r9', 'r1'], '表單時間 table-header sorting must remain functional');
 }
 
 function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {

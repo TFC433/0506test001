@@ -118,9 +118,8 @@
   const formContextFieldIntelligenceMode = 'field_intelligence';
   const followUpPriorityFieldTitle = '後續追蹤優先度';
   const followUpPriorityValues = Object.freeze(['高', '中', '低', '暫不追蹤']);
-  const followUpWorklistPriorityValues = Object.freeze(['高', '中', '低']);
   const followUpDefaultVisiblePriorityValues = Object.freeze(['高', '中']);
-  const followUpPriorityRank = Object.freeze({ '高': 0, '中': 1, '低': 2 });
+  const followUpPriorityRank = Object.freeze({ '高': 0, '中': 1, '低': 2, '暫不追蹤': 3 });
   const followUpEmailSourceCard = '名片';
   const followUpEmailSourceForm = '表單內容';
   const formContextLabels = Object.freeze({
@@ -290,7 +289,6 @@
       priorities: [...followUpDefaultVisiblePriorityValues],
       sortKey: '',
       sortDirection: '',
-      priorityFilterOpen: false,
       manualState: {}
     };
   }
@@ -4557,55 +4555,26 @@
   function renderAnalyticsTracking(activity) {
     const data = followUpAnalyticsData(activity);
     const rows = data.rows;
-    const allRows = data.allRows;
-    const emptyText = allRows.length ? '目前沒有符合優先度顯示條件的後續追蹤紀錄。' : '目前沒有高、中、低後續追蹤紀錄。';
+    const attentionRows = data.attentionRows;
+    const emptyText = data.allRows.length ? '目前沒有符合 KPI 優先度範圍的後續追蹤紀錄。' : '目前沒有後續追蹤紀錄。';
     return `
       <section class="aim-follow-up-view" aria-label="後續追蹤">
         <div class="aim-kpi-grid aim-follow-up-kpi-row">
-          ${followUpPriorityValues.map(priority => `<div class="aim-kpi"><span>${Store.escapeHtml(priority)}</span><strong>${data.kpis[priority] || 0}</strong></div>`).join('')}
+          ${followUpPriorityValues.map(priority => renderFollowUpPriorityKpi(priority, data.kpis[priority] || 0)).join('')}
         </div>
-        <div class="aim-follow-up-table-wrap">
-          <table class="aim-table aim-follow-up-table">
-            <thead><tr>
-              <th class="aim-follow-up-row-number">項次</th>
-              ${renderFollowUpPriorityHeaderCell()}
-              ${renderFollowUpHeaderCell('company', '公司名稱')}
-              ${renderFollowUpHeaderCell('contact', '聯絡人')}
-              ${renderFollowUpHeaderCell('email', 'Email')}
-              <th>Email來源</th>
-              ${renderFollowUpHeaderCell('mailSent', '已寄 Mail')}
-              ${renderFollowUpHeaderCell('opportunityCreated', '已建機會')}
-              ${renderFollowUpHeaderCell('recorder', '紀錄者', 'aim-follow-up-meta-head')}
-              ${renderFollowUpHeaderCell('createdAt', '表單時間', 'aim-follow-up-meta-head')}
-            </tr></thead>
-            <tbody>
-              ${rows.length ? rows.map(row => renderFollowUpRow(row)).join('') : `<tr><td colspan="10"><div class="aim-empty">${Store.escapeHtml(emptyText)}</div></td></tr>`}
-            </tbody>
-          </table>
-        </div>
+        ${renderFollowUpTable(rows, emptyText)}
+        ${renderFollowUpAttentionSection(attentionRows)}
       </section>
     `;
   }
 
-  function renderFollowUpPriorityHeaderCell() {
-    const followUp = ui.followUp || defaultFollowUpState();
-    const selected = followUpSelectedPriorities();
-    const active = followUp.sortKey === 'priority';
-    const indicator = active ? (followUp.sortDirection === 'asc' ? ' ↑' : ' ↓') : '';
+  function renderFollowUpPriorityKpi(priority, countValue) {
+    const active = followUpSelectedPriorities().includes(priority);
     return `
-      <th class="aim-follow-up-priority-head">
-        <div class="aim-follow-up-head-tools">
-          <button class="aim-follow-up-sort-header" data-action="follow-up-sort" data-sort-key="priority" type="button">優先度${indicator}</button>
-          <button class="aim-follow-up-priority-filter-button" data-action="toggle-follow-up-priority-menu" type="button" aria-expanded="${followUp.priorityFilterOpen ? 'true' : 'false'}">篩選</button>
-        </div>
-        ${followUp.priorityFilterOpen ? `
-          <div class="aim-follow-up-priority-popover">
-            ${followUpWorklistPriorityValues.map(priority => `
-              <label><input class="aim-follow-up-priority" type="checkbox" value="${Store.escapeHtml(priority)}" ${selected.includes(priority) ? 'checked' : ''}>${Store.escapeHtml(priority)}</label>
-            `).join('')}
-          </div>
-        ` : ''}
-      </th>
+      <button class="aim-kpi aim-follow-up-kpi-card" data-action="toggle-follow-up-priority" data-priority="${Store.escapeHtml(priority)}" aria-pressed="${active ? 'true' : 'false'}" type="button">
+        <span>${Store.escapeHtml(priority)}</span>
+        <strong>${countValue}</strong>
+      </button>
     `;
   }
 
@@ -4616,10 +4585,49 @@
     return `<th${className ? ` class="${Store.escapeHtml(className)}"` : ''}><button class="aim-follow-up-sort-header" data-action="follow-up-sort" data-sort-key="${Store.escapeHtml(key)}" type="button">${Store.escapeHtml(label)}${indicator}</button></th>`;
   }
 
+  function renderFollowUpTable(rows, emptyText) {
+    return `
+      <div class="aim-follow-up-table-wrap">
+        <table class="aim-table aim-follow-up-table">
+          <thead><tr>
+            <th class="aim-follow-up-row-number">項次</th>
+            ${renderFollowUpHeaderCell('priority', '優先度')}
+            ${renderFollowUpHeaderCell('company', '公司名稱')}
+            ${renderFollowUpHeaderCell('contact', '聯絡人')}
+            ${renderFollowUpHeaderCell('email', 'Email')}
+            <th>Email來源</th>
+            ${renderFollowUpHeaderCell('mailSent', '已寄 Mail')}
+            ${renderFollowUpHeaderCell('opportunityCreated', '已進CRM')}
+            ${renderFollowUpHeaderCell('recorder', '紀錄者', 'aim-follow-up-meta-head')}
+            ${renderFollowUpHeaderCell('createdAt', '表單時間', 'aim-follow-up-meta-head')}
+          </tr></thead>
+          <tbody>
+            ${rows.length ? rows.map(row => renderFollowUpRow(row)).join('') : `<tr><td colspan="10"><div class="aim-empty">${Store.escapeHtml(emptyText)}</div></td></tr>`}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function renderFollowUpAttentionSection(rows) {
+    return `
+      <section class="aim-follow-up-attention" aria-label="需注意紀錄">
+        <div class="aim-follow-up-attention-head">
+          <h2>需注意紀錄</h2>
+          <p>以下紀錄存在 Email 缺漏或重複情況，寄送前請先確認。</p>
+        </div>
+        ${rows.length ? renderFollowUpTable(rows, '目前沒有需要特別確認的 Email 紀錄。') : '<div class="aim-empty">目前沒有需要特別確認的 Email 紀錄。</div>'}
+      </section>
+    `;
+  }
+
   function renderFollowUpRow(row) {
     const emailHtml = row.emails.length
       ? row.emails.map(entry => `<div class="aim-follow-up-email-entry">${Store.escapeHtml(entry.email)}</div>`).join('')
       : '<span class="aim-muted-dash">—</span>';
+    const reasonHtml = (row.attentionReasons || []).length
+      ? `<div class="aim-follow-up-reasons">${row.attentionReasons.map(reason => `<span>${Store.escapeHtml(reason)}</span>`).join('')}</div>`
+      : '';
     const sourceHtml = row.emails.length
       ? row.emails.map(entry => `<div class="aim-follow-up-email-entry">${Store.escapeHtml(entry.sourceLabel)}</div>`).join('')
       : '<span class="aim-muted-dash">—</span>';
@@ -4629,10 +4637,10 @@
         <td>${priorityPill(row.priority)}</td>
         <td title="${Store.escapeHtml(row.company || '—')}">${Store.escapeHtml(row.company || '—')}</td>
         <td title="${Store.escapeHtml(row.contact || '—')}">${Store.escapeHtml(row.contact || '—')}</td>
-        <td><div class="aim-follow-up-email-list">${emailHtml}</div></td>
+        <td><div class="aim-follow-up-email-list">${emailHtml}${reasonHtml}</div></td>
         <td><div class="aim-follow-up-email-list">${sourceHtml}</div></td>
-        <td><label class="aim-follow-up-check"><input class="aim-follow-up-manual" data-id="${Store.escapeHtml(row.id)}" data-field="mailSent" type="checkbox" ${row.mailSent ? 'checked' : ''}>已寄</label></td>
-        <td><label class="aim-follow-up-check"><input class="aim-follow-up-manual" data-id="${Store.escapeHtml(row.id)}" data-field="opportunityCreated" type="checkbox" ${row.opportunityCreated ? 'checked' : ''}>已建</label></td>
+        <td><label class="aim-follow-up-check" aria-label="已寄 Mail"><input class="aim-follow-up-manual" data-id="${Store.escapeHtml(row.id)}" data-field="mailSent" type="checkbox" ${row.mailSent ? 'checked' : ''}></label></td>
+        <td><label class="aim-follow-up-check" aria-label="已進CRM"><input class="aim-follow-up-manual" data-id="${Store.escapeHtml(row.id)}" data-field="opportunityCreated" type="checkbox" ${row.opportunityCreated ? 'checked' : ''}></label></td>
         <td class="aim-follow-up-meta-cell" title="${Store.escapeHtml(row.recorder || '—')}">${Store.escapeHtml(row.recorder || '—')}</td>
         <td class="aim-follow-up-meta-cell" title="${Store.escapeHtml(Store.formatDateTime(row.createdAt) || '—')}">${Store.escapeHtml(Store.formatDateTime(row.createdAt) || '—')}</td>
       </tr>
@@ -6960,9 +6968,15 @@
         ui.followUp.sortDirection = sameKey && ui.followUp.sortDirection === 'asc' ? 'desc' : 'asc';
       }
     }
-    if (action === 'toggle-follow-up-priority-menu') {
+    if (action === 'toggle-follow-up-priority') {
       if (!ui.followUp) ui.followUp = defaultFollowUpState();
-      ui.followUp.priorityFilterOpen = !ui.followUp.priorityFilterOpen;
+      const priority = followUpPriorityValues.includes(el.dataset.priority) ? el.dataset.priority : '';
+      if (priority) {
+        const selected = new Set(followUpSelectedPriorities());
+        if (selected.has(priority)) selected.delete(priority);
+        else selected.add(priority);
+        ui.followUp.priorities = followUpPriorityValues.filter(value => selected.has(value));
+      }
     }
     if (action === 'open-company-kpi-modal' && canUseAnalytics()) {
       ui.companyKpiModal = {
@@ -7712,10 +7726,6 @@
 
   function bindFollowUpInputs() {
     if (!ui.followUp) ui.followUp = defaultFollowUpState();
-    document.querySelectorAll('.aim-follow-up-priority').forEach(node => node.addEventListener('change', () => {
-      ui.followUp.priorities = Array.from(document.querySelectorAll('.aim-follow-up-priority:checked')).map(input => input.value).filter(priority => followUpWorklistPriorityValues.includes(priority));
-      render();
-    }));
     document.querySelectorAll('.aim-follow-up-manual').forEach(node => node.addEventListener('change', () => {
       const manual = followUpManualStateForRecord(node.dataset.id);
       if (node.dataset.field === 'mailSent') manual.mailSent = node.checked;
@@ -8795,7 +8805,7 @@
 
   function followUpSelectedPriorities() {
     const followUp = ui.followUp || defaultFollowUpState();
-    const selected = Array.isArray(followUp.priorities) ? followUp.priorities.filter(priority => followUpWorklistPriorityValues.includes(priority)) : [];
+    const selected = Array.isArray(followUp.priorities) ? followUp.priorities.filter(priority => followUpPriorityValues.includes(priority)) : [];
     return Array.isArray(followUp.priorities) ? selected : [...followUpDefaultVisiblePriorityValues];
   }
 
@@ -8882,7 +8892,7 @@
 
   function followUpRowForRecord(record, activity) {
     const priority = followUpPriorityValue(record, activity);
-    if (!followUpWorklistPriorityValues.includes(priority)) return null;
+    if (!followUpPriorityValues.includes(priority)) return null;
     const preview = recordPreview(record, activity);
     const manual = followUpManualStateForRecord(record.id);
     const emails = followUpSubmissionEmails(record, activity);
@@ -8957,14 +8967,44 @@
     });
   }
 
+  function followUpNormalizedEmail(email) {
+    return String(email || '').trim().toLowerCase();
+  }
+
+  function followUpDuplicateEmailKeys(rows) {
+    const emailRows = new Map();
+    (rows || []).forEach(row => {
+      const rowEmailKeys = new Set((row.emails || []).map(entry => followUpNormalizedEmail(entry.email)).filter(Boolean));
+      rowEmailKeys.forEach(key => {
+        if (!emailRows.has(key)) emailRows.set(key, new Set());
+        emailRows.get(key).add(row.id);
+      });
+    });
+    return new Set(Array.from(emailRows.entries()).filter(([, rowIds]) => rowIds.size >= 2).map(([key]) => key));
+  }
+
+  function followUpAttentionRows(rows) {
+    const duplicateKeys = followUpDuplicateEmailKeys(rows);
+    const attentionRows = (rows || []).map(row => {
+      const reasons = [];
+      if (!row.emails.length) reasons.push('無 Email');
+      else if (row.emails.some(entry => duplicateKeys.has(followUpNormalizedEmail(entry.email)))) reasons.push('重複 Email');
+      return reasons.length ? { ...row, attentionReasons: reasons } : null;
+    }).filter(Boolean);
+    return followUpSortedRows(attentionRows).map((row, index) => ({ ...row, rowNumber: index + 1 }));
+  }
+
   function followUpAnalyticsData(activity) {
     const records = followUpVisitorRecords(activity);
     const allRows = records.map(record => followUpRowForRecord(record, activity)).filter(Boolean);
-    const rows = followUpSortedRows(allRows.filter(followUpRowMatchesFilters)).map((row, index) => ({ ...row, rowNumber: index + 1 }));
+    const scopedRows = allRows.filter(followUpRowMatchesFilters);
+    const rows = followUpSortedRows(scopedRows).map((row, index) => ({ ...row, rowNumber: index + 1 }));
+    const attentionRows = followUpAttentionRows(scopedRows);
     return {
       kpis: followUpKpiCounts(records, activity),
       allRows,
-      rows
+      rows,
+      attentionRows
     };
   }
 
