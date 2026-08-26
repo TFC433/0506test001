@@ -1449,6 +1449,167 @@ function assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource
     assert.deepStrictEqual(contract.analyticsRecords(activity).map(record => record.id), ['visitor-1', 'visitor-2'], 'Switching back to Visitor must restore the visitor dataset');
 }
 
+function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
+    ['去重公司', '重複紀錄', '無效紀錄'].forEach(label => {
+        assert(managementSource.includes(label), `Company KPI label ${label} must exist in source`);
+    });
+    assert(managementSource.includes('data-action="open-company-kpi-modal"'), 'Company KPI cards must be clickable through a shared action');
+    assert(managementSource.includes('data-action="close-company-kpi-modal"'), 'Company KPI modal must use a shared close action');
+    assert(cssSource.includes('.aim-company-kpi-card'), 'Company KPI cards must have dedicated interactive styling');
+    assert(cssSource.includes('.aim-company-kpi-dialog'), 'Company KPI detail modal must have dialog styling');
+    assert(managementSource.includes("const visitorField = options.includeVisitorCount === false ? null : currentVisitorCountField(activity);"), 'Visitor Count opt-out contract must remain unchanged');
+    assert(managementSource.includes("return publishedRecordItems(activity).find(field => field.type === 'single_choice' && field.title === visitorCountFieldTitle) || null;"), 'Visitor Count detector must remain single_choice/title based');
+    assert(managementSource.includes("moreTypes: ['rose', 'polarBar', 'treemap', 'bubble']"), 'More chart availability must remain intact');
+
+    const companyHelperSource = [
+        extractFunctionDeclaration(managementSource, 'renderCompanyKpiCards'),
+        extractFunctionDeclaration(managementSource, 'companyKpiDerivation'),
+        extractFunctionDeclaration(managementSource, 'renderCompanyKpiDetailModal')
+    ].join('\n');
+    assert(!/ActivityIntelligenceApi|fetch\s*\(/.test(companyHelperSource), 'Company KPI helpers must not add frontend API fetches');
+
+    const source = [
+        'const cardAssistRoles = new Set(["person_name", "job_title", "company_name"]);',
+        'const formContextVisitorMode = "visitor";',
+        'const formContextFieldIntelligenceMode = "field_intelligence";',
+        'const recordContextVisitorMode = "visitor";',
+        'const recordContextActiveMode = "active-intelligence";',
+        'const otherAnswerValue = "其他";',
+        'const Store = { CURRENT_DATE: "2026-08-16", clone(value) { return JSON.parse(JSON.stringify(value)); }, escapeHtml(value) { return String(value === undefined || value === null ? "" : value).replace(/[&<>"\']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\\"": "&quot;", "\'": "&#39;" }[char])); }, answerText(value) { if (Array.isArray(value)) return value.join("、"); if (value && typeof value === "object") return value.label || value.value || JSON.stringify(value); return value === undefined || value === null ? "" : String(value); }, formatDateTime(value) { return String(value || "").replace("T", " ").slice(0, 16); } };',
+        'let ui = { analyticsScope: recordContextVisitorMode, companyKpiModal: null };',
+        'let selectedAnalyticsActivity = null;',
+        'const state = { records: [] };',
+        'function selectedActivity() { return selectedAnalyticsActivity; }',
+        'function canUseAnalytics() { return true; }',
+        'function normalizeFormContext(value) { return value === formContextFieldIntelligenceMode ? formContextFieldIntelligenceMode : formContextVisitorMode; }',
+        'function normalizeDesignerItem(item) { const key = item.itemKey || item.fieldId || item.itemId || item.title; return { ...item, itemKey: item.itemKey || key, itemId: item.itemId || key, fieldId: item.fieldId || key, options: item.options || [], optionEntries: item.optionEntries || [], visible: item.visible !== false, retired: Boolean(item.retired), removedInDraft: Boolean(item.removedInDraft), settings: item.settings || {} }; }',
+        'function formDesign(activity, context) { return activity.formDesignRuntimeByContext[normalizeFormContext(context)]; }',
+        'function recordsFor(activityId) { return state.records.filter(record => record.activityId === activityId); }',
+        'function recordIsFieldIntelligence(record) { return normalizeFormContext(record && record.recordContext) === formContextFieldIntelligenceMode; }',
+        'function otherAnswersForRecord(record) { return record && record.runtimeOtherAnswers ? record.runtimeOtherAnswers : {}; }',
+        'function displayAnswerValue(field, value, otherAnswers) { if (!field || !otherAnswers || !hasValue(otherAnswers[field.fieldId])) return value; if (Array.isArray(value)) return value.map(item => item === otherAnswerValue ? `${otherAnswerValue}：${otherAnswers[field.fieldId]}` : item); return value === otherAnswerValue ? `${otherAnswerValue}：${otherAnswers[field.fieldId]}` : value; }',
+        'function analyticsScopeCaption(records) { return `${records.length} records`; }',
+        extractFunctionDeclaration(managementSource, 'publishedRecordItems'),
+        extractFunctionDeclaration(managementSource, 'answerProducingItems'),
+        extractFunctionDeclaration(managementSource, 'cardAssistFieldRole'),
+        extractFunctionDeclaration(managementSource, 'hasValue'),
+        extractFunctionDeclaration(managementSource, 'analyticsRecords'),
+        extractFunctionDeclaration(managementSource, 'analyticsScopeIsActive'),
+        extractFunctionDeclaration(managementSource, 'analyticsFormContext'),
+        extractFunctionDeclaration(managementSource, 'renderCompanyKpiCards'),
+        extractFunctionDeclaration(managementSource, 'companyKpiDerivation'),
+        extractFunctionDeclaration(managementSource, 'currentCompanyKpiFields'),
+        extractFunctionDeclaration(managementSource, 'currentCompanyNameField'),
+        extractFunctionDeclaration(managementSource, 'currentCompanyTypeField'),
+        extractFunctionDeclaration(managementSource, 'companyKpiLegacyCompanyNameField'),
+        extractFunctionDeclaration(managementSource, 'companyKpiCompanyTypeField'),
+        extractFunctionDeclaration(managementSource, 'companyKpiRecordEntry'),
+        extractFunctionDeclaration(managementSource, 'companyKpiAnswerText'),
+        extractFunctionDeclaration(managementSource, 'normalizeCompanyKpiKey'),
+        extractFunctionDeclaration(managementSource, 'companyKpiRecordOrderCompare'),
+        extractFunctionDeclaration(managementSource, 'companyKpiTypeDisplay'),
+        extractFunctionDeclaration(managementSource, 'companyKpiBlankDisplay'),
+        extractFunctionDeclaration(managementSource, 'companyKpiSimilarNamePairs'),
+        extractFunctionDeclaration(managementSource, 'renderCompanyKpiDetailModal'),
+        extractFunctionDeclaration(managementSource, 'renderCompanyKpiUniqueDetail'),
+        extractFunctionDeclaration(managementSource, 'renderCompanyKpiDuplicateDetail'),
+        extractFunctionDeclaration(managementSource, 'renderCompanyKpiInvalidDetail'),
+        extractFunctionDeclaration(managementSource, 'renderCompanyKpiTable'),
+        extractFunctionDeclaration(managementSource, 'renderCompanyKpiSimilarNameAdvisory'),
+        '({ state, ui, setSelectedActivity(activity) { selectedAnalyticsActivity = activity; }, analyticsRecords, analyticsFormContext, renderCompanyKpiCards, companyKpiDerivation, currentCompanyKpiFields, normalizeCompanyKpiKey, renderCompanyKpiDetailModal });'
+    ].join('\n');
+    const contract = vm.runInNewContext(source, {});
+    const companyNameField = { itemKey: 'companyName', itemId: 'companyName', fieldId: 'companyName', type: 'short_text', title: 'Renamed Company', settings: { cardAssistField: 'company_name' }, visible: true };
+    const companyTypeField = { itemKey: 'companyType', itemId: 'companyType', fieldId: 'companyType', type: 'single_choice', title: '公司類型', options: ['MTB', 'MTU'], visible: true };
+    const activity = {
+        id: 'company-kpi-activity',
+        formDesignRuntimeByContext: {
+            visitor: { published: { items: [companyNameField, companyTypeField] } },
+            field_intelligence: { published: { items: [companyNameField, companyTypeField] } }
+        }
+    };
+    const record = (id, createdAt, companyName, companyType, extra = {}) => ({
+        id,
+        submissionId: id,
+        activityId: activity.id,
+        recordContext: 'visitor',
+        status: 'active',
+        createdAt,
+        createdByUserId: `${id}-user`,
+        createdByDisplayName: `${id} Recorder`,
+        answers: { companyName, companyType },
+        ...extra
+    });
+
+    contract.setSelectedActivity(activity);
+    contract.state.records = [
+        record('abc-1', '2026-08-10T01:00:00.000Z', 'ABC科技', 'MTB'),
+        record('abc-2', '2026-08-10T01:00:00.000Z', 'ａｂｃ科技', 'MTU'),
+        record('hiwin-short', '2026-08-11T01:00:00.000Z', '上銀', 'MTB'),
+        record('hiwin-long', '2026-08-12T01:00:00.000Z', '上銀科技', 'MTU'),
+        record('blank-name', '2026-08-13T01:00:00.000Z', '   ', ''),
+        record('void-record', '2026-08-14T01:00:00.000Z', 'ABC科技', 'MTB', { status: 'void' }),
+        record('active-record', '2026-08-15T01:00:00.000Z', 'Active Co', 'MTB', { recordContext: 'field_intelligence' })
+    ];
+
+    const records = contract.analyticsRecords(activity);
+    const data = contract.companyKpiDerivation(activity, records, contract.analyticsFormContext());
+    assert.strictEqual(data.capable, true, 'Company KPI must render when Company Name and Company Type are clear');
+    assert.strictEqual(records.length, 5, 'Company KPI must use the existing Analytics scope and exclude void/other-context records');
+    assert.strictEqual(data.uniqueCompanyCount, 3, 'Unique Company count must count distinct valid Company Name identities');
+    assert.strictEqual(data.duplicateRecordCount, 1, 'Duplicate KPI must count duplicate records, not duplicate company groups');
+    assert.strictEqual(data.invalidRecordCount, 1, 'Blank Company Name must be invalid');
+    assert.strictEqual(data.uniqueCompanyCount + data.duplicateRecordCount + data.invalidRecordCount, records.length, 'Company KPI three-bucket invariant must hold');
+    const abc = data.uniqueGroups.find(group => group.key === 'abc科技');
+    assert(abc, 'NFKC/case normalized ABC group must exist');
+    assert.strictEqual(abc.representative.record.id, 'abc-1', 'Earliest createdAt/submissionId must select the representative');
+    assert.strictEqual(JSON.stringify(abc.duplicateRecords.map(entry => entry.record.id)), JSON.stringify(['abc-2']), 'Later same-identity records must be duplicate records');
+    assert.strictEqual(abc.companyTypes.join('、'), 'MTB、MTU', 'Company Type must remain metadata and aggregate across one Company Name identity');
+    assert(data.similarNamePairs.some(pair => pair.a === '上銀' && pair.b === '上銀科技'), 'Containment-based similar names must be advisory candidates');
+    assert.strictEqual(data.uniqueCompanyCount, data.uniqueGroups.length, 'Unique modal groups must derive from the KPI aggregation');
+    assert.strictEqual(data.duplicateRecordCount, data.duplicateGroups.reduce((sum, group) => sum + group.duplicateRecords.length, 0), 'Duplicate modal counts must derive from the KPI aggregation');
+    assert.strictEqual(data.invalidRecordCount, data.invalidRecords.length, 'Invalid modal rows must derive from the KPI aggregation');
+    assert.strictEqual(contract.normalizeCompanyKpiKey(' ＡＢＣ   Tech '), 'abc tech', 'Company normalization must use NFKC, trim, whitespace collapse, and case-insensitive English comparison');
+    assert.notStrictEqual(contract.normalizeCompanyKpiKey('上銀科技股份有限公司'), contract.normalizeCompanyKpiKey('上銀科技'), 'Company KPI must not strip meaningful company suffixes');
+
+    const cards = contract.renderCompanyKpiCards(data);
+    assert(cards.includes('去重公司') && cards.includes('3 家'), 'Unique Company card must show label and 家 unit');
+    assert(cards.includes('重複紀錄') && cards.includes('1 筆'), 'Duplicate Record card must show label and 筆 unit');
+    assert(cards.includes('無效紀錄') && cards.includes('1 筆'), 'Invalid Record card must show label and 筆 unit');
+    assert.strictEqual(contract.renderCompanyKpiCards({ capable: false }), '', 'Company KPI group must be hidden when capability is absent');
+
+    contract.ui.companyKpiModal = { mode: 'unique' };
+    const uniqueModal = contract.renderCompanyKpiDetailModal();
+    assert(uniqueModal.includes('去重公司') && uniqueModal.includes('公司名稱') && uniqueModal.includes('公司類型') && uniqueModal.includes('總紀錄'), 'Unique modal must render approved columns');
+    assert(uniqueModal.includes('MTB、MTU'), 'Unique modal must show distinct Company Type metadata without splitting identity');
+    assert(uniqueModal.includes('名稱相近，請人工確認'), 'Unique modal must render advisory only when candidate pairs exist');
+    contract.ui.companyKpiModal = { mode: 'duplicate' };
+    const duplicateModal = contract.renderCompanyKpiDetailModal();
+    assert(duplicateModal.includes('重複紀錄') && duplicateModal.includes('重複筆數'), 'Duplicate modal must render approved grouped columns');
+    contract.ui.companyKpiModal = { mode: 'invalid' };
+    const invalidModal = contract.renderCompanyKpiDetailModal();
+    assert(invalidModal.includes('無效紀錄') && invalidModal.includes('（空白）') && invalidModal.includes('blank-name Recorder') && invalidModal.includes('2026-08-13 01:00'), 'Invalid modal must render record-level blank, recorder, and time details');
+
+    const withoutType = { ...activity, formDesignRuntimeByContext: { visitor: { published: { items: [companyNameField] } } } };
+    assert.strictEqual(contract.currentCompanyKpiFields(withoutType, 'visitor').reason, 'COMPANY_TYPE_FIELD=ABSENT');
+    assert.strictEqual(contract.companyKpiDerivation(withoutType, records, 'visitor').capable, false, 'Missing Company Type must hide the KPI group');
+    const withoutName = { ...activity, formDesignRuntimeByContext: { visitor: { published: { items: [companyTypeField] } } } };
+    assert.strictEqual(contract.currentCompanyKpiFields(withoutName, 'visitor').reason, 'COMPANY_NAME_FIELD=ABSENT');
+    assert.strictEqual(contract.companyKpiDerivation(withoutName, records, 'visitor').capable, false, 'Missing Company Name must hide the KPI group');
+    const ambiguousType = {
+        ...activity,
+        formDesignRuntimeByContext: { visitor: { published: { items: [companyNameField, companyTypeField, { ...companyTypeField, fieldId: 'industry', itemKey: 'industry', itemId: 'industry', title: 'Industry' }] } } }
+    };
+    assert.strictEqual(contract.currentCompanyKpiFields(ambiguousType, 'visitor').reason, 'COMPANY_TYPE_FIELD=AMBIGUOUS');
+    assert.strictEqual(contract.companyKpiDerivation(ambiguousType, records, 'visitor').capable, false, 'Ambiguous Company Type must hide the KPI group');
+    const ambiguousName = {
+        ...activity,
+        formDesignRuntimeByContext: { visitor: { published: { items: [companyNameField, { ...companyNameField, fieldId: 'companyName2', itemKey: 'companyName2', itemId: 'companyName2' }, companyTypeField] } } }
+    };
+    assert.strictEqual(contract.currentCompanyKpiFields(ambiguousName, 'visitor').reason, 'COMPANY_NAME_FIELD=AMBIGUOUS');
+    assert.strictEqual(contract.companyKpiDerivation(ambiguousName, records, 'visitor').capable, false, 'Ambiguous Company Name must hide the KPI group');
+}
+
 function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, service) {
     assert(managementSource.includes('enableOtherHistorySuggestions'), 'Other history suggestions setting must exist in the frontend source');
     assert(managementSource.includes('啟用「其他」歷史值建議'), 'Builder must expose the approved Other history suggestion label');
@@ -4180,6 +4341,7 @@ async function main() {
     assertDualStreamFormBuilderSourceContract(managementSource, apiSource, cssSource);
     await assertRealActiveIntelligenceRuntimeSourceContract(managementSource, cssSource, service);
     assertAnalyticsChartTypeImplementationContract(managementSource, cssSource);
+    assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource);
     assertLongTextPreviewExplicitDesignerStateContract(managementSource);
     assertVisitorRecordPreviewIdentityContract(managementSource);
     assertRecordCardMetaResponsiveContract(managementSource, cssSource);

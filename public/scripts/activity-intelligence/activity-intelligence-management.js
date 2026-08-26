@@ -166,6 +166,7 @@
     formDesignConfirm: null,
     analyticsAiConfirm: null,
     analyticsChartModal: null,
+    companyKpiModal: null,
     formAssistCardImportConfirm: null,
     mobileAnalysisMode: false,
     recordContextMode: recordContextVisitorMode,
@@ -1218,6 +1219,7 @@
       ${renderAnalyticsAiConfirmDialog()}
       ${renderFormAssistCardImportConfirmDialog()}
       ${renderAnalyticsChartModal()}
+      ${renderCompanyKpiDetailModal()}
       ${renderHardDeleteConfirmDialog()}
       ${renderCardPickerDialog()}
       ${ui.toast ? `<div class="aim-toast" role="status">${Store.escapeHtml(ui.toast)}</div>` : ''}
@@ -1638,6 +1640,7 @@
     ui.drawer = null;
     ui.dialog = null;
     ui.cardPicker = null;
+    ui.companyKpiModal = null;
     if (isGuestUser()) {
       applyGuestLanding();
       return;
@@ -4091,6 +4094,98 @@
     `;
   }
 
+  function renderCompanyKpiDetailModal() {
+    if (!ui.companyKpiModal || !canUseAnalytics()) return '';
+    const activity = selectedActivity();
+    if (!activity) return '';
+    const mode = ['unique', 'duplicate', 'invalid'].includes(ui.companyKpiModal.mode) ? ui.companyKpiModal.mode : 'unique';
+    const records = analyticsRecords(activity);
+    const data = companyKpiDerivation(activity, records, analyticsFormContext());
+    if (!data.capable) return '';
+    const title = {
+      unique: '去重公司',
+      duplicate: '重複紀錄',
+      invalid: '無效紀錄'
+    }[mode];
+    const body = mode === 'unique'
+      ? renderCompanyKpiUniqueDetail(data)
+      : (mode === 'duplicate' ? renderCompanyKpiDuplicateDetail(data) : renderCompanyKpiInvalidDetail(data));
+    return `
+      <div class="aim-dialog-backdrop aim-company-kpi-modal-backdrop" data-action="close-company-kpi-modal"></div>
+      <section class="aim-dialog aim-company-kpi-dialog" role="dialog" aria-modal="true" aria-labelledby="aim-company-kpi-modal-title">
+        <div class="aim-dialog-head">
+          <div>
+            <h2 id="aim-company-kpi-modal-title">${Store.escapeHtml(title)}</h2>
+            <p class="aim-company-kpi-modal-scope">${Store.escapeHtml(analyticsScopeCaption(records))}</p>
+          </div>
+          <button class="aim-button aim-icon-button" data-action="close-company-kpi-modal" type="button" aria-label="關閉">×</button>
+        </div>
+        <div class="aim-dialog-body aim-company-kpi-dialog-body">
+          ${body}
+        </div>
+      </section>
+    `;
+  }
+
+  function renderCompanyKpiUniqueDetail(data) {
+    const rows = data.uniqueGroups.map(group => `
+      <tr>
+        <td>${Store.escapeHtml(group.displayName)}</td>
+        <td>${Store.escapeHtml(companyKpiTypeDisplay(group.companyTypes))}</td>
+        <td class="aim-company-kpi-number">${group.records.length}</td>
+      </tr>
+    `).join('');
+    const advisory = renderCompanyKpiSimilarNameAdvisory(data.similarNamePairs);
+    return `${renderCompanyKpiTable(['公司名稱', '公司類型', '總紀錄'], rows, '目前沒有可列出的公司。')}${advisory}`;
+  }
+
+  function renderCompanyKpiDuplicateDetail(data) {
+    const rows = data.duplicateGroups.map(group => `
+      <tr>
+        <td>${Store.escapeHtml(group.displayName)}</td>
+        <td class="aim-company-kpi-number">${group.records.length}</td>
+        <td class="aim-company-kpi-number">${group.duplicateRecords.length}</td>
+      </tr>
+    `).join('');
+    return renderCompanyKpiTable(['公司名稱', '總紀錄', '重複筆數'], rows, '目前沒有重複紀錄。');
+  }
+
+  function renderCompanyKpiInvalidDetail(data) {
+    const rows = data.invalidRecords.map(entry => `
+      <tr>
+        <td>${Store.escapeHtml(companyKpiBlankDisplay(entry.rawCompany))}</td>
+        <td>${Store.escapeHtml(entry.companyType || '—')}</td>
+        <td>${Store.escapeHtml(entry.record.createdByDisplayName || entry.record.createdByUserId || '—')}</td>
+        <td>${Store.escapeHtml(Store.formatDateTime(entry.record.createdAt) || '—')}</td>
+      </tr>
+    `).join('');
+    return renderCompanyKpiTable(['原始公司名稱', '公司類型', '填表人', '時間'], rows, '目前沒有無效紀錄。');
+  }
+
+  function renderCompanyKpiTable(headers, rows, emptyText) {
+    if (!rows) return `<div class="aim-empty">${Store.escapeHtml(emptyText)}</div>`;
+    return `
+      <div class="aim-company-kpi-table-wrap">
+        <table class="aim-table aim-company-kpi-table">
+          <thead><tr>${headers.map(header => `<th>${Store.escapeHtml(header)}</th>`).join('')}</tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function renderCompanyKpiSimilarNameAdvisory(pairs) {
+    if (!Array.isArray(pairs) || !pairs.length) return '';
+    return `
+      <section class="aim-company-kpi-advisory">
+        <h3>名稱相近，請人工確認</h3>
+        <div class="aim-company-kpi-advisory-list">
+          ${pairs.map(pair => `<div class="aim-company-kpi-advisory-pair"><span>${Store.escapeHtml(pair.a)}</span><b>↔</b><span>${Store.escapeHtml(pair.b)}</span></div>`).join('')}
+        </div>
+      </section>
+    `;
+  }
+
   function defaultAnalyticsChartReadingState() {
     return { labelSize: 0, valueSize: 0, theme: 'light' };
   }
@@ -4272,13 +4367,15 @@
     const assistant = !isMobileFormViewport() ? renderAnalyticsAiPanel(activity, records) : '';
     const scopeSelector = renderAnalyticsScopeSelector();
     const metrics = analyticsMetrics(activity, records, { includeVisitorCount: !activeAnalytics });
+    const companyKpi = companyKpiDerivation(activity, records, formContext);
     const visitorKpi = metrics.visitorCount !== null
       ? `<div class="aim-kpi"><span>參觀人數</span><strong>${metrics.visitorCount}</strong></div>`
       : '';
+    const companyKpis = renderCompanyKpiCards(companyKpi);
     return `
       ${assistant}
       ${scopeSelector}
-      <div class="aim-kpi-grid aim-analytics-kpi-row"><div class="aim-kpi"><span>有效紀錄</span><strong>${metrics.total}</strong></div>${visitorKpi}<div class="aim-kpi"><span>今日新增</span><strong>${metrics.today}</strong></div><div class="aim-kpi"><span>紀錄者數</span><strong>${metrics.recorders}</strong></div><div class="aim-kpi"><span>完整度</span><strong>${metrics.completeRate}</strong><small>平均填答 ${metrics.avgAnswered} / ${metrics.avgExpected} 欄</small></div></div>
+      <div class="aim-kpi-grid aim-analytics-kpi-row"><div class="aim-kpi"><span>有效紀錄</span><strong>${metrics.total}</strong></div>${visitorKpi}${companyKpis}<div class="aim-kpi"><span>今日新增</span><strong>${metrics.today}</strong></div><div class="aim-kpi"><span>紀錄者數</span><strong>${metrics.recorders}</strong></div><div class="aim-kpi"><span>完整度</span><strong>${metrics.completeRate}</strong><small>平均填答 ${metrics.avgAnswered} / ${metrics.avgExpected} 欄</small></div></div>
       <div class="aim-chart-grid">${renderActivityTrendChart(records)}${recorderDistributionChart(records)}${choiceCharts(activity, records, formContext)}${numberCharts(activity, records, formContext)}</div>
     `;
   }
@@ -4288,6 +4385,7 @@
     const activeAnalytics = analyticsScopeIsActive();
     const formContext = analyticsFormContext();
     const metrics = analyticsMetrics(activity, records, { includeVisitorCount: !activeAnalytics });
+    const companyKpi = companyKpiDerivation(activity, records, formContext);
     const categorical = analyticFields(activity, records, formContext)
       .filter(field => analyticsCategoricalFieldTypes.includes(field.type))
       .map(field => renderMobileCategoricalAnalyticsChart(categoricalFieldChartData(field, records)))
@@ -4296,7 +4394,7 @@
       <section class="aim-mobile-analysis" aria-label="行動數據分析">
         ${renderMobileAnalyticsAiPanel(activity, records)}
         ${renderAnalyticsScopeSelector()}
-        ${renderMobileAnalyticsKpis(metrics, { includeVisitorCount: !activeAnalytics })}
+        ${renderMobileAnalyticsKpis(metrics, { includeVisitorCount: !activeAnalytics, companyKpi })}
         <div class="aim-mobile-analysis-chart-feed">
           ${renderMobileActivityTrendChart(records)}
           ${renderMobileCategoricalAnalyticsChart(recorderDistributionChartData(records))}
@@ -4346,10 +4444,12 @@
   function renderMobileAnalyticsKpis(metrics, options = {}) {
     const includeVisitorCount = options.includeVisitorCount !== false;
     const visitorValue = metrics.visitorCount !== null ? metrics.visitorCount : '-';
+    const companyKpis = renderCompanyKpiCards(options.companyKpi);
     return `
       <section class="aim-mobile-analysis-kpi-grid" aria-label="行動分析指標">
         <div class="aim-kpi"><span>有效紀錄</span><strong>${metrics.total}</strong></div>
         ${includeVisitorCount ? `<div class="aim-kpi"><span>參觀人數</span><strong>${visitorValue}</strong></div>` : ''}
+        ${companyKpis}
         <div class="aim-kpi"><span>今日新增</span><strong>${metrics.today}</strong></div>
         <div class="aim-kpi"><span>紀錄者數</span><strong>${metrics.recorders}</strong></div>
         <div class="aim-kpi aim-mobile-kpi-completeness"><span>完整度</span><strong>${metrics.completeRate}</strong><small>平均填答 ${metrics.avgAnswered} / ${metrics.avgExpected} 欄</small></div>
@@ -6482,10 +6582,11 @@
       render();
       return;
     }
-    if (event.key === 'Escape' && (ui.formDesignConfirm || ui.analyticsAiConfirm || ui.analyticsChartModal)) {
+    if (event.key === 'Escape' && (ui.formDesignConfirm || ui.analyticsAiConfirm || ui.analyticsChartModal || ui.companyKpiModal)) {
       ui.formDesignConfirm = null;
       ui.analyticsAiConfirm = null;
       ui.analyticsChartModal = null;
+      ui.companyKpiModal = null;
       render();
       return;
     }
@@ -6502,6 +6603,7 @@
     else if (ui.analyticsAiConfirm) ui.analyticsAiConfirm = null;
     else if (ui.formAssistCardImportConfirm) ui.formAssistCardImportConfirm = null;
     else if (ui.analyticsChartModal) ui.analyticsChartModal = null;
+    else if (ui.companyKpiModal) ui.companyKpiModal = null;
     else if (ui.hardDeleteConfirm) ui.hardDeleteConfirm = null;
     else if (ui.cardPicker) ui.cardPicker = null;
     else return;
@@ -6619,7 +6721,14 @@
     if (action === 'analytics-scope') {
       disposeActivityAnalyticsCharts();
       ui.analyticsChartModal = null;
+      ui.companyKpiModal = null;
       ui.analyticsScope = el.dataset.mode === recordContextActiveMode ? recordContextActiveMode : recordContextVisitorMode;
+    }
+    if (action === 'open-company-kpi-modal' && canUseAnalytics()) {
+      ui.companyKpiModal = { mode: ['unique', 'duplicate', 'invalid'].includes(el.dataset.mode) ? el.dataset.mode : 'unique' };
+    }
+    if (action === 'close-company-kpi-modal') {
+      ui.companyKpiModal = null;
     }
     if (action === 'add-field' && canDesignForm()) addField();
     if (action === 'select-field' && canDesignForm()) ui.selectedFieldId = el.dataset.id;
@@ -8444,6 +8553,199 @@
       acc.totalExpected += coverage.total;
       return acc;
     }, { totalAnswered: 0, totalExpected: 0 });
+  }
+
+  function renderCompanyKpiCards(data) {
+    if (!data || !data.capable) return '';
+    return [
+      ['unique', '去重公司', `${data.uniqueCompanyCount} 家`],
+      ['duplicate', '重複紀錄', `${data.duplicateRecordCount} 筆`],
+      ['invalid', '無效紀錄', `${data.invalidRecordCount} 筆`]
+    ].map(([mode, label, value]) => `
+      <button class="aim-kpi aim-company-kpi-card" data-action="open-company-kpi-modal" data-mode="${mode}" type="button">
+        <span>${Store.escapeHtml(label)}</span>
+        <strong>${Store.escapeHtml(value)}</strong>
+      </button>
+    `).join('');
+  }
+
+  function companyKpiDerivation(activity, records, formContext) {
+    const total = Array.isArray(records) ? records.length : 0;
+    const fields = currentCompanyKpiFields(activity, formContext);
+    const base = {
+      capable: false,
+      reason: fields.reason,
+      fields,
+      total,
+      uniqueCompanyCount: 0,
+      duplicateRecordCount: 0,
+      invalidRecordCount: 0,
+      uniqueGroups: [],
+      duplicateGroups: [],
+      invalidRecords: [],
+      similarNamePairs: []
+    };
+    if (!fields.capable) return base;
+
+    const entries = (records || [])
+      .map((record, index) => companyKpiRecordEntry(record, fields.companyNameField, fields.companyTypeField, index))
+      .sort(companyKpiRecordOrderCompare);
+    const groupsByKey = new Map();
+    const invalidRecords = [];
+    const duplicateRecords = [];
+
+    entries.forEach(entry => {
+      if (!entry.normalizedKey) {
+        invalidRecords.push(entry);
+        return;
+      }
+      if (!groupsByKey.has(entry.normalizedKey)) {
+        groupsByKey.set(entry.normalizedKey, {
+          key: entry.normalizedKey,
+          displayName: entry.displayCompany,
+          representative: entry,
+          records: [],
+          duplicateRecords: [],
+          companyTypeValues: new Set()
+        });
+      }
+      const group = groupsByKey.get(entry.normalizedKey);
+      group.records.push(entry);
+      if (entry.companyType) group.companyTypeValues.add(entry.companyType);
+      if (entry !== group.representative) {
+        group.duplicateRecords.push(entry);
+        duplicateRecords.push(entry);
+      }
+    });
+
+    const uniqueGroups = Array.from(groupsByKey.values()).map(group => ({
+      ...group,
+      companyTypes: Array.from(group.companyTypeValues).sort((a, b) => String(a).localeCompare(String(b), 'zh-Hant'))
+    })).sort((a, b) => companyKpiRecordOrderCompare(a.representative, b.representative));
+    const duplicateGroups = uniqueGroups.filter(group => group.duplicateRecords.length > 0);
+
+    return {
+      ...base,
+      capable: true,
+      reason: '',
+      uniqueCompanyCount: uniqueGroups.length,
+      duplicateRecordCount: duplicateRecords.length,
+      invalidRecordCount: invalidRecords.length,
+      uniqueGroups,
+      duplicateGroups,
+      invalidRecords,
+      similarNamePairs: companyKpiSimilarNamePairs(uniqueGroups)
+    };
+  }
+
+  function currentCompanyKpiFields(activity, formContext) {
+    const companyName = currentCompanyNameField(activity, formContext);
+    const companyType = currentCompanyTypeField(activity, formContext);
+    return {
+      capable: Boolean(companyName.field && companyType.field),
+      reason: companyName.reason || companyType.reason || '',
+      companyNameField: companyName.field,
+      companyTypeField: companyType.field,
+      companyName,
+      companyType
+    };
+  }
+
+  function currentCompanyNameField(activity, formContext) {
+    const fields = publishedRecordItems(activity, formContext);
+    const semantic = fields.filter(field => cardAssistFieldRole(field) === 'company_name');
+    if (semantic.length === 1) return { field: semantic[0], reason: '', candidates: semantic };
+    if (semantic.length > 1) return { field: null, reason: 'COMPANY_NAME_FIELD=AMBIGUOUS', candidates: semantic };
+
+    const legacy = fields.filter(companyKpiLegacyCompanyNameField);
+    if (legacy.length === 1) return { field: legacy[0], reason: '', candidates: legacy };
+    if (legacy.length > 1) return { field: null, reason: 'COMPANY_NAME_FIELD=AMBIGUOUS', candidates: legacy };
+    return { field: null, reason: 'COMPANY_NAME_FIELD=ABSENT', candidates: [] };
+  }
+
+  function currentCompanyTypeField(activity, formContext) {
+    const fields = answerProducingItems(publishedRecordItems(activity, formContext)).filter(companyKpiCompanyTypeField);
+    if (fields.length === 1) return { field: fields[0], reason: '', candidates: fields };
+    if (fields.length > 1) return { field: null, reason: 'COMPANY_TYPE_FIELD=AMBIGUOUS', candidates: fields };
+    return { field: null, reason: 'COMPANY_TYPE_FIELD=ABSENT', candidates: [] };
+  }
+
+  function companyKpiLegacyCompanyNameField(field) {
+    if (!field || !['short_text', 'long_text'].includes(field.type)) return false;
+    if (field.fieldId === 'fld_company') return true;
+    return /^(公司名稱|公司|企業|組織)$/.test(String(field.title || '').trim());
+  }
+
+  function companyKpiCompanyTypeField(field) {
+    const title = String(field && field.title || '').trim().replace(/\s+/g, '');
+    return /^(公司類型|客戶產業大類|產業大類|產業別|產業類別|CompanyType|Industry)$/i.test(title);
+  }
+
+  function companyKpiRecordEntry(record, companyNameField, companyTypeField, index) {
+    const rawCompany = companyKpiAnswerText(record, companyNameField);
+    return {
+      record,
+      index,
+      rawCompany,
+      displayCompany: companyKpiBlankDisplay(rawCompany),
+      normalizedKey: normalizeCompanyKpiKey(rawCompany),
+      companyType: companyKpiAnswerText(record, companyTypeField)
+    };
+  }
+
+  function companyKpiAnswerText(record, field) {
+    if (!record || !field) return '';
+    const answers = record.answers || {};
+    const value = displayAnswerValue(field, answers[field.fieldId], otherAnswersForRecord(record));
+    return String(Store.answerText(value) || '').trim();
+  }
+
+  function normalizeCompanyKpiKey(value) {
+    if (value === null || value === undefined) return '';
+    let text = String(value);
+    if (typeof text.normalize === 'function') text = text.normalize('NFKC');
+    text = text.trim().replace(/\s+/g, ' ');
+    return text ? text.toLowerCase() : '';
+  }
+
+  function companyKpiRecordOrderCompare(a, b) {
+    const aCreated = String(a && a.record && a.record.createdAt || '');
+    const bCreated = String(b && b.record && b.record.createdAt || '');
+    if (aCreated !== bCreated) return aCreated.localeCompare(bCreated);
+    const aId = String((a && a.record && (a.record.submissionId || a.record.id)) || '');
+    const bId = String((b && b.record && (b.record.submissionId || b.record.id)) || '');
+    if (aId !== bId) return aId.localeCompare(bId);
+    return Number(a && a.index || 0) - Number(b && b.index || 0);
+  }
+
+  function companyKpiTypeDisplay(values) {
+    const cleanValues = (Array.isArray(values) ? values : []).map(value => String(value || '').trim()).filter(Boolean);
+    return cleanValues.length ? cleanValues.join('、') : '—';
+  }
+
+  function companyKpiBlankDisplay(value) {
+    const text = String(value || '').trim();
+    return text || '（空白）';
+  }
+
+  function companyKpiSimilarNamePairs(groups) {
+    const pairs = [];
+    const rows = (Array.isArray(groups) ? groups : [])
+      .map(group => ({ name: group.displayName, key: group.key }))
+      .filter(group => group.key && group.name);
+    for (let i = 0; i < rows.length; i += 1) {
+      for (let j = i + 1; j < rows.length; j += 1) {
+        const a = rows[i];
+        const b = rows[j];
+        if (a.key === b.key) continue;
+        const related = a.key.length < b.key.length
+          ? b.key.includes(a.key)
+          : a.key.includes(b.key);
+        if (!related) continue;
+        pairs.push(a.key.length <= b.key.length ? { a: a.name, b: b.name } : { a: b.name, b: a.name });
+      }
+    }
+    return pairs;
   }
 
   function currentVisitorCountField(activity) {

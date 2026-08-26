@@ -881,6 +881,29 @@ a:focus-visible {
   font-size: 22px;
 }
 
+.aim-company-kpi-card {
+  appearance: none;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  width: 100%;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+.aim-company-kpi-card:hover,
+.aim-company-kpi-card:focus-visible {
+  border-color: var(--aim-primary);
+  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.12);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.aim-company-kpi-card:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, 0.28);
+  outline-offset: 2px;
+}
+
 .aim-analytics-scope-tabs {
   margin: 12px 0;
 }
@@ -5091,6 +5114,67 @@ a:focus-visible {
   margin: 8px 0 0;
   color: var(--aim-muted);
   font-size: 12px;
+  font-weight: 600;
+}
+
+.aim-company-kpi-dialog {
+  width: min(760px, calc(100vw - 56px));
+}
+
+.aim-company-kpi-modal-scope {
+  margin: 4px 0 0;
+  color: var(--aim-muted);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.aim-company-kpi-dialog-body {
+  display: grid;
+  gap: 16px;
+}
+
+.aim-company-kpi-table-wrap {
+  overflow: auto;
+}
+
+.aim-company-kpi-table th,
+.aim-company-kpi-table td {
+  white-space: nowrap;
+}
+
+.aim-company-kpi-number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.aim-company-kpi-advisory {
+  border-top: 1px solid var(--aim-border);
+  padding-top: 14px;
+}
+
+.aim-company-kpi-advisory h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.aim-company-kpi-advisory-list {
+  display: grid;
+  gap: 8px;
+}
+
+.aim-company-kpi-advisory-pair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--aim-text);
+  font-size: 14px;
+}
+
+.aim-company-kpi-advisory-pair b {
+  color: var(--aim-muted);
   font-weight: 600;
 }
 
