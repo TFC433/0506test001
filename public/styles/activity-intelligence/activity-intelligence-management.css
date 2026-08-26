@@ -5118,7 +5118,7 @@ a:focus-visible {
 }
 
 .aim-company-kpi-dialog {
-  width: min(760px, calc(100vw - 56px));
+  width: min(920px, calc(100vw - 32px));
 }
 
 .aim-company-kpi-modal-scope {
@@ -5131,32 +5131,103 @@ a:focus-visible {
 
 .aim-company-kpi-dialog-body {
   display: grid;
-  gap: 16px;
+  gap: 12px;
+  padding: 12px;
 }
 
 .aim-company-kpi-table-wrap {
   overflow: auto;
 }
 
+.aim-company-kpi-table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
 .aim-company-kpi-table th,
 .aim-company-kpi-table td {
+  padding: 8px 8px;
+  font-size: 13px;
+  line-height: 1.35;
+  vertical-align: top;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.aim-company-kpi-table th {
+  font-size: 12px;
+  line-height: 1.25;
   white-space: nowrap;
 }
 
-.aim-company-kpi-number {
+.aim-company-kpi-row-number {
+  width: 34px;
+  color: var(--aim-muted);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
+.aim-company-kpi-company-name {
+  width: auto;
+}
+
+.aim-company-kpi-number {
+  width: 68px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.aim-company-kpi-table-unique th:nth-child(3),
+.aim-company-kpi-table-unique td:nth-child(3) {
+  width: 148px;
+}
+
+.aim-company-kpi-table-duplicate th:nth-child(3),
+.aim-company-kpi-table-duplicate td:nth-child(3),
+.aim-company-kpi-table-duplicate th:nth-child(4),
+.aim-company-kpi-table-duplicate td:nth-child(4) {
+  width: 78px;
+}
+
+.aim-company-kpi-table-invalid th:nth-child(3),
+.aim-company-kpi-table-invalid td:nth-child(3) {
+  width: 120px;
+}
+
+.aim-company-kpi-table-invalid th:nth-child(4),
+.aim-company-kpi-table-invalid td:nth-child(4) {
+  width: 118px;
+}
+
+.aim-company-kpi-table-invalid th:nth-child(5),
+.aim-company-kpi-table-invalid td:nth-child(5) {
+  width: 122px;
+}
+
 .aim-company-kpi-advisory {
   border-top: 1px solid var(--aim-border);
-  padding-top: 14px;
+  padding-top: 12px;
 }
 
 .aim-company-kpi-advisory h3 {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   font-size: 15px;
   font-weight: 700;
+}
+
+.aim-company-kpi-advisory-estimate {
+  margin: 0;
+  color: var(--aim-text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.aim-company-kpi-advisory-note {
+  margin: 2px 0 10px;
+  color: var(--aim-muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .aim-company-kpi-advisory-list {
@@ -5170,7 +5241,8 @@ a:focus-visible {
   align-items: center;
   gap: 8px;
   color: var(--aim-text);
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .aim-company-kpi-advisory-pair b {
