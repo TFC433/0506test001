@@ -1467,6 +1467,11 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
     assert(managementSource.includes("const visitorField = options.includeVisitorCount === false ? null : currentVisitorCountField(activity);"), 'Visitor Count opt-out contract must remain unchanged');
     assert(managementSource.includes("return publishedRecordItems(activity).find(field => field.type === 'single_choice' && field.title === visitorCountFieldTitle) || null;"), 'Visitor Count detector must remain single_choice/title based');
     assert(managementSource.includes("moreTypes: ['rose', 'polarBar', 'treemap', 'bubble']"), 'More chart availability must remain intact');
+    const renderAnalyticsSource = extractFunctionDeclaration(managementSource, 'renderAnalytics');
+    assert(renderAnalyticsSource.includes('<div class="aim-kpi"><span>有效紀錄</span><strong>${metrics.total}</strong></div>'), 'Standard 有效紀錄 KPI markup must remain unchanged');
+    assert(renderAnalyticsSource.includes('<div class="aim-kpi"><span>今日新增</span><strong>${metrics.today}</strong></div>'), 'Standard 今日新增 KPI markup must remain unchanged');
+    assert(renderAnalyticsSource.includes('<div class="aim-kpi"><span>紀錄者數</span><strong>${metrics.recorders}</strong></div>'), 'Standard 紀錄者數 KPI markup must remain unchanged');
+    assert(renderAnalyticsSource.includes('<div class="aim-kpi"><span>完整度</span><strong>${metrics.completeRate}</strong><small>平均填答 ${metrics.avgAnswered} / ${metrics.avgExpected} 欄</small></div>'), 'Completeness KPI markup and auxiliary text must remain unchanged');
     const fieldIntelligenceResolverSource = extractFunctionDeclaration(managementSource, 'currentFieldIntelligenceSourceField');
     assert(fieldIntelligenceResolverSource.includes("=== 'BOOTH名稱'"), 'Field Intelligence KPI resolver must use the exact BOOTH名稱 form field');
     assert(!fieldIntelligenceResolverSource.includes('情報來源'), 'Field Intelligence KPI resolver must not search for a form field titled 情報來源');
@@ -1609,13 +1614,14 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
     assert.notStrictEqual(contract.normalizeCompanyKpiKey('上銀科技股份有限公司'), contract.normalizeCompanyKpiKey('上銀科技'), 'Company KPI must not strip meaningful company suffixes');
 
     const cards = contract.renderCompanyKpiCards(data);
-    assert(cards.includes('來拜訪公司數（去重）') && cards.includes('4 家*'), 'Unique Company card must add a lightweight value asterisk when similar-name groups exist');
-    assert(cards.includes('同公司重複紀錄數') && cards.includes('1 筆'), 'Duplicate Record card must show final label and 筆 unit');
-    assert(cards.includes('無公司名稱') && cards.includes('1 筆'), 'Invalid Record card must show final label and 筆 unit');
+    assert(cards.includes('來拜訪公司數（去重）') && cards.includes('<strong>4*</strong>'), 'Unique Company card must show the unitless official count with the existing lightweight asterisk');
+    assert(cards.includes('同公司重複紀錄數') && cards.includes('<strong>1</strong>'), 'Duplicate Record card must show the unitless official count');
+    assert(cards.includes('無公司名稱') && cards.includes('<strong>1</strong>'), 'Invalid Record card must show the unitless official count');
+    assert(!cards.includes('家') && !cards.includes('筆'), 'Visitor Company KPI card values must not render count units');
     assert(!cards.includes('* 名稱相近，請人工確認'), 'Company KPI card must not add explanatory advisory text');
-    assert(!cards.includes('1 筆*'), 'Company KPI marker must not appear on duplicate or invalid cards');
+    assert(!cards.includes('<strong>1*</strong>'), 'Company KPI marker must not appear on duplicate or invalid cards');
     const cardsWithoutAdvisoryGroups = contract.renderCompanyKpiCards({ ...data, similarNamePairs: [] });
-    assert(cardsWithoutAdvisoryGroups.includes('4 家') && !cardsWithoutAdvisoryGroups.includes('4 家*'), 'Unique Company card must not add an asterisk when no connected similar-name group exists');
+    assert(cardsWithoutAdvisoryGroups.includes('<strong>4</strong>') && !cardsWithoutAdvisoryGroups.includes('<strong>4*</strong>'), 'Unique Company card must not add an asterisk when no connected similar-name group exists');
     assert.strictEqual(contract.renderCompanyKpiCards({ capable: false }), '', 'Company KPI group must be hidden when capability is absent');
 
     contract.ui.companyKpiModal = { mode: 'unique', sortKey: '', sortDirection: '' };

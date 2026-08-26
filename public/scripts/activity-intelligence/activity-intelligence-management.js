@@ -8685,10 +8685,11 @@
     if (!data || !data.capable) return '';
     const labels = data.copy && data.copy.cardLabels ? data.copy.cardLabels : companyKpiCopy(formContextVisitorMode).cardLabels;
     const uniqueMarker = companyKpiHasSimilarNameGroups(data) ? '*' : '';
+    const visitorContext = normalizeFormContext(data.context) !== formContextFieldIntelligenceMode;
     return [
-      ['unique', labels.unique, `${data.uniqueCompanyCount} 家${uniqueMarker}`],
-      ['duplicate', labels.duplicate, `${data.duplicateRecordCount} 筆`],
-      ['invalid', labels.invalid, `${data.invalidRecordCount} 筆`]
+      ['unique', labels.unique, visitorContext ? `${data.uniqueCompanyCount}${uniqueMarker}` : `${data.uniqueCompanyCount} 家${uniqueMarker}`],
+      ['duplicate', labels.duplicate, visitorContext ? `${data.duplicateRecordCount}` : `${data.duplicateRecordCount} 筆`],
+      ['invalid', labels.invalid, visitorContext ? `${data.invalidRecordCount}` : `${data.invalidRecordCount} 筆`]
     ].map(([mode, label, value]) => `
       <button class="aim-kpi aim-company-kpi-card" data-action="open-company-kpi-modal" data-mode="${mode}" type="button">
         <span>${Store.escapeHtml(label)}</span>
