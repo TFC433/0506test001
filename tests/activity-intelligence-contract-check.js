@@ -1632,6 +1632,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert(cssSource.includes('.aim-chart-reading-icon-button') && cssSource.includes('.aim-chart-reading-icon'), 'icon-only chart theme buttons must have lightweight scoped styling');
 
     const bubblePointsSource = extractFunctionDeclaration(managementSource, 'analyticsBubblePoints');
+    const bubbleOptionSource = extractFunctionDeclaration(managementSource, 'analyticsBubbleOption');
     const source = [
         'const analyticsCategoricalFieldTypes = ["yes_no", "single_choice", "multiple_choice", "dropdown"];',
         'const analyticsChartTypeLabels = { bar: "Bar", pie: "Pie", trend: "Trend", rose: "Rose", polarBar: "Polar Bar", treemap: "Treemap", bubble: "Bubble" };',
@@ -1694,11 +1695,15 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
         extractFunctionDeclaration(managementSource, 'analyticsReadableLabelColor'),
         extractFunctionDeclaration(managementSource, 'analyticsShortChartLabel'),
         bubblePointsSource,
-        extractFunctionDeclaration(managementSource, 'analyticsBubbleOption'),
+        extractFunctionDeclaration(managementSource, 'analyticsBubbleMetricValue'),
+        extractFunctionDeclaration(managementSource, 'analyticsBubbleContinuousSymbolSize'),
+        extractFunctionDeclaration(managementSource, 'analyticsBubbleLabelFormatter'),
+        extractFunctionDeclaration(managementSource, 'analyticsBubbleLabelRichStyles'),
+        bubbleOptionSource,
         extractFunctionDeclaration(managementSource, 'analyticsVisibleTrendSeries'),
         extractFunctionDeclaration(managementSource, 'activityTrendOption'),
         extractFunctionDeclaration(managementSource, 'analyticsCategoricalTrendOption'),
-        '({ ui, defaultAnalyticsChartReadingState, sanitizeAnalyticsChartReadingState, analyticsChartReadingControlsSupported, renderAnalyticsChartReadingControls, chartCapabilitiesForField, chartCapabilitiesForChart, analyticsValidatedChartView, renderAnalyticsChartTypeControls, categoricalChartRow, analyticsBarOption, analyticsPieOption, analyticsRoseOption, analyticsPolarBarOption, analyticsTierSourceValues, analyticsMagnitudeTier, analyticsTreemapVisualValue, analyticsTreemapOption, analyticsBubbleSymbolSize, analyticsBubbleOption, analyticsApplyExpandedExternalLabelOverlay, analyticsTreemapRenderedTileGeometries, analyticsAssignExternalLabelRows, analyticsTooltipFormatter, activityTrendOption, analyticsCategoricalTrendOption });'
+        '({ ui, defaultAnalyticsChartReadingState, sanitizeAnalyticsChartReadingState, analyticsChartReadingControlsSupported, renderAnalyticsChartReadingControls, chartCapabilitiesForField, chartCapabilitiesForChart, analyticsValidatedChartView, renderAnalyticsChartTypeControls, categoricalChartRow, analyticsBarOption, analyticsPieOption, analyticsRoseOption, analyticsPolarBarOption, analyticsTierSourceValues, analyticsMagnitudeTier, analyticsTreemapVisualValue, analyticsTreemapOption, analyticsBubbleMetricValue, analyticsBubbleContinuousSymbolSize, analyticsBubbleOption, analyticsApplyExpandedExternalLabelOverlay, analyticsTreemapRenderedTileGeometries, analyticsAssignExternalLabelRows, analyticsTooltipFormatter, activityTrendOption, analyticsCategoricalTrendOption });'
     ].join('\n');
     const contract = vm.runInNewContext(source, {});
     const rows = labels => labels.map(label => ({ label, count: 1, percent: 10, selectionPercent: 10 }));
@@ -1767,7 +1772,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert(contract.analyticsChartReadingControlsSupported(smallSingle, { type: 'rose' }), 'Rose must support expanded reading controls');
     assert(contract.analyticsChartReadingControlsSupported(smallSingle, { type: 'polarBar' }), 'Polar Bar must support expanded reading controls');
     assert(contract.analyticsChartReadingControlsSupported(smallSingle, { type: 'treemap' }), 'Treemap must use the existing expanded reading controls');
-    assert(!contract.analyticsChartReadingControlsSupported(multi, { type: 'bubble' }), 'Bubble must remain outside expanded reading controls V1');
+    assert(contract.analyticsChartReadingControlsSupported(multi, { type: 'bubble' }), 'Bubble must use the existing expanded reading controls');
     assert.strictEqual(JSON.stringify(contract.defaultAnalyticsChartReadingState()), JSON.stringify({ labelSize: 0, valueSize: 0, theme: 'light' }), 'new expanded chart sessions must start at Light and baseline sizes');
     assert.strictEqual(JSON.stringify(contract.sanitizeAnalyticsChartReadingState({ labelSize: 9, valueSize: -8, theme: 'dark' })), JSON.stringify({ labelSize: 3, valueSize: -1, theme: 'dark' }), 'expanded reading size controls must be bounded');
     const baselineReadingControls = contract.renderAnalyticsChartReadingControls(contract.defaultAnalyticsChartReadingState());
@@ -1949,61 +1954,71 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.strictEqual(readingTreemapOption.series[0].label.fontSize, 14, 'Treemap category labels must respond to label size control');
     assert.strictEqual(readingTreemapOption.series[0].label.rich.value.fontSize, 16, 'Treemap value labels must respond to value size control');
 
-    const smallestBubble = contract.analyticsBubbleSymbolSize(1, 73, 19, 86, tierValues);
-    const largestBubble = contract.analyticsBubbleSymbolSize(73, 73, 19, 86, tierValues);
-    assert(smallestBubble >= 19, 'Bubble smallest tier must remain visible and hoverable');
-    assert(largestBubble <= 86, 'Bubble largest tier must stay capped in thumbnail mode');
-    assert(largestBubble - smallestBubble >= 55, 'Bubble tier mapping must make dominant categories visually distinct');
-    assert(!bubblePointsSource.includes('Math.random'), 'Bubble layout must be deterministic and must not use Math.random');
+    assert(!bubbleOptionSource.includes('analyticsBubblePoints'), 'Bubble active renderer must not call packed-coordinate helper');
+    assert(!bubbleOptionSource.includes('__aimExternalLabelOverlay'), 'Bubble active renderer must not request external-label overlay');
+    assert(!bubbleOptionSource.includes('externalLabelCandidate'), 'Bubble active renderer must not mark external label candidates');
+    assert(!bubbleOptionSource.includes('visualTier'), 'Bubble active renderer must not use discrete visual tiers');
+    assert(!bubbleOptionSource.includes('convertToPixel'), 'Bubble active renderer must not depend on chart-instance geometry');
+    assert(!bubblePointsSource.includes('Math.random'), 'retained old Bubble packing helper must remain deterministic while inactive');
+    assert.strictEqual(contract.analyticsBubbleContinuousSymbolSize(50, 0, 100, 18, 50), 34, 'Bubble continuous size mapping must linearly interpolate thumbnail symbols');
+    assert.strictEqual(contract.analyticsBubbleContinuousSymbolSize(5, 5, 5, 18, 50), 34, 'equal Bubble metric values must use the neutral thumbnail midpoint');
     const bubbleChart = {
         title: 'Bubble',
         rows: skewedRows
     };
     const bubbleOption = contract.analyticsBubbleOption(bubbleChart, { type: 'bubble', valueMode: 'percentage' });
-    const repeatedBubbleOption = contract.analyticsBubbleOption(bubbleChart, { type: 'bubble', valueMode: 'percentage' });
     assert.strictEqual(bubbleOption.series[0].type, 'scatter', 'Bubble must use ECharts scatter');
-    assert.strictEqual(bubbleOption.series[0].data[0].realCount, 73, 'Bubble must size from respondent count data without backend transformation');
+    assert.strictEqual(bubbleOption.xAxis.type, 'category', 'Bubble X axis must represent categories');
+    assert.strictEqual(bubbleOption.yAxis.type, 'value', 'Bubble Y axis must represent the current metric');
+    assert.strictEqual(bubbleOption.series[0].data[0].value[0], 'Tier 0', 'Bubble X values must use category identity');
+    assert.strictEqual(bubbleOption.series[0].data[0].value[1], 73, 'Bubble percent-mode Y value must use respondent percent');
+    assert.strictEqual(bubbleOption.series[0].data[0].symbolSize, 50, 'Bubble percent-mode symbol size must follow the current metric');
+    assert.strictEqual(bubbleOption.series[0].data[0].realCount, 73, 'Bubble must preserve respondent count data without backend transformation');
     assert.strictEqual(Math.round(bubbleOption.series[0].data[0].realPercent * 10) / 10, 73, 'Bubble precise percent must remain respondent percentage');
-    assert.strictEqual(bubbleOption.series.length, 1, 'thumbnail Bubble must not force all external labels');
-    assert(bubbleOption.series[0].data.every(point => Number.isInteger(point.visualTier) && point.visualTier >= 1 && point.visualTier <= 10), 'Bubble data points must carry finite visual tiers');
-    assert.deepStrictEqual(
-        bubbleOption.series[0].data.map(point => point.value),
-        repeatedBubbleOption.series[0].data.map(point => point.value),
-        'Bubble packed coordinates must be deterministic across repeated renders'
-    );
-    assert(
-        bubbleOption.series[0].data.some((point, index) => index > 0 && (Math.abs(point.value[0] - Math.round(point.value[0])) > 0.001 || Math.abs(point.value[1] - Math.round(point.value[1])) > 0.001)),
-        'Bubble layout must use packed coordinates rather than grid cells'
-    );
+    assert.strictEqual(bubbleOption.series.length, 1, 'thumbnail Bubble must use one native scatter series');
+    assert(!bubbleOption.series[0].data.some(point => point.visualTier || point.externalLabelCandidate), 'Bubble data points must not carry packed-layout tier or annotation state');
+    const countBubbleOption = contract.analyticsBubbleOption(bubbleChart, { type: 'bubble', valueMode: 'count' });
+    assert.strictEqual(countBubbleOption.series[0].data[0].value[1], 73, 'Bubble count-mode Y value must use count');
+    assert.strictEqual(countBubbleOption.series[0].data[0].symbolSize, 50, 'Bubble count-mode symbol size must follow count');
+    const unsortedBubbleRows = [
+        { label: 'First', count: 5, percent: 90, selectionPercent: 10 },
+        { label: 'Second', count: 2, percent: 20, selectionPercent: 60 },
+        { label: 'Third', count: 9, percent: 50, selectionPercent: 60 },
+        { label: 'Fourth', count: 1, percent: 10, selectionPercent: 5 }
+    ];
+    const unsortedBubbleOriginal = unsortedBubbleRows.map(row => row.label);
+    const percentBubbleOption = contract.analyticsBubbleOption({ title: 'Unsorted Bubble', rows: unsortedBubbleRows }, { type: 'bubble', valueMode: 'percentage' });
+    assert.strictEqual(JSON.stringify(percentBubbleOption.xAxis.data), JSON.stringify(['First', 'Third', 'Second', 'Fourth']), 'Bubble percentage order must descend by current percent metric');
+    assert.strictEqual(JSON.stringify(percentBubbleOption.series[0].data.map(point => point.value[1])), JSON.stringify([90, 50, 20, 10]), 'Bubble percent-mode Y values must follow the sorted current metric');
+    const countSortedBubbleOption = contract.analyticsBubbleOption({ title: 'Unsorted Bubble', rows: unsortedBubbleRows }, { type: 'bubble', valueMode: 'count' });
+    assert.strictEqual(JSON.stringify(countSortedBubbleOption.xAxis.data), JSON.stringify(['Third', 'First', 'Second', 'Fourth']), 'Bubble count order must descend by count');
+    assert.strictEqual(JSON.stringify(unsortedBubbleRows.map(row => row.label)), JSON.stringify(unsortedBubbleOriginal), 'Bubble sorting must not mutate source rows');
+    const equalBubbleOption = contract.analyticsBubbleOption({ title: 'Equal Bubble', rows: [{ label: 'A', count: 3, percent: 30 }, { label: 'B', count: 3, percent: 30 }, { label: 'C', count: 1, percent: 10 }] }, { type: 'bubble', valueMode: 'count' });
+    assert.strictEqual(JSON.stringify(equalBubbleOption.xAxis.data), JSON.stringify(['A', 'B', 'C']), 'Bubble equal current metric values must preserve source order');
+    assert(countSortedBubbleOption.series[0].data[0].symbolSize > countSortedBubbleOption.series[0].data[1].symbolSize, 'larger Bubble metric values must produce larger symbols');
     const bubbleModal = contract.analyticsBubbleOption(bubbleChart, { type: 'bubble', valueMode: 'percentage' }, { modal: true });
     assert.strictEqual(bubbleModal.series.length, 1, 'expanded Bubble must not use the previous ruler-like external label series');
-    assert.strictEqual(bubbleModal.__aimExternalLabelOverlay.type, 'bubble', 'expanded Bubble must request the geometry-driven graphic overlay');
-    assert(bubbleModal.series[0].data.some(point => point.externalLabelCandidate), 'expanded Bubble must mark small unreadable bubbles for external labels');
-    const labelRows = contract.analyticsAssignExternalLabelRows([
-        { anchorY: 70, label: 'B' },
-        { anchorY: 30, label: 'A' },
-        { anchorY: 33, label: 'C' }
-    ], 10, 100, 18);
-    assert.deepStrictEqual(
-        labelRows.map(item => ({ label: item.label, y: item.labelY })),
-        contract.analyticsAssignExternalLabelRows([{ anchorY: 70, label: 'B' }, { anchorY: 30, label: 'A' }, { anchorY: 33, label: 'C' }], 10, 100, 18).map(item => ({ label: item.label, y: item.labelY })),
-        'external annotation row assignment must be deterministic'
-    );
-    assert(labelRows.every((item, index) => index === 0 || item.labelY - labelRows[index - 1].labelY >= 14), 'external labels must keep readable deterministic spacing');
+    assert.strictEqual(bubbleModal.__aimExternalLabelOverlay, undefined, 'expanded Bubble must not request the geometry-driven graphic overlay');
+    assert.strictEqual(bubbleModal.series[0].data[0].symbolSize, 76, 'expanded Bubble must use the larger native scatter size range');
     const bubbleChartMock = {
         getWidth: () => 640,
         getHeight: () => 520,
-        convertToPixel: (finder, value) => [320 + Number(value[0] || 0), 260 - Number(value[1] || 0)],
+        convertToPixel() {
+            this.convertToPixelCalled = true;
+            return [0, 0];
+        },
         setOption(option) {
             this.appliedOption = option;
         }
     };
-    assert.strictEqual(contract.analyticsApplyExpandedExternalLabelOverlay(bubbleChartMock, bubbleModal), true, 'expanded Bubble must apply a graphic annotation overlay');
-    const bubbleGraphicElements = bubbleChartMock.appliedOption.graphic.elements;
-    assert(bubbleGraphicElements.some(element => element.type === 'polyline'), 'Bubble graphic overlay must include leader lines');
-    assert(bubbleGraphicElements.some(element => element.type === 'text'), 'Bubble graphic overlay must include external text labels');
-    const bubbleLines = bubbleGraphicElements.filter(element => element.type === 'polyline');
-    assert(bubbleLines.every(element => Math.abs(element.shape.points[2][0] - element.shape.points[0][0]) <= 90), 'Bubble leader lines must remain short instead of ruler-like');
+    assert.strictEqual(contract.analyticsApplyExpandedExternalLabelOverlay(bubbleChartMock, bubbleModal), false, 'expanded Bubble must not apply a graphic annotation overlay');
+    assert.strictEqual(bubbleChartMock.convertToPixelCalled, undefined, 'expanded Bubble must not call convertToPixel for annotation');
+    assert.strictEqual(bubbleChartMock.appliedOption, undefined, 'expanded Bubble must not create graphic leader lines or text labels');
+    const readingBubbleOption = contract.analyticsBubbleOption({ title: 'Single', rows: [respondentRow] }, { type: 'bubble', valueMode: 'percentage' }, { modal: true, reading: { labelSize: 1, valueSize: 2, theme: 'dark' } });
+    assert.strictEqual(readingBubbleOption.backgroundColor, '#111827', 'Bubble expanded Dark chart must use chart-local ECharts appearance');
+    assert.strictEqual(readingBubbleOption.tooltip.backgroundColor, 'rgba(15, 23, 42, 0.96)', 'Bubble expanded Dark tooltip must use existing chart-local tooltip styling');
+    assert.strictEqual(readingBubbleOption.series[0].label.fontSize, 13, 'Bubble labels must respond to label size control');
+    assert.strictEqual(readingBubbleOption.series[0].label.rich.value.fontSize, 16, 'Bubble value labels must respond to value size control');
     const bubbleTooltip = contract.analyticsTooltipFormatter({ marker: '', name: 'Tier 0', data: bubbleOption.series[0].data[0] });
     assert(bubbleTooltip.includes('73 筆') && bubbleTooltip.includes('73%'), 'Bubble tooltip must preserve exact respondent count and percent');
 

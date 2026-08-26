@@ -4118,7 +4118,7 @@
 
   function analyticsChartReadingControlsSupported(chart, view) {
     if (chart && chart.kind === 'activityTrend') return true;
-    return ['bar', 'pie', 'trend', 'rose', 'polarBar', 'treemap'].includes(view && view.type);
+    return ['bar', 'pie', 'trend', 'rose', 'polarBar', 'treemap', 'bubble'].includes(view && view.type);
   }
 
   function renderAnalyticsChartReadingControls(reading) {
@@ -5404,44 +5404,80 @@
   }
 
   function analyticsBubbleOption(chart, view, options = {}) {
-    const styles = analyticsChartStyles();
+    const styles = analyticsChartStyles(options);
     const percentage = view.valueMode === 'percentage';
-    const rows = (Array.isArray(chart.rows) ? chart.rows : []).filter(row => row.count > 0).sort((a, b) => b.count - a.count || String(a.label).localeCompare(String(b.label), 'zh-Hant'));
     const modal = Boolean(options.modal);
-    const maxCount = Math.max(...rows.map(row => Number(row.count || 0)), 1);
-    const minSize = modal ? 24 : 19;
-    const maxSize = modal ? (rows.length > 14 ? 128 : 146) : (rows.length > 14 ? 74 : 86);
-    const data = analyticsBubblePoints(rows, maxCount, minSize, maxSize, modal ? 12 : 8, { externalLabels: modal });
+    const reading = analyticsChartReadingFromOptions(options);
+    const rows = (Array.isArray(chart.rows) ? chart.rows : [])
+      .map((row, index) => ({ row, index, metric: analyticsBubbleMetricValue(row, percentage) }))
+      .filter(entry => Number(entry.row && entry.row.count || 0) > 0)
+      .sort((a, b) => b.metric - a.metric || a.index - b.index);
+    const metricValues = rows.map(entry => entry.metric).filter(Number.isFinite);
+    const minMetric = metricValues.length ? Math.min(...metricValues) : 0;
+    const maxMetric = metricValues.length ? Math.max(...metricValues) : 0;
+    const minSize = modal ? 24 : 18;
+    const maxSize = modal ? 76 : 50;
     const palette = styles.isDark
       ? ['rgba(96, 165, 250, 0.78)', 'rgba(45, 212, 191, 0.74)', 'rgba(148, 163, 184, 0.72)', 'rgba(52, 211, 153, 0.72)', 'rgba(251, 191, 36, 0.72)']
       : ['rgba(37, 99, 235, 0.76)', 'rgba(15, 118, 110, 0.72)', 'rgba(100, 116, 139, 0.70)', 'rgba(5, 150, 105, 0.70)', 'rgba(217, 119, 6, 0.70)'];
-    data.points.forEach((point, index) => {
+    const data = rows.map((entry, index) => {
+      const row = entry.row;
+      const metric = entry.metric;
+      const size = analyticsBubbleContinuousSymbolSize(metric, minMetric, maxMetric, minSize, maxSize);
       const color = palette[index % palette.length];
-      point.itemStyle = { color };
-      point.labelColor = analyticsReadableLabelColor(color, styles);
+      return {
+        ...analyticsChartPoint(row, percentage),
+        name: row.label,
+        value: [row.label, metric],
+        metricValue: metric,
+        sourceIndex: entry.index,
+        symbolSize: size,
+        itemStyle: { color },
+        labelColor: analyticsReadableLabelColor(color, styles),
+        label: {
+          width: Math.max(22, Math.round(size - 8)),
+          overflow: 'truncate',
+          ellipsis: '...'
+        }
+      };
     });
     return {
-      __aimExternalLabelOverlay: modal ? { type: 'bubble' } : null,
+      ...analyticsChartAppearanceOption(styles),
       legend: { show: false },
-      grid: { top: modal ? 32 : 10, right: modal ? 70 : 10, bottom: modal ? 32 : 10, left: modal ? 70 : 10 },
-      tooltip: { trigger: 'item', formatter: analyticsTooltipFormatter },
+      grid: { top: modal ? 28 : 18, right: modal ? 26 : 16, bottom: modal ? 58 : 50, left: 10, containLabel: true },
+      tooltip: analyticsChartTooltipOption(styles, { trigger: 'item', formatter: analyticsTooltipFormatter }),
       xAxis: {
-        type: 'value',
-        min: data.minX,
-        max: data.maxX,
-        show: false
+        type: 'category',
+        data: rows.map(entry => entry.row.label),
+        axisTick: { show: false },
+        axisLine: { lineStyle: { color: styles.border } },
+        axisLabel: {
+          color: styles.secondary,
+          fontSize: analyticsReadingFontSize(modal ? 11 : 10, options, 'labelSize') || (modal ? 11 : 10),
+          interval: 0,
+          width: modal ? 92 : 54,
+          overflow: 'truncate',
+          ellipsis: '...'
+        }
       },
       yAxis: {
         type: 'value',
-        min: data.minY,
-        max: data.maxY,
-        show: false
+        min: 0,
+        max: percentage ? 100 : undefined,
+        minInterval: percentage ? undefined : 1,
+        axisLabel: {
+          color: styles.muted,
+          formatter: value => percentage ? `${Number(value).toFixed(0)}%` : Number(value).toFixed(0)
+        },
+        axisLine: { lineStyle: { color: styles.border } },
+        axisTick: { show: false },
+        splitLine: { lineStyle: { color: styles.border, type: 'dashed', opacity: styles.isDark ? 0.24 : 0.34 } }
       },
       series: [{
         name: chart.title,
         type: 'scatter',
-        data: data.points,
-        clip: false,
+        data,
+        clip: true,
         symbolSize: (value, params) => params && params.data ? params.data.symbolSize : minSize,
         itemStyle: {
           borderColor: styles.isDark ? 'rgba(226, 232, 240, 0.82)' : 'rgba(255, 255, 255, 0.92)',
@@ -5451,19 +5487,12 @@
           show: true,
           position: 'inside',
           color: params => (params.data && params.data.labelColor) || (styles.isDark ? '#0f172a' : '#ffffff'),
-          fontSize: modal ? 12 : 10,
+          fontSize: analyticsReadingFontSize(modal ? 11 : 10, options, 'labelSize') || (modal ? 11 : 10),
           fontWeight: 700,
-          formatter: params => {
-            const data = params.data || {};
-            const size = Number(data.symbolSize || 0);
-            if (modal && data.externalLabelCandidate) return '';
-            if (size < (modal ? 34 : 40)) return '';
-            const label = String(params.name || '');
-            const limit = size >= (modal ? 72 : 54) ? (modal ? 10 : 7) : (modal ? 7 : 5);
-            const shortLabel = label.length > limit ? `${label.slice(0, limit)}...` : label;
-            if (size < (modal ? 50 : 48)) return shortLabel;
-            return `${shortLabel}\n${percentage ? formatAnalyticsPercent(data.realPercent) : data.realCount}`;
-          }
+          overflow: 'truncate',
+          ellipsis: '...',
+          formatter: params => analyticsBubbleLabelFormatter(params, percentage, reading, modal),
+          rich: reading ? analyticsBubbleLabelRichStyles(options, modal ? 11 : 10, modal ? 12 : 10) : undefined
         },
         emphasis: {
           focus: 'self',
@@ -5471,11 +5500,54 @@
             show: true,
             formatter: params => {
               const data = params.data || {};
-              return `${params.name}\n${formatAnalyticsPercent(data.realPercent)}`;
+              return `${params.name}\n${percentage ? formatAnalyticsPercent(data.realPercent) : data.realCount}`;
             }
           }
         }
       }]
+    };
+  }
+
+  function analyticsBubbleMetricValue(row, percentage) {
+    return percentage ? Number(Number(row && row.percent || 0).toFixed(1)) : Number(row && row.count || 0);
+  }
+
+  function analyticsBubbleContinuousSymbolSize(metricValue, minMetric, maxMetric, minSize, maxSize) {
+    const value = Number(metricValue || 0);
+    const min = Number(minMetric || 0);
+    const max = Number(maxMetric || 0);
+    const low = Number(minSize || 0);
+    const high = Math.max(low, Number(maxSize || low));
+    if (![value, min, max, low, high].every(Number.isFinite)) return Math.max(1, low);
+    if (max <= min) return Math.round((low + high) / 2);
+    const clamped = Math.max(min, Math.min(value, max));
+    const ratio = (clamped - min) / (max - min);
+    return Math.max(1, Math.round(low + ratio * (high - low)));
+  }
+
+  function analyticsBubbleLabelFormatter(params, percentage, reading, modal) {
+    const data = params.data || {};
+    const size = Number(data.symbolSize || 0);
+    const label = String(params.name || '');
+    const value = percentage ? formatAnalyticsPercent(data.realPercent) : `${Number(data.realCount || 0)}`;
+    if (size < (modal ? 42 : 34)) return label;
+    return reading ? `{label|${label}}\n{value|${value}}` : `${label}\n${value}`;
+  }
+
+  function analyticsBubbleLabelRichStyles(options, labelBaseSize, valueBaseSize) {
+    const labelSize = analyticsReadingFontSize(labelBaseSize, options, 'labelSize');
+    const valueSize = analyticsReadingFontSize(valueBaseSize, options, 'valueSize');
+    return {
+      label: {
+        fontSize: labelSize,
+        fontWeight: 700,
+        lineHeight: labelSize ? labelSize + 4 : undefined
+      },
+      value: {
+        fontSize: valueSize,
+        fontWeight: 700,
+        lineHeight: valueSize ? valueSize + 4 : undefined
+      }
     };
   }
 
