@@ -1449,6 +1449,161 @@ function assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource
     assert.deepStrictEqual(contract.analyticsRecords(activity).map(record => record.id), ['visitor-1', 'visitor-2'], 'Switching back to Visitor must restore the visitor dataset');
 }
 
+function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
+    const assertJsonEqual = (actual, expected, message) => assert.strictEqual(JSON.stringify(actual), JSON.stringify(expected), message);
+    assert(managementSource.includes("const analyticsScopeTrackingMode = 'follow-up';"), 'Analytics must define a dedicated Follow-up inner scope');
+    assert(managementSource.includes('data-mode="${analyticsScopeTrackingMode}"') && managementSource.includes('>後續追蹤</button>'), 'Analytics selector must expose 訪客分析 / 主動情報 / 後續追蹤');
+    assert(managementSource.includes("const followUpPriorityFieldTitle = '後續追蹤優先度';"), 'Follow-up priority must use the approved exact title');
+    assert(managementSource.includes("const followUpPriorityValues = Object.freeze(['高', '中', '低', '暫不追蹤']);"), 'Follow-up KPIs must use the four approved priority values only');
+    assert(managementSource.includes("const followUpWorklistPriorityValues = Object.freeze(['高', '中', '低']);"), 'Follow-up worklist must include only high, medium, and low priorities');
+    assert(managementSource.includes("ui.followUp = defaultFollowUpState()") || managementSource.includes('followUp: defaultFollowUpState()'), 'Follow-up controls must use runtime UI state');
+    assert(managementSource.includes('data-action="follow-up-sort"'), 'Follow-up table must expose sortable headers');
+    assert(managementSource.includes('data-action="open-record-inline"'), 'Follow-up view must reuse the existing inline record detail action');
+    assert(cssSource.includes('.aim-analytics-scope-tabs .aim-mode-tab[data-mode="follow-up"][aria-selected="true"]'), 'Follow-up selected tab state must be styled');
+    assert(cssSource.includes('grid-template-columns: repeat(3, minmax(0, 1fr));'), 'Mobile Analytics scope tabs must support three tabs');
+    assert(cssSource.includes('.aim-follow-up-table-wrap') && cssSource.includes('overflow-x: auto'), 'Follow-up table must be contained by an overflow-safe wrapper');
+
+    const renderTrackingSource = extractFunctionDeclaration(managementSource, 'renderAnalyticsTracking');
+    ['項次', '優先度', '公司名稱', '聯絡人', '紀錄者', 'Email', 'Email來源', '名片', '已寄 Mail', '已建機會', '查看'].forEach(label => {
+        assert(renderTrackingSource.includes(label), `Follow-up table must render ${label}`);
+    });
+    assert(!/renderAnalyticsAiPanel|renderMobileAnalyticsAiPanel|exportCsv|CSV|localStorage|sessionStorage|document\.cookie|activity\.settings|submission\.status/.test(renderTrackingSource), 'Follow-up renderer must not add AI, export, storage, settings, or status-write behavior');
+    assert(!extractFunctionDeclaration(managementSource, 'followUpPriorityField').includes('/優先/'), 'Follow-up priority resolver must not use broad priority-title fuzziness');
+    assert(!/optionNotesForRecord|JSON\.stringify|field_intelligence/.test(extractFunctionDeclaration(managementSource, 'followUpTextualAnswerValues')), 'Form-content email extraction must stay limited to textual answer values');
+
+    const source = [
+        'const formContextVisitorMode = "visitor";',
+        'const formContextFieldIntelligenceMode = "field_intelligence";',
+        'const followUpPriorityFieldTitle = "後續追蹤優先度";',
+        'const followUpPriorityValues = Object.freeze(["高", "中", "低", "暫不追蹤"]);',
+        'const followUpWorklistPriorityValues = Object.freeze(["高", "中", "低"]);',
+        'const followUpPriorityRank = Object.freeze({ "高": 0, "中": 1, "低": 2 });',
+        'const followUpEmailSourceCard = "名片";',
+        'const followUpEmailSourceForm = "表單內容";',
+        'const Store = { answerText(value) { if (Array.isArray(value)) return value.join("、"); return String(value == null ? "" : value); } };',
+        extractFunctionDeclaration(managementSource, 'defaultFollowUpState'),
+        'let ui = { followUp: defaultFollowUpState() };',
+        'const state = { records: [] };',
+        'function recordsFor(activityId) { return state.records.filter(record => record.activityId === activityId); }',
+        'function normalizeFormContext(value) { return value === formContextFieldIntelligenceMode ? formContextFieldIntelligenceMode : formContextVisitorMode; }',
+        'function recordIsFieldIntelligence(record) { return normalizeFormContext(record && record.recordContext) === formContextFieldIntelligenceMode; }',
+        'function normalizeDesignerItem(item) { return { ...item, fieldId: item.fieldId || item.itemKey || item.itemId || item.title, itemKey: item.itemKey || item.fieldId || item.itemId || item.title, visible: item.visible !== false, retired: Boolean(item.retired), removedInDraft: Boolean(item.removedInDraft) }; }',
+        'function snapshotRecordItems(record) { return record.formRuntimeSnapshot.items.map(normalizeDesignerItem); }',
+        'function answerProducingItems(items) { return (items || []).filter(item => ["short_text", "long_text", "number", "yes_no", "single_choice", "multiple_choice", "dropdown"].includes(item.type)); }',
+        'function hasValue(value) { return Array.isArray(value) ? value.length > 0 : String(value || "").trim().length > 0; }',
+        'function otherAnswersForRecord(record) { return record.runtimeOtherAnswers || {}; }',
+        'function displayAnswerValue(field, value) { return value; }',
+        'function cardLinkForRecord(record) { return record.runtimeCardLink || { linked: false, cardId: null, card: null }; }',
+        'function recordPreview(record) { return { company: record.companyName || "", customer: record.personName || "" }; }',
+        extractFunctionDeclaration(managementSource, 'followUpSelectedPriorities'),
+        extractFunctionDeclaration(managementSource, 'followUpVisitorRecords'),
+        extractFunctionDeclaration(managementSource, 'followUpPriorityCompatibleField'),
+        extractFunctionDeclaration(managementSource, 'followUpPriorityField'),
+        extractFunctionDeclaration(managementSource, 'followUpPriorityValue'),
+        extractFunctionDeclaration(managementSource, 'followUpTextualAnswerValues'),
+        extractFunctionDeclaration(managementSource, 'extractEmailsFromText'),
+        extractFunctionDeclaration(managementSource, 'followUpSubmissionEmails'),
+        extractFunctionDeclaration(managementSource, 'followUpManualStateForRecord'),
+        extractFunctionDeclaration(managementSource, 'followUpRowForRecord'),
+        extractFunctionDeclaration(managementSource, 'followUpKpiCounts'),
+        extractFunctionDeclaration(managementSource, 'followUpSearchText'),
+        extractFunctionDeclaration(managementSource, 'followUpRowMatchesFilters'),
+        extractFunctionDeclaration(managementSource, 'followUpDefaultCompare'),
+        extractFunctionDeclaration(managementSource, 'followUpSortValue'),
+        extractFunctionDeclaration(managementSource, 'followUpSortedRows'),
+        extractFunctionDeclaration(managementSource, 'followUpAnalyticsData'),
+        '({ state, ui, followUpVisitorRecords, followUpPriorityField, followUpPriorityValue, extractEmailsFromText, followUpSubmissionEmails, followUpAnalyticsData });'
+    ].join('\n');
+    const contract = vm.runInNewContext(source, {});
+    const activity = { id: 'activity-follow-up' };
+    const exactItems = [
+        { fieldId: 'priority', type: 'single_choice', title: '後續追蹤優先度' },
+        { fieldId: 'company', type: 'short_text', title: '公司名稱' },
+        { fieldId: 'person', type: 'short_text', title: '姓名' },
+        { fieldId: 'notes', type: 'long_text', title: '備註' },
+        { fieldId: 'rawBlob', type: 'short_text', title: 'Raw Blob' }
+    ];
+    const broadItems = [
+        { fieldId: 'broad-priority', type: 'single_choice', title: '拜訪優先程度' },
+        { fieldId: 'notes', type: 'long_text', title: '備註' }
+    ];
+    const fallbackItems = [
+        { fieldId: 'fld_priority', type: 'dropdown', title: 'Legacy Priority' },
+        { fieldId: 'notes', type: 'long_text', title: '備註' }
+    ];
+    const record = (id, answers, overrides = {}) => ({
+        id,
+        activityId: activity.id,
+        recordContext: 'visitor',
+        status: 'active',
+        createdAt: '2026-08-16T00:00:00.000Z',
+        createdByDisplayName: 'Recorder A',
+        answers,
+        runtimeOtherAnswers: {},
+        formRuntimeSnapshot: { items: exactItems },
+        companyName: 'Acme',
+        personName: 'Alice',
+        runtimeCardLink: { linked: false, cardId: null, card: null },
+        card: null,
+        ...overrides
+    });
+    contract.state.records = [
+        record('r1', { priority: '高', company: 'Acme', person: 'Alice', notes: 'Please email sales@example.com and john@example.com.', rawBlob: { email: 'hidden@example.com' } }, { createdAt: '2026-08-16T04:00:00.000Z', card: { email: 'John@Example.com' }, runtimeCardLink: { linked: true, cardId: 'card-1', card: { email: 'John@Example.com' } } }),
+        record('r2', { priority: '中', company: 'Acme', person: 'Bob', notes: 'bob@example.tw' }, { createdAt: '2026-08-16T03:00:00.000Z', personName: 'Bob' }),
+        record('r3', { priority: '低', company: 'Beta', person: 'Cara', notes: '' }, { createdAt: '2026-08-16T02:00:00.000Z', companyName: 'Beta', personName: 'Cara', createdByDisplayName: 'Recorder B' }),
+        record('r4', { priority: '暫不追蹤', notes: 'skip@example.com' }),
+        record('r5', { priority: '', notes: 'blank@example.com' }),
+        record('r6', { 'broad-priority': '高', notes: 'broad@example.com' }, { formRuntimeSnapshot: { items: broadItems } }),
+        record('r7', { fld_priority: '中', notes: 'fallback@example.com' }, { formRuntimeSnapshot: { items: fallbackItems }, createdAt: '2026-08-16T01:00:00.000Z', companyName: 'Fallback Co', personName: 'Fallback' }),
+        record('active-1', { priority: '高', notes: 'active@example.com' }, { recordContext: 'field_intelligence' }),
+        record('void-1', { priority: '高', notes: 'void@example.com' }, { status: 'void' })
+    ];
+
+    assertJsonEqual(contract.followUpVisitorRecords(activity).map(item => item.id), ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7'], 'Follow-up dataset must use only non-void Visitor records');
+    assert.strictEqual(contract.followUpPriorityValue(contract.state.records.find(item => item.id === 'r6'), activity), '', 'Broad priority-like titles must not resolve as the Follow-up priority');
+    assert.strictEqual(contract.followUpPriorityField(contract.state.records.find(item => item.id === 'r7'), activity).fieldId, 'fld_priority', 'Narrow fld_priority fallback must remain available');
+    const beforeEmailRead = JSON.stringify(contract.state.records[0]);
+    const emails = contract.followUpSubmissionEmails(contract.state.records[0], activity);
+    assert.strictEqual(JSON.stringify(contract.state.records[0]), beforeEmailRead, 'Email derivation must not mutate the source submission');
+    assertJsonEqual(emails.map(entry => entry.email).sort(), ['John@Example.com', 'sales@example.com'].sort(), 'Email derivation must preserve all distinct valid addresses');
+    assert.strictEqual(emails.find(entry => entry.email.toLowerCase() === 'john@example.com').sourceLabel, '名片 / 表單內容', 'Duplicate card/form email must display one address with both source labels');
+    assert(!emails.some(entry => entry.email === 'hidden@example.com'), 'Email derivation must not scan object/blob answer values');
+    assertJsonEqual(contract.extractEmailsFromText('a@test invalid@@example.com ok.person@example.co.jp bad@x.c'), ['ok.person@example.co.jp'], 'Email extractor must stay conservative');
+
+    let data = contract.followUpAnalyticsData(activity);
+    assertJsonEqual(data.kpis, { '高': 1, '中': 2, '低': 1, '暫不追蹤': 1 }, 'KPIs must count known priorities only, including no-follow KPI-only rows');
+    assertJsonEqual(data.rows.map(row => row.id), ['r1', 'r2', 'r7', 'r3'], 'Default sort must be priority high-medium-low, then newer first');
+    assert.strictEqual(data.allRows.filter(row => row.company === 'Acme').length, 2, 'Worklist must keep one row per submission without company dedupe');
+    assertJsonEqual(data.rows.map(row => row.rowNumber), [1, 2, 3, 4], 'Row numbers must be display-derived after sorting');
+
+    contract.ui.followUp.q = 'sales@example.com';
+    data = contract.followUpAnalyticsData(activity);
+    assertJsonEqual(data.rows.map(row => row.id), ['r1'], 'Search must include visible email data');
+    assertJsonEqual(data.kpis, { '高': 1, '中': 2, '低': 1, '暫不追蹤': 1 }, 'KPI counts must not be affected by filters');
+    contract.ui.followUp.q = '';
+    contract.ui.followUp.priorities = ['高', '中'];
+    assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.id), ['r1', 'r2', 'r7'], 'Priority filter must support high/medium combinations');
+    contract.ui.followUp.priorities = ['高', '中', '低'];
+    contract.ui.followUp.emailSource = 'card';
+    assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.id), ['r1'], 'Email source filter must distinguish card-sourced email');
+    contract.ui.followUp.emailSource = 'form';
+    assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.id), ['r1', 'r2', 'r7'], 'Email source filter must distinguish form-content email');
+    contract.ui.followUp.emailSource = 'all';
+    contract.ui.followUp.card = 'has';
+    assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.id), ['r1'], 'Business card filter must use existing linked card data');
+    contract.ui.followUp.card = 'all';
+    contract.ui.followUp.manualState.r2 = { mailSent: true, opportunityCreated: false };
+    contract.ui.followUp.mailSent = 'sent';
+    assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.id), ['r2'], '已寄 Mail filter must use runtime-only manual state');
+    contract.ui.followUp.mailSent = 'all';
+    contract.ui.followUp.recorder = 'Recorder B';
+    assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.id), ['r3'], 'Recorder filter must use createdByDisplayName');
+    contract.ui.followUp.recorder = 'all';
+    contract.ui.followUp.sortKey = 'company';
+    contract.ui.followUp.sortDirection = 'desc';
+    assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.rowNumber), [1, 2, 3, 4], 'Row numbers must recompute after explicit sorting');
+}
+
 function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
     ['來拜訪公司數（去重）', '同公司重複紀錄數', '無公司名稱', '情報來源數（去重）', '同來源重複紀錄數', '無情報來源'].forEach(label => {
         assert(managementSource.includes(label), `Company KPI label ${label} must exist in source`);
@@ -4475,6 +4630,7 @@ async function main() {
     assertDualStreamFormBuilderSourceContract(managementSource, apiSource, cssSource);
     await assertRealActiveIntelligenceRuntimeSourceContract(managementSource, cssSource, service);
     assertAnalyticsChartTypeImplementationContract(managementSource, cssSource);
+    assertFollowUpTabFrontendV1Contract(managementSource, cssSource);
     assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource);
     assertLongTextPreviewExplicitDesignerStateContract(managementSource);
     assertVisitorRecordPreviewIdentityContract(managementSource);
