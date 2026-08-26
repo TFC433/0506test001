@@ -4128,7 +4128,8 @@
   }
 
   function renderCompanyKpiUniqueDetail(data) {
-    const rows = data.uniqueGroups.map((group, index) => `
+    const displayGroups = companyKpiFilteredSortedUniqueGroups(data);
+    const rows = displayGroups.map((group, index) => `
       <tr>
         <td class="aim-company-kpi-row-number">${index + 1}</td>
         <td class="aim-company-kpi-company-name">${Store.escapeHtml(group.displayName)}</td>
@@ -4136,8 +4137,80 @@
         <td class="aim-company-kpi-number">${group.records.length}</td>
       </tr>
     `).join('');
+    const controls = renderCompanyKpiUniqueControls(data);
     const advisory = renderCompanyKpiSimilarNameAdvisory(data.similarNamePairs, data.uniqueCompanyCount);
-    return `${renderCompanyKpiTable(['#', '公司名稱', '公司類型', '總紀錄'], rows, '目前沒有可列出的公司。', 'unique')}${advisory}`;
+    return `${controls}${renderCompanyKpiTable(['#', '公司名稱', '公司類型', '總紀錄'], rows, '目前沒有符合條件的公司。', 'unique')}${advisory}`;
+  }
+
+  function renderCompanyKpiUniqueControls(data) {
+    const state = companyKpiUniqueControlState();
+    const typeOptions = companyKpiUniqueTypeFilterOptions(data.uniqueGroups);
+    const typeOptionsHtml = typeOptions.map(option => `<option value="${Store.escapeHtml(option.value)}" ${state.companyType === option.value ? 'selected' : ''}>${Store.escapeHtml(option.label)}</option>`).join('');
+    const sortOptions = [
+      ['original', '原始順序'],
+      ['total-desc', '總紀錄：多 → 少'],
+      ['total-asc', '總紀錄：少 → 多']
+    ];
+    return `
+      <div class="aim-company-kpi-controls">
+        <label>
+          <span>公司類型</span>
+          <select class="aim-select" data-action="company-kpi-type-filter">${typeOptionsHtml}</select>
+        </label>
+        <label>
+          <span>排序</span>
+          <select class="aim-select" data-action="company-kpi-sort">
+            ${sortOptions.map(([value, label]) => `<option value="${Store.escapeHtml(value)}" ${state.sort === value ? 'selected' : ''}>${Store.escapeHtml(label)}</option>`).join('')}
+          </select>
+        </label>
+      </div>
+    `;
+  }
+
+  function companyKpiUniqueControlState() {
+    const modal = ui.companyKpiModal || {};
+    const sort = ['original', 'total-desc', 'total-asc'].includes(modal.uniqueSort) ? modal.uniqueSort : 'original';
+    return {
+      companyType: modal.companyTypeFilter || 'all',
+      sort
+    };
+  }
+
+  function companyKpiUniqueTypeFilterOptions(groups) {
+    const values = new Set();
+    let hasUnavailable = false;
+    (groups || []).forEach(group => {
+      const types = Array.isArray(group.companyTypes) ? group.companyTypes.filter(Boolean) : [];
+      if (!types.length) hasUnavailable = true;
+      types.forEach(value => values.add(value));
+    });
+    const options = [{ value: 'all', label: '全部' }];
+    Array.from(values).sort((a, b) => String(a).localeCompare(String(b), 'zh-Hant')).forEach(value => {
+      options.push({ value, label: value });
+    });
+    if (hasUnavailable) options.push({ value: '__unavailable__', label: '—' });
+    return options;
+  }
+
+  function companyKpiFilteredSortedUniqueGroups(data) {
+    const state = companyKpiUniqueControlState();
+    const groups = (data.uniqueGroups || []).slice();
+    const filtered = state.companyType === 'all'
+      ? groups
+      : groups.filter(group => {
+        const types = Array.isArray(group.companyTypes) ? group.companyTypes.filter(Boolean) : [];
+        if (state.companyType === '__unavailable__') return !types.length;
+        return types.includes(state.companyType);
+      });
+    if (state.sort === 'original') return filtered;
+    return filtered
+      .map((group, index) => ({ group, index }))
+      .sort((a, b) => {
+        const diff = a.group.records.length - b.group.records.length;
+        if (diff) return state.sort === 'total-desc' ? -diff : diff;
+        return a.index - b.index;
+      })
+      .map(entry => entry.group);
   }
 
   function renderCompanyKpiDuplicateDetail(data) {
@@ -4180,21 +4253,24 @@
 
   function renderCompanyKpiSimilarNameAdvisory(pairs, officialUniqueCount) {
     if (!Array.isArray(pairs) || !pairs.length) return '';
-    const estimate = companyKpiEstimatedCompanyCount(officialUniqueCount, pairs);
+    const groups = companyKpiSimilarNameGroups(pairs);
+    if (!groups.length) return '';
+    const estimate = companyKpiEstimatedCompanyCount(officialUniqueCount, groups);
     return `
       <section class="aim-company-kpi-advisory">
         <h3>名稱相近，請人工確認</h3>
-        <p class="aim-company-kpi-advisory-estimate">若以上相近名稱皆視為同公司，推估來拜訪公司數：${Store.escapeHtml(estimate)} 家</p>
+        <p class="aim-company-kpi-advisory-estimate">若以下相近名稱皆視為同公司，推估來拜訪公司數：${Store.escapeHtml(estimate)} 家</p>
         <p class="aim-company-kpi-advisory-note">正式統計仍以目前紀錄內容為準。</p>
         <div class="aim-company-kpi-advisory-list">
-          ${pairs.map(pair => `<div class="aim-company-kpi-advisory-pair"><span>${Store.escapeHtml(pair.a)}</span><b>↔</b><span>${Store.escapeHtml(pair.b)}</span></div>`).join('')}
+          ${groups.map(group => `<div class="aim-company-kpi-advisory-pair"><span>${Store.escapeHtml(group.names.join(' / '))}：${group.size} → 1，少 ${group.reduction} 家</span></div>`).join('')}
         </div>
       </section>
     `;
   }
 
-  function companyKpiEstimatedCompanyCount(officialUniqueCount, pairs) {
+  function companyKpiSimilarNameGroups(pairs) {
     const parent = new Map();
+    const names = new Map();
     const keyFor = value => String(value || '').trim();
     const find = key => {
       if (!parent.has(key)) parent.set(key, key);
@@ -4212,14 +4288,32 @@
     (pairs || []).forEach(pair => {
       const a = keyFor(pair.aKey || pair.a);
       const b = keyFor(pair.bKey || pair.b);
-      if (a && b && a !== b) union(a, b);
+      if (!a || !b || a === b) return;
+      names.set(a, pair.a || a);
+      names.set(b, pair.b || b);
+      union(a, b);
     });
-    const sizes = new Map();
+    const groups = new Map();
     parent.forEach((value, key) => {
       const root = find(key);
-      sizes.set(root, (sizes.get(root) || 0) + 1);
+      if (!groups.has(root)) groups.set(root, []);
+      groups.get(root).push({ key, name: names.get(key) || key });
     });
-    const reduction = Array.from(sizes.values()).reduce((sum, size) => sum + Math.max(0, size - 1), 0);
+    return Array.from(groups.values())
+      .filter(group => group.length > 1)
+      .map(group => {
+        const sorted = group.sort((a, b) => a.key.length - b.key.length || a.key.localeCompare(b.key, 'zh-Hant'));
+        return {
+          names: sorted.map(entry => entry.name),
+          keys: sorted.map(entry => entry.key),
+          size: sorted.length,
+          reduction: sorted.length - 1
+        };
+      });
+  }
+
+  function companyKpiEstimatedCompanyCount(officialUniqueCount, groups) {
+    const reduction = (groups || []).reduce((sum, group) => sum + Math.max(0, Number(group.reduction || 0)), 0);
     return Math.max(0, Number(officialUniqueCount || 0) - reduction);
   }
 
@@ -6654,6 +6748,19 @@
     applyOtherHistorySuggestion(el);
   });
 
+  root.addEventListener('change', event => {
+    const el = event.target.closest('[data-action]');
+    if (!el || !ui.companyKpiModal || ui.companyKpiModal.mode !== 'unique') return;
+    if (el.dataset.action === 'company-kpi-type-filter') {
+      ui.companyKpiModal.companyTypeFilter = el.value || 'all';
+      render();
+    }
+    if (el.dataset.action === 'company-kpi-sort') {
+      ui.companyKpiModal.uniqueSort = ['original', 'total-desc', 'total-asc'].includes(el.value) ? el.value : 'original';
+      render();
+    }
+  });
+
   root.addEventListener('click', async event => {
     const chartMoreClick = event.target.closest('.aim-chart-more-control');
     const closedChartMore = !chartMoreClick && closeAnalyticsChartMoreMenus();
@@ -6664,6 +6771,7 @@
     }
     const action = el.dataset.action;
     if (await handleFormDesignAction(action, el, event)) return;
+    if (action === 'company-kpi-type-filter' || action === 'company-kpi-sort') return;
     if (action === 'other-history-suggestion') {
       applyOtherHistorySuggestion(el);
       return;
@@ -6762,7 +6870,11 @@
       ui.analyticsScope = el.dataset.mode === recordContextActiveMode ? recordContextActiveMode : recordContextVisitorMode;
     }
     if (action === 'open-company-kpi-modal' && canUseAnalytics()) {
-      ui.companyKpiModal = { mode: ['unique', 'duplicate', 'invalid'].includes(el.dataset.mode) ? el.dataset.mode : 'unique' };
+      ui.companyKpiModal = {
+        mode: ['unique', 'duplicate', 'invalid'].includes(el.dataset.mode) ? el.dataset.mode : 'unique',
+        companyTypeFilter: 'all',
+        uniqueSort: 'original'
+      };
     }
     if (action === 'close-company-kpi-modal') {
       ui.companyKpiModal = null;

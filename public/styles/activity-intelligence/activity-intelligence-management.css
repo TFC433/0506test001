@@ -5139,6 +5139,29 @@ a:focus-visible {
   overflow: auto;
 }
 
+.aim-company-kpi-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.aim-company-kpi-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--aim-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.aim-company-kpi-controls .aim-select {
+  min-width: 136px;
+  height: 34px;
+  padding: 6px 30px 6px 10px;
+  font-size: 13px;
+}
+
 .aim-company-kpi-table {
   min-width: 0;
   table-layout: fixed;
@@ -5179,7 +5202,15 @@ a:focus-visible {
 
 .aim-company-kpi-table-unique th:nth-child(3),
 .aim-company-kpi-table-unique td:nth-child(3) {
-  width: 148px;
+  width: 220px;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+.aim-company-kpi-table-unique th:nth-child(4),
+.aim-company-kpi-table-unique td:nth-child(4) {
+  width: 92px;
+  text-align: right;
 }
 
 .aim-company-kpi-table-duplicate th:nth-child(3),

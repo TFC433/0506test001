@@ -1501,6 +1501,10 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
         extractFunctionDeclaration(managementSource, 'analyticsFormContext'),
         extractFunctionDeclaration(managementSource, 'renderCompanyKpiCards'),
         extractFunctionDeclaration(managementSource, 'companyKpiDerivation'),
+        extractFunctionDeclaration(managementSource, 'renderCompanyKpiUniqueControls'),
+        extractFunctionDeclaration(managementSource, 'companyKpiUniqueControlState'),
+        extractFunctionDeclaration(managementSource, 'companyKpiUniqueTypeFilterOptions'),
+        extractFunctionDeclaration(managementSource, 'companyKpiFilteredSortedUniqueGroups'),
         extractFunctionDeclaration(managementSource, 'currentCompanyKpiFields'),
         extractFunctionDeclaration(managementSource, 'currentCompanyNameField'),
         extractFunctionDeclaration(managementSource, 'currentCompanyTypeField'),
@@ -1513,6 +1517,7 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
         extractFunctionDeclaration(managementSource, 'companyKpiTypeDisplay'),
         extractFunctionDeclaration(managementSource, 'companyKpiBlankDisplay'),
         extractFunctionDeclaration(managementSource, 'companyKpiSimilarNamePairs'),
+        extractFunctionDeclaration(managementSource, 'companyKpiSimilarNameGroups'),
         extractFunctionDeclaration(managementSource, 'companyKpiEstimatedCompanyCount'),
         extractFunctionDeclaration(managementSource, 'renderCompanyKpiDetailModal'),
         extractFunctionDeclaration(managementSource, 'renderCompanyKpiUniqueDetail'),
@@ -1520,7 +1525,7 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
         extractFunctionDeclaration(managementSource, 'renderCompanyKpiInvalidDetail'),
         extractFunctionDeclaration(managementSource, 'renderCompanyKpiTable'),
         extractFunctionDeclaration(managementSource, 'renderCompanyKpiSimilarNameAdvisory'),
-        '({ state, ui, setSelectedActivity(activity) { selectedAnalyticsActivity = activity; }, analyticsRecords, analyticsFormContext, renderCompanyKpiCards, companyKpiDerivation, currentCompanyKpiFields, currentCompanyTypeField, normalizeCompanyKpiKey, renderCompanyKpiDetailModal, renderCompanyKpiSimilarNameAdvisory, companyKpiEstimatedCompanyCount });'
+        '({ state, ui, setSelectedActivity(activity) { selectedAnalyticsActivity = activity; }, analyticsRecords, analyticsFormContext, renderCompanyKpiCards, companyKpiDerivation, renderCompanyKpiUniqueControls, companyKpiUniqueControlState, companyKpiUniqueTypeFilterOptions, companyKpiFilteredSortedUniqueGroups, currentCompanyKpiFields, currentCompanyTypeField, normalizeCompanyKpiKey, renderCompanyKpiDetailModal, renderCompanyKpiSimilarNameAdvisory, companyKpiSimilarNameGroups, companyKpiEstimatedCompanyCount });'
     ].join('\n');
     const contract = vm.runInNewContext(source, {});
     const companyNameField = { itemKey: 'companyName', itemId: 'companyName', fieldId: 'companyName', type: 'short_text', title: 'Renamed Company', settings: { cardAssistField: 'company_name' }, visible: true };
@@ -1554,7 +1559,9 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
         record('hiwin-suffix', '2026-08-12T02:00:00.000Z', '上銀科技股份有限公司', 'MTU'),
         record('blank-name', '2026-08-13T01:00:00.000Z', '   ', ''),
         record('void-record', '2026-08-14T01:00:00.000Z', 'ABC科技', 'MTB', { status: 'void' }),
-        record('active-record', '2026-08-15T01:00:00.000Z', 'Active Co', 'MTB', { recordContext: 'field_intelligence' })
+        record('active-1', '2026-08-15T01:00:00.000Z', 'Active Co', 'MTB', { recordContext: 'field_intelligence' }),
+        record('active-2', '2026-08-16T01:00:00.000Z', 'active co', 'MTU', { recordContext: 'field_intelligence' }),
+        record('active-blank', '2026-08-17T01:00:00.000Z', '', '', { recordContext: 'field_intelligence' })
     ];
 
     const records = contract.analyticsRecords(activity);
@@ -1571,7 +1578,8 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
     assert.strictEqual(JSON.stringify(abc.duplicateRecords.map(entry => entry.record.id)), JSON.stringify(['abc-2']), 'Later same-identity records must be duplicate records');
     assert.strictEqual(abc.companyTypes.join('、'), 'MTB、MTU', 'Company Type must remain metadata and aggregate across one Company Name identity');
     assert(data.similarNamePairs.some(pair => pair.a === '上銀' && pair.b === '上銀科技'), 'Containment-based similar names must be advisory candidates');
-    assert.strictEqual(contract.companyKpiEstimatedCompanyCount(data.uniqueCompanyCount, data.similarNamePairs), 2, 'Overlapping similar-name pairs must reduce by connected components, not by blind pair count');
+    const advisoryGroups = contract.companyKpiSimilarNameGroups(data.similarNamePairs);
+    assert.strictEqual(contract.companyKpiEstimatedCompanyCount(data.uniqueCompanyCount, advisoryGroups), 2, 'Overlapping similar-name pairs must reduce by connected components, not by blind pair count');
     assert.strictEqual(data.uniqueCompanyCount, data.uniqueGroups.length, 'Unique modal groups must derive from the KPI aggregation');
     assert.strictEqual(data.duplicateRecordCount, data.duplicateGroups.reduce((sum, group) => sum + group.duplicateRecords.length, 0), 'Duplicate modal counts must derive from the KPI aggregation');
     assert.strictEqual(data.invalidRecordCount, data.invalidRecords.length, 'Invalid modal rows must derive from the KPI aggregation');
@@ -1589,10 +1597,29 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
     assert(uniqueModal.includes('來拜訪公司數（去重）') && uniqueModal.includes('<th class="aim-company-kpi-row-number">#</th>') && uniqueModal.includes('公司名稱') && uniqueModal.includes('公司類型') && uniqueModal.includes('總紀錄'), 'Unique modal must render final title and row-numbered columns');
     assert(uniqueModal.includes('MTB、MTU'), 'Unique modal must show distinct Company Type metadata without splitting identity');
     assert(uniqueModal.includes('名稱相近，請人工確認'), 'Unique modal must render advisory only when candidate pairs exist');
-    assert(uniqueModal.includes('若以上相近名稱皆視為同公司，推估來拜訪公司數：2 家'), 'Unique modal must render connected-component advisory estimate');
+    assert(uniqueModal.includes('公司類型') && uniqueModal.includes('全部') && uniqueModal.includes('排序') && uniqueModal.includes('原始順序') && uniqueModal.includes('總紀錄：多 → 少') && uniqueModal.includes('總紀錄：少 → 多'), 'Unique modal must render lightweight Company Type filter and Total Records sort controls');
+    assert(uniqueModal.includes('若以下相近名稱皆視為同公司，推估來拜訪公司數：2 家'), 'Unique modal must render connected-component advisory estimate with corrected directional copy');
+    assert(!uniqueModal.includes('若以上相近名稱'), 'Unique modal must not keep the obsolete advisory direction copy');
     assert(uniqueModal.includes('正式統計仍以目前紀錄內容為準。'), 'Unique modal must state advisory estimate is not official');
+    assert(uniqueModal.includes('上銀 / 上銀科技 / 上銀科技股份有限公司：3 → 1，少 2 家'), 'Unique modal must render connected similar-name groups instead of duplicate pair rows');
+    assert.strictEqual((uniqueModal.match(/↔/g) || []).length, 0, 'Connected advisory display must not render individual pair rows');
     assert.strictEqual(uniqueModal.includes('4 家'), false, 'Advisory estimate must not rewrite official KPI value inside the advisory section');
     assert.strictEqual(contract.renderCompanyKpiSimilarNameAdvisory([], data.uniqueCompanyCount), '', 'Empty advisory must remain hidden');
+    assert.strictEqual(contract.companyKpiUniqueControlState().sort, 'original', 'Unique Company modal default sort must preserve existing order');
+    assert.strictEqual(contract.companyKpiUniqueControlState().companyType, 'all', 'Unique Company modal default Company Type filter must show all rows');
+    const mtbOptions = contract.companyKpiUniqueTypeFilterOptions(data.uniqueGroups).map(entry => entry.label).join('|');
+    assert(mtbOptions.includes('全部') && mtbOptions.includes('MTB') && mtbOptions.includes('MTU'), 'Company Type filter options must derive from available unique-group metadata');
+    const originalNames = contract.companyKpiFilteredSortedUniqueGroups(data).map(group => group.displayName).join('|');
+    assert.strictEqual(originalNames, 'ABC科技|上銀|上銀科技|上銀科技股份有限公司', 'Original display order must stay unchanged by default');
+    contract.ui.companyKpiModal = { mode: 'unique', companyTypeFilter: 'MTU', uniqueSort: 'total-asc' };
+    const filteredSorted = contract.companyKpiFilteredSortedUniqueGroups(data);
+    assert.strictEqual(filteredSorted.map(group => group.displayName).join('|'), '上銀科技|上銀科技股份有限公司|ABC科技', 'Company Type filter and Total Records sort must compose without mutating official groups');
+    assert.strictEqual(data.uniqueGroups.map(group => group.displayName).join('|'), originalNames, 'Display filter/sort must not mutate official aggregation order');
+    const filteredModal = contract.renderCompanyKpiDetailModal();
+    assert(filteredModal.indexOf('上銀科技') < filteredModal.indexOf('ABC科技'), 'Visible row order must follow composed filter/sort state');
+    assert(filteredModal.includes('<td class="aim-company-kpi-row-number">1</td>') && filteredModal.includes('<td class="aim-company-kpi-row-number">2</td>'), 'Visible row numbers must reflect current display order');
+    assert(filteredModal.includes('推估來拜訪公司數：2 家'), 'Similar-name estimate must ignore the Company Type display filter');
+    contract.ui.companyKpiModal = { mode: 'unique', companyTypeFilter: 'all', uniqueSort: 'original' };
     contract.ui.companyKpiModal = { mode: 'duplicate' };
     const duplicateModal = contract.renderCompanyKpiDetailModal();
     assert(duplicateModal.includes('同公司重複紀錄數') && duplicateModal.includes('<th class="aim-company-kpi-row-number">#</th>') && duplicateModal.includes('重複筆數'), 'Duplicate modal must render final title and row-numbered grouped columns');
@@ -1632,6 +1659,23 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
     assert.strictEqual(ambiguousTypeData.capable, true, 'Company Type ambiguity must not hide the KPI group');
     assert.strictEqual(ambiguousTypeData.uniqueGroups.every(group => group.companyTypes.length === 0), true, 'Ambiguous Company Type metadata must be unavailable instead of guessed');
     assert.strictEqual(ambiguousTypeData.uniqueCompanyCount + ambiguousTypeData.duplicateRecordCount + ambiguousTypeData.invalidRecordCount, records.length, 'Ambiguous Company Type must not affect the three-bucket invariant');
+
+    contract.ui.analyticsScope = 'active-intelligence';
+    const activeRecords = contract.analyticsRecords(activity);
+    const activeData = contract.companyKpiDerivation(activity, activeRecords, contract.analyticsFormContext());
+    assert.strictEqual(activeRecords.length, 3, 'Field Intelligence Company KPI must use field_intelligence records only');
+    assert.strictEqual(activeData.capable, true, 'Field Intelligence Company KPI capability must use its own form context');
+    assert.strictEqual(activeData.uniqueCompanyCount, 1, 'Field Intelligence Unique Company count must be isolated from Visitor names');
+    assert.strictEqual(activeData.duplicateRecordCount, 1, 'Field Intelligence Duplicate count must be isolated from Visitor records');
+    assert.strictEqual(activeData.invalidRecordCount, 1, 'Field Intelligence Invalid count must be isolated from Visitor records');
+    assert.strictEqual(activeData.uniqueCompanyCount + activeData.duplicateRecordCount + activeData.invalidRecordCount, activeRecords.length, 'Field Intelligence three-bucket invariant must hold independently');
+    contract.ui.companyKpiModal = { mode: 'unique', companyTypeFilter: 'all', uniqueSort: 'original' };
+    contract.setSelectedActivity(activity);
+    const activeModal = contract.renderCompanyKpiDetailModal();
+    assert(activeModal.includes('Active Co') && !activeModal.includes('上銀'), 'Shared Company KPI modal must render context-safe Field Intelligence data without Visitor leakage');
+    const activeWithoutName = { ...activity, formDesignRuntimeByContext: { ...activity.formDesignRuntimeByContext, field_intelligence: { published: { items: [companyTypeField] } } } };
+    assert.strictEqual(contract.companyKpiDerivation(activeWithoutName, activeRecords, 'field_intelligence').capable, false, 'Field Intelligence Company Name capability must be evaluated against its own form context');
+    contract.ui.analyticsScope = 'visitor';
 
     const ambiguousName = {
         ...activity,
