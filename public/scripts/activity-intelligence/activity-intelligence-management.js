@@ -8642,8 +8642,8 @@
     const companyName = currentCompanyNameField(activity, formContext);
     const companyType = currentCompanyTypeField(activity, formContext);
     return {
-      capable: Boolean(companyName.field && companyType.field),
-      reason: companyName.reason || companyType.reason || '',
+      capable: Boolean(companyName.field),
+      reason: companyName.reason || '',
       companyNameField: companyName.field,
       companyTypeField: companyType.field,
       companyName,
@@ -8677,8 +8677,7 @@
   }
 
   function companyKpiCompanyTypeField(field) {
-    const title = String(field && field.title || '').trim().replace(/\s+/g, '');
-    return /^(公司類型|客戶產業大類|產業大類|產業別|產業類別|CompanyType|Industry)$/i.test(title);
+    return String(field && field.title || '').trim() === '公司類型';
   }
 
   function companyKpiRecordEntry(record, companyNameField, companyTypeField, index) {

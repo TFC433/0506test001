@@ -1516,7 +1516,7 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
         extractFunctionDeclaration(managementSource, 'renderCompanyKpiInvalidDetail'),
         extractFunctionDeclaration(managementSource, 'renderCompanyKpiTable'),
         extractFunctionDeclaration(managementSource, 'renderCompanyKpiSimilarNameAdvisory'),
-        '({ state, ui, setSelectedActivity(activity) { selectedAnalyticsActivity = activity; }, analyticsRecords, analyticsFormContext, renderCompanyKpiCards, companyKpiDerivation, currentCompanyKpiFields, normalizeCompanyKpiKey, renderCompanyKpiDetailModal });'
+        '({ state, ui, setSelectedActivity(activity) { selectedAnalyticsActivity = activity; }, analyticsRecords, analyticsFormContext, renderCompanyKpiCards, companyKpiDerivation, currentCompanyKpiFields, currentCompanyTypeField, normalizeCompanyKpiKey, renderCompanyKpiDetailModal });'
     ].join('\n');
     const contract = vm.runInNewContext(source, {});
     const companyNameField = { itemKey: 'companyName', itemId: 'companyName', fieldId: 'companyName', type: 'short_text', title: 'Renamed Company', settings: { cardAssistField: 'company_name' }, visible: true };
@@ -1554,7 +1554,7 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
 
     const records = contract.analyticsRecords(activity);
     const data = contract.companyKpiDerivation(activity, records, contract.analyticsFormContext());
-    assert.strictEqual(data.capable, true, 'Company KPI must render when Company Name and Company Type are clear');
+    assert.strictEqual(data.capable, true, 'Company KPI must render when Company Name is clear');
     assert.strictEqual(records.length, 5, 'Company KPI must use the existing Analytics scope and exclude void/other-context records');
     assert.strictEqual(data.uniqueCompanyCount, 3, 'Unique Company count must count distinct valid Company Name identities');
     assert.strictEqual(data.duplicateRecordCount, 1, 'Duplicate KPI must count duplicate records, not duplicate company groups');
@@ -1591,17 +1591,38 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
     assert(invalidModal.includes('無效紀錄') && invalidModal.includes('（空白）') && invalidModal.includes('blank-name Recorder') && invalidModal.includes('2026-08-13 01:00'), 'Invalid modal must render record-level blank, recorder, and time details');
 
     const withoutType = { ...activity, formDesignRuntimeByContext: { visitor: { published: { items: [companyNameField] } } } };
-    assert.strictEqual(contract.currentCompanyKpiFields(withoutType, 'visitor').reason, 'COMPANY_TYPE_FIELD=ABSENT');
-    assert.strictEqual(contract.companyKpiDerivation(withoutType, records, 'visitor').capable, false, 'Missing Company Type must hide the KPI group');
+    const withoutTypeData = contract.companyKpiDerivation(withoutType, records, 'visitor');
+    assert.strictEqual(contract.currentCompanyTypeField(withoutType, 'visitor').reason, 'COMPANY_TYPE_FIELD=ABSENT');
+    assert.strictEqual(withoutTypeData.capable, true, 'Missing Company Type must not hide the KPI group');
+    assert.strictEqual(withoutTypeData.uniqueCompanyCount + withoutTypeData.duplicateRecordCount + withoutTypeData.invalidRecordCount, records.length, 'Missing Company Type must not affect the three-bucket invariant');
+    assert.strictEqual(withoutTypeData.invalidRecordCount, 1, 'Missing Company Type must not create invalid records');
+    assert(contract.renderCompanyKpiCards(withoutTypeData).includes('去重公司'), 'Unique Company Name with no Company Type must still render Company KPI cards');
+    contract.setSelectedActivity(withoutType);
+    contract.ui.companyKpiModal = { mode: 'unique' };
+    assert(contract.renderCompanyKpiDetailModal().includes('—'), 'Unique modal must tolerate unavailable Company Type metadata');
+    contract.setSelectedActivity(activity);
+
     const withoutName = { ...activity, formDesignRuntimeByContext: { visitor: { published: { items: [companyTypeField] } } } };
     assert.strictEqual(contract.currentCompanyKpiFields(withoutName, 'visitor').reason, 'COMPANY_NAME_FIELD=ABSENT');
     assert.strictEqual(contract.companyKpiDerivation(withoutName, records, 'visitor').capable, false, 'Missing Company Name must hide the KPI group');
+
+    const withCustomerIndustry = {
+        ...activity,
+        formDesignRuntimeByContext: { visitor: { published: { items: [companyNameField, companyTypeField, { ...companyTypeField, fieldId: 'customerIndustry', itemKey: 'customerIndustry', itemId: 'customerIndustry', title: '客戶產業大類' }] } } }
+    };
+    assert.strictEqual(contract.currentCompanyTypeField(withCustomerIndustry, 'visitor').field.fieldId, 'companyType', 'Customer Industry must not be treated as Company Type metadata');
+    assert.strictEqual(contract.companyKpiDerivation(withCustomerIndustry, records, 'visitor').capable, true, 'Company Type and Customer Industry coexistence must not hide the KPI group');
+
     const ambiguousType = {
         ...activity,
-        formDesignRuntimeByContext: { visitor: { published: { items: [companyNameField, companyTypeField, { ...companyTypeField, fieldId: 'industry', itemKey: 'industry', itemId: 'industry', title: 'Industry' }] } } }
+        formDesignRuntimeByContext: { visitor: { published: { items: [companyNameField, companyTypeField, { ...companyTypeField, fieldId: 'companyType2', itemKey: 'companyType2', itemId: 'companyType2', title: '公司類型' }] } } }
     };
-    assert.strictEqual(contract.currentCompanyKpiFields(ambiguousType, 'visitor').reason, 'COMPANY_TYPE_FIELD=AMBIGUOUS');
-    assert.strictEqual(contract.companyKpiDerivation(ambiguousType, records, 'visitor').capable, false, 'Ambiguous Company Type must hide the KPI group');
+    const ambiguousTypeData = contract.companyKpiDerivation(ambiguousType, records, 'visitor');
+    assert.strictEqual(contract.currentCompanyTypeField(ambiguousType, 'visitor').reason, 'COMPANY_TYPE_FIELD=AMBIGUOUS');
+    assert.strictEqual(ambiguousTypeData.capable, true, 'Company Type ambiguity must not hide the KPI group');
+    assert.strictEqual(ambiguousTypeData.uniqueGroups.every(group => group.companyTypes.length === 0), true, 'Ambiguous Company Type metadata must be unavailable instead of guessed');
+    assert.strictEqual(ambiguousTypeData.uniqueCompanyCount + ambiguousTypeData.duplicateRecordCount + ambiguousTypeData.invalidRecordCount, records.length, 'Ambiguous Company Type must not affect the three-bucket invariant');
+
     const ambiguousName = {
         ...activity,
         formDesignRuntimeByContext: { visitor: { published: { items: [companyNameField, { ...companyNameField, fieldId: 'companyName2', itemKey: 'companyName2', itemId: 'companyName2' }, companyTypeField] } } }
