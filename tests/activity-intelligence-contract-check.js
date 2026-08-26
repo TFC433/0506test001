@@ -1477,7 +1477,8 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     assert(cssSource.includes('grid-template-columns: repeat(3, minmax(0, 1fr));'), 'Mobile Analytics scope tabs must support three tabs');
     assert(cssSource.includes('.aim-follow-up-table-wrap') && cssSource.includes('overflow-x: auto'), 'Follow-up table must be contained by an overflow-safe wrapper');
     assert(cssSource.includes('.aim-follow-up-kpi-card[aria-pressed="true"]') && cssSource.includes('background: #ecfdf5'), 'Active Follow-up KPI cards must use subtle green treatment');
-    assert(cssSource.includes('.aim-follow-up-meta-cell') && cssSource.includes('font-size: 11px'), 'Follow-up metadata columns must use lighter table styling');
+    assert(!cssSource.includes('.aim-follow-up-meta-head .aim-follow-up-sort-header'), 'Recorder/time headers must keep normal table-header hierarchy');
+    assert(cssSource.includes('.aim-follow-up-meta-cell') && cssSource.includes('font-size: 11px'), 'Follow-up metadata row cells must use lighter table styling');
     assert(cssSource.includes('.aim-follow-up-attention') && cssSource.includes('border-top: 1px solid var(--aim-border)'), 'Attention Records must be separated below the main table with a subtle divider');
     assert(cssSource.includes('.aim-follow-up-reasons'), 'Attention reasons must render as compact tags inside the table');
 
@@ -1544,8 +1545,8 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
         extractFunctionDeclaration(managementSource, 'followUpSortValue'),
         extractFunctionDeclaration(managementSource, 'followUpSortedRows'),
         extractFunctionDeclaration(managementSource, 'followUpNormalizedEmail'),
-        extractFunctionDeclaration(managementSource, 'followUpDuplicateEmailKeys'),
-        extractFunctionDeclaration(managementSource, 'followUpAttentionRows'),
+        extractFunctionDeclaration(managementSource, 'followUpStableDuplicateCompare'),
+        extractFunctionDeclaration(managementSource, 'followUpPartitionRows'),
         extractFunctionDeclaration(managementSource, 'followUpAnalyticsData'),
         '({ state, ui, followUpVisitorRecords, followUpPriorityField, followUpPriorityValue, extractEmailsFromText, followUpSubmissionEmails, followUpAnalyticsData });'
     ].join('\n');
@@ -1592,11 +1593,14 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
         record('r7', { fld_priority: '中', notes: 'fallback@example.com' }, { formRuntimeSnapshot: { items: fallbackItems }, createdAt: '2026-08-16T01:00:00.000Z', companyName: 'Fallback Co', personName: 'Fallback' }),
         record('r8', { priority: '中', company: 'Gamma', person: 'Gina', notes: 'JOHN@example.com' }, { createdAt: '2026-08-16T02:30:00.000Z', companyName: 'Gamma', personName: 'Gina' }),
         record('r9', { priority: '高', company: 'Delta', person: 'Dana', notes: '' }, { createdAt: '2026-08-16T03:30:00.000Z', companyName: 'Delta', personName: 'Dana' }),
+        record('r10', { priority: '高', company: 'Tie A', person: 'Tina', notes: 'tie@example.com' }, { createdAt: '2026-08-16T05:00:00.000Z', companyName: 'Tie A', personName: 'Tina' }),
+        record('r11', { priority: '高', company: 'Tie B', person: 'Tim', notes: 'TIE@example.com' }, { createdAt: '2026-08-16T05:00:00.000Z', companyName: 'Tie B', personName: 'Tim' }),
+        record('r12', { priority: '中', company: 'Multi', person: 'Mina', notes: 'other@example.com and sales@example.com' }, { createdAt: '2026-08-16T05:30:00.000Z', companyName: 'Multi', personName: 'Mina' }),
         record('active-1', { priority: '高', notes: 'active@example.com' }, { recordContext: 'field_intelligence' }),
         record('void-1', { priority: '高', notes: 'void@example.com' }, { status: 'void' })
     ];
 
-    assertJsonEqual(contract.followUpVisitorRecords(activity).map(item => item.id), ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9'], 'Follow-up dataset must use only non-void Visitor records');
+    assertJsonEqual(contract.followUpVisitorRecords(activity).map(item => item.id), ['r1', 'r2', 'r3', 'r4', 'r5', 'r6', 'r7', 'r8', 'r9', 'r10', 'r11', 'r12'], 'Follow-up dataset must use only non-void Visitor records');
     assert.strictEqual(contract.followUpPriorityValue(contract.state.records.find(item => item.id === 'r6'), activity), '', 'Broad priority-like titles must not resolve as the Follow-up priority');
     assert.strictEqual(contract.followUpPriorityField(contract.state.records.find(item => item.id === 'r7'), activity).fieldId, 'fld_priority', 'Narrow fld_priority fallback must remain available');
     const beforeEmailRead = JSON.stringify(contract.state.records[0]);
@@ -1607,26 +1611,40 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     assert(!emails.some(entry => entry.email === 'hidden@example.com'), 'Email derivation must not scan object/blob answer values');
     assertJsonEqual(contract.extractEmailsFromText('a@test invalid@@example.com ok.person@example.co.jp bad@x.c'), ['ok.person@example.co.jp'], 'Email extractor must stay conservative');
 
+    const assertPartitionInvariant = (result, message) => {
+        const mainIds = result.rows.map(row => row.id);
+        const attentionIds = result.attentionRows.map(row => row.id);
+        const scopedIds = result.scopedRows.map(row => row.id);
+        assert.strictEqual(new Set(mainIds.filter(id => attentionIds.includes(id))).size, 0, `${message}: Main and Attention must be mutually exclusive`);
+        assert.strictEqual(mainIds.length + attentionIds.length, scopedIds.length, `${message}: Main + Attention must equal active scoped submissions`);
+        assertJsonEqual([...mainIds, ...attentionIds].sort(), scopedIds.slice().sort(), `${message}: no scoped submission may disappear`);
+    };
+
     let data = contract.followUpAnalyticsData(activity);
-    assertJsonEqual(data.kpis, { '高': 2, '中': 3, '低': 1, '暫不追蹤': 1 }, 'KPIs must count known priorities only and remain independent of active card state');
-    assertJsonEqual(data.rows.map(row => row.id), ['r1', 'r9', 'r2', 'r8', 'r7'], 'Default Follow-up visibility must show high and medium only');
+    assertJsonEqual(data.kpis, { '高': 4, '中': 4, '低': 1, '暫不追蹤': 1 }, 'KPIs must count known priorities only and remain independent of active card state');
+    assertJsonEqual(data.rows.map(row => row.id), ['r10', 'r2', 'r8', 'r7'], 'Default Main list must show only scoped normal records');
     assert.strictEqual(data.allRows.filter(row => row.company === 'Acme').length, 3, 'Worklist must keep one row per submission without company dedupe');
-    assertJsonEqual(data.rows.map(row => row.rowNumber), [1, 2, 3, 4, 5], 'Row numbers must be display-derived after sorting and priority visibility');
+    assertJsonEqual(data.rows.map(row => row.rowNumber), [1, 2, 3, 4], 'Main row numbers must be display-derived after partitioning and sorting');
     assert.strictEqual(data.rows.some(row => row.id === 'r3'), false, 'Low-priority rows must be hidden by default');
     assert.strictEqual(data.rows.some(row => row.id === 'r4'), false, 'No-follow rows must be hidden by default');
-    assertJsonEqual(data.attentionRows.map(row => row.id), ['r1', 'r9', 'r8'], 'Attention Records must be derived from the current active priority scope');
-    assertJsonEqual(data.attentionRows.map(row => row.rowNumber), [1, 2, 3], 'Attention Records must have independent display row numbers');
+    assertJsonEqual(data.attentionRows.map(row => row.id), ['r11', 'r1', 'r9', 'r12'], 'Attention Records must contain only scoped no-email or later duplicate records');
+    assertJsonEqual(data.attentionRows.map(row => row.rowNumber), [1, 2, 3, 4], 'Attention Records must have independent display row numbers');
     assertJsonEqual(data.attentionRows.find(row => row.id === 'r9').attentionReasons, ['無 Email'], 'Current-scope records with no Email must be attention records');
-    assertJsonEqual(data.attentionRows.find(row => row.id === 'r1').attentionReasons, ['重複 Email'], 'Duplicate Email must be detected case-insensitively across distinct submissions');
-    assertJsonEqual(data.attentionRows.find(row => row.id === 'r8').attentionReasons, ['重複 Email'], 'All records sharing a duplicate Email must be attention records');
+    assertJsonEqual(data.attentionRows.find(row => row.id === 'r1').attentionReasons, ['重複 Email'], 'Later duplicate Email must be detected case-insensitively across distinct submissions');
+    assert(data.rows.some(row => row.id === 'r8'), 'Earlier duplicate Email occurrence must remain in Main');
+    assertJsonEqual(data.attentionRows.find(row => row.id === 'r11').attentionReasons, ['重複 Email'], 'createdAt ties must use deterministic submission id ordering');
+    assert(data.rows.some(row => row.id === 'r10'), 'createdAt tie earliest id occurrence must remain Main');
+    assertJsonEqual(data.attentionRows.find(row => row.id === 'r12').attentionReasons, ['重複 Email'], 'A later multi-Email submission must move to Attention when any Email duplicates an earlier submission');
     assert(!data.attentionRows.some(row => row.id === 'r2'), 'Same company with distinct Email must not create an attention record');
     assert(!data.attentionRows.some(row => row.id === 'r3'), 'Duplicate/no-email detection outside active KPI scope must not influence visible Attention Records');
+    assertPartitionInvariant(data, 'default scope');
 
     contract.ui.followUp.priorities = ['低'];
     data = contract.followUpAnalyticsData(activity);
-    assertJsonEqual(data.rows.map(row => row.id), ['r3'], 'Low-priority rows must be available through lightweight priority visibility');
+    assertJsonEqual(data.rows.map(row => row.id), [], 'Low-priority no-Email records must not remain in Main');
     assertJsonEqual(data.attentionRows.map(row => row.id), ['r3'], 'Toggling KPI scope must recompute Attention Records');
-    assertJsonEqual(data.kpis, { '高': 2, '中': 3, '低': 1, '暫不追蹤': 1 }, 'KPI counts must not be affected by visible priority filtering');
+    assertPartitionInvariant(data, 'low-only scope');
+    assertJsonEqual(data.kpis, { '高': 4, '中': 4, '低': 1, '暫不追蹤': 1 }, 'KPI counts must not be affected by visible priority filtering');
     contract.ui.followUp.priorities = ['暫不追蹤'];
     data = contract.followUpAnalyticsData(activity);
     assertJsonEqual(data.rows.map(row => row.id), ['r4'], 'No-follow rows must be available when the no-follow KPI is active');
@@ -1634,22 +1652,25 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     data = contract.followUpAnalyticsData(activity);
     assertJsonEqual(data.rows.map(row => row.id), [], 'All KPI cards off must produce an empty visible main list');
     assertJsonEqual(data.attentionRows.map(row => row.id), [], 'All KPI cards off must produce an empty Attention Records list');
-    assertJsonEqual(data.kpis, { '高': 2, '中': 3, '低': 1, '暫不追蹤': 1 }, 'All KPI cards off must not change KPI counts');
+    assertJsonEqual(data.kpis, { '高': 4, '中': 4, '低': 1, '暫不追蹤': 1 }, 'All KPI cards off must not change KPI counts');
     contract.ui.followUp.priorities = ['高', '中'];
-    assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.id), ['r1', 'r9', 'r2', 'r8', 'r7'], 'KPI priority scope must support high/medium combinations');
+    assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.id), ['r10', 'r2', 'r8', 'r7'], 'KPI priority scope must support high/medium combinations');
     contract.ui.followUp.priorities = ['高', '中', '低'];
     contract.ui.followUp.manualState.r2 = { mailSent: true, opportunityCreated: false };
     assert.strictEqual(contract.followUpAnalyticsData(activity).rows.find(row => row.id === 'r2').mailSent, true, '已寄 Mail must remain runtime-only manual state');
     contract.ui.followUp.manualState.r1 = { mailSent: true, opportunityCreated: true };
     data = contract.followUpAnalyticsData(activity);
-    assert.strictEqual(data.rows.find(row => row.id === 'r1').opportunityCreated, true, '已進CRM must keep the existing runtime state semantics');
+    assert.strictEqual(data.attentionRows.find(row => row.id === 'r1').opportunityCreated, true, '已進CRM must keep the existing runtime state semantics');
     assert.strictEqual(data.attentionRows.find(row => row.id === 'r1').opportunityCreated, true, 'Manual checkbox state must be shared across Main and Attention rows by submission');
     contract.ui.followUp.sortKey = 'company';
     contract.ui.followUp.sortDirection = 'desc';
-    assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.rowNumber), [1, 2, 3, 4, 5, 6], 'Row numbers must recompute after explicit sorting');
+    assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.rowNumber), [1, 2, 3, 4], 'Main row numbers must recompute after explicit sorting');
     contract.ui.followUp.sortKey = 'createdAt';
     contract.ui.followUp.sortDirection = 'asc';
-    assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.id), ['r7', 'r3', 'r8', 'r2', 'r9', 'r1'], '表單時間 table-header sorting must remain functional');
+    data = contract.followUpAnalyticsData(activity);
+    assertJsonEqual(data.rows.map(row => row.id), ['r7', 'r8', 'r2', 'r10'], '表單時間 table-header sorting must remain functional after partitioning');
+    assert(data.attentionRows.some(row => row.id === 'r1') && data.rows.some(row => row.id === 'r8'), 'UI sorting must not swap duplicate ownership');
+    assertPartitionInvariant(data, 'sorted high-medium-low scope');
 }
 
 function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {

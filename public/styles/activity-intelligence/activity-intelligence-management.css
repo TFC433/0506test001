@@ -1589,7 +1589,6 @@ a:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-.aim-follow-up-meta-head .aim-follow-up-sort-header,
 .aim-follow-up-meta-cell {
   color: var(--aim-muted-light, var(--aim-muted));
   font-size: 11px;

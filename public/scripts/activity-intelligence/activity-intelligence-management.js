@@ -8971,38 +8971,41 @@
     return String(email || '').trim().toLowerCase();
   }
 
-  function followUpDuplicateEmailKeys(rows) {
-    const emailRows = new Map();
-    (rows || []).forEach(row => {
-      const rowEmailKeys = new Set((row.emails || []).map(entry => followUpNormalizedEmail(entry.email)).filter(Boolean));
-      rowEmailKeys.forEach(key => {
-        if (!emailRows.has(key)) emailRows.set(key, new Set());
-        emailRows.get(key).add(row.id);
-      });
-    });
-    return new Set(Array.from(emailRows.entries()).filter(([, rowIds]) => rowIds.size >= 2).map(([key]) => key));
+  function followUpStableDuplicateCompare(a, b) {
+    const createdDiff = String(a.createdAt || '').localeCompare(String(b.createdAt || ''));
+    if (createdDiff) return createdDiff;
+    const idDiff = String(a.id || '').localeCompare(String(b.id || ''), 'zh-Hant');
+    if (idDiff) return idDiff;
+    return Number(a.originalIndex) - Number(b.originalIndex);
   }
 
-  function followUpAttentionRows(rows) {
-    const duplicateKeys = followUpDuplicateEmailKeys(rows);
-    const attentionRows = (rows || []).map(row => {
+  function followUpPartitionRows(rows) {
+    const normalRows = [];
+    const attentionRows = [];
+    const seenEmailKeys = new Set();
+    (rows || []).slice().sort(followUpStableDuplicateCompare).forEach(row => {
+      const rowEmailKeys = new Set((row.emails || []).map(entry => followUpNormalizedEmail(entry.email)).filter(Boolean));
       const reasons = [];
-      if (!row.emails.length) reasons.push('無 Email');
-      else if (row.emails.some(entry => duplicateKeys.has(followUpNormalizedEmail(entry.email)))) reasons.push('重複 Email');
-      return reasons.length ? { ...row, attentionReasons: reasons } : null;
-    }).filter(Boolean);
-    return followUpSortedRows(attentionRows).map((row, index) => ({ ...row, rowNumber: index + 1 }));
+      if (!rowEmailKeys.size) reasons.push('無 Email');
+      else if (Array.from(rowEmailKeys).some(key => seenEmailKeys.has(key))) reasons.push('重複 Email');
+      rowEmailKeys.forEach(key => seenEmailKeys.add(key));
+      if (reasons.length) attentionRows.push({ ...row, attentionReasons: reasons });
+      else normalRows.push(row);
+    });
+    return { normalRows, attentionRows };
   }
 
   function followUpAnalyticsData(activity) {
     const records = followUpVisitorRecords(activity);
     const allRows = records.map(record => followUpRowForRecord(record, activity)).filter(Boolean);
     const scopedRows = allRows.filter(followUpRowMatchesFilters);
-    const rows = followUpSortedRows(scopedRows).map((row, index) => ({ ...row, rowNumber: index + 1 }));
-    const attentionRows = followUpAttentionRows(scopedRows);
+    const partition = followUpPartitionRows(scopedRows);
+    const rows = followUpSortedRows(partition.normalRows).map((row, index) => ({ ...row, rowNumber: index + 1 }));
+    const attentionRows = followUpSortedRows(partition.attentionRows).map((row, index) => ({ ...row, rowNumber: index + 1 }));
     return {
       kpis: followUpKpiCounts(records, activity),
       allRows,
+      scopedRows,
       rows,
       attentionRows
     };
