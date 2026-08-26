@@ -1961,6 +1961,7 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert(!bubbleOptionSource.includes('externalLabelCandidate'), 'Bubble active renderer must not mark external label candidates');
     assert(!bubbleOptionSource.includes('visualTier'), 'Bubble active renderer must not use discrete visual tiers');
     assert(!bubbleOptionSource.includes('convertToPixel'), 'Bubble active renderer must not depend on chart-instance geometry');
+    assert(!bubbleOptionSource.includes('analyticsReadableLabelColor'), 'Bubble active renderer must not use adaptive fill-luminance label color');
     assert(!bubblePointsSource.includes('Math.random'), 'retained old Bubble packing helper must remain deterministic while inactive');
     assert.strictEqual(contract.analyticsBubbleContinuousSymbolSize(50, 0, 100, 18, 50), 34, 'Bubble continuous size mapping must linearly interpolate thumbnail symbols');
     assert.strictEqual(contract.analyticsBubbleContinuousSymbolSize(5, 5, 5, 18, 50), 34, 'equal Bubble metric values must use the neutral thumbnail midpoint');
@@ -1984,10 +1985,13 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.strictEqual(Math.round(bubbleOption.series[0].data[0].realPercent * 10) / 10, 73, 'Bubble precise percent must remain respondent percentage');
     assert.strictEqual(bubbleOption.series.length, 1, 'thumbnail Bubble must use one native scatter series');
     assert(!bubbleOption.series[0].data.some(point => point.visualTier || point.externalLabelCandidate), 'Bubble data points must not carry packed-layout tier or annotation state');
+    assert(!bubbleOption.series[0].data.some(point => Object.prototype.hasOwnProperty.call(point, 'labelColor')), 'Bubble data points must not carry adaptive label color state');
+    assert.strictEqual(bubbleOption.series[0].label.color, '#ffffff', 'Bubble labels must use stable white text');
+    assert.strictEqual(bubbleOption.series[0].label.textBorderColor, 'rgba(15, 23, 42, 0.75)', 'Bubble labels must use a dark neutral outline');
+    assert.strictEqual(bubbleOption.series[0].label.textBorderWidth, 2, 'Bubble labels must use a restrained native text border width');
     assert.strictEqual(bubbleOption.series[0].label.fontWeight, 600, 'Bubble labels must use semibold typography');
     assert.strictEqual(contract.analyticsReadableLabelColor('rgba(15, 23, 42, 0.92)', { isDark: false }), '#ffffff', 'Bubble label color must use light text on dark resolved fills');
     assert.strictEqual(contract.analyticsReadableLabelColor('rgba(251, 191, 36, 0.72)', { isDark: false }), '#0f172a', 'Bubble label color must use dark text on light resolved fills');
-    assert(bubbleOption.series[0].data.some(point => point.labelColor === '#ffffff') && bubbleOption.series[0].data.some(point => point.labelColor === '#0f172a'), 'Bubble point labels must resolve adaptive fill-based contrast');
     const countBubbleOption = contract.analyticsBubbleOption(bubbleChart, { type: 'bubble', valueMode: 'count' });
     assert.strictEqual(countBubbleOption.series[0].data[0].value[1], 73, 'Bubble count-mode Y value must use count');
     assert.strictEqual(countBubbleOption.series[0].data[0].symbolSize, 50, 'Bubble count-mode symbol size must follow count');
@@ -2033,6 +2037,12 @@ function assertAnalyticsChartTypeImplementationContract(managementSource, cssSou
     assert.strictEqual(readingBubbleOption.tooltip.backgroundColor, 'rgba(15, 23, 42, 0.96)', 'Bubble expanded Dark tooltip must use existing chart-local tooltip styling');
     assert.strictEqual(readingBubbleOption.series[0].label.fontSize, 13, 'Bubble labels must respond to label size control');
     assert.strictEqual(readingBubbleOption.series[0].label.rich.value.fontSize, 16, 'Bubble value labels must respond to value size control');
+    assert.strictEqual(readingBubbleOption.series[0].label.rich.label.color, '#ffffff', 'Bubble rich category labels must use stable white text');
+    assert.strictEqual(readingBubbleOption.series[0].label.rich.value.color, '#ffffff', 'Bubble rich value labels must use stable white text');
+    assert.strictEqual(readingBubbleOption.series[0].label.rich.label.textBorderColor, 'rgba(15, 23, 42, 0.75)', 'Bubble rich category labels must use a dark neutral outline');
+    assert.strictEqual(readingBubbleOption.series[0].label.rich.value.textBorderColor, 'rgba(15, 23, 42, 0.75)', 'Bubble rich value labels must use a dark neutral outline');
+    assert.strictEqual(readingBubbleOption.series[0].label.rich.label.textBorderWidth, 2, 'Bubble rich category labels must use the native text border');
+    assert.strictEqual(readingBubbleOption.series[0].label.rich.value.textBorderWidth, 2, 'Bubble rich value labels must use the native text border');
     assert.strictEqual(readingBubbleOption.series[0].label.rich.label.fontWeight, 600, 'Bubble rich category labels must remain semibold');
     assert.strictEqual(readingBubbleOption.series[0].label.rich.value.fontWeight, 600, 'Bubble rich value labels must remain semibold');
     const bubbleTooltip = contract.analyticsTooltipFormatter({ marker: '', name: 'Tier 0', data: bubbleOption.series[0].data[0] });

@@ -5433,7 +5433,6 @@
         sourceIndex: entry.index,
         symbolSize: size,
         itemStyle: { color },
-        labelColor: analyticsReadableLabelColor(color, styles),
         label: {
           width: Math.max(22, Math.round(size - 8)),
           overflow: 'truncate',
@@ -5487,9 +5486,11 @@
         label: {
           show: true,
           position: 'inside',
-          color: params => (params.data && params.data.labelColor) || (styles.isDark ? '#0f172a' : '#ffffff'),
+          color: '#ffffff',
           fontSize: analyticsReadingFontSize(modal ? 11 : 10, options, 'labelSize') || (modal ? 11 : 10),
           fontWeight: 600,
+          textBorderColor: 'rgba(15, 23, 42, 0.75)',
+          textBorderWidth: 2,
           overflow: 'truncate',
           ellipsis: '...',
           formatter: params => analyticsBubbleLabelFormatter(params, percentage, reading, modal),
@@ -5499,6 +5500,9 @@
           focus: 'self',
           label: {
             show: true,
+            color: '#ffffff',
+            textBorderColor: 'rgba(15, 23, 42, 0.75)',
+            textBorderWidth: 2,
             formatter: params => {
               const data = params.data || {};
               return `${params.name}\n${percentage ? formatAnalyticsPercent(data.realPercent) : data.realCount}`;
@@ -5540,13 +5544,19 @@
     const valueSize = analyticsReadingFontSize(valueBaseSize, options, 'valueSize');
     return {
       label: {
+        color: '#ffffff',
         fontSize: labelSize,
         fontWeight: 600,
+        textBorderColor: 'rgba(15, 23, 42, 0.75)',
+        textBorderWidth: 2,
         lineHeight: labelSize ? labelSize + 4 : undefined
       },
       value: {
+        color: '#ffffff',
         fontSize: valueSize,
         fontWeight: 600,
+        textBorderColor: 'rgba(15, 23, 42, 0.75)',
+        textBorderWidth: 2,
         lineHeight: valueSize ? valueSize + 4 : undefined
       }
     };
