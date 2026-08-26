@@ -1478,7 +1478,7 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     assert(cssSource.includes('.aim-follow-up-table-wrap') && cssSource.includes('overflow-x: auto'), 'Follow-up table must be contained by an overflow-safe wrapper');
     assert(cssSource.includes('.aim-follow-up-kpi-card[aria-pressed="true"]') && cssSource.includes('background: #ecfdf5'), 'Active Follow-up KPI cards must use subtle green treatment');
     assert(!cssSource.includes('.aim-follow-up-meta-head .aim-follow-up-sort-header'), 'Recorder/time headers must keep normal table-header hierarchy');
-    assert(cssSource.includes('.aim-follow-up-meta-cell') && cssSource.includes('font-size: 11px'), 'Follow-up metadata row cells must use lighter table styling');
+    assert(cssSource.includes('.aim-follow-up-meta-cell') && cssSource.includes('font-size: 10px'), 'Follow-up metadata row cells must use a visibly smaller metadata tier');
     assert(cssSource.includes('.aim-follow-up-attention') && cssSource.includes('border-top: 1px solid var(--aim-border)'), 'Attention Records must be separated below the main table with a subtle divider');
     assert(cssSource.includes('.aim-follow-up-reasons'), 'Attention reasons must render as compact tags inside the table');
 
