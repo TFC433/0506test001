@@ -4217,20 +4217,28 @@
   }
 
   function renderCompanyKpiSimilarNameAdvisory(pairs, officialUniqueCount, formContext) {
-    if (!Array.isArray(pairs) || !pairs.length) return '';
-    const groups = companyKpiSimilarNameGroups(pairs);
+    const groups = companyKpiSimilarNameGroupList(pairs);
     if (!groups.length) return '';
     const estimate = companyKpiEstimatedCompanyCount(officialUniqueCount, groups);
     return `
       <section class="aim-company-kpi-advisory">
-        <h3>名稱相近，請人工確認</h3>
+        <h3>* 名稱相近，請人工確認</h3>
         <p class="aim-company-kpi-advisory-estimate">${Store.escapeHtml(companyKpiAdvisoryEstimateText(estimate, formContext))}</p>
         <p class="aim-company-kpi-advisory-note">正式統計仍以目前紀錄內容為準。</p>
         <div class="aim-company-kpi-advisory-list">
-          ${groups.map(group => `<div class="aim-company-kpi-advisory-pair"><span>${Store.escapeHtml(group.names.join(' / '))}：${group.size} → 1，少 ${group.reduction} 家</span></div>`).join('')}
+          ${groups.map((group, index) => `<div class="aim-company-kpi-advisory-pair"><span>${index + 1}. ${Store.escapeHtml(group.names.join(' / '))}：${group.size} → 1，少 ${group.reduction} 家</span></div>`).join('')}
         </div>
       </section>
     `;
+  }
+
+  function companyKpiHasSimilarNameGroups(data) {
+    return companyKpiSimilarNameGroupList(data && data.similarNamePairs).length > 0;
+  }
+
+  function companyKpiSimilarNameGroupList(pairs) {
+    if (!Array.isArray(pairs) || !pairs.length) return [];
+    return companyKpiSimilarNameGroups(pairs);
   }
 
   function companyKpiAdvisoryEstimateText(estimate, formContext) {
@@ -8676,8 +8684,9 @@
   function renderCompanyKpiCards(data) {
     if (!data || !data.capable) return '';
     const labels = data.copy && data.copy.cardLabels ? data.copy.cardLabels : companyKpiCopy(formContextVisitorMode).cardLabels;
+    const uniqueMarker = companyKpiHasSimilarNameGroups(data) ? '*' : '';
     return [
-      ['unique', labels.unique, `${data.uniqueCompanyCount} 家`],
+      ['unique', labels.unique, `${data.uniqueCompanyCount} 家${uniqueMarker}`],
       ['duplicate', labels.duplicate, `${data.duplicateRecordCount} 筆`],
       ['invalid', labels.invalid, `${data.invalidRecordCount} 筆`]
     ].map(([mode, label, value]) => `
@@ -8821,10 +8830,10 @@
   }
 
   function currentFieldIntelligenceSourceField(activity, formContext) {
-    const fields = answerProducingItems(publishedRecordItems(activity, formContext)).filter(field => String(field && field.title || '').trim() === '情報來源');
+    const fields = answerProducingItems(publishedRecordItems(activity, formContext)).filter(field => String(field && field.title || '').trim() === 'BOOTH名稱');
     if (fields.length === 1) return { field: fields[0], reason: '', candidates: fields };
-    if (fields.length > 1) return { field: null, reason: 'FIELD_INTELLIGENCE_SOURCE_FIELD=AMBIGUOUS', candidates: fields };
-    return { field: null, reason: 'FIELD_INTELLIGENCE_SOURCE_FIELD=ABSENT', candidates: [] };
+    if (fields.length > 1) return { field: null, reason: 'FIELD_INTELLIGENCE_BOOTH_FIELD=AMBIGUOUS', candidates: fields };
+    return { field: null, reason: 'FIELD_INTELLIGENCE_BOOTH_FIELD=ABSENT', candidates: [] };
   }
 
   function currentCompanyTypeField(activity, formContext) {

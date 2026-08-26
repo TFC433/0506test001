@@ -5251,8 +5251,13 @@ a:focus-visible {
 
 .aim-company-kpi-advisory h3 {
   margin: 0 0 8px;
-  font-size: 15px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #f5f6f8;
+  color: var(--aim-text);
+  font-size: 13px;
   font-weight: 700;
+  line-height: 1.35;
 }
 
 .aim-company-kpi-advisory-estimate {

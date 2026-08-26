@@ -1462,10 +1462,14 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
     assert(cssSource.includes('.aim-company-kpi-sort-header'), 'Company KPI unique modal must expose lightweight sortable table headers');
     assert(cssSource.includes('.aim-company-kpi-table-invalid th:nth-child(2)') && cssSource.includes('width: 110px'), 'Invalid/missing-source identity column must stay compact');
     assert(cssSource.includes('.aim-company-kpi-table-invalid th:nth-child(3)') && cssSource.includes('width: 260px'), 'Invalid/missing-source Company Type column must be expanded');
+    assert(cssSource.includes('.aim-company-kpi-advisory h3') && cssSource.includes('background: #f5f6f8') && cssSource.includes('padding: 6px 8px'), 'Company KPI advisory heading must use a local light-gray section-header treatment');
     assert(cssSource.includes('.aim-company-kpi-row-number'), 'Company KPI detail table must style compact row numbers');
     assert(managementSource.includes("const visitorField = options.includeVisitorCount === false ? null : currentVisitorCountField(activity);"), 'Visitor Count opt-out contract must remain unchanged');
     assert(managementSource.includes("return publishedRecordItems(activity).find(field => field.type === 'single_choice' && field.title === visitorCountFieldTitle) || null;"), 'Visitor Count detector must remain single_choice/title based');
     assert(managementSource.includes("moreTypes: ['rose', 'polarBar', 'treemap', 'bubble']"), 'More chart availability must remain intact');
+    const fieldIntelligenceResolverSource = extractFunctionDeclaration(managementSource, 'currentFieldIntelligenceSourceField');
+    assert(fieldIntelligenceResolverSource.includes("=== 'BOOTH名稱'"), 'Field Intelligence KPI resolver must use the exact BOOTH名稱 form field');
+    assert(!fieldIntelligenceResolverSource.includes('情報來源'), 'Field Intelligence KPI resolver must not search for a form field titled 情報來源');
 
     const companyHelperSource = [
         extractFunctionDeclaration(managementSource, 'renderCompanyKpiCards'),
@@ -1520,6 +1524,8 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
         extractFunctionDeclaration(managementSource, 'companyKpiTypeDisplay'),
         extractFunctionDeclaration(managementSource, 'companyKpiBlankDisplay'),
         extractFunctionDeclaration(managementSource, 'companyKpiSimilarNamePairs'),
+        extractFunctionDeclaration(managementSource, 'companyKpiHasSimilarNameGroups'),
+        extractFunctionDeclaration(managementSource, 'companyKpiSimilarNameGroupList'),
         extractFunctionDeclaration(managementSource, 'companyKpiSimilarNameGroups'),
         extractFunctionDeclaration(managementSource, 'companyKpiEstimatedCompanyCount'),
         extractFunctionDeclaration(managementSource, 'renderCompanyKpiDetailModal'),
@@ -1535,13 +1541,14 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
     const contract = vm.runInNewContext(source, {});
     const companyNameField = { itemKey: 'companyName', itemId: 'companyName', fieldId: 'companyName', type: 'short_text', title: 'Renamed Company', settings: { cardAssistField: 'company_name' }, visible: true };
     const activeCompanyNameField = { itemKey: 'activeCompanyName', itemId: 'activeCompanyName', fieldId: 'activeCompanyName', type: 'short_text', title: '公司名稱', settings: { cardAssistField: 'company_name' }, visible: true };
-    const sourceField = { itemKey: 'intelSource', itemId: 'intelSource', fieldId: 'intelSource', type: 'short_text', title: '情報來源', visible: true };
+    const misleadingSourceField = { itemKey: 'intelSource', itemId: 'intelSource', fieldId: 'intelSource', type: 'short_text', title: '情報來源', visible: true };
+    const boothField = { itemKey: 'boothName', itemId: 'boothName', fieldId: 'boothName', type: 'short_text', title: 'BOOTH名稱', visible: true };
     const companyTypeField = { itemKey: 'companyType', itemId: 'companyType', fieldId: 'companyType', type: 'single_choice', title: '公司類型', options: ['MTB', 'MTU'], visible: true };
     const activity = {
         id: 'company-kpi-activity',
         formDesignRuntimeByContext: {
             visitor: { published: { items: [companyNameField, companyTypeField] } },
-            field_intelligence: { published: { items: [activeCompanyNameField, sourceField, companyTypeField] } }
+            field_intelligence: { published: { items: [activeCompanyNameField, misleadingSourceField, boothField, companyTypeField] } }
         }
     };
     const record = (id, createdAt, companyName, companyType, extra = {}) => {
@@ -1570,10 +1577,10 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
         record('hiwin-suffix', '2026-08-12T02:00:00.000Z', '上銀科技股份有限公司', 'MTU'),
         record('blank-name', '2026-08-13T01:00:00.000Z', '   ', ''),
         record('void-record', '2026-08-14T01:00:00.000Z', 'ABC科技', 'MTB', { status: 'void' }),
-        record('active-1', '2026-08-15T01:00:00.000Z', 'Wrong Visitor Name A', 'MTB', { recordContext: 'field_intelligence', answers: { activeCompanyName: 'Should Not Count A', intelSource: '新代', companyType: 'MTB' } }),
-        record('active-2', '2026-08-16T01:00:00.000Z', 'Wrong Visitor Name B', 'MTU', { recordContext: 'field_intelligence', answers: { activeCompanyName: 'Should Not Count B', intelSource: '新代科技', companyType: 'MTU' } }),
-        record('active-3', '2026-08-16T02:00:00.000Z', 'Wrong Visitor Name C', 'MTB', { recordContext: 'field_intelligence', answers: { activeCompanyName: 'Should Not Count C', intelSource: '新代', companyType: 'MTB' } }),
-        record('active-blank', '2026-08-17T01:00:00.000Z', 'Wrong Visitor Name D', '', { recordContext: 'field_intelligence', answers: { activeCompanyName: 'Should Not Count D', intelSource: '   ', companyType: '' } })
+        record('active-1', '2026-08-15T01:00:00.000Z', 'Wrong Visitor Name A', 'MTB', { recordContext: 'field_intelligence', answers: { activeCompanyName: 'Should Not Count A', intelSource: 'Do Not Count A', boothName: '新代', companyType: 'MTB' } }),
+        record('active-2', '2026-08-16T01:00:00.000Z', 'Wrong Visitor Name B', 'MTU', { recordContext: 'field_intelligence', answers: { activeCompanyName: 'Should Not Count B', intelSource: 'Do Not Count B', boothName: '新代科技', companyType: 'MTU' } }),
+        record('active-3', '2026-08-16T02:00:00.000Z', 'Wrong Visitor Name C', 'MTB', { recordContext: 'field_intelligence', answers: { activeCompanyName: 'Should Not Count C', intelSource: 'Do Not Count C', boothName: '新代', companyType: 'MTB' } }),
+        record('active-blank', '2026-08-17T01:00:00.000Z', 'Wrong Visitor Name D', '', { recordContext: 'field_intelligence', answers: { activeCompanyName: 'Should Not Count D', intelSource: 'Do Not Count D', boothName: '   ', companyType: '' } })
     ];
 
     const records = contract.analyticsRecords(activity);
@@ -1581,7 +1588,7 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
     assert.strictEqual(data.capable, true, 'Company KPI must render when Company Name is clear');
     assert.strictEqual(data.copy.identityLabel, '公司名稱', 'Visitor Company KPI identity label must remain Company Name');
     assert.strictEqual(contract.currentCompanyKpiFields(activity, 'visitor').companyNameField.fieldId, 'companyName', 'Visitor Company KPI must keep the existing Company Name resolver');
-    assert.strictEqual(contract.currentCompanyKpiFields(activity, 'field_intelligence').companyNameField.fieldId, 'intelSource', 'Field Intelligence Company KPI must use the exact 情報來源 field as identity');
+    assert.strictEqual(contract.currentCompanyKpiFields(activity, 'field_intelligence').companyNameField.fieldId, 'boothName', 'Field Intelligence Company KPI must use the exact BOOTH名稱 field as identity');
     assert.strictEqual(records.length, 6, 'Company KPI must use the existing Analytics scope and exclude void/other-context records');
     assert.strictEqual(data.uniqueCompanyCount, 4, 'Unique Company count must count distinct valid Company Name identities');
     assert.strictEqual(data.duplicateRecordCount, 1, 'Duplicate KPI must count duplicate records, not duplicate company groups');
@@ -1602,25 +1609,37 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
     assert.notStrictEqual(contract.normalizeCompanyKpiKey('上銀科技股份有限公司'), contract.normalizeCompanyKpiKey('上銀科技'), 'Company KPI must not strip meaningful company suffixes');
 
     const cards = contract.renderCompanyKpiCards(data);
-    assert(cards.includes('來拜訪公司數（去重）') && cards.includes('4 家'), 'Unique Company card must show final label and 家 unit without changing official count');
+    assert(cards.includes('來拜訪公司數（去重）') && cards.includes('4 家*'), 'Unique Company card must add a lightweight value asterisk when similar-name groups exist');
     assert(cards.includes('同公司重複紀錄數') && cards.includes('1 筆'), 'Duplicate Record card must show final label and 筆 unit');
     assert(cards.includes('無公司名稱') && cards.includes('1 筆'), 'Invalid Record card must show final label and 筆 unit');
+    assert(!cards.includes('* 名稱相近，請人工確認'), 'Company KPI card must not add explanatory advisory text');
+    assert(!cards.includes('1 筆*'), 'Company KPI marker must not appear on duplicate or invalid cards');
+    const cardsWithoutAdvisoryGroups = contract.renderCompanyKpiCards({ ...data, similarNamePairs: [] });
+    assert(cardsWithoutAdvisoryGroups.includes('4 家') && !cardsWithoutAdvisoryGroups.includes('4 家*'), 'Unique Company card must not add an asterisk when no connected similar-name group exists');
     assert.strictEqual(contract.renderCompanyKpiCards({ capable: false }), '', 'Company KPI group must be hidden when capability is absent');
 
     contract.ui.companyKpiModal = { mode: 'unique', sortKey: '', sortDirection: '' };
     const uniqueModal = contract.renderCompanyKpiDetailModal();
     assert(uniqueModal.includes('來拜訪公司數（去重）') && uniqueModal.includes('<th class="aim-company-kpi-row-number">#</th>') && uniqueModal.includes('公司名稱') && uniqueModal.includes('公司類型') && uniqueModal.includes('總紀錄'), 'Unique modal must render final title and row-numbered columns');
     assert(uniqueModal.includes('MTB、MTU'), 'Unique modal must show distinct Company Type metadata without splitting identity');
-    assert(uniqueModal.includes('名稱相近，請人工確認'), 'Unique modal must render advisory only when candidate pairs exist');
+    assert(uniqueModal.includes('<h3>* 名稱相近，請人工確認</h3>'), 'Unique modal must render exact marker-explaining advisory heading only when candidate pairs exist');
     assert(uniqueModal.includes('data-action="company-kpi-header-sort"') && uniqueModal.includes('data-sort-key="companyType"') && uniqueModal.includes('data-sort-key="total"'), 'Unique modal must expose Company Type and Total Records header sorting');
     assert(!uniqueModal.includes('<select') && !uniqueModal.includes('data-action="company-kpi-type-filter"') && !uniqueModal.includes('data-action="company-kpi-sort"'), 'Unique modal must remove the separate Company Type filter and sort dropdown toolbar');
     assert(uniqueModal.includes('若以下相近名稱皆視為同公司，推估來拜訪公司數：2 家'), 'Unique modal must render connected-component advisory estimate with corrected directional copy');
     assert(!uniqueModal.includes('若以上相近名稱'), 'Unique modal must not keep the obsolete advisory direction copy');
     assert(uniqueModal.includes('正式統計仍以目前紀錄內容為準。'), 'Unique modal must state advisory estimate is not official');
-    assert(uniqueModal.includes('上銀 / 上銀科技 / 上銀科技股份有限公司：3 → 1，少 2 家'), 'Unique modal must render connected similar-name groups instead of duplicate pair rows');
+    assert(uniqueModal.includes('1. 上銀 / 上銀科技 / 上銀科技股份有限公司：3 → 1，少 2 家'), 'Unique modal must render numbered connected similar-name groups instead of duplicate pair rows');
     assert.strictEqual((uniqueModal.match(/↔/g) || []).length, 0, 'Connected advisory display must not render individual pair rows');
     assert.strictEqual(uniqueModal.includes('4 家'), false, 'Advisory estimate must not rewrite official KPI value inside the advisory section');
     assert.strictEqual(contract.renderCompanyKpiSimilarNameAdvisory([], data.uniqueCompanyCount, data.context), '', 'Empty advisory must remain hidden');
+    const multiGroupAdvisory = contract.renderCompanyKpiSimilarNameAdvisory([
+        { a: 'A', b: 'AB', aKey: 'a', bKey: 'ab' },
+        { a: 'AB', b: 'ABC', aKey: 'ab', bKey: 'abc' },
+        { a: '東台', b: '東台精機股份有限公司', aKey: '東台', bKey: '東台精機股份有限公司' }
+    ], 5, 'visitor');
+    assert(multiGroupAdvisory.includes('1. A / AB / ABC：3 → 1，少 2 家'), 'Connected A / AB / ABC component must render as one numbered advisory item');
+    assert(multiGroupAdvisory.includes('2. 東台 / 東台精機股份有限公司：2 → 1，少 1 家'), 'Advisory numbering must follow connected-group display order');
+    assert(multiGroupAdvisory.includes('推估來拜訪公司數：2 家'), 'Advisory estimate must use the same connected groups as the numbered list');
     const defaultSortState = contract.companyKpiUniqueSortState();
     assert.strictEqual(defaultSortState.key, '', 'Unique Company modal default sort must preserve existing order with no active sort key');
     assert.strictEqual(defaultSortState.direction, '', 'Unique Company modal default sort must preserve existing order with no active sort direction');
@@ -1686,25 +1705,29 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
     assert.strictEqual(activeRecords.length, 4, 'Field Intelligence Company KPI must use field_intelligence records only');
     assert.strictEqual(activeData.capable, true, 'Field Intelligence Company KPI capability must use its own form context');
     assert.strictEqual(activeData.copy.identityLabel, '情報來源', 'Field Intelligence Company KPI copy must use source semantics');
-    assert.strictEqual(activeData.fields.companyNameField.fieldId, 'intelSource', 'Field Intelligence identity must be sourced from 情報來源, not 公司名稱');
+    assert.strictEqual(activeData.fields.companyNameField.fieldId, 'boothName', 'Field Intelligence identity must be sourced from BOOTH名稱, not 公司名稱 or 情報來源');
     assert.strictEqual(activeData.uniqueCompanyCount, 2, 'Field Intelligence Unique Source count must be isolated from Visitor names');
     assert.strictEqual(activeData.duplicateRecordCount, 1, 'Field Intelligence Duplicate count must be isolated from Visitor records');
-    assert.strictEqual(activeData.invalidRecordCount, 1, 'Blank Field Intelligence 情報來源 must be invalid');
+    assert.strictEqual(activeData.invalidRecordCount, 1, 'Blank Field Intelligence BOOTH名稱 must be invalid while UI copy remains 情報來源');
     assert.strictEqual(activeData.uniqueCompanyCount + activeData.duplicateRecordCount + activeData.invalidRecordCount, activeRecords.length, 'Field Intelligence three-bucket invariant must hold independently');
     assert.strictEqual(contract.companyKpiAdvisoryEstimateText(contract.companyKpiEstimatedCompanyCount(activeData.uniqueCompanyCount, contract.companyKpiSimilarNameGroups(activeData.similarNamePairs)), activeData.context), '若以下相近名稱皆視為同一情報來源，推估情報來源數：1 家', 'Field Intelligence similar-name advisory copy must use source semantics');
+    const activeCards = contract.renderCompanyKpiCards(activeData);
+    assert(activeCards.includes('情報來源數（去重）') && activeCards.includes('2 家*'), 'Field Intelligence Source KPI card must add a lightweight value asterisk from BOOTH名稱 similar-name groups');
+    assert(activeCards.includes('同來源重複紀錄數') && activeCards.includes('無情報來源') && !activeCards.includes('1 筆*'), 'Field Intelligence marker must not appear on duplicate or invalid cards');
+    assert(!contract.renderCompanyKpiCards({ ...activeData, similarNamePairs: [] }).includes('2 家*'), 'Field Intelligence Source KPI card must not add an asterisk without BOOTH名稱 similar-name groups');
     contract.ui.companyKpiModal = { mode: 'unique', sortKey: '', sortDirection: '' };
     contract.setSelectedActivity(activity);
     const activeModal = contract.renderCompanyKpiDetailModal();
-    assert(activeModal.includes('情報來源數（去重）') && activeModal.includes('情報來源') && activeModal.includes('新代') && !activeModal.includes('Should Not Count') && !activeModal.includes('上銀'), 'Shared Company KPI modal must render context-safe Field Intelligence source data without Visitor or Company Name leakage');
+    assert(activeModal.includes('情報來源數（去重）') && activeModal.includes('情報來源') && activeModal.includes('新代') && !activeModal.includes('BOOTH名稱') && !activeModal.includes('Do Not Count') && !activeModal.includes('Should Not Count') && !activeModal.includes('上銀'), 'Shared Company KPI modal must render context-safe Field Intelligence BOOTH名稱 data under 情報來源 UI copy without leakage');
     assert(activeModal.includes('若以下相近名稱皆視為同一情報來源，推估情報來源數：1 家'), 'Field Intelligence modal must render source-context similar-name advisory copy');
-    const activeSourceOnly = { ...activity, formDesignRuntimeByContext: { ...activity.formDesignRuntimeByContext, field_intelligence: { published: { items: [sourceField, companyTypeField] } } } };
-    assert.strictEqual(contract.companyKpiDerivation(activeSourceOnly, activeRecords, 'field_intelligence').capable, true, 'Field Intelligence Company KPI must not require a Company Name field when 情報來源 exists');
-    const activeWithoutSource = { ...activity, formDesignRuntimeByContext: { ...activity.formDesignRuntimeByContext, field_intelligence: { published: { items: [activeCompanyNameField, companyTypeField] } } } };
-    assert.strictEqual(contract.currentCompanyKpiFields(activeWithoutSource, 'field_intelligence').reason, 'FIELD_INTELLIGENCE_SOURCE_FIELD=ABSENT');
-    assert.strictEqual(contract.companyKpiDerivation(activeWithoutSource, activeRecords, 'field_intelligence').capable, false, 'Field Intelligence capability must fail when 情報來源 is absent even if 公司名稱 exists');
-    const activeAmbiguousSource = { ...activity, formDesignRuntimeByContext: { ...activity.formDesignRuntimeByContext, field_intelligence: { published: { items: [sourceField, { ...sourceField, fieldId: 'intelSource2', itemKey: 'intelSource2', itemId: 'intelSource2' }, companyTypeField] } } } };
-    assert.strictEqual(contract.currentCompanyKpiFields(activeAmbiguousSource, 'field_intelligence').reason, 'FIELD_INTELLIGENCE_SOURCE_FIELD=AMBIGUOUS');
-    assert.strictEqual(contract.companyKpiDerivation(activeAmbiguousSource, activeRecords, 'field_intelligence').capable, false, 'Field Intelligence capability must fail rather than guess between multiple 情報來源 fields');
+    const activeBoothOnly = { ...activity, formDesignRuntimeByContext: { ...activity.formDesignRuntimeByContext, field_intelligence: { published: { items: [boothField, companyTypeField] } } } };
+    assert.strictEqual(contract.companyKpiDerivation(activeBoothOnly, activeRecords, 'field_intelligence').capable, true, 'Field Intelligence Company KPI must not require a Company Name or 情報來源 field when BOOTH名稱 exists');
+    const activeWithoutBooth = { ...activity, formDesignRuntimeByContext: { ...activity.formDesignRuntimeByContext, field_intelligence: { published: { items: [activeCompanyNameField, misleadingSourceField, companyTypeField] } } } };
+    assert.strictEqual(contract.currentCompanyKpiFields(activeWithoutBooth, 'field_intelligence').reason, 'FIELD_INTELLIGENCE_BOOTH_FIELD=ABSENT');
+    assert.strictEqual(contract.companyKpiDerivation(activeWithoutBooth, activeRecords, 'field_intelligence').capable, false, 'Field Intelligence capability must fail when BOOTH名稱 is absent even if 公司名稱 or 情報來源 exists');
+    const activeAmbiguousBooth = { ...activity, formDesignRuntimeByContext: { ...activity.formDesignRuntimeByContext, field_intelligence: { published: { items: [boothField, { ...boothField, fieldId: 'boothName2', itemKey: 'boothName2', itemId: 'boothName2' }, companyTypeField] } } } };
+    assert.strictEqual(contract.currentCompanyKpiFields(activeAmbiguousBooth, 'field_intelligence').reason, 'FIELD_INTELLIGENCE_BOOTH_FIELD=AMBIGUOUS');
+    assert.strictEqual(contract.companyKpiDerivation(activeAmbiguousBooth, activeRecords, 'field_intelligence').capable, false, 'Field Intelligence capability must fail rather than guess between multiple BOOTH名稱 fields');
     contract.ui.analyticsScope = 'visitor';
 
     const ambiguousName = {
