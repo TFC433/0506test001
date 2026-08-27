@@ -8571,7 +8571,7 @@
     if (!activity || ui.tab !== 'records' || !['mine', 'all'].includes(ui.records.scope)) return;
     const target = document.getElementById('aim-record-results');
     if (!target) return;
-    const rows = filteredRecords(activity, ui.records.scope);
+    const rows = filteredRecordListRows(activity, ui.records.scope);
     target.innerHTML = renderRecordResults(activity, ui.records.scope, rows);
     const count = document.getElementById('aim-record-result-count');
     if (count) count.textContent = `目前結果共 ${rows.length} 筆`;
@@ -8583,7 +8583,7 @@
     if (!activity || ui.tab !== 'records' || !['mine', 'all'].includes(ui.records.scope)) return;
     const list = document.querySelector('.aim-record-card-list-all');
     if (!list) return;
-    const rows = filteredRecords(activity, ui.records.scope);
+    const rows = filteredRecordListRows(activity, ui.records.scope);
     list.innerHTML = renderRecordListCards(activity, ui.records.scope, rows);
     fitRecordPreviewBadges();
   }

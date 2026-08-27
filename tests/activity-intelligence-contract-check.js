@@ -3552,6 +3552,61 @@ async function assertRecordListProjectionV1Contract(sources) {
     assert.strictEqual(fieldProjection.formRuntimeSnapshot.items[0].formItemId, IDS.activeLongItem);
 }
 
+function assertRecordsDoubleLoadRemovalV1Contract(managementSource) {
+    const initSource = extractFunctionDeclaration(managementSource, 'init');
+    assert(initSource.includes("ui.tab === 'records' && ui.records.scope === 'entry'"), 'Records entry init branch must remain explicit');
+    assert(initSource.includes('startBackgroundRecordListLoadForActivity(ui.selectedActivityId, { includeVoid: true });'), 'Records entry init must use projection background load');
+    assert(initSource.includes("ui.tab === 'records') {\n      await loadRecordListProjectionsForActivity(ui.selectedActivityId, { includeVoid: true });"), 'Records history init must await projection load');
+    assert(initSource.includes("ui.tab === 'analytics') {\n      await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });"), 'Analytics init may still load full submissions');
+
+    const renderRecordsSource = extractFunctionDeclaration(managementSource, 'renderRecords');
+    assert(renderRecordsSource.includes('filteredRecordListRows(activity, scope)'), 'Records render must use projection filtering');
+    assert(renderRecordsSource.includes('recordListRowsFor(activity.id)'), 'Records recorder facets must use projection rows');
+    assert(!renderRecordsSource.includes('filteredRecords('), 'Records render must not use full records filtering');
+    assert(!renderRecordsSource.includes('loadRecordsForActivity'), 'Records render must not trigger full submissions loading');
+
+    const renderRecordResultsSource = extractFunctionDeclaration(managementSource, 'renderRecordResults');
+    assert(renderRecordResultsSource.includes('filteredRecordListRows(activity, scope)'), 'Records result refresh fallback must use projection filtering');
+    assert(!renderRecordResultsSource.includes('filteredRecords('), 'Records result rendering must not use full records filtering');
+
+    const refreshRecordResultsSource = extractFunctionDeclaration(managementSource, 'refreshRecordResults');
+    assert(refreshRecordResultsSource.includes('filteredRecordListRows(activity, ui.records.scope)'), 'Desktop live Records refresh must use projection rows');
+    assert(!refreshRecordResultsSource.includes('filteredRecords('), 'Desktop live Records refresh must not use full records');
+
+    const refreshMobileRecordResultsSource = extractFunctionDeclaration(managementSource, 'refreshMobileRecordResults');
+    assert(refreshMobileRecordResultsSource.includes('filteredRecordListRows(activity, ui.records.scope)'), 'Mobile live Records refresh must use projection rows');
+    assert(!refreshMobileRecordResultsSource.includes('filteredRecords('), 'Mobile live Records refresh must not use full records');
+
+    const clickStart = managementSource.indexOf("root.addEventListener('click'");
+    const bindInputsStart = managementSource.indexOf('function bindInputs', clickStart);
+    const clickSource = clickStart >= 0 && bindInputsStart > clickStart ? managementSource.slice(clickStart, bindInputsStart) : '';
+    assert(clickSource.includes("if (action === 'tab')"), 'click handler must keep tab navigation branch');
+    assert(clickSource.includes("if (ui.tab === 'records' && ui.records.scope === 'entry')"), 'Records tab entry branch must remain explicit');
+    assert(clickSource.includes('startBackgroundRecordListLoadForActivity(ui.selectedActivityId, { includeVoid: true });'), 'Records tab entry branch must use projection background load');
+    assert(clickSource.includes("} else if (ui.tab === 'records') await loadRecordListProjectionsForActivity(ui.selectedActivityId, { includeVoid: true });"), 'Records tab history branch must await projection load');
+    assert(clickSource.includes("else if (ui.tab === 'analytics') await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });"), 'Analytics tab branch may still load full submissions');
+    assert(clickSource.includes("if (action === 'mobile-record-scope'"), 'mobile record scope branch must remain present');
+    assert(clickSource.includes("if (action === 'scope'"), 'desktop record scope branch must remain present');
+    assert(clickSource.includes("} else await loadRecordListProjectionsForActivity(ui.selectedActivityId, { includeVoid: true });"), 'Records scope changes must await projection load');
+
+    const tabBranchStart = clickSource.indexOf("if (action === 'tab')");
+    const tabBranchEnd = clickSource.indexOf("if (action === 'sort'", tabBranchStart);
+    const tabBranchSource = tabBranchStart >= 0 && tabBranchEnd > tabBranchStart ? clickSource.slice(tabBranchStart, tabBranchEnd) : '';
+    assert(tabBranchSource && !tabBranchSource.replace(/else if \(ui\.tab === 'analytics'\)[^\n]+/, '').includes('loadRecordsForActivity'), 'Records tab navigation must not invoke full submissions loading');
+
+    const mobileScopeBranchStart = clickSource.indexOf("if (action === 'mobile-record-scope'");
+    const mobileScopeBranchEnd = clickSource.indexOf("if (action === 'scope'", mobileScopeBranchStart);
+    const mobileScopeBranchSource = mobileScopeBranchStart >= 0 && mobileScopeBranchEnd > mobileScopeBranchStart ? clickSource.slice(mobileScopeBranchStart, mobileScopeBranchEnd) : '';
+    assert(mobileScopeBranchSource && !mobileScopeBranchSource.includes('loadRecordsForActivity'), 'Mobile Records scope navigation must not invoke full submissions loading');
+
+    const scopeBranchStart = clickSource.indexOf("if (action === 'scope'");
+    const scopeBranchEnd = clickSource.indexOf("if (action === 'record-period')", scopeBranchStart);
+    const scopeBranchSource = scopeBranchStart >= 0 && scopeBranchEnd > scopeBranchStart ? clickSource.slice(scopeBranchStart, scopeBranchEnd) : '';
+    assert(scopeBranchSource && !scopeBranchSource.includes('loadRecordsForActivity'), 'Desktop Records scope navigation must not invoke full submissions loading');
+
+    assert(extractFunctionDeclaration(managementSource, 'exportFilteredRecordsCsv').includes('await loadRecordsForActivity(activity.id, { includeVoid: true });'), 'CSV export must still explicitly hydrate full records');
+}
+
 function assertCardAssistShortTextMappingBuilderContract(managementSource) {
     const source = [
         "const fieldTypes = [['section_heading', 'Section'], ['information_text', 'Info'], ['short_text', 'Short'], ['long_text', 'Long'], ['number', 'Number'], ['yes_no', 'Yes No'], ['single_choice', 'Single'], ['multiple_choice', 'Multiple'], ['dropdown', 'Dropdown']];",
@@ -5151,6 +5206,7 @@ async function main() {
     assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiSource, cssSource, activityIntelligenceSqlSource);
     await assertOverviewLoadOptimizationContract(managementSource, apiSource, routesSource, controllerSource);
     await assertRecordListProjectionV1Contract({ managementSource, apiSource, routesSource, controllerSource, serviceSource, readerSource });
+    assertRecordsDoubleLoadRemovalV1Contract(managementSource);
     assert(managementSource.includes("if (ui.analytics.ai.state === 'loading') return;"));
     assert(managementSource.includes("state === 'loading'"));
     assert(!managementSource.includes('FORM_GEMINI_API_KEY'));
