@@ -3669,15 +3669,20 @@ function assertReleaseStabilizationHistoricalLookupContract(sources) {
     assert(serviceSource.includes("const matchSemantic = kind === 'person' ? 'customerName' : 'companyName';"), 'person/company lookup source semantics must remain explicit');
     assert(serviceSource.includes('this.reader.getSubmissionsByIds(submissionIds, { activityIds: sourceActivityIds })'), 'Form Assist suggestions must use historical full submissions from configured source activities');
 
+    const targetAttributeSource = extractFunctionDeclaration(managementSource, 'formAssistTargetAttributes');
+    assert(targetAttributeSource.includes('data-field=') && targetAttributeSource.includes('data-section=') && targetAttributeSource.includes('data-assist-kind='), 'Form Assist candidate target helper must carry durable target identity');
+
     const renderPersonSource = extractFunctionDeclaration(managementSource, 'renderPersonAssistSuggestion');
     assert(renderPersonSource.includes('data-action="form-assist-select-person"'), 'person candidates must render the delegated select action');
     assert(renderPersonSource.includes('data-submission-id='), 'person candidates must carry submission identity for selection');
+    assert(renderPersonSource.includes("formAssistTargetAttributes(field, sectionId, 'person')"), 'person candidates must render durable target identity');
     assert(renderPersonSource.includes('item.personName'), 'person candidates must display person name');
     assert(renderPersonSource.includes('item.companyName') && renderPersonSource.includes('item.jobTitle'), 'person candidates must display company/job metadata');
 
     const renderCompanySource = extractFunctionDeclaration(managementSource, 'renderCompanyAssistSuggestion');
     assert(renderCompanySource.includes('data-action="form-assist-select-company"'), 'company candidates must render the delegated select action');
     assert(renderCompanySource.includes('data-company-name='), 'company candidates must carry company identity for selection');
+    assert(renderCompanySource.includes("formAssistTargetAttributes(field, sectionId, 'company')"), 'company candidates must render durable target identity');
     assert(renderCompanySource.includes('item.companyName'), 'company candidates must display company name');
     assert(renderCompanySource.includes('recentVisitors') && renderCompanySource.includes('historicalCompanyTypes'), 'company candidates must preserve visitor/type summary display');
 
@@ -3685,13 +3690,12 @@ function assertReleaseStabilizationHistoricalLookupContract(sources) {
     const clickStart = managementSource.indexOf("root.addEventListener('click'", pointerStart);
     const pointerSource = pointerStart >= 0 && clickStart > pointerStart ? managementSource.slice(pointerStart, clickStart) : '';
     assert(pointerSource.includes("'.aim-form-assist-suggestion[data-action]'"), 'Form Assist suggestions must commit on pointerdown before blur can clear candidates');
-    assert(pointerSource.includes("assist.dataset.action === 'form-assist-select-person'"), 'pointerdown must route person candidate selection');
-    assert(pointerSource.includes("assist.dataset.action === 'form-assist-select-company'"), 'pointerdown must route company candidate selection');
+    assert(pointerSource.includes('commitFormAssistCandidate(assist)'), 'pointerdown must use the shared Form Assist candidate commit primitive');
     assert(pointerSource.includes('event.preventDefault();'), 'Form Assist pointerdown must prevent blur-first loss of candidate DOM');
 
     const clickHandlerSource = managementSource.slice(clickStart, managementSource.indexOf('function bindInputs', clickStart));
-    assert(clickHandlerSource.includes("if (action === 'form-assist-select-person')"), 'click handler must keep person candidate fallback');
-    assert(clickHandlerSource.includes("if (action === 'form-assist-select-company')"), 'click handler must keep company candidate fallback');
+    assert(clickHandlerSource.includes("action === 'form-assist-select-person' || action === 'form-assist-select-company'"), 'click handler must keep person/company candidate fallback');
+    assert(clickHandlerSource.includes('commitFormAssistCandidate(el)'), 'click fallback must use the shared Form Assist candidate commit primitive');
 
     const source = [
         "const ui = { quickAnswers: {}, formAssist: { activeFieldId: 'personField', kind: 'person', q: 'Ada', loading: false, suggestions: [] } };",
@@ -3709,6 +3713,7 @@ function assertReleaseStabilizationHistoricalLookupContract(sources) {
         extractFunctionDeclaration(managementSource, 'quickAnswerIsBlank'),
         extractFunctionDeclaration(managementSource, 'cardAssistSourceValue'),
         extractFunctionDeclaration(managementSource, 'fillQuickFormAssistFields'),
+        extractFunctionDeclaration(managementSource, 'formAssistSelectionSectionId'),
         extractFunctionDeclaration(managementSource, 'selectFormAssistPerson'),
         extractFunctionDeclaration(managementSource, 'selectFormAssistCompany'),
         "({ ui, state, fillQuickFormAssistFields, selectFormAssistPerson, selectFormAssistCompany, counts: () => ({ resetCount, refreshCount }) });"
@@ -3727,7 +3732,7 @@ function assertReleaseStabilizationHistoricalLookupContract(sources) {
             companyName: 'Apex Motion'
         }]
     };
-    contract.selectFormAssistPerson('submission-a');
+    contract.selectFormAssistPerson('submission-a', { sectionId: 'section-a' });
     assert.strictEqual(contract.ui.quickAnswers.personField, 'Ada Lin', 'person candidate click must autofill mapped person field');
     assert.strictEqual(contract.ui.quickAnswers.jobField, 'Procurement Lead', 'person candidate click must autofill mapped job-title field');
     assert.strictEqual(contract.ui.quickAnswers.companyField, 'Apex Motion', 'person candidate click must autofill mapped company field');
@@ -3735,10 +3740,208 @@ function assertReleaseStabilizationHistoricalLookupContract(sources) {
 
     contract.ui.quickAnswers = {};
     contract.ui.formAssist = { activeFieldId: 'companyField', kind: 'company', q: 'Apex', loading: false, suggestions: [] };
-    contract.selectFormAssistCompany('Apex Motion');
+    contract.selectFormAssistCompany('Apex Motion', { sectionId: 'section-a' });
     assert.strictEqual(contract.ui.quickAnswers.companyField, 'Apex Motion', 'company candidate click must autofill mapped company field');
     assert.strictEqual(contract.ui.quickAnswers.personField, undefined, 'company candidate click must not invent a person autofill value');
     assert.strictEqual(contract.ui.quickAnswers.jobField, undefined, 'company candidate click must not invent a job-title autofill value');
+}
+
+async function assertSystemRepairPhase1FormAssistContract(sources, service) {
+    const { managementSource, serviceSource } = sources;
+    assert(serviceSource.includes('settings.cardAssistField'), 'backend Form Assist semantic resolver must inspect explicit Card Assist settings');
+    assert(serviceSource.indexOf('settings.cardAssistField') < serviceSource.indexOf('FORM_ASSIST_FIXED_KEYS[key]'), 'explicit Card Assist semantic settings must outrank fixed-key fallback');
+    assert.strictEqual(service._formAssistSemanticForItem({
+        type: 'short_text',
+        title: '訪談對象',
+        settings: { cardAssistField: 'person_name' }
+    }), 'customerName', 'explicit person_name must resolve customerName even when title misses legacy person regex');
+    assert.strictEqual(service._formAssistSemanticForItem({
+        type: 'short_text',
+        title: 'Display Company',
+        settings: { cardAssistField: 'company_name' }
+    }), 'companyName', 'explicit company_name must resolve companyName');
+    assert.strictEqual(service._formAssistSemanticForItem({
+        type: 'short_text',
+        title: 'Display Role',
+        settings: { cardAssistField: 'job_title' }
+    }), 'jobTitle', 'explicit job_title must resolve jobTitle');
+    assert.strictEqual(service._formAssistSemanticForItem({
+        itemKey: 'fld_customer_name',
+        type: 'short_text',
+        title: 'Legacy Key'
+    }), 'customerName', 'legacy fixed customer key fallback must remain available');
+    assert.strictEqual(service._formAssistSemanticForItem({
+        type: 'short_text',
+        title: '姓名'
+    }), 'customerName', 'legacy supported person title fallback must remain available');
+    assert.strictEqual(service._formAssistSemanticForItem({
+        type: 'short_text',
+        title: '訪談對象'
+    }), '', 'unrelated title outside the legacy regex must not become a person field by fuzzy inference');
+
+    const historicalPersonItem = {
+        formItemId: 'historical-person-item',
+        itemKey: 'historical-person-key',
+        fieldId: 'historical-person-key',
+        type: 'short_text',
+        title: '訪談對象',
+        settings: { cardAssistField: 'person_name' }
+    };
+    const historicalJobItem = {
+        formItemId: 'historical-job-item',
+        itemKey: 'historical-job-key',
+        fieldId: 'historical-job-key',
+        type: 'short_text',
+        title: 'Display Role',
+        settings: { cardAssistField: 'job_title' }
+    };
+    const historicalCompanyItem = {
+        formItemId: 'historical-company-item',
+        itemKey: 'historical-company-key',
+        fieldId: 'historical-company-key',
+        type: 'short_text',
+        title: 'Display Company',
+        settings: { cardAssistField: 'company_name' }
+    };
+    const semanticHarness = new ActivityIntelligenceService({
+        activityIntelligenceSqlReader: {
+            async getActivityById(id) {
+                return {
+                    ...baseActivity,
+                    id,
+                    settings: { formAssistSuggestionSourceActivityIds: [IDS.otherActivity] }
+                };
+            },
+            async listSubmissionIdsByActivityIds(activityIds) {
+                assert.deepStrictEqual(activityIds, [IDS.otherActivity], 'person lookup must use configured source activities');
+                return ['historical-submission'];
+            },
+            async listFormAssistItems() {
+                return [historicalPersonItem, historicalJobItem, historicalCompanyItem];
+            },
+            async searchSubmissionAnswersByItems(formItemIds, queryText, limit, filters) {
+                assert(formItemIds.includes(historicalPersonItem.formItemId), 'person search must include explicitly mapped historical person item');
+                assert.strictEqual(queryText, '林');
+                assert.deepStrictEqual(filters.submissionIds, ['historical-submission']);
+                return [{ submissionId: 'historical-submission' }];
+            },
+            async getSubmissionsByIds(submissionIds, filters) {
+                assert.deepStrictEqual(submissionIds, ['historical-submission']);
+                assert.deepStrictEqual(filters.activityIds, [IDS.otherActivity]);
+                return [{
+                    id: 'historical-submission',
+                    activityId: IDS.otherActivity,
+                    status: 'active',
+                    createdAt: '2026-08-20T01:00:00.000Z',
+                    createdByDisplayName: 'Recorder',
+                    answers: {
+                        [historicalPersonItem.fieldId]: '林佳穎',
+                        [historicalJobItem.fieldId]: '採購經理',
+                        [historicalCompanyItem.fieldId]: '精準科技'
+                    },
+                    formSnapshot: {
+                        versionId: 'historical-version-different-from-current',
+                        formContext: 'visitor',
+                        items: [historicalPersonItem, historicalJobItem, historicalCompanyItem]
+                    }
+                }];
+            },
+            async getActivitiesByIds(activityIds) {
+                assert.deepStrictEqual(activityIds, [IDS.otherActivity]);
+                return new Map([[IDS.otherActivity, { id: IDS.otherActivity, name: 'Historical Expo' }]]);
+            }
+        }
+    });
+    const personResult = await semanticHarness.getFormAssistSuggestions(IDS.activity, { kind: 'person', q: '林' });
+    assert.strictEqual(personResult.suggestions.length, 1, 'explicit historical semantic mapping must produce a person suggestion');
+    assert.strictEqual(personResult.suggestions[0].personName, '林佳穎', 'CJK person value must round-trip without mojibake');
+    assert.strictEqual(personResult.suggestions[0].jobTitle, '採購經理');
+    assert.strictEqual(personResult.suggestions[0].companyName, '精準科技');
+
+    const renderSource = [
+        'const ui = { formAssist: { activeFieldId: "personField", kind: "person", q: "林", loading: false, suggestions: [{ submissionId: "sub-a", personName: "林佳穎", jobTitle: "採購經理", companyName: "精準科技", companyType: "製造業" }] } };',
+        'const Store = { escapeHtml(value) { return String(value == null ? "" : value).replace(/[&<>"\\\']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\\"": "&quot;", "\\\'": "&#39;" }[char])); }, formatDate(value) { return value || ""; } };',
+        'const FORM_ASSIST_COPY = { listSeparator: "、", companyTypePrefix: "類型：", visitCountSeparator: " / ", visitCountSuffix: "筆", suggestionsLoading: "搜尋中" };',
+        'function cardAssistSectionForField(fieldId) { return fieldId === "personField" || fieldId === "companyField" ? "section-a" : ""; }',
+        extractFunctionDeclaration(managementSource, 'renderFormAssistSuggestions'),
+        extractFunctionDeclaration(managementSource, 'formAssistTargetAttributes'),
+        extractFunctionDeclaration(managementSource, 'renderPersonAssistSuggestion'),
+        extractFunctionDeclaration(managementSource, 'renderCompanyAssistSuggestion'),
+        '({ ui, renderFormAssistSuggestions });'
+    ].join('\n');
+    const renderContract = vm.runInNewContext(renderSource, {});
+    const personHtml = renderContract.renderFormAssistSuggestions({ fieldId: 'personField' });
+    assert(personHtml.includes('data-field="personField"') && personHtml.includes('data-section="section-a"') && personHtml.includes('data-assist-kind="person"'), 'rendered person candidate must carry durable target identity');
+    assert(personHtml.includes('data-person-name="林佳穎"') && personHtml.includes('data-company-name="精準科技"'), 'rendered person candidate must carry values needed after transient state cleanup');
+    renderContract.ui.formAssist = {
+        activeFieldId: 'companyField',
+        kind: 'company',
+        q: '精準',
+        loading: false,
+        suggestions: [{ companyName: '精準科技', recentVisitors: [{ personName: '林佳穎', jobTitle: '採購經理' }], historicalCompanyTypes: [{ value: '製造業', count: 2 }], visitCount: 2 }]
+    };
+    const companyHtml = renderContract.renderFormAssistSuggestions({ fieldId: 'companyField' });
+    assert(companyHtml.includes('data-field="companyField"') && companyHtml.includes('data-section="section-a"') && companyHtml.includes('data-assist-kind="company"'), 'rendered company candidate must carry durable target identity');
+    assert(companyHtml.includes('data-company-name="精準科技"'), 'rendered company candidate must carry company value');
+
+    const selectionSource = [
+        "const ui = { quickAnswers: {}, formAssist: { activeFieldId: '', kind: '', q: '', loading: false, suggestions: [] } };",
+        "const cardAssistRoles = new Set(['person_name', 'job_title', 'company_name']);",
+        "const otherAnswerValue = '其他';",
+        "let resetCount = 0;",
+        "let refreshCount = 0;",
+        "function cardAssistTargetsForSection(sectionId) { return sectionId === 'section-a' ? [{ role: 'person_name', field: { fieldId: 'personField' } }, { role: 'job_title', field: { fieldId: 'jobField' } }, { role: 'company_name', field: { fieldId: 'companyField' } }] : []; }",
+        "function cardAssistSectionForField() { throw new Error('selection must not depend on activeFieldId fallback when candidate carries a section'); }",
+        "function resetFormAssistState() { resetCount += 1; ui.formAssist = { activeFieldId: '', kind: '', q: '', loading: false, suggestions: [] }; }",
+        "function refreshQuickAnswerList() { refreshCount += 1; }",
+        "function setQuickOtherAnswer() {}",
+        extractFunctionDeclaration(managementSource, 'setQuickAnswer'),
+        extractFunctionDeclaration(managementSource, 'quickAnswerIsBlank'),
+        extractFunctionDeclaration(managementSource, 'cardAssistSourceValue'),
+        extractFunctionDeclaration(managementSource, 'fillQuickFormAssistFields'),
+        extractFunctionDeclaration(managementSource, 'formAssistSelectionSectionId'),
+        extractFunctionDeclaration(managementSource, 'formAssistPersonSourceFromCandidate'),
+        extractFunctionDeclaration(managementSource, 'commitFormAssistCandidate'),
+        extractFunctionDeclaration(managementSource, 'selectFormAssistPerson'),
+        extractFunctionDeclaration(managementSource, 'selectFormAssistCompany'),
+        "({ ui, commitFormAssistCandidate, counts: () => ({ resetCount, refreshCount }) });"
+    ].join('\n');
+    const selectionContract = vm.runInNewContext(selectionSource, {});
+    const personCandidate = {
+        dataset: {
+            action: 'form-assist-select-person',
+            field: 'personField',
+            section: 'section-a',
+            assistKind: 'person',
+            submissionId: 'sub-a',
+            personName: '林佳穎',
+            jobTitle: '採購經理',
+            companyName: '精準科技',
+            companyType: '製造業'
+        }
+    };
+    assert.strictEqual(selectionContract.commitFormAssistCandidate(personCandidate), true, 'person candidate must commit once');
+    assert.strictEqual(selectionContract.commitFormAssistCandidate(personCandidate), false, 'same pointer/click candidate must not double-commit');
+    assert.strictEqual(selectionContract.ui.quickAnswers.personField, '林佳穎');
+    assert.strictEqual(selectionContract.ui.quickAnswers.jobField, '採購經理');
+    assert.strictEqual(selectionContract.ui.quickAnswers.companyField, '精準科技');
+    assert.strictEqual(selectionContract.counts().resetCount, 1, 'person commit must clear transient suggestions once');
+    assert.strictEqual(selectionContract.counts().refreshCount, 1, 'person commit must refresh once');
+
+    selectionContract.ui.quickAnswers = {};
+    const companyCandidate = {
+        dataset: {
+            action: 'form-assist-select-company',
+            field: 'companyField',
+            section: 'section-a',
+            assistKind: 'company',
+            companyName: '精準科技'
+        }
+    };
+    assert.strictEqual(selectionContract.commitFormAssistCandidate(companyCandidate), true, 'company candidate must commit from durable target identity');
+    assert.strictEqual(selectionContract.ui.quickAnswers.companyField, '精準科技');
+    assert.strictEqual(selectionContract.ui.quickAnswers.personField, undefined, 'company candidate must not invent person value');
+    assert.strictEqual(selectionContract.ui.quickAnswers.jobField, undefined, 'company candidate must not invent job value');
 }
 
 function assertCardAssistShortTextMappingBuilderContract(managementSource) {
@@ -5343,6 +5546,7 @@ async function main() {
     assertRecordsDoubleLoadRemovalV1Contract(managementSource);
     assertRecordsCountProjectionConsistencyV1Contract(managementSource);
     assertReleaseStabilizationHistoricalLookupContract({ managementSource, apiSource, routesSource, controllerSource, serviceSource });
+    await assertSystemRepairPhase1FormAssistContract({ managementSource, serviceSource }, service);
     assert(managementSource.includes("if (ui.analytics.ai.state === 'loading') return;"));
     assert(managementSource.includes("state === 'loading'"));
     assert(!managementSource.includes('FORM_GEMINI_API_KEY'));

@@ -1289,6 +1289,12 @@ class ActivityIntelligenceService {
     }
 
     _formAssistSemanticForItem(item = {}) {
+        const settings = item.settings && typeof item.settings === 'object' ? item.settings : {};
+        const explicitRole = String(item.cardAssistField || settings.cardAssistField || '').trim();
+        if (explicitRole === 'person_name') return 'customerName';
+        if (explicitRole === 'company_name') return 'companyName';
+        if (explicitRole === 'job_title') return 'jobTitle';
+
         const key = String(item.itemKey || item.fieldId || item.itemId || '').trim();
         if (FORM_ASSIST_FIXED_KEYS[key]) return FORM_ASSIST_FIXED_KEYS[key];
 

@@ -2738,18 +2738,23 @@
     if (!field || assist.activeFieldId !== field.fieldId || !String(assist.q || '').trim()) return '';
     if (assist.loading) return `<div class="aim-form-assist-suggestions"><div class="aim-form-assist-loading">${Store.escapeHtml(FORM_ASSIST_COPY.suggestionsLoading)}</div></div>`;
     if (!Array.isArray(assist.suggestions) || !assist.suggestions.length) return '';
+    const sectionId = cardAssistSectionForField(field.fieldId);
     const rows = assist.kind === 'company'
-      ? assist.suggestions.map(renderCompanyAssistSuggestion).join('')
-      : assist.suggestions.map(renderPersonAssistSuggestion).join('');
+      ? assist.suggestions.map(item => renderCompanyAssistSuggestion(item, field, sectionId)).join('')
+      : assist.suggestions.map(item => renderPersonAssistSuggestion(item, field, sectionId)).join('');
     return `<div class="aim-form-assist-suggestions" role="listbox">${rows}</div>`;
   }
 
-  function renderPersonAssistSuggestion(item) {
+  function formAssistTargetAttributes(field, sectionId, kind) {
+    return `data-field="${Store.escapeHtml(field && field.fieldId || '')}" data-section="${Store.escapeHtml(sectionId || '')}" data-assist-kind="${Store.escapeHtml(kind || '')}"`;
+  }
+
+  function renderPersonAssistSuggestion(item, field, sectionId) {
     const title = item.personName || '';
     const meta = [item.companyName, item.jobTitle].filter(Boolean).join(' / ');
     const context = [item.activityName, Store.formatDate(item.submittedAt), item.recorderName].filter(Boolean).join(' / ');
     return `
-      <button class="aim-form-assist-suggestion" data-action="form-assist-select-person" data-submission-id="${Store.escapeHtml(item.submissionId || '')}" type="button" role="option">
+      <button class="aim-form-assist-suggestion" data-action="form-assist-select-person" ${formAssistTargetAttributes(field, sectionId, 'person')} data-submission-id="${Store.escapeHtml(item.submissionId || '')}" data-person-name="${Store.escapeHtml(item.personName || '')}" data-job-title="${Store.escapeHtml(item.jobTitle || '')}" data-company-name="${Store.escapeHtml(item.companyName || '')}" data-company-type="${Store.escapeHtml(item.companyType || '')}" type="button" role="option">
         <strong>${Store.escapeHtml(title)}</strong>
         ${meta ? `<span>${Store.escapeHtml(meta)}</span>` : ''}
         ${context ? `<small>${Store.escapeHtml(context)}</small>` : ''}
@@ -2757,12 +2762,12 @@
     `;
   }
 
-  function renderCompanyAssistSuggestion(item) {
+  function renderCompanyAssistSuggestion(item, field, sectionId) {
     const visitors = (item.recentVisitors || []).slice(0, 3).map(visitor => [visitor.personName, visitor.jobTitle].filter(Boolean).join(' / ')).filter(Boolean).join(FORM_ASSIST_COPY.listSeparator);
     const types = (item.historicalCompanyTypes || []).slice(0, 3).map(entry => `${entry.value} ${entry.count}`).join(FORM_ASSIST_COPY.listSeparator);
     const context = [item.recentActivityName, Store.formatDate(item.recentSubmittedAt)].filter(Boolean).join(' / ');
     return `
-      <button class="aim-form-assist-suggestion" data-action="form-assist-select-company" data-company-name="${Store.escapeHtml(item.companyName || '')}" type="button" role="option">
+      <button class="aim-form-assist-suggestion" data-action="form-assist-select-company" ${formAssistTargetAttributes(field, sectionId, 'company')} data-company-name="${Store.escapeHtml(item.companyName || '')}" type="button" role="option">
         <strong>${Store.escapeHtml(item.companyName || '')}</strong>
         ${visitors ? `<span>${Store.escapeHtml(visitors)}</span>` : ''}
         ${types ? `<small>${Store.escapeHtml(FORM_ASSIST_COPY.companyTypePrefix)}${Store.escapeHtml(types)}</small>` : ''}
@@ -7002,8 +7007,7 @@
     const assist = event.target.closest('.aim-form-assist-suggestion[data-action]');
     if (assist) {
       event.preventDefault();
-      if (assist.dataset.action === 'form-assist-select-person') selectFormAssistPerson(assist.dataset.submissionId || '');
-      if (assist.dataset.action === 'form-assist-select-company') selectFormAssistCompany(assist.dataset.companyName || '');
+      commitFormAssistCandidate(assist);
       return;
     }
 
@@ -7400,12 +7404,8 @@
       render();
       return true;
     }
-    if (action === 'form-assist-select-person') {
-      selectFormAssistPerson(el.dataset.submissionId || '');
-      return true;
-    }
-    if (action === 'form-assist-select-company') {
-      selectFormAssistCompany(el.dataset.companyName || '');
+    if (action === 'form-assist-select-person' || action === 'form-assist-select-company') {
+      commitFormAssistCandidate(el);
       return true;
     }
     if (action === 'cancel-form-assist-card-import') {
@@ -10395,6 +10395,15 @@
     ui.formAssist = { activeFieldId: '', kind: '', q: '', loading: false, suggestions: [] };
   }
 
+  function formAssistRequestStillCurrent(seq, fieldId, kind, q, formContext) {
+    const assist = ui.formAssist || {};
+    return seq === formAssistRequestSeq &&
+      assist.activeFieldId === fieldId &&
+      assist.kind === kind &&
+      assist.q === q &&
+      activeRecordFormContext() === formContext;
+  }
+
   function quickAnswerIsBlank(fieldId) {
     const value = ui.quickAnswers[fieldId];
     return !(Array.isArray(value) ? value.length : String(value || '').trim());
@@ -10592,18 +10601,56 @@
     toast('已刪除補充紀錄。');
   }
 
-  function selectFormAssistPerson(submissionId) {
-    const suggestion = (ui.formAssist && ui.formAssist.suggestions || []).find(item => item.submissionId === submissionId);
-    if (!suggestion) return;
-    fillQuickFormAssistFields(suggestion, { sectionId: cardAssistSectionForField(ui.formAssist.activeFieldId) });
-    resetFormAssistState();
-    refreshQuickAnswerList();
+  function formAssistSelectionSectionId(options = {}) {
+    return options.sectionId || cardAssistSectionForField(options.fieldId || '');
   }
 
-  function selectFormAssistCompany(companyName) {
-    fillQuickFormAssistFields({ companyName }, { sectionId: cardAssistSectionForField(ui.formAssist.activeFieldId) });
+  function formAssistPersonSourceFromCandidate(candidate) {
+    const data = candidate && candidate.dataset ? candidate.dataset : {};
+    return {
+      submissionId: data.submissionId || '',
+      personName: data.personName || '',
+      jobTitle: data.jobTitle || '',
+      companyName: data.companyName || '',
+      companyType: data.companyType || ''
+    };
+  }
+
+  function commitFormAssistCandidate(candidate) {
+    if (!candidate || !candidate.dataset || candidate.dataset.formAssistCommitted === 'true') return false;
+    const action = candidate.dataset.action || '';
+    const options = {
+      fieldId: candidate.dataset.field || '',
+      sectionId: candidate.dataset.section || ''
+    };
+    candidate.dataset.formAssistCommitted = 'true';
+    if (action === 'form-assist-select-person') {
+      return selectFormAssistPerson(candidate.dataset.submissionId || '', {
+        ...options,
+        source: formAssistPersonSourceFromCandidate(candidate)
+      });
+    }
+    if (action === 'form-assist-select-company') {
+      return selectFormAssistCompany(candidate.dataset.companyName || '', options);
+    }
+    candidate.dataset.formAssistCommitted = '';
+    return false;
+  }
+
+  function selectFormAssistPerson(submissionId, options = {}) {
+    const suggestion = options.source || (ui.formAssist && ui.formAssist.suggestions || []).find(item => item.submissionId === submissionId);
+    if (!suggestion) return;
+    fillQuickFormAssistFields(suggestion, { sectionId: formAssistSelectionSectionId(options) });
     resetFormAssistState();
     refreshQuickAnswerList();
+    return true;
+  }
+
+  function selectFormAssistCompany(companyName, options = {}) {
+    fillQuickFormAssistFields({ companyName }, { sectionId: formAssistSelectionSectionId(options) });
+    resetFormAssistState();
+    refreshQuickAnswerList();
+    return true;
   }
 
   function handleQuickFormAssistInput(fieldId, kind, value) {
@@ -10618,6 +10665,7 @@
     if (formAssistDebounceTimer) window.clearTimeout(formAssistDebounceTimer);
     const seq = formAssistRequestSeq + 1;
     formAssistRequestSeq = seq;
+    const formContext = activeRecordFormContext();
     ui.formAssist = { activeFieldId: fieldId, kind, q, loading: false, suggestions: [] };
     refreshFormAssistSuggestions(fieldId);
 
@@ -10627,7 +10675,7 @@
       try {
         const activity = selectedActivity();
         const result = await window.ActivityIntelligenceApi.getFormAssistSuggestions(activity.id, { kind, q });
-        if (seq !== formAssistRequestSeq) return;
+        if (!formAssistRequestStillCurrent(seq, fieldId, kind, q, formContext)) return;
         ui.formAssist = {
           activeFieldId: fieldId,
           kind,
@@ -10636,7 +10684,7 @@
           suggestions: (result && result.suggestions) || []
         };
       } catch (error) {
-        if (seq !== formAssistRequestSeq) return;
+        if (!formAssistRequestStillCurrent(seq, fieldId, kind, q, formContext)) return;
         ui.formAssist = { activeFieldId: fieldId, kind, q, loading: false, suggestions: [] };
       }
       refreshFormAssistSuggestions(fieldId);
