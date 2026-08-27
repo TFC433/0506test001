@@ -10419,12 +10419,16 @@
   function fillQuickFormAssistFields(source = {}, options = {}) {
     const targets = cardAssistTargetsForSection(options.sectionId || '');
     const replacements = new Set(options.replaceFields || []);
+    const replaceFieldIds = new Set(options.replaceFieldIds || []);
+    const directTargetFieldId = String(options.directTargetFieldId || '').trim();
+    if (directTargetFieldId) replaceFieldIds.add(directTargetFieldId);
     let changed = false;
     targets.forEach(({ role, field }) => {
       const value = cardAssistSourceValue(source, role);
       const text = String(value || '').trim();
       if (!field || !text) return;
-      if (!replacements.has(role) && !quickAnswerIsBlank(field.fieldId)) return;
+      const canReplaceField = replaceFieldIds.has(field.fieldId);
+      if (!replacements.has(role) && !canReplaceField && !quickAnswerIsBlank(field.fieldId)) return;
       setQuickAnswer(field.fieldId, text);
       changed = true;
     });
@@ -10640,14 +10644,14 @@
   function selectFormAssistPerson(submissionId, options = {}) {
     const suggestion = options.source || (ui.formAssist && ui.formAssist.suggestions || []).find(item => item.submissionId === submissionId);
     if (!suggestion) return;
-    fillQuickFormAssistFields(suggestion, { sectionId: formAssistSelectionSectionId(options) });
+    fillQuickFormAssistFields(suggestion, { sectionId: formAssistSelectionSectionId(options), directTargetFieldId: options.fieldId });
     resetFormAssistState();
     refreshQuickAnswerList();
     return true;
   }
 
   function selectFormAssistCompany(companyName, options = {}) {
-    fillQuickFormAssistFields({ companyName }, { sectionId: formAssistSelectionSectionId(options) });
+    fillQuickFormAssistFields({ companyName }, { sectionId: formAssistSelectionSectionId(options), directTargetFieldId: options.fieldId });
     resetFormAssistState();
     refreshQuickAnswerList();
     return true;

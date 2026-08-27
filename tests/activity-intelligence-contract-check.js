@@ -3716,7 +3716,7 @@ function assertReleaseStabilizationHistoricalLookupContract(sources) {
         extractFunctionDeclaration(managementSource, 'formAssistSelectionSectionId'),
         extractFunctionDeclaration(managementSource, 'selectFormAssistPerson'),
         extractFunctionDeclaration(managementSource, 'selectFormAssistCompany'),
-        "({ ui, state, fillQuickFormAssistFields, selectFormAssistPerson, selectFormAssistCompany, counts: () => ({ resetCount, refreshCount }) });"
+        "({ ui, state, setQuickAnswer, fillQuickFormAssistFields, selectFormAssistPerson, selectFormAssistCompany, counts: () => ({ resetCount, refreshCount }) });"
     ].join('\n');
     const contract = vm.runInNewContext(source, {});
 
@@ -3738,12 +3738,75 @@ function assertReleaseStabilizationHistoricalLookupContract(sources) {
     assert.strictEqual(contract.ui.quickAnswers.companyField, 'Apex Motion', 'person candidate click must autofill mapped company field');
     assert.strictEqual(contract.counts().refreshCount, 1, 'person candidate selection must refresh visible quick-entry inputs');
 
+    contract.ui.quickAnswers = { personField: 'Ada' };
+    contract.ui.formAssist = {
+        activeFieldId: 'personField',
+        kind: 'person',
+        q: 'Ada',
+        loading: false,
+        suggestions: [{
+            submissionId: 'submission-a',
+            personName: 'Ada Lin',
+            jobTitle: 'Procurement Lead',
+            companyName: 'Apex Motion'
+        }]
+    };
+    contract.selectFormAssistPerson('submission-a', { sectionId: 'section-a', fieldId: 'personField' });
+    assert.strictEqual(contract.ui.quickAnswers.personField, 'Ada Lin', 'person candidate must replace typed query when related fields are blank');
+    assert.strictEqual(contract.ui.quickAnswers.jobField, 'Procurement Lead', 'person candidate must fill blank related job-title value');
+    assert.strictEqual(contract.ui.quickAnswers.companyField, 'Apex Motion', 'person candidate must fill blank related company value');
+
+    contract.ui.quickAnswers = {
+        personField: 'Ada',
+        jobField: 'Manual job',
+        companyField: 'Manual company'
+    };
+    contract.ui.formAssist = {
+        activeFieldId: 'personField',
+        kind: 'person',
+        q: 'Ada',
+        loading: false,
+        suggestions: [{
+            submissionId: 'submission-a',
+            personName: 'Ada Lin',
+            jobTitle: 'Procurement Lead',
+            companyName: 'Apex Motion'
+        }]
+    };
+    contract.selectFormAssistPerson('submission-a', { sectionId: 'section-a', fieldId: 'personField' });
+    assert.strictEqual(contract.ui.quickAnswers.personField, 'Ada Lin', 'person candidate must replace the nonblank direct typed query');
+    assert.strictEqual(contract.ui.quickAnswers.jobField, 'Manual job', 'person candidate must preserve nonblank related job-title value');
+    assert.strictEqual(contract.ui.quickAnswers.companyField, 'Manual company', 'person candidate must preserve nonblank related company value');
+
     contract.ui.quickAnswers = {};
     contract.ui.formAssist = { activeFieldId: 'companyField', kind: 'company', q: 'Apex', loading: false, suggestions: [] };
     contract.selectFormAssistCompany('Apex Motion', { sectionId: 'section-a' });
     assert.strictEqual(contract.ui.quickAnswers.companyField, 'Apex Motion', 'company candidate click must autofill mapped company field');
     assert.strictEqual(contract.ui.quickAnswers.personField, undefined, 'company candidate click must not invent a person autofill value');
     assert.strictEqual(contract.ui.quickAnswers.jobField, undefined, 'company candidate click must not invent a job-title autofill value');
+
+    contract.ui.quickAnswers = {
+        companyField: 'Apex',
+        personField: 'Existing person',
+        jobField: 'Existing job'
+    };
+    contract.ui.formAssist = { activeFieldId: 'companyField', kind: 'company', q: 'Apex', loading: false, suggestions: [] };
+    contract.selectFormAssistCompany('Apex Motion', { sectionId: 'section-a', fieldId: 'companyField' });
+    assert.strictEqual(contract.ui.quickAnswers.companyField, 'Apex Motion', 'company candidate must replace the nonblank direct typed query');
+    assert.strictEqual(contract.ui.quickAnswers.personField, 'Existing person', 'company candidate must not change existing person value');
+    assert.strictEqual(contract.ui.quickAnswers.jobField, 'Existing job', 'company candidate must not change existing job value');
+
+    contract.ui.quickAnswers = { companyField: 'Apex Motion' };
+    contract.selectFormAssistCompany('Apex Motion', { sectionId: 'section-a', fieldId: 'companyField' });
+    assert.strictEqual(contract.ui.quickAnswers.companyField, 'Apex Motion', 'same-value company candidate commit must be idempotent');
+
+    contract.ui.quickAnswers = { companyField: 'Typed company' };
+    contract.selectFormAssistCompany('   ', { sectionId: 'section-a', fieldId: 'companyField' });
+    assert.strictEqual(contract.ui.quickAnswers.companyField, 'Typed company', 'empty company candidate must not erase typed free text');
+
+    contract.ui.quickAnswers = {};
+    contract.setQuickAnswer('personField', 'New free-text person');
+    assert.strictEqual(contract.ui.quickAnswers.personField, 'New free-text person', 'free-text person input must remain canonical without candidate selection');
 }
 
 async function assertSystemRepairPhase1FormAssistContract(sources, service) {
@@ -3890,7 +3953,11 @@ async function assertSystemRepairPhase1FormAssistContract(sources, service) {
         "const otherAnswerValue = '其他';",
         "let resetCount = 0;",
         "let refreshCount = 0;",
-        "function cardAssistTargetsForSection(sectionId) { return sectionId === 'section-a' ? [{ role: 'person_name', field: { fieldId: 'personField' } }, { role: 'job_title', field: { fieldId: 'jobField' } }, { role: 'company_name', field: { fieldId: 'companyField' } }] : []; }",
+        "function cardAssistTargetsForSection(sectionId) {",
+        "  if (sectionId === 'section-a') return [{ role: 'person_name', field: { fieldId: 'personField' } }, { role: 'job_title', field: { fieldId: 'jobField' } }, { role: 'company_name', field: { fieldId: 'companyField' } }];",
+        "  if (sectionId === 'section-b') return [{ role: 'person_name', field: { fieldId: 'personFieldB' } }, { role: 'job_title', field: { fieldId: 'jobFieldB' } }, { role: 'company_name', field: { fieldId: 'companyFieldB' } }];",
+        "  return [];",
+        "}",
         "function cardAssistSectionForField() { throw new Error('selection must not depend on activeFieldId fallback when candidate carries a section'); }",
         "function resetFormAssistState() { resetCount += 1; ui.formAssist = { activeFieldId: '', kind: '', q: '', loading: false, suggestions: [] }; }",
         "function refreshQuickAnswerList() { refreshCount += 1; }",
@@ -3928,6 +3995,35 @@ async function assertSystemRepairPhase1FormAssistContract(sources, service) {
     assert.strictEqual(selectionContract.counts().resetCount, 1, 'person commit must clear transient suggestions once');
     assert.strictEqual(selectionContract.counts().refreshCount, 1, 'person commit must refresh once');
 
+    selectionContract.ui.quickAnswers = {
+        personField: '林',
+        jobField: '手動職稱',
+        companyField: '手動公司',
+        personFieldB: '第二區姓名',
+        jobFieldB: '第二區職稱',
+        companyFieldB: '第二區公司'
+    };
+    const nonblankPersonCandidate = {
+        dataset: {
+            action: 'form-assist-select-person',
+            field: 'personField',
+            section: 'section-a',
+            assistKind: 'person',
+            submissionId: 'sub-a',
+            personName: '林佳穎',
+            jobTitle: '採購經理',
+            companyName: '精準科技',
+            companyType: '製造業'
+        }
+    };
+    assert.strictEqual(selectionContract.commitFormAssistCandidate(nonblankPersonCandidate), true, 'person candidate must commit against a nonblank direct target');
+    assert.strictEqual(selectionContract.ui.quickAnswers.personField, '林佳穎', 'person commit must replace only the direct typed query');
+    assert.strictEqual(selectionContract.ui.quickAnswers.jobField, '手動職稱', 'person commit must preserve nonblank related job-title');
+    assert.strictEqual(selectionContract.ui.quickAnswers.companyField, '手動公司', 'person commit must preserve nonblank related company');
+    assert.strictEqual(selectionContract.ui.quickAnswers.personFieldB, '第二區姓名', 'person commit must not touch another section person field');
+    assert.strictEqual(selectionContract.ui.quickAnswers.jobFieldB, '第二區職稱', 'person commit must not touch another section job field');
+    assert.strictEqual(selectionContract.ui.quickAnswers.companyFieldB, '第二區公司', 'person commit must not touch another section company field');
+
     selectionContract.ui.quickAnswers = {};
     const companyCandidate = {
         dataset: {
@@ -3942,6 +4038,27 @@ async function assertSystemRepairPhase1FormAssistContract(sources, service) {
     assert.strictEqual(selectionContract.ui.quickAnswers.companyField, '精準科技');
     assert.strictEqual(selectionContract.ui.quickAnswers.personField, undefined, 'company candidate must not invent person value');
     assert.strictEqual(selectionContract.ui.quickAnswers.jobField, undefined, 'company candidate must not invent job value');
+
+    selectionContract.ui.quickAnswers = {
+        companyField: '精',
+        personField: '既有人員',
+        jobField: '既有職稱',
+        companyFieldB: '第二區公司'
+    };
+    const nonblankCompanyCandidate = {
+        dataset: {
+            action: 'form-assist-select-company',
+            field: 'companyField',
+            section: 'section-a',
+            assistKind: 'company',
+            companyName: '精準科技'
+        }
+    };
+    assert.strictEqual(selectionContract.commitFormAssistCandidate(nonblankCompanyCandidate), true, 'company candidate must commit against a nonblank direct target');
+    assert.strictEqual(selectionContract.ui.quickAnswers.companyField, '精準科技', 'company commit must replace the direct typed query');
+    assert.strictEqual(selectionContract.ui.quickAnswers.personField, '既有人員', 'company commit must preserve person value');
+    assert.strictEqual(selectionContract.ui.quickAnswers.jobField, '既有職稱', 'company commit must preserve job value');
+    assert.strictEqual(selectionContract.ui.quickAnswers.companyFieldB, '第二區公司', 'company commit must not touch another section company field');
 }
 
 function assertCardAssistShortTextMappingBuilderContract(managementSource) {
