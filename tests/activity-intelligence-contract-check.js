@@ -1523,7 +1523,8 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     assert(renderTrackingSource.indexOf('renderFollowUpTable(rows, emptyText)') < renderTrackingSource.indexOf('renderFollowUpAttentionSection(attentionRows)'), 'Attention Records must render after the main Follow-up table');
     assert(!['搜尋', 'aim-follow-up-q', 'aim-follow-up-controls', 'aim-follow-up-card', 'aim-follow-up-recorder', '查看', 'data-action="open-record-inline"', '篩選', 'aim-follow-up-priority-popover'].some(text => renderTrackingSource.includes(text)), 'Follow-up renderer must not expose the heavy toolbar, card/view columns, or old priority header filter');
     assert(!renderTrackingSource.includes("renderFollowUpHeaderCell('card', '名片')"), 'Follow-up table must not render a visible standalone business-card column');
-    assert(!/renderAnalyticsAiPanel|renderMobileAnalyticsAiPanel|exportCsv|CSV|localStorage|sessionStorage|document\.cookie|activity\.settings|submission\.status/.test(renderTrackingSource), 'Follow-up renderer must not add AI, export, storage, settings, or status-write behavior');
+    assert(renderTrackingSource.includes('data-action="export-follow-up-csv"') && renderTrackingSource.includes('下載 CSV'), 'Follow-up renderer must expose the minimal CSV download action');
+    assert(!/renderAnalyticsAiPanel|renderMobileAnalyticsAiPanel|localStorage|sessionStorage|document\.cookie|activity\.settings|submission\.status/.test(renderTrackingSource), 'Follow-up renderer must not add AI, storage, settings, or status-write behavior');
     assert(!managementSource.includes('function renderFollowUpPriorityHeaderCell'), 'Old 優先度 header filter helper must be removed');
     assert(extractFunctionDeclaration(managementSource, 'renderFollowUpHeaderCell').includes('data-action="follow-up-sort"'), 'Follow-up sorting must stay on lightweight table headers');
     const tableSource = extractFunctionDeclaration(managementSource, 'renderFollowUpTable');
@@ -1550,6 +1551,13 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     assert(attentionSource.includes('目前沒有需要特別確認的 Email 紀錄。'), 'Attention section must include a lightweight empty state');
     assert(!extractFunctionDeclaration(managementSource, 'followUpPriorityField').includes('/優先/'), 'Follow-up priority resolver must not use broad priority-title fuzziness');
     assert(!/optionNotesForRecord|JSON\.stringify|field_intelligence/.test(extractFunctionDeclaration(managementSource, 'followUpTextualAnswerValues')), 'Form-content email extraction must stay limited to textual answer values');
+    const followUpCsvWorkingRowsSource = extractFunctionDeclaration(managementSource, 'followUpCsvWorkingRows');
+    assert(followUpCsvWorkingRowsSource.includes('followUpVisitorRecords(activity)') && followUpCsvWorkingRowsSource.includes('includeUnknownPriority: true'), 'Follow-up CSV must derive from the complete Visitor Follow-up dataset, including blank priorities');
+    assert(followUpCsvWorkingRowsSource.includes('followUpPartitionRows(allRows)'), 'Follow-up CSV must reuse the existing duplicate classification helper');
+    assert(!/followUpSelectedPriorities|followUpRowMatchesFilters|followUpSortedRows|renderFollowUpTable|querySelector/.test(followUpCsvWorkingRowsSource), 'Follow-up CSV export must not use KPI-filtered rows, table sorting, or rendered DOM visibility for inclusion');
+    assert(extractFunctionDeclaration(managementSource, 'downloadCsv').includes("'\\uFEFF'") && extractFunctionDeclaration(managementSource, 'downloadCsv').includes("'\\r\\n'") && extractFunctionDeclaration(managementSource, 'downloadCsv').includes("text/csv;charset=utf-8"), 'CSV downloads must keep existing BOM, CRLF, and MIME conventions');
+    assert(extractFunctionDeclaration(managementSource, 'csvCell').includes('replace(/"/g, \'""\')'), 'CSV cell escaping must keep quote doubling');
+    assert(!/Email確認|待確認|已確認|confirmed_by|confirmed_at/.test(managementSource), 'Follow-up CSV workstream must not introduce Email confirmation concepts');
 
     const source = [
         'const formContextVisitorMode = "visitor";',
@@ -1560,7 +1568,7 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
         'const followUpPriorityRank = Object.freeze({ "高": 0, "中": 1, "低": 2, "暫不追蹤": 3 });',
         'const followUpEmailSourceCard = "名片";',
         'const followUpEmailSourceForm = "表單內容";',
-        'const Store = { answerText(value) { if (Array.isArray(value)) return value.join("、"); return String(value == null ? "" : value); } };',
+        'const Store = { answerText(value) { if (Array.isArray(value)) return value.join("、"); return String(value == null ? "" : value); }, formatDateTime(value) { return String(value || "").replace("T", " ").slice(0, 16); }, localToday() { return "2026-08-16"; } };',
         extractFunctionDeclaration(managementSource, 'defaultFollowUpState'),
         'let ui = { followUp: defaultFollowUpState() };',
         'const state = { records: [] };',
@@ -1594,7 +1602,15 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
         extractFunctionDeclaration(managementSource, 'followUpStableDuplicateCompare'),
         extractFunctionDeclaration(managementSource, 'followUpPartitionRows'),
         extractFunctionDeclaration(managementSource, 'followUpAnalyticsData'),
-        '({ state, ui, followUpVisitorRecords, followUpPriorityField, followUpPriorityValue, extractEmailsFromText, followUpSubmissionEmails, followUpAnalyticsData });'
+        extractFunctionDeclaration(managementSource, 'followUpCsvHeaders'),
+        extractFunctionDeclaration(managementSource, 'followUpExportPriorityRank'),
+        extractFunctionDeclaration(managementSource, 'followUpExportCompare'),
+        extractFunctionDeclaration(managementSource, 'followUpCsvEmailCheck'),
+        extractFunctionDeclaration(managementSource, 'followUpCsvSendValue'),
+        extractFunctionDeclaration(managementSource, 'followUpCsvWorkingRows'),
+        extractFunctionDeclaration(managementSource, 'followUpCsvRows'),
+        extractFunctionDeclaration(managementSource, 'followUpCsvFilename'),
+        '({ state, ui, followUpVisitorRecords, followUpPriorityField, followUpPriorityValue, extractEmailsFromText, followUpSubmissionEmails, followUpAnalyticsData, followUpCsvHeaders, followUpCsvEmailCheck, followUpCsvSendValue, followUpCsvWorkingRows, followUpCsvRows, followUpCsvFilename });'
     ].join('\n');
     const contract = vm.runInNewContext(source, {});
     const activity = { id: 'activity-follow-up' };
@@ -1717,6 +1733,36 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     assertJsonEqual(data.rows.map(row => row.id), ['r7', 'r8', 'r2', 'r10'], '表單時間 table-header sorting must remain functional after partitioning');
     assert(data.attentionRows.some(row => row.id === 'r1') && data.rows.some(row => row.id === 'r8'), 'UI sorting must not swap duplicate ownership');
     assertPartitionInvariant(data, 'sorted high-medium-low scope');
+
+    contract.ui.followUp.priorities = [];
+    contract.ui.followUp.sortKey = 'company';
+    contract.ui.followUp.sortDirection = 'desc';
+    const csvHeaders = contract.followUpCsvHeaders();
+    assertJsonEqual(csvHeaders, ['項次', '本次寄送', 'Email檢查', '優先度', '公司名稱', '聯絡人', 'Email', 'Email來源', '已寄 Mail', '已進CRM', '紀錄者', '表單時間'], 'Follow-up CSV fixed V1 headers must match the approved first 12 columns');
+    const csvWorkingRows = contract.followUpCsvWorkingRows(activity);
+    const csvRows = contract.followUpCsvRows(activity);
+    const csvRowById = id => csvRows[csvWorkingRows.findIndex(row => row.id === id)];
+    assertJsonEqual(csvWorkingRows.map(row => row.id), ['r10', 'r11', 'r1', 'r9', 'r12', 'r2', 'r8', 'r7', 'r3', 'r4', 'r5', 'r6'], 'Follow-up CSV must use deterministic full-export sorting independent of current UI sorting');
+    assertJsonEqual(csvWorkingRows.map(row => row.rowNumber), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 'Follow-up CSV 項次 must be continuous after full-export sorting');
+    assert.strictEqual(csvRows.length, 12, 'Follow-up CSV must keep one row per non-void Visitor submission');
+    assert.strictEqual(csvRows.filter(row => row[4] === 'Acme').length, 5, 'Follow-up CSV must not dedupe companies');
+    assert.strictEqual(csvWorkingRows.some(row => row.id === 'active-1' || row.id === 'void-1'), false, 'Follow-up CSV must exclude Field Intelligence and void submissions without dropping Visitor rows');
+    assert.strictEqual(csvRowById('r10')[1], '是', 'High priority usable Email must default 本次寄送 to 是');
+    assert.strictEqual(csvRowById('r2')[1], '是', 'Medium priority usable Email must default 本次寄送 to 是');
+    assert.strictEqual(csvRowById('r3')[1], '', 'Low priority must default 本次寄送 blank');
+    assert.strictEqual(csvRowById('r4')[1], '', '暫不追蹤 must default 本次寄送 blank');
+    assert.strictEqual(csvRowById('r5')[1], '', 'Blank priority must default 本次寄送 blank');
+    assert.strictEqual(csvRowById('r9')[1], '', 'No Email rows must default 本次寄送 blank');
+    assert.strictEqual(csvRowById('r1')[1], '', 'Duplicate Email rows must default 本次寄送 blank');
+    assert.strictEqual(csvRowById('r10')[2], '可用');
+    assert.strictEqual(csvRowById('r9')[2], '無 Email');
+    assert.strictEqual(csvRowById('r1')[2], '重複 Email');
+    assert.strictEqual(csvRowById('r2')[8], '是', 'Runtime 已寄 Mail state must export as 是 without persistence changes');
+    assert.strictEqual(csvRowById('r1')[9], '是', 'Runtime 已進CRM state must export as 是 without persistence changes');
+    assert.strictEqual(csvRowById('r12')[6], 'other@example.com / sales@example.com', 'Multiple Emails must stay in one CSV cell using the existing slash display convention');
+    assert.strictEqual(csvRowById('r1')[7], '名片 / 表單內容 / 表單內容', 'Email來源 must reuse current source labels and slash display convention');
+    assert.strictEqual(csvRowById('r1')[11], '2026-08-16 04:00', '表單時間 must use the stable existing date-time formatter');
+    assert(contract.followUpCsvFilename({ name: '活動:/名稱' }).includes('活動_名稱-後續追蹤-2026-08-16.csv'), 'Follow-up CSV filename must include a sanitized Activity name and deterministic date');
 }
 
 function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {

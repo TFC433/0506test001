@@ -1517,6 +1517,12 @@ a:focus-visible {
   table-layout: fixed;
 }
 
+.aim-follow-up-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 8px;
+}
+
 .aim-follow-up-table th,
 .aim-follow-up-table td {
   vertical-align: middle;

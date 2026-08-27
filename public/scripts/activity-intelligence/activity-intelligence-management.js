@@ -4562,6 +4562,7 @@
         <div class="aim-kpi-grid aim-follow-up-kpi-row">
           ${followUpPriorityValues.map(priority => renderFollowUpPriorityKpi(priority, data.kpis[priority] || 0)).join('')}
         </div>
+        ${canExport() ? '<div class="aim-follow-up-actions"><button class="aim-button" data-action="export-follow-up-csv" type="button">下載 CSV</button></div>' : ''}
         ${renderFollowUpTable(rows, emptyText)}
         ${renderFollowUpAttentionSection(attentionRows)}
       </section>
@@ -7079,6 +7080,7 @@
     if (action === 'cancel-void-record') await cancelVoidRecord(el.dataset.id);
     if (action === 'quick-save-next') await saveQuickRecord();
     if (action === 'export-filtered' && canExport()) exportCsv(filteredRecords(selectedActivity(), ui.records.scope), selectedActivity(), 'filtered');
+    if (action === 'export-follow-up-csv' && canExport()) exportFollowUpCsv(selectedActivity());
     if (action === 'analytics-ai-preset' && canUseAnalytics()) {
       await submitAnalyticsAiQuestion({ question: el.dataset.question || '' });
     }
@@ -8897,9 +8899,9 @@
     return followUp.manualState[recordId];
   }
 
-  function followUpRowForRecord(record, activity) {
+  function followUpRowForRecord(record, activity, options = {}) {
     const priority = followUpPriorityValue(record, activity);
-    if (!followUpPriorityValues.includes(priority)) return null;
+    if (!options.includeUnknownPriority && !followUpPriorityValues.includes(priority)) return null;
     const preview = recordPreview(record, activity);
     const manual = followUpManualStateForRecord(record.id);
     const emails = followUpSubmissionEmails(record, activity);
@@ -9016,6 +9018,76 @@
       rows,
       attentionRows
     };
+  }
+
+  function followUpCsvHeaders() {
+    return ['項次', '本次寄送', 'Email檢查', '優先度', '公司名稱', '聯絡人', 'Email', 'Email來源', '已寄 Mail', '已進CRM', '紀錄者', '表單時間'];
+  }
+
+  function followUpExportPriorityRank(priority) {
+    return Object.prototype.hasOwnProperty.call(followUpPriorityRank, priority) ? followUpPriorityRank[priority] : followUpPriorityValues.length;
+  }
+
+  function followUpExportCompare(a, b) {
+    const priorityDiff = followUpExportPriorityRank(a.priority) - followUpExportPriorityRank(b.priority);
+    if (priorityDiff) return priorityDiff;
+    const createdDiff = String(b.createdAt || '').localeCompare(String(a.createdAt || ''));
+    if (createdDiff) return createdDiff;
+    const idDiff = String(a.id || '').localeCompare(String(b.id || ''), 'zh-Hant');
+    if (idDiff) return idDiff;
+    return Number(a.originalIndex) - Number(b.originalIndex);
+  }
+
+  function followUpCsvEmailCheck(row) {
+    const reasons = row.attentionReasons || [];
+    if (reasons.includes('無 Email')) return '無 Email';
+    if (reasons.includes('重複 Email')) return '重複 Email';
+    return '可用';
+  }
+
+  function followUpCsvSendValue(row) {
+    const emailCheck = followUpCsvEmailCheck(row);
+    return ['高', '中'].includes(row.priority) && emailCheck === '可用' && (row.emails || []).length ? '是' : '';
+  }
+
+  function followUpCsvWorkingRows(activity) {
+    const allRows = followUpVisitorRecords(activity)
+      .map(record => followUpRowForRecord(record, activity, { includeUnknownPriority: true }))
+      .filter(Boolean);
+    const partition = followUpPartitionRows(allRows);
+    const attentionReasonsById = new Map();
+    partition.attentionRows.forEach(row => attentionReasonsById.set(row.id, row.attentionReasons || []));
+    return allRows
+      .map(row => ({ ...row, attentionReasons: attentionReasonsById.get(row.id) || [] }))
+      .sort(followUpExportCompare)
+      .map((row, index) => ({ ...row, rowNumber: index + 1 }));
+  }
+
+  function followUpCsvRows(activity) {
+    return followUpCsvWorkingRows(activity).map(row => [
+      row.rowNumber,
+      followUpCsvSendValue(row),
+      followUpCsvEmailCheck(row),
+      row.priority || '',
+      row.company || '',
+      row.contact || '',
+      row.emailText || '',
+      row.emailSourceText || '',
+      row.mailSent ? '是' : '',
+      row.opportunityCreated ? '是' : '',
+      row.recorder || '',
+      Store.formatDateTime(row.createdAt) || ''
+    ]);
+  }
+
+  function followUpCsvFilename(activity) {
+    const safeName = String(activity && activity.name || '未命名活動').replace(/[\\/:*?"<>|]+/g, '_').trim() || '未命名活動';
+    return `${safeName}-後續追蹤-${Store.localToday()}.csv`;
+  }
+
+  function exportFollowUpCsv(activity) {
+    downloadCsv(followUpCsvFilename(activity), [followUpCsvHeaders(), ...followUpCsvRows(activity)]);
+    toast('已匯出 CSV。');
   }
 
   function analyticsMetrics(activity, records, options) {
@@ -10732,16 +10804,20 @@
         ...fields.map(f => Store.answerText(displayAnswerValue(f, r.answers[f.fieldId], otherAnswersForRecord(r))))
       ];
     });
-    const csv = '\uFEFF' + [header, ...body].map(row => row.map(csvCell).join(',')).join('\r\n');
+    downloadCsv(`${activity.name}-${scope}-${Store.localToday()}.csv`, [header, ...body]);
+    toast('已匯出 CSV。');
+  }
+
+  function downloadCsv(filename, rows) {
+    const csv = '\uFEFF' + rows.map(row => row.map(csvCell).join(',')).join('\r\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${activity.name}-${scope}-${Store.localToday()}.csv`;
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(link.href);
-    toast('已匯出 CSV。');
   }
 
   function exportFields(activity, records) {
