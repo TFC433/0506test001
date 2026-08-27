@@ -2,6 +2,7 @@
 const { GoogleGenerativeAI } = require('@google/generative-ai');
 const { plannerDomainContext, finalizerDomainContext } = require('./form-ai-domain-context');
 const { roleAllows } = require('../middleware/role.middleware');
+const ActivityIntelligencePerf = require('./activity-intelligence-perf');
 
 const ANSWER_ITEM_TYPES = new Set([
     'short_text',
@@ -290,11 +291,34 @@ class ActivityIntelligenceService {
     }
 
     async listSubmissions(activityId, query = {}, user = {}) {
-        await this._requireActivity(activityId);
-        const filters = this._normalizeSubmissionFilters(query);
-        const submissions = await this.reader.listSubmissions(activityId, filters);
-        const enriched = await this._enrichSubmissionCards(submissions);
-        return await this._enrichSubmissionSummaries(enriched, user);
+        const perf = ActivityIntelligencePerf.startTrace('submissions', { activityId });
+        let failed = false;
+        let resultCount = 0;
+        try {
+            await ActivityIntelligencePerf.timeAsync(perf, 'submissions.requireActivity', () => ({ activityId }), async () => await this._requireActivity(activityId));
+            const filters = this._normalizeSubmissionFilters(query);
+            ActivityIntelligencePerf.log(perf, 'submissions.filters', {
+                activityId,
+                state: filters.state || '',
+                includeVoid: Boolean(filters.includeVoid),
+                recordContext: filters.recordContext || '',
+                hasDateStart: Boolean(filters.dateStart),
+                hasDateEnd: Boolean(filters.dateEnd),
+                hasRecorderUserId: Boolean(filters.recorderUserId),
+                hasRecorderDisplayName: Boolean(filters.recorderDisplayName),
+                hasSearch: Boolean(filters.search)
+            });
+            const submissions = await this.reader.listSubmissions(activityId, filters, perf);
+            const enriched = await this._enrichSubmissionCards(submissions, perf);
+            const result = await this._enrichSubmissionSummaries(enriched, user, perf);
+            resultCount = result.length;
+            return result;
+        } catch (error) {
+            failed = true;
+            throw error;
+        } finally {
+            ActivityIntelligencePerf.finishTrace(perf, { activityId, failed, submissions: resultCount });
+        }
     }
 
     async listFollowUpStates(activityId, query = {}, user = {}) {
@@ -313,18 +337,48 @@ class ActivityIntelligenceService {
     }
 
     async getOverviewSummary(query = {}, user = {}) {
-        const activities = await this.reader.listActivities();
-        const activityIds = activities.map(activity => activity.id).filter(Boolean);
-        const filters = {};
-        if (user && user.accessClass === 'guest' && user.userId) filters.recorderUserId = user.userId;
-        const submissions = await this.reader.listSubmissionOverviewRows(activityIds, filters);
-        const submissionIds = submissions.map(submission => submission.id).filter(Boolean);
-        const versionIds = [...new Set(submissions.map(submission => submission.formVersionId).filter(Boolean))];
-        const [answerRows, itemsByVersionId] = await Promise.all([
-            this.reader.getOverviewAnswerRowsBySubmissionIds(submissionIds),
-            this.reader.getItemsByVersionIds(versionIds)
-        ]);
-        return this._overviewSummaryDto(activities, submissions, answerRows, itemsByVersionId, query);
+        const perf = ActivityIntelligencePerf.startTrace('overview-summary');
+        let failed = false;
+        let activityCount = 0;
+        let submissionCount = 0;
+        try {
+            const activities = await this.reader.listActivities(perf);
+            activityCount = activities.length;
+            const { activityIds, filters } = ActivityIntelligencePerf.timeSync(perf, 'overview.prepare_scope', result => ({
+                activityCount: result.activityIds.length,
+                hasGuestScope: Boolean(result.filters.recorderUserId)
+            }), () => {
+                const scopedActivityIds = activities.map(activity => activity.id).filter(Boolean);
+                const scopedFilters = {};
+                if (user && user.accessClass === 'guest' && user.userId) scopedFilters.recorderUserId = user.userId;
+                return { activityIds: scopedActivityIds, filters: scopedFilters };
+            });
+            const submissions = await this.reader.listSubmissionOverviewRows(activityIds, filters, perf);
+            submissionCount = submissions.length;
+            const { submissionIds, versionIds } = ActivityIntelligencePerf.timeSync(perf, 'overview.prepare_hydration', result => ({
+                submissionCount: result.submissionIds.length,
+                versionCount: result.versionIds.length
+            }), () => ({
+                submissionIds: submissions.map(submission => submission.id).filter(Boolean),
+                versionIds: [...new Set(submissions.map(submission => submission.formVersionId).filter(Boolean))]
+            }));
+            const [answerRows, itemsByVersionId] = await Promise.all([
+                this.reader.getOverviewAnswerRowsBySubmissionIds(submissionIds, perf),
+                this.reader.getItemsByVersionIds(versionIds, perf)
+            ]);
+            return ActivityIntelligencePerf.timeSync(perf, 'overview.aggregation', result => ({
+                activityCount,
+                submissionCount,
+                answerCount: answerRows.length,
+                itemVersionCount: itemsByVersionId.size,
+                responseCount: ((result && result.activities) || []).length
+            }), () => this._overviewSummaryDto(activities, submissions, answerRows, itemsByVersionId, query));
+        } catch (error) {
+            failed = true;
+            throw error;
+        } finally {
+            ActivityIntelligencePerf.finishTrace(perf, { failed, activityCount, submissions: submissionCount });
+        }
     }
 
     async getFormAssistSuggestions(activityId, query = {}) {
@@ -2773,15 +2827,24 @@ class ActivityIntelligenceService {
         };
     }
 
-    async _enrichSubmissionCards(submissions) {
+    async _enrichSubmissionCards(submissions, perf) {
+        const startedNs = process.hrtime.bigint();
         const cardIds = (submissions || []).map(submission => submission && submission.cardId).filter(Boolean);
         const uniqueCardIds = [...new Set(cardIds.map(cardId => String(cardId)))];
         let cardsById = new Map();
         if (uniqueCardIds.length) {
-            cardsById = await this.rawContactSqlReader.getRawContactsByCardIds(uniqueCardIds);
+            cardsById = await ActivityIntelligencePerf.timeAsync(perf, 'submissions.cards.query', result => ({
+                submissions: Array.isArray(submissions) ? submissions.length : 0,
+                cardCount: uniqueCardIds.length,
+                rows: result && result.size !== undefined ? result.size : 0
+            }), async () => await this.rawContactSqlReader.getRawContactsByCardIds(uniqueCardIds));
         }
 
-        return (submissions || []).map(submission => {
+        const enriched = ActivityIntelligencePerf.timeSync(perf, 'submissions.cards.merge', result => ({
+            submissions: Array.isArray(submissions) ? submissions.length : 0,
+            cardCount: uniqueCardIds.length,
+            rows: (result || []).length
+        }), () => (submissions || []).map(submission => {
             if (!submission.cardId) return submission;
             const card = cardsById.get(String(submission.cardId));
             return {
@@ -2810,21 +2873,34 @@ class ActivityIntelligenceService {
                     thumbnailUrl: card.driveFileId ? `/api/external/thumbnail?fileId=${encodeURIComponent(card.driveFileId)}` : null
                 } : null
             };
+        }));
+        ActivityIntelligencePerf.log(perf, 'submissions.cards.total', {
+            durationMs: Number(process.hrtime.bigint() - startedNs) / 1e6,
+            submissions: Array.isArray(submissions) ? submissions.length : 0,
+            cardCount: uniqueCardIds.length,
+            rows: enriched.length,
+            batched: true
         });
+        return enriched;
     }
 
-    async _enrichSubmissionSummaries(submissions, user = {}) {
+    async _enrichSubmissionSummaries(submissions, user = {}, perf) {
         if (!Array.isArray(submissions) || !submissions.length) return submissions || [];
         const actor = this._safeActorFromUser(user);
         const summaries = await this.reader.getSupplementSummariesBySubmissionIds(
             submissions.map(submission => submission.id),
-            actor && actor.userId
+            actor && actor.userId,
+            perf
         );
-        return submissions.map(submission => ({
+        return ActivityIntelligencePerf.timeSync(perf, 'submissions.summaries.merge', result => ({
+            submissions: submissions.length,
+            summaryCount: summaries.size,
+            rows: (result || []).length
+        }), () => submissions.map(submission => ({
             ...submission,
             supplementalSummary: this._supplementSummaryDto(summaries.get(submission.id)),
             supplements: null
-        }));
+        })));
     }
 
     async _enrichSubmissionDetails(submissions, user = {}) {

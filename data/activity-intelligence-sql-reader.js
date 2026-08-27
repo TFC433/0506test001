@@ -1,4 +1,5 @@
 const { supabase } = require('../config/supabase');
+const ActivityIntelligencePerf = require('../services/activity-intelligence-perf');
 
 const ACTIVITY_SELECT = '*';
 const VERSION_SELECT = '*';
@@ -19,12 +20,17 @@ class ActivityIntelligenceSqlReader {
         this.followUpStatesTable = 'activity_intelligence_submission_follow_up_states';
     }
 
-    async listActivities() {
-        const { data, error } = await supabase
-            .from(this.activitiesTable)
-            .select(ACTIVITY_SELECT)
-            .order('form_open_start', { ascending: false, nullsFirst: false })
-            .order('created_at', { ascending: false, nullsFirst: false });
+    async listActivities(perf) {
+        const { data, error } = await ActivityIntelligencePerf.timeAsync(
+            perf,
+            'overview.listActivities',
+            result => ({ rows: ((result && result.data) || []).length, failed: Boolean(result && result.error) }),
+            async () => await supabase
+                .from(this.activitiesTable)
+                .select(ACTIVITY_SELECT)
+                .order('form_open_start', { ascending: false, nullsFirst: false })
+                .order('created_at', { ascending: false, nullsFirst: false })
+        );
 
         if (error) throw this._dbError('listActivities', error);
         return (data || []).map(row => this.mapActivityRow(row));
@@ -87,14 +93,24 @@ class ActivityIntelligenceSqlReader {
         return this._attachItems(mappedVersion, itemsByVersionId);
     }
 
-    async getItemsByVersionIds(versionIds) {
+    async getItemsByVersionIds(versionIds, perf) {
         if (!Array.isArray(versionIds) || versionIds.length === 0) return new Map();
 
-        const { data, error } = await supabase
-            .from(this.formItemsTable)
-            .select(ITEM_SELECT)
-            .in('form_version_id', versionIds)
-            .order('sort_order', { ascending: true });
+        const phase = perf && perf.operation === 'overview-summary' ? 'overview.items' : 'submissions.items';
+        const { data, error } = await ActivityIntelligencePerf.timeAsync(
+            perf,
+            phase,
+            result => ({
+                versionCount: versionIds.length,
+                rows: ((result && result.data) || []).length,
+                failed: Boolean(result && result.error)
+            }),
+            async () => await supabase
+                .from(this.formItemsTable)
+                .select(ITEM_SELECT)
+                .in('form_version_id', versionIds)
+                .order('sort_order', { ascending: true })
+        );
 
         if (error) throw this._dbError('getItemsByVersionIds', error);
 
@@ -107,7 +123,7 @@ class ActivityIntelligenceSqlReader {
         }, new Map());
     }
 
-    async listSubmissions(activityId, filters = {}) {
+    async listSubmissions(activityId, filters = {}, perf) {
         let query = supabase
             .from(this.submissionsTable)
             .select(SUBMISSION_SELECT)
@@ -125,12 +141,29 @@ class ActivityIntelligenceSqlReader {
         if (filters.recorderDisplayName) query = query.eq('created_by_display_name', filters.recorderDisplayName);
         if (filters.recordContext) query = query.eq('record_context', filters.recordContext);
 
-        const { data, error } = await query.order('created_at', { ascending: false });
+        const { data, error } = await ActivityIntelligencePerf.timeAsync(
+            perf,
+            'submissions.base_query',
+            result => ({
+                activityId,
+                state: filters.state || '',
+                includeVoid: Boolean(filters.includeVoid),
+                recordContext: filters.recordContext || '',
+                hasDateStart: Boolean(filters.dateStart),
+                hasDateEnd: Boolean(filters.dateEnd),
+                hasRecorderUserId: Boolean(filters.recorderUserId),
+                hasRecorderDisplayName: Boolean(filters.recorderDisplayName),
+                hasSearch: Boolean(filters.search),
+                rows: ((result && result.data) || []).length,
+                failed: Boolean(result && result.error)
+            }),
+            async () => await query.order('created_at', { ascending: false })
+        );
 
         if (error) throw this._dbError('listSubmissions', error);
 
         const submissions = (data || []).map(row => this.mapSubmissionRow(row));
-        return await this.hydrateSubmissionDetails(submissions, { search: filters.search });
+        return await this.hydrateSubmissionDetails(submissions, { search: filters.search, perf });
     }
 
     async listFollowUpStatesByActivityId(activityId, filters = {}) {
@@ -165,7 +198,7 @@ class ActivityIntelligenceSqlReader {
         return (data || []).map(row => this.mapFollowUpStateRow(row));
     }
 
-    async listSubmissionOverviewRows(activityIds, filters = {}) {
+    async listSubmissionOverviewRows(activityIds, filters = {}, perf) {
         const ids = Array.isArray(activityIds) ? [...new Set(activityIds.filter(Boolean))] : [];
         if (!ids.length) return [];
 
@@ -176,37 +209,75 @@ class ActivityIntelligenceSqlReader {
 
         if (filters.recorderUserId) query = query.eq('created_by_user_id', filters.recorderUserId);
 
-        const { data, error } = await query.order('created_at', { ascending: false });
+        const { data, error } = await ActivityIntelligencePerf.timeAsync(
+            perf,
+            'overview.submissionOverviewRows',
+            result => ({
+                activityCount: ids.length,
+                hasRecorderUserId: Boolean(filters.recorderUserId),
+                rows: ((result && result.data) || []).length,
+                failed: Boolean(result && result.error)
+            }),
+            async () => await query.order('created_at', { ascending: false })
+        );
         if (error) throw this._dbError('listSubmissionOverviewRows', error);
         return (data || []).map(row => this.mapSubmissionRow(row));
     }
 
-    async getOverviewAnswerRowsBySubmissionIds(submissionIds) {
+    async getOverviewAnswerRowsBySubmissionIds(submissionIds, perf) {
         const ids = Array.isArray(submissionIds) ? [...new Set(submissionIds.filter(Boolean))] : [];
         if (!ids.length) return [];
 
-        const rows = [];
-        let from = 0;
+        let pageCount = 0;
+        let rowCount = 0;
+        return await ActivityIntelligencePerf.timeAsync(
+            perf,
+            'overview.answers.total',
+            result => ({
+                submissionCount: ids.length,
+                rows: rowCount,
+                pageCount,
+                pageSize: ANSWER_HYDRATION_PAGE_SIZE,
+                mappedRows: (result || []).length
+            }),
+            async () => {
+                const rows = [];
+                let from = 0;
 
-        while (true) {
-            const to = from + ANSWER_HYDRATION_PAGE_SIZE - 1;
-            const { data, error } = await supabase
-                .from(this.answersTable)
-                .select('submission_id,form_item_id,value_text,value_number,value_boolean,value_jsonb,other_text')
-                .in('submission_id', ids)
-                .order('submission_answer_id', { ascending: true })
-                .range(from, to);
+                while (true) {
+                    const pageNumber = pageCount + 1;
+                    const to = from + ANSWER_HYDRATION_PAGE_SIZE - 1;
+                    const { data, error } = await ActivityIntelligencePerf.timeAsync(
+                        perf,
+                        'overview.answers.page',
+                        result => ({
+                            pageNumber,
+                            pageSize: ANSWER_HYDRATION_PAGE_SIZE,
+                            rows: ((result && result.data) || []).length,
+                            failed: Boolean(result && result.error)
+                        }),
+                        async () => await supabase
+                            .from(this.answersTable)
+                            .select('submission_id,form_item_id,value_text,value_number,value_boolean,value_jsonb,other_text')
+                            .in('submission_id', ids)
+                            .order('submission_answer_id', { ascending: true })
+                            .range(from, to)
+                    );
 
-            if (error) throw this._dbError('getOverviewAnswerRowsBySubmissionIds', error);
+                    if (error) throw this._dbError('getOverviewAnswerRowsBySubmissionIds', error);
 
-            const pageRows = data || [];
-            rows.push(...pageRows);
+                    const pageRows = data || [];
+                    pageCount += 1;
+                    rowCount += pageRows.length;
+                    rows.push(...pageRows);
 
-            if (pageRows.length < ANSWER_HYDRATION_PAGE_SIZE) break;
-            from += ANSWER_HYDRATION_PAGE_SIZE;
-        }
+                    if (pageRows.length < ANSWER_HYDRATION_PAGE_SIZE) break;
+                    from += ANSWER_HYDRATION_PAGE_SIZE;
+                }
 
-        return rows.map(row => this.mapAnswerRow(row));
+                return rows.map(row => this.mapAnswerRow(row));
+            }
+        );
     }
 
     async listFormAssistItems() {
@@ -312,28 +383,59 @@ class ActivityIntelligenceSqlReader {
             return [];
         }
 
+        const perf = options.perf;
+        const hydrateStartedNs = process.hrtime.bigint();
         const submissionIds = submissions.map(submission => submission.id);
         const versionIds = [...new Set(submissions.map(submission => submission.formVersionId).filter(Boolean))];
 
         const [answersBySubmissionId, itemsByVersionId, versionsById] = await Promise.all([
-            this.getAnswersBySubmissionIds(submissionIds),
-            this.getItemsByVersionIds(versionIds),
-            this.getVersionsByIds(versionIds)
+            this.getAnswersBySubmissionIds(submissionIds, perf),
+            this.getItemsByVersionIds(versionIds, perf),
+            this.getVersionsByIds(versionIds, perf)
         ]);
 
-        const hydrated = submissions.map(submission => {
-            const answers = answersBySubmissionId.get(submission.id) || [];
-            const items = itemsByVersionId.get(submission.formVersionId) || [];
-            const version = versionsById.get(submission.formVersionId) || null;
-            return this.mapSubmissionDto(submission, answers, version, items);
-        });
+        const hydrated = ActivityIntelligencePerf.timeSync(
+            perf,
+            'submissions.hydrate.mapping',
+            result => ({
+                submissions: submissions.length,
+                versionCount: versionIds.length,
+                rows: (result || []).length
+            }),
+            () => submissions.map(submission => {
+                const answers = answersBySubmissionId.get(submission.id) || [];
+                const items = itemsByVersionId.get(submission.formVersionId) || [];
+                const version = versionsById.get(submission.formVersionId) || null;
+                return this.mapSubmissionDto(submission, answers, version, items);
+            })
+        );
 
-        if (!options.search) return hydrated;
+        if (!options.search) {
+            ActivityIntelligencePerf.log(perf, 'submissions.hydrate.total', {
+                durationMs: Number(process.hrtime.bigint() - hydrateStartedNs) / 1e6,
+                submissions: submissions.length,
+                versionCount: versionIds.length,
+                rows: hydrated.length
+            });
+            return hydrated;
+        }
 
         const needle = String(options.search).trim().toLowerCase();
-        if (!needle) return hydrated;
+        if (!needle) {
+            ActivityIntelligencePerf.log(perf, 'submissions.hydrate.total', {
+                durationMs: Number(process.hrtime.bigint() - hydrateStartedNs) / 1e6,
+                submissions: submissions.length,
+                versionCount: versionIds.length,
+                rows: hydrated.length,
+                hasSearch: true
+            });
+            return hydrated;
+        }
 
-        return hydrated.filter(submission => {
+        const filtered = ActivityIntelligencePerf.timeSync(perf, 'submissions.hydrate.search_filter', result => ({
+            inputRows: hydrated.length,
+            rows: (result || []).length
+        }), () => hydrated.filter(submission => {
             const haystack = [
                 submission.createdByDisplayName,
                 submission.updatedByDisplayName,
@@ -344,44 +446,84 @@ class ActivityIntelligenceSqlReader {
             ].filter(value => value !== null && value !== undefined).join(' ').toLowerCase();
 
             return haystack.includes(needle);
+        }));
+        ActivityIntelligencePerf.log(perf, 'submissions.hydrate.total', {
+            durationMs: Number(process.hrtime.bigint() - hydrateStartedNs) / 1e6,
+            submissions: submissions.length,
+            versionCount: versionIds.length,
+            rows: filtered.length,
+            hasSearch: true
         });
+        return filtered;
     }
 
-    async getAnswersBySubmissionIds(submissionIds) {
+    async getAnswersBySubmissionIds(submissionIds, perf) {
         if (!Array.isArray(submissionIds) || submissionIds.length === 0) return new Map();
 
-        const rows = [];
-        let from = 0;
+        let pageCount = 0;
+        let rowCount = 0;
+        return await ActivityIntelligencePerf.timeAsync(
+            perf,
+            'submissions.answers.total',
+            result => ({
+                submissionCount: submissionIds.length,
+                rows: rowCount,
+                pageCount,
+                pageSize: ANSWER_HYDRATION_PAGE_SIZE,
+                submissionBuckets: result ? result.size : 0
+            }),
+            async () => {
+                const rows = [];
+                let from = 0;
 
-        while (true) {
-            const to = from + ANSWER_HYDRATION_PAGE_SIZE - 1;
-            const { data, error } = await supabase
-                .from(this.answersTable)
-                .select(ANSWER_SELECT)
-                .in('submission_id', submissionIds)
-                .order('submission_answer_id', { ascending: true })
-                .range(from, to);
+                while (true) {
+                    const pageNumber = pageCount + 1;
+                    const to = from + ANSWER_HYDRATION_PAGE_SIZE - 1;
+                    const { data, error } = await ActivityIntelligencePerf.timeAsync(
+                        perf,
+                        'submissions.answers.page',
+                        result => ({
+                            pageNumber,
+                            pageSize: ANSWER_HYDRATION_PAGE_SIZE,
+                            rows: ((result && result.data) || []).length,
+                            failed: Boolean(result && result.error)
+                        }),
+                        async () => await supabase
+                            .from(this.answersTable)
+                            .select(ANSWER_SELECT)
+                            .in('submission_id', submissionIds)
+                            .order('submission_answer_id', { ascending: true })
+                            .range(from, to)
+                    );
 
-            if (error) throw this._dbError('getAnswersBySubmissionIds', error);
+                    if (error) throw this._dbError('getAnswersBySubmissionIds', error);
 
-            const pageRows = data || [];
-            rows.push(...pageRows);
+                    const pageRows = data || [];
+                    pageCount += 1;
+                    rowCount += pageRows.length;
+                    rows.push(...pageRows);
 
-            if (pageRows.length < ANSWER_HYDRATION_PAGE_SIZE) break;
-            from += ANSWER_HYDRATION_PAGE_SIZE;
-        }
-        return rows.reduce((acc, row) => {
-            const answer = this.mapAnswerRow(row);
-            const list = acc.get(answer.submissionId) || [];
-            list.push(answer);
-            acc.set(answer.submissionId, list);
-            return acc;
-        }, new Map());
+                    if (pageRows.length < ANSWER_HYDRATION_PAGE_SIZE) break;
+                    from += ANSWER_HYDRATION_PAGE_SIZE;
+                }
+                return rows.reduce((acc, row) => {
+                    const answer = this.mapAnswerRow(row);
+                    const list = acc.get(answer.submissionId) || [];
+                    list.push(answer);
+                    acc.set(answer.submissionId, list);
+                    return acc;
+                }, new Map());
+            }
+        );
     }
 
-    async getSupplementSummariesBySubmissionIds(submissionIds, actorUserId) {
-        const rows = await this.getSupplementsBySubmissionIds(submissionIds);
-        return rows.reduce((acc, row) => {
+    async getSupplementSummariesBySubmissionIds(submissionIds, actorUserId, perf) {
+        const startedNs = process.hrtime.bigint();
+        const rows = await this.getSupplementsBySubmissionIds(submissionIds, perf);
+        const summaries = ActivityIntelligencePerf.timeSync(perf, 'submissions.supplements.aggregate', result => ({
+            rows: rows.length,
+            summaryCount: result ? result.size : 0
+        }), () => rows.reduce((acc, row) => {
             const current = acc.get(row.submissionId) || {
                 additionalVisitorCount: 0,
                 contributionCount: 0,
@@ -394,30 +536,55 @@ class ActivityIntelligenceSqlReader {
             }
             acc.set(row.submissionId, current);
             return acc;
-        }, new Map());
+        }, new Map()));
+        ActivityIntelligencePerf.log(perf, 'submissions.supplements.total', {
+            durationMs: Number(process.hrtime.bigint() - startedNs) / 1e6,
+            submissionCount: Array.isArray(submissionIds) ? submissionIds.length : 0,
+            rows: rows.length,
+            summaryCount: summaries.size
+        });
+        return summaries;
     }
 
-    async getSupplementsBySubmissionIds(submissionIds) {
+    async getSupplementsBySubmissionIds(submissionIds, perf) {
         const ids = Array.isArray(submissionIds) ? [...new Set(submissionIds.filter(Boolean))] : [];
         if (!ids.length) return [];
 
-        const { data, error } = await supabase
-            .from(this.supplementsTable)
-            .select('*')
-            .in('submission_id', ids)
-            .order('created_at', { ascending: true });
+        const { data, error } = await ActivityIntelligencePerf.timeAsync(
+            perf,
+            'submissions.supplements.query',
+            result => ({
+                submissionCount: ids.length,
+                rows: ((result && result.data) || []).length,
+                failed: Boolean(result && result.error)
+            }),
+            async () => await supabase
+                .from(this.supplementsTable)
+                .select('*')
+                .in('submission_id', ids)
+                .order('created_at', { ascending: true })
+        );
 
         if (error) throw this._dbError('getSupplementsBySubmissionIds', error);
         return (data || []).map(row => this.mapSupplementRow(row)).filter(Boolean);
     }
 
-    async getVersionsByIds(versionIds) {
+    async getVersionsByIds(versionIds, perf) {
         if (!Array.isArray(versionIds) || versionIds.length === 0) return new Map();
 
-        const { data, error } = await supabase
-            .from(this.formVersionsTable)
-            .select(VERSION_SELECT)
-            .in('form_version_id', versionIds);
+        const { data, error } = await ActivityIntelligencePerf.timeAsync(
+            perf,
+            'submissions.versions',
+            result => ({
+                versionCount: versionIds.length,
+                rows: ((result && result.data) || []).length,
+                failed: Boolean(result && result.error)
+            }),
+            async () => await supabase
+                .from(this.formVersionsTable)
+                .select(VERSION_SELECT)
+                .in('form_version_id', versionIds)
+        );
 
         if (error) throw this._dbError('getVersionsByIds', error);
 
