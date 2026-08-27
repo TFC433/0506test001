@@ -139,9 +139,11 @@
     };
   }
 
-  let state = { activities: [], records: [], selectedActivityId: null };
+  let state = { activities: [], records: [], recordListProjections: [], selectedActivityId: null };
   let currentUser = null;
   const formBundles = new Map();
+  const recordListLoadState = new Map();
+  const recordListLoadPromises = new Map();
   const recordLoadState = new Map();
   const recordLoadPromises = new Map();
   const locallyCreatedRecordIds = new Set();
@@ -256,8 +258,10 @@
       await loadOverviewData({ force: true });
     } else if (currentUser.authenticated && ui.selectedActivityId && ui.tab === 'records' && ui.records.scope === 'entry') {
       await loadPublishedFormForActivity(ui.selectedActivityId);
-      startBackgroundRecordLoadForActivity(ui.selectedActivityId, { includeVoid: true });
-    } else if (currentUser.authenticated && ui.selectedActivityId && (ui.tab === 'records' || ui.tab === 'analytics')) {
+      startBackgroundRecordListLoadForActivity(ui.selectedActivityId, { includeVoid: true });
+    } else if (currentUser.authenticated && ui.selectedActivityId && ui.tab === 'records') {
+      await loadRecordListProjectionsForActivity(ui.selectedActivityId, { includeVoid: true });
+    } else if (currentUser.authenticated && ui.selectedActivityId && ui.tab === 'analytics') {
       await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
     }
     render();
@@ -340,6 +344,9 @@
     ui.recordContextMode = recordContextVisitorMode;
     resetAllQuickStates();
     state.records = [];
+    state.recordListProjections = [];
+    recordListLoadState.clear();
+    recordListLoadPromises.clear();
     recordLoadState.clear();
     recordLoadPromises.clear();
     locallyCreatedRecordIds.clear();
@@ -363,6 +370,9 @@
     }
     state.selectedActivityId = ui.selectedActivityId || null;
     state.records = [];
+    state.recordListProjections = [];
+    recordListLoadState.clear();
+    recordListLoadPromises.clear();
     recordLoadState.clear();
     recordLoadPromises.clear();
     locallyCreatedRecordIds.clear();
@@ -630,6 +640,55 @@
     };
   }
 
+  function recordListLoadKey(activityId, includeVoid) {
+    return `${activityId}:${includeVoid ? 'all' : 'active'}`;
+  }
+
+  async function loadRecordListProjectionsForActivity(activityId, options) {
+    if (!activityId || !window.ActivityIntelligenceApi || typeof window.ActivityIntelligenceApi.listRecordListProjections !== 'function') return [];
+    const includeVoid = options && options.includeVoid !== undefined ? options.includeVoid : true;
+    const force = Boolean(options && options.force);
+    const loadKey = recordListLoadKey(activityId, includeVoid);
+    const current = recordListLoadState.get(loadKey);
+    if (!force && current === 'loaded') return recordListRowsFor(activityId);
+    if (!force && current === 'loading' && recordListLoadPromises.has(loadKey)) {
+      return recordListLoadPromises.get(loadKey).catch(() => recordListRowsFor(activityId));
+    }
+    if (!force && current === 'loading') return recordListRowsFor(activityId);
+
+    recordListLoadState.set(loadKey, 'loading');
+    const loadPromise = (async () => {
+      await loadPublishedFormForActivity(activityId);
+      const projections = await window.ActivityIntelligenceApi.listRecordListProjections(activityId, {
+        state: includeVoid ? 'all' : 'active'
+      });
+      const normalized = (projections || []).map(normalizeRecordListProjectionDto);
+      mergeRecordListProjections(activityId, normalized);
+      recordListLoadState.set(loadKey, 'loaded');
+      return recordListRowsFor(activityId);
+    })();
+    recordListLoadPromises.set(loadKey, loadPromise);
+    try {
+      return await loadPromise;
+    } catch (error) {
+      recordListLoadState.delete(loadKey);
+      toast(error.message || 'Record list load failed.');
+      return recordListRowsFor(activityId);
+    } finally {
+      if (recordListLoadPromises.get(loadKey) === loadPromise) recordListLoadPromises.delete(loadKey);
+    }
+  }
+
+  function startBackgroundRecordListLoadForActivity(activityId, options) {
+    if (!activityId || !window.ActivityIntelligenceApi) return;
+    const targetActivityId = activityId;
+    loadRecordListProjectionsForActivity(targetActivityId, options)
+      .then(() => {
+        if (shouldRefreshPersonalRecordsPanel(targetActivityId)) refreshPersonalRecordsPanel(targetActivityId);
+      })
+      .catch(() => {});
+  }
+
   async function loadRecordsForActivity(activityId, options) {
     if (!activityId || !window.ActivityIntelligenceApi) return [];
     const includeVoid = options && options.includeVoid !== undefined ? options.includeVoid : true;
@@ -683,6 +742,14 @@
     return recordLoadState.get(`${activityId}:all`) === 'loading';
   }
 
+  function recordListLoadingForActivity(activityId) {
+    return recordListLoadState.get(recordListLoadKey(activityId, true)) === 'loading';
+  }
+
+  function recordListLoadedForActivity(activityId) {
+    return recordListLoadState.get(recordListLoadKey(activityId, true)) === 'loaded';
+  }
+
   function startBackgroundRecordLoadForActivity(activityId, options) {
     if (!activityId || !window.ActivityIntelligenceApi) return;
     const targetActivityId = activityId;
@@ -721,32 +788,34 @@
   async function loadGuestOwnRecordsForActivity(activityId) {
     if (!activityId || !window.ActivityIntelligenceApi || !isGuestUser()) return [];
     const loadKey = `guest-own:${activityId}`;
-    const current = recordLoadState.get(loadKey);
-    if (current === 'loaded') return visiblePersonalRecords(activityId);
-    if (current === 'loading') return visiblePersonalRecords(activityId);
+    const current = recordListLoadState.get(loadKey);
+    if (current === 'loaded') return visiblePersonalRecordListRows(activityId);
+    if (current === 'loading') return visiblePersonalRecordListRows(activityId);
 
-    recordLoadState.set(loadKey, 'loading');
+    recordListLoadState.set(loadKey, 'loading');
     try {
       await loadPublishedFormForActivity(activityId);
-      const submissions = await window.ActivityIntelligenceApi.listSubmissions(activityId, {
+      const submissions = await window.ActivityIntelligenceApi.listRecordListProjections(activityId, {
         state: 'active'
       });
       const normalized = (submissions || []).map(normalizeSubmissionDto);
       const submissionIds = new Set(normalized.map(record => record.id));
-      state.records = state.records.filter(record => record.activityId !== activityId || !submissionIds.has(record.id));
-      state.records = state.records.filter(record => record.activityId !== activityId).concat(normalized);
-      recordLoadState.set(loadKey, 'loaded');
-      return visiblePersonalRecords(activityId);
+      ensureRecordListProjectionState();
+      state.recordListProjections = state.recordListProjections.filter(record => record.activityId !== activityId || !submissionIds.has(record.id));
+      state.recordListProjections = state.recordListProjections.filter(record => record.activityId !== activityId).concat(normalized.map(normalizeRecordListProjectionDto));
+      recordListLoadState.set(loadKey, 'loaded');
+      return visiblePersonalRecordListRows(activityId);
     } catch (error) {
-      recordLoadState.delete(loadKey);
+      recordListLoadState.delete(loadKey);
       toast(error.message || 'Guest record load failed.');
-      return visiblePersonalRecords(activityId);
+      return visiblePersonalRecordListRows(activityId);
     }
   }
 
   function replaceRecord(record) {
     const normalized = normalizeSubmissionDto(record);
     state.records = state.records.filter(item => item.id !== normalized.id).concat(normalized);
+    replaceRecordListProjection(normalized);
     return normalized;
   }
 
@@ -1694,7 +1763,7 @@
     }
     enterVisitorRecordEntryState(activity.id);
     await loadPublishedFormForActivity(activity.id);
-    startBackgroundRecordLoadForActivity(activity.id, { includeVoid: true });
+    startBackgroundRecordListLoadForActivity(activity.id, { includeVoid: true });
   }
 
   function renderOverview() {
@@ -1863,8 +1932,8 @@
   }
 
   function renderPersonalRecordsAside(activity) {
-    const personalRecords = visiblePersonalRecords(activity.id);
-    const loading = recordHistoryLoadingForActivity(activity.id) && !recordsLoadedForActivity(activity.id);
+    const personalRecords = visiblePersonalRecordListRows(activity.id);
+    const loading = recordListLoadingForActivity(activity.id) && !recordListLoadedForActivity(activity.id);
     const countLabel = loading && !personalRecords.length ? '讀取中...' : `${personalRecords.length} 筆`;
     const listHtml = personalRecords.length
       ? personalRecords.map(record => renderRecordCard(record, activity, 'personal', { showActivityName: false })).join('')
@@ -1886,6 +1955,7 @@
   function renderRecordCard(record, activity, context, options) {
     options = options || {};
     const expanded = ui.expandedRecords[context].has(record.id) && canViewRecord(record, activity);
+    const detailRecord = expanded ? (state.records.find(item => item.id === record.id) || record) : record;
     const preview = recordPreview(record, activity);
     const coverage = recordCoverage(record, activity);
     const contextClass = recordIsFieldIntelligence(record) ? 'aim-record-card-field-intelligence' : '';
@@ -1904,7 +1974,7 @@
             <div class="aim-record-card-biz-slot">${renderRecordCardThumb(record)}</div>
           </div>
         </div>
-        ${expanded ? renderInlineRecordDetail(record, activity) : ''}
+        ${expanded ? renderInlineRecordDetail(detailRecord, activity) : ''}
       </article>
     `;
   }
@@ -2058,7 +2128,7 @@
   }
 
   function renderGuestOwnRecords(activity) {
-    const rows = visiblePersonalRecords(activity.id);
+    const rows = visiblePersonalRecordListRows(activity.id);
     return `
       <section class="aim-panel aim-guest-own-records">
         <div class="aim-panel-title-row">
@@ -3906,6 +3976,7 @@
       ui.drawer && ui.drawer.workingCardLink && ui.drawer.workingCardLink.card,
       ...(ui.quickAdditionalVisitors || []).map(entry => entry && entry.card),
       ...((ui.drawer && ui.drawer.workingAdditionalVisitors) || []).map(entry => entry && entry.card),
+      ...(state.recordListProjections || []).map(record => cardLinkForRecord(record).card),
       ...(state.records || []).map(record => cardLinkForRecord(record).card),
       ...(state.records || []).flatMap(record => ((record.supplements && record.supplements.additionalVisitors) || []).map(entry => supplementSnapshotAsRawCard(entry.cardSnapshot)))
     ];
@@ -4391,8 +4462,8 @@
 
   function renderRecords(activity, forcedScope) {
     const scope = forcedScope || ui.records.scope;
-    const rows = filteredRecords(activity, scope);
-    const recorders = unique(recordsFor(activity.id).map(r => r.createdByDisplayName));
+    const rows = filteredRecordListRows(activity, scope);
+    const recorders = unique(recordListRowsFor(activity.id).map(r => r.createdByDisplayName));
     const advancedCount = activeAdvancedFilterCount();
     const periodButtons = recordPeriodOptions(activity).map(([period, label]) => periodButton(period, label)).join('');
     const contextFilters = renderRecordContextFilters();
@@ -4452,7 +4523,7 @@
   }
 
   function renderRecordResults(activity, scope, rows) {
-    const visibleRows = rows || filteredRecords(activity, scope);
+    const visibleRows = rows || filteredRecordListRows(activity, scope);
     return `<div class="aim-record-card-list aim-record-card-list-all">${renderRecordListCards(activity, scope, visibleRows)}</div>`;
   }
 
@@ -5914,6 +5985,61 @@
     };
   }
 
+  function normalizeRecordListProjectionDto(submission) {
+    const normalized = normalizeSubmissionDto(submission);
+    return {
+      id: normalized.id,
+      submissionId: normalized.submissionId,
+      activityId: normalized.activityId,
+      formVersionId: normalized.formVersionId,
+      recordContext: normalized.recordContext,
+      status: normalized.status,
+      cardId: normalized.cardId,
+      createdByUserId: normalized.createdByUserId || '',
+      createdByDisplayName: normalized.createdByDisplayName || '',
+      createdAt: normalized.createdAt || '',
+      updatedByUserId: normalized.updatedByUserId || '',
+      updatedByDisplayName: normalized.updatedByDisplayName || '',
+      updatedAt: normalized.updatedAt || '',
+      answers: normalized.answers || {},
+      runtimeOtherAnswers: normalized.runtimeOtherAnswers || {},
+      runtimeOptionNotes: normalized.runtimeOptionNotes || {},
+      runtimeCardLink: normalized.runtimeCardLink || { linked: false, cardId: null, card: null },
+      supplementalSummary: normalizeSupplementalSummary(normalized.supplementalSummary),
+      supplements: normalizeSupplements(null),
+      supplementalDetailsLoaded: false,
+      formRuntimeSnapshot: normalized.formRuntimeSnapshot,
+      recordListProjection: true
+    };
+  }
+
+  function ensureRecordListProjectionState() {
+    if (!Array.isArray(state.recordListProjections)) state.recordListProjections = [];
+  }
+
+  function mergeRecordListProjections(activityId, records) {
+    ensureRecordListProjectionState();
+    const ids = new Set((records || []).map(record => record.id).filter(Boolean));
+    const preservedLocalRecords = state.recordListProjections.filter(record =>
+      record.activityId === activityId &&
+      locallyCreatedRecordIds.has(record.id) &&
+      !ids.has(record.id)
+    );
+    state.recordListProjections = state.recordListProjections
+      .filter(record => record.activityId !== activityId)
+      .concat(preservedLocalRecords, records || []);
+  }
+
+  function replaceRecordListProjection(record) {
+    ensureRecordListProjectionState();
+    const projection = normalizeRecordListProjectionDto(record);
+    if (!projection.id) return projection;
+    state.recordListProjections = state.recordListProjections
+      .filter(item => item.id !== projection.id)
+      .concat(projection);
+    return projection;
+  }
+
   function analyticsBubblePoints(rows, maxCount, minSize, maxSize, spacing = 7, options = {}) {
     const tierValues = analyticsTierSourceValues(rows);
     const placed = [];
@@ -6702,7 +6828,7 @@
   }
 
   function contributionDrawer() {
-    const record = state.records.find(item => item.id === ui.drawer.id);
+    const record = state.records.find(item => item.id === ui.drawer.id) || recordListRowsFor(ui.selectedActivityId || '').find(item => item.id === ui.drawer.id);
     if (!canContributeToRecord(record, selectedActivity())) return '';
     const contribution = (record.supplements && record.supplements.myContribution) || (record.supplementalSummary && record.supplementalSummary.myContribution);
     return `
@@ -6915,8 +7041,9 @@
       if (ui.tab === 'form') await loadFormBundleForActivity(ui.selectedActivityId, currentFormContext());
       if (ui.tab === 'records' && ui.records.scope === 'entry') {
         await loadPublishedFormForActivity(ui.selectedActivityId);
-        startBackgroundRecordLoadForActivity(ui.selectedActivityId, { includeVoid: true });
-      } else if (ui.tab === 'records' || ui.tab === 'analytics') await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
+        startBackgroundRecordListLoadForActivity(ui.selectedActivityId, { includeVoid: true });
+      } else if (ui.tab === 'records') await loadRecordListProjectionsForActivity(ui.selectedActivityId, { includeVoid: true });
+      else if (ui.tab === 'analytics') await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
     }
     if (action === 'sort' && canManageActivities()) sort(el.dataset.key);
     if (action === 'clear-overview' && canManageActivities()) ui.overview = { q: '', status: 'all', sort: 'name', dir: 'asc' };
@@ -7033,8 +7160,8 @@
         ui.records.scope = el.dataset.scope;
         if (ui.records.scope === 'entry') {
           await loadPublishedFormForActivity(ui.selectedActivityId);
-          startBackgroundRecordLoadForActivity(ui.selectedActivityId, { includeVoid: true });
-        } else await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
+          startBackgroundRecordListLoadForActivity(ui.selectedActivityId, { includeVoid: true });
+        } else await loadRecordListProjectionsForActivity(ui.selectedActivityId, { includeVoid: true });
       }
     }
     if (action === 'scope' && (canManageRecords() || isRecorder())) {
@@ -7043,8 +7170,8 @@
         ui.records.scope = el.dataset.scope;
         if (ui.records.scope === 'entry') {
           await loadPublishedFormForActivity(ui.selectedActivityId);
-          startBackgroundRecordLoadForActivity(ui.selectedActivityId, { includeVoid: true });
-        } else await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
+          startBackgroundRecordListLoadForActivity(ui.selectedActivityId, { includeVoid: true });
+        } else await loadRecordListProjectionsForActivity(ui.selectedActivityId, { includeVoid: true });
       }
     }
     if (action === 'record-period') setRecordPeriod(el.dataset.period);
@@ -7054,8 +7181,8 @@
     if (action === 'clear-custom-period') clearCustomPeriod();
     if (action === 'reset-more-filters') resetMoreFilters();
     if (action === 'open-record-inline') {
-      let record = state.records.find(r => r.id === el.dataset.id);
-      if (!record && el.dataset.id) record = await fetchRecordDetails(el.dataset.id);
+      let record = state.records.find(r => r.id === el.dataset.id) || recordListRowsFor(ui.selectedActivityId || '').find(r => r.id === el.dataset.id);
+      if ((!state.records.find(r => r.id === el.dataset.id) || !record || !record.supplementalDetailsLoaded) && el.dataset.id) record = await fetchRecordDetails(el.dataset.id);
       if (canViewRecord(record, selectedActivity())) {
         ui.tab = 'records';
         ui.records.scope = 'all';
@@ -7071,8 +7198,8 @@
       toggleOptionNoteEditor(el.dataset.context || 'quick', el.dataset.field || '', el.dataset.optionKey || '');
     }
     if (action === 'edit-record') {
-      let record = state.records.find(r => r.id === el.dataset.id);
-      if (record && !record.supplementalDetailsLoaded) record = await fetchRecordDetails(record.id);
+      let record = state.records.find(r => r.id === el.dataset.id) || recordListRowsFor(ui.selectedActivityId || '').find(r => r.id === el.dataset.id);
+      if (record && (!state.records.find(r => r.id === record.id) || !record.supplementalDetailsLoaded)) record = await fetchRecordDetails(record.id);
       if (canOpenRecordDrawer(record, selectedActivity())) ui.drawer = {
         type: 'record',
         mode: record.status === 'void' ? 'void' : 'edit',
@@ -7089,7 +7216,7 @@
     if (action === 'void-record') await voidRecord(el.dataset.id);
     if (action === 'cancel-void-record') await cancelVoidRecord(el.dataset.id);
     if (action === 'quick-save-next') await saveQuickRecord();
-    if (action === 'export-filtered' && canExport()) exportCsv(filteredRecords(selectedActivity(), ui.records.scope), selectedActivity(), 'filtered');
+    if (action === 'export-filtered' && canExport()) await exportFilteredRecordsCsv();
     if (action === 'export-follow-up-csv' && canExport()) exportFollowUpCsv(selectedActivity());
     if (action === 'analytics-ai-preset' && canUseAnalytics()) {
       await submitAnalyticsAiQuestion({ question: el.dataset.question || '' });
@@ -8649,6 +8776,11 @@
     return state.records.filter(r => r.activityId === activityId);
   }
 
+  function recordListRowsFor(activityId) {
+    ensureRecordListProjectionState();
+    return state.recordListProjections.filter(r => r.activityId === activityId);
+  }
+
   function recordsOwnedByCurrentUser(activityId) {
     if (!currentUser || !currentUser.authenticated) return [];
     return recordsFor(activityId)
@@ -8660,14 +8792,26 @@
     return recordsOwnedByCurrentUser(activityId).filter(record => ui.records.showVoidRecords || record.status !== 'void');
   }
 
+  function recordListRowsOwnedByCurrentUser(activityId) {
+    if (!currentUser || !currentUser.authenticated) return [];
+    const rows = recordListRowsFor(activityId);
+    return rows
+      .filter(recordBelongsToCurrentUser)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || rows.indexOf(b) - rows.indexOf(a));
+  }
+
+  function visiblePersonalRecordListRows(activityId) {
+    return recordListRowsOwnedByCurrentUser(activityId).filter(record => ui.records.showVoidRecords || record.status !== 'void');
+  }
+
   async function toggleRecordExpansion(context, recordId) {
     if (!['personal', 'all'].includes(context)) return;
-    let record = state.records.find(item => item.id === recordId);
+    let record = state.records.find(item => item.id === recordId) || recordListRowsFor(ui.selectedActivityId || '').find(item => item.id === recordId);
     if (!canViewRecord(record, selectedActivity())) return;
     const expanded = ui.expandedRecords[context];
     if (expanded.has(recordId)) expanded.delete(recordId);
     else {
-      if (record && !record.supplementalDetailsLoaded) {
+      if (!state.records.find(item => item.id === recordId) || (record && !record.supplementalDetailsLoaded)) {
         record = await fetchRecordDetails(recordId);
       }
       expanded.add(recordId);
@@ -8681,7 +8825,7 @@
   }
 
   function visibleRecordsForContext(context, activity) {
-    return context === 'personal' ? visiblePersonalRecords(activity.id) : filteredRecords(activity, 'all');
+    return context === 'personal' ? visiblePersonalRecordListRows(activity.id) : filteredRecordListRows(activity, 'all');
   }
 
   async function toggleAllRecordExpansions(context) {
@@ -8836,6 +8980,24 @@
     const q = ui.records.q.trim().toLowerCase();
     const [dateStart, dateEnd] = recordDateRange(activity);
     return recordsFor(activity.id).filter(r => {
+      if (scope === 'mine' && !recordBelongsToCurrentUser(r)) return false;
+      if (ui.records.recordContext === formContextFieldIntelligenceMode && !recordIsFieldIntelligence(r)) return false;
+      if (!ui.records.showVoidRecords && r.status === 'void') return false;
+      if (ui.records.state !== 'all' && (ui.records.state === 'void') !== (r.status === 'void')) return false;
+      if (ui.records.recorder !== 'all' && r.createdByDisplayName !== ui.records.recorder) return false;
+      if (dateStart && r.createdAt.slice(0, 10) < dateStart) return false;
+      if (dateEnd && r.createdAt.slice(0, 10) > dateEnd) return false;
+      if (ui.records.low && recordCoverage(r, activity).answered > 1) return false;
+      if (!recordMatchesChoiceFilters(r, activity)) return false;
+      if (q && !recordSearchText(r, activity).includes(q)) return false;
+      return true;
+    }).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  function filteredRecordListRows(activity, scope) {
+    const q = ui.records.q.trim().toLowerCase();
+    const [dateStart, dateEnd] = recordDateRange(activity);
+    return recordListRowsFor(activity.id).filter(r => {
       if (scope === 'mine' && !recordBelongsToCurrentUser(r)) return false;
       if (ui.records.recordContext === formContextFieldIntelligenceMode && !recordIsFieldIntelligence(r)) return false;
       if (!ui.records.showVoidRecords && r.status === 'void') return false;
@@ -10383,7 +10545,7 @@
   }
 
   function openContributionDrawer(submissionId) {
-    const record = state.records.find(item => item.id === submissionId);
+    const record = state.records.find(item => item.id === submissionId) || recordListRowsFor(ui.selectedActivityId || '').find(item => item.id === submissionId);
     if (!record || !canContributeToRecord(record, selectedActivity())) return;
     const contribution = (record.supplements && record.supplements.myContribution) || (record.supplementalSummary && record.supplementalSummary.myContribution) || null;
     ui.drawer = {
@@ -10641,7 +10803,7 @@
       if (!isGuestUser()) {
         const normalizedSubmission = replaceRecord(submission);
         locallyCreatedRecordIds.add(normalizedSubmission.id);
-      } else recordLoadState.delete(`guest-own:${activity.id}`);
+      } else recordListLoadState.delete(`guest-own:${activity.id}`);
       resetQuickState(formContext);
       resetFormAssistState();
       ui.focusQuickFirst = true;
@@ -10761,7 +10923,7 @@
   }
 
   async function voidRecord(id) {
-    const record = state.records.find(r => r.id === id);
+    const record = state.records.find(r => r.id === id) || recordListRowsFor(ui.selectedActivityId || '').find(r => r.id === id);
     if (!canVoidRecord(record, selectedActivity())) return toast('沒有權限作廢此紀錄。');
     if (!window.confirm('確定要作廢此紀錄？')) return;
     if (writeInFlight) return;
@@ -10779,7 +10941,7 @@
   }
 
   async function cancelVoidRecord(id) {
-    const record = state.records.find(r => r.id === id);
+    const record = state.records.find(r => r.id === id) || recordListRowsFor(ui.selectedActivityId || '').find(r => r.id === id);
     if (!canCancelVoidRecord(record, selectedActivity())) return toast('沒有權限取消作廢此紀錄。');
     if (!window.confirm('確定要取消作廢此紀錄？')) return;
     if (writeInFlight) return;
@@ -10803,7 +10965,7 @@
   }
 
   function openHardDeleteSubmission(submissionId) {
-    const record = state.records.find(item => item.id === submissionId);
+    const record = state.records.find(item => item.id === submissionId) || recordListRowsFor(ui.selectedActivityId || '').find(item => item.id === submissionId);
     if (!record) return toast('找不到紀錄。');
     ui.hardDeleteConfirm = { type: 'submission', id: record.id };
   }
@@ -10827,6 +10989,8 @@
     await window.ActivityIntelligenceApi.hardDeleteSubmission(submissionId);
     locallyCreatedRecordIds.delete(submissionId);
     state.records = state.records.filter(record => record.id !== submissionId);
+    ensureRecordListProjectionState();
+    state.recordListProjections = state.recordListProjections.filter(record => record.id !== submissionId);
     ui.expandedRecords.personal.delete(submissionId);
     ui.expandedRecords.all.delete(submissionId);
     if (ui.drawer && ui.drawer.type === 'record' && ui.drawer.id === submissionId) ui.drawer = null;
@@ -10840,8 +11004,16 @@
       .forEach(record => locallyCreatedRecordIds.delete(record.id));
     state.activities = state.activities.filter(activity => activity.id !== activityId);
     state.records = state.records.filter(record => record.activityId !== activityId);
+    ensureRecordListProjectionState();
+    state.recordListProjections = state.recordListProjections.filter(record => record.activityId !== activityId);
     [...formBundles.keys()].forEach(key => {
       if (String(key).startsWith(`${activityId}:`)) formBundles.delete(key);
+    });
+    [...recordListLoadState.keys()].forEach(key => {
+      if (String(key).startsWith(`${activityId}:`)) recordListLoadState.delete(key);
+    });
+    [...recordListLoadPromises.keys()].forEach(key => {
+      if (String(key).startsWith(`${activityId}:`)) recordListLoadPromises.delete(key);
     });
     [...recordLoadState.keys()].forEach(key => {
       if (String(key).startsWith(`${activityId}:`)) recordLoadState.delete(key);
@@ -10859,6 +11031,13 @@
     ui.view = 'overview';
     ui.tab = 'overview';
     toast('已永久刪除活動。');
+  }
+
+  async function exportFilteredRecordsCsv() {
+    const activity = selectedActivity();
+    if (!activity) return;
+    await loadRecordsForActivity(activity.id, { includeVoid: true });
+    exportCsv(filteredRecords(activity, ui.records.scope), activity, 'filtered');
   }
 
   function exportCsv(records, activity, scope) {
@@ -10923,6 +11102,7 @@
   function resetData() {
     if (!window.confirm('確定要重設 本階段資料？這會還原 V2 繁體中文範例資料。')) return;
     state = Store.reset();
+    state.recordListProjections = [];
     ui.selectedActivityId = state.selectedActivityId;
     ui.view = 'overview';
     ui.tab = 'overview';
@@ -10932,6 +11112,8 @@
     ui.records.showVoidRecords = false;
     ui.records.state = 'normal';
     recordLoadPromises.clear();
+    recordListLoadState.clear();
+    recordListLoadPromises.clear();
     locallyCreatedRecordIds.clear();
     toast('已重設 本階段資料。');
   }

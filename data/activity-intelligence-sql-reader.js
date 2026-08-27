@@ -6,9 +6,13 @@ const VERSION_SELECT = '*';
 const ITEM_SELECT = '*';
 const SUBMISSION_SELECT = '*';
 const ANSWER_SELECT = '*';
+const RECORD_LIST_SUBMISSION_SELECT = 'submission_id,activity_id,form_version_id,record_context,status,card_id,created_by_user_id,created_by_display_name,created_at,updated_by_user_id,updated_by_display_name,updated_at';
+const RECORD_LIST_ANSWER_SELECT = 'submission_id,form_item_id,value_text,value_number,value_boolean,value_jsonb,other_text';
+const RECORD_LIST_ITEM_SELECT = 'form_item_id,form_version_id,item_key,item_type,title,options,settings,is_hidden,is_removed,sort_order';
 const ANSWER_HYDRATION_PAGE_SIZE = 1000;
 const ANSWER_HYDRATION_CONFIRMED_TERMINAL_PAGE_SIZE = 500;
 const DEFAULT_FORM_CONTEXT = 'visitor';
+const RECORD_LIST_ANSWER_ITEM_TYPES = new Set(['short_text', 'long_text', 'number', 'yes_no', 'single_choice', 'multiple_choice', 'dropdown']);
 
 function shouldStopAnswerHydrationPagination(rowCount) {
     return rowCount === 0 || rowCount < Math.min(ANSWER_HYDRATION_PAGE_SIZE, ANSWER_HYDRATION_CONFIRMED_TERMINAL_PAGE_SIZE);
@@ -169,6 +173,48 @@ class ActivityIntelligenceSqlReader {
 
         const submissions = (data || []).map(row => this.mapSubmissionRow(row));
         return await this.hydrateSubmissionDetails(submissions, { search: filters.search, perf });
+    }
+
+    async listRecordListProjections(activityId, filters = {}, perf) {
+        let query = supabase
+            .from(this.submissionsTable)
+            .select(RECORD_LIST_SUBMISSION_SELECT)
+            .eq('activity_id', activityId);
+
+        if (filters.state && filters.state !== 'all') {
+            query = query.eq('status', filters.state);
+        } else if (!filters.includeVoid) {
+            query = query.neq('status', 'void');
+        }
+
+        if (filters.dateStart) query = query.gte('created_at', `${filters.dateStart}T00:00:00.000Z`);
+        if (filters.dateEnd) query = query.lte('created_at', `${filters.dateEnd}T23:59:59.999Z`);
+        if (filters.recorderUserId) query = query.eq('created_by_user_id', filters.recorderUserId);
+        if (filters.recorderDisplayName) query = query.eq('created_by_display_name', filters.recorderDisplayName);
+        if (filters.recordContext) query = query.eq('record_context', filters.recordContext);
+
+        const { data, error } = await ActivityIntelligencePerf.timeAsync(
+            perf,
+            'record-list.base_query',
+            result => ({
+                activityId,
+                state: filters.state || '',
+                includeVoid: Boolean(filters.includeVoid),
+                recordContext: filters.recordContext || '',
+                hasDateStart: Boolean(filters.dateStart),
+                hasDateEnd: Boolean(filters.dateEnd),
+                hasRecorderUserId: Boolean(filters.recorderUserId),
+                hasRecorderDisplayName: Boolean(filters.recorderDisplayName),
+                rows: ((result && result.data) || []).length,
+                failed: Boolean(result && result.error)
+            }),
+            async () => await query.order('created_at', { ascending: false })
+        );
+
+        if (error) throw this._dbError('listRecordListProjections', error);
+
+        const submissions = (data || []).map(row => this.mapSubmissionRow(row));
+        return await this.hydrateRecordListProjections(submissions, { perf });
     }
 
     async listFollowUpStatesByActivityId(activityId, filters = {}) {
@@ -460,6 +506,151 @@ class ActivityIntelligenceSqlReader {
             hasSearch: true
         });
         return filtered;
+    }
+
+    async hydrateRecordListProjections(submissions, options = {}) {
+        if (!Array.isArray(submissions) || submissions.length === 0) {
+            return [];
+        }
+
+        const perf = options.perf;
+        const submissionIds = submissions.map(submission => submission.id);
+        const versionIds = [...new Set(submissions.map(submission => submission.formVersionId).filter(Boolean))];
+
+        const [answersBySubmissionId, itemsByVersionId, versionsById] = await Promise.all([
+            this.getRecordListAnswersBySubmissionIds(submissionIds, perf),
+            this.getRecordListItemsByVersionIds(versionIds, perf),
+            this.getRecordListVersionsByIds(versionIds, perf)
+        ]);
+
+        return ActivityIntelligencePerf.timeSync(
+            perf,
+            'record-list.mapping',
+            result => ({
+                submissions: submissions.length,
+                versionCount: versionIds.length,
+                rows: (result || []).length
+            }),
+            () => submissions.map(submission => {
+                const answers = answersBySubmissionId.get(submission.id) || [];
+                const items = itemsByVersionId.get(submission.formVersionId) || [];
+                const version = versionsById.get(submission.formVersionId) || null;
+                return this.mapRecordListProjectionDto(submission, answers, version, items);
+            })
+        );
+    }
+
+    async getRecordListAnswersBySubmissionIds(submissionIds, perf) {
+        const ids = Array.isArray(submissionIds) ? [...new Set(submissionIds.filter(Boolean))] : [];
+        if (!ids.length) return new Map();
+
+        let pageCount = 0;
+        let rowCount = 0;
+        return await ActivityIntelligencePerf.timeAsync(
+            perf,
+            'record-list.answers',
+            result => ({
+                submissionCount: ids.length,
+                rows: rowCount,
+                pageCount,
+                pageSize: ANSWER_HYDRATION_PAGE_SIZE,
+                submissionBuckets: result ? result.size : 0
+            }),
+            async () => {
+                const rows = [];
+                let from = 0;
+
+                while (true) {
+                    const to = from + ANSWER_HYDRATION_PAGE_SIZE - 1;
+                    const { data, error } = await supabase
+                        .from(this.answersTable)
+                        .select(RECORD_LIST_ANSWER_SELECT)
+                        .in('submission_id', ids)
+                        .order('submission_answer_id', { ascending: true })
+                        .range(from, to);
+
+                    if (error) throw this._dbError('getRecordListAnswersBySubmissionIds', error);
+
+                    const pageRows = data || [];
+                    pageCount += 1;
+                    rowCount += pageRows.length;
+                    rows.push(...pageRows);
+
+                    if (shouldStopAnswerHydrationPagination(pageRows.length)) break;
+                    from += pageRows.length;
+                }
+
+                return rows.reduce((acc, row) => {
+                    const answer = this.mapAnswerRow(row);
+                    const list = acc.get(answer.submissionId) || [];
+                    list.push(answer);
+                    acc.set(answer.submissionId, list);
+                    return acc;
+                }, new Map());
+            }
+        );
+    }
+
+    async getRecordListItemsByVersionIds(versionIds, perf) {
+        const ids = Array.isArray(versionIds) ? [...new Set(versionIds.filter(Boolean))] : [];
+        if (!ids.length) return new Map();
+
+        const { data, error } = await ActivityIntelligencePerf.timeAsync(
+            perf,
+            'record-list.items',
+            result => ({
+                versionCount: ids.length,
+                rows: ((result && result.data) || []).length,
+                failed: Boolean(result && result.error)
+            }),
+            async () => await supabase
+                .from(this.formItemsTable)
+                .select(RECORD_LIST_ITEM_SELECT)
+                .in('form_version_id', ids)
+                .in('item_type', Array.from(RECORD_LIST_ANSWER_ITEM_TYPES))
+                .order('sort_order', { ascending: true })
+        );
+
+        if (error) throw this._dbError('getRecordListItemsByVersionIds', error);
+
+        return (data || []).reduce((acc, row) => {
+            const item = this.mapFormItemRow(row);
+            const list = acc.get(item.formVersionId) || [];
+            list.push(this.mapRecordListItemDto(item));
+            acc.set(item.formVersionId, list);
+            return acc;
+        }, new Map());
+    }
+
+    async getRecordListVersionsByIds(versionIds, perf) {
+        const ids = Array.isArray(versionIds) ? [...new Set(versionIds.filter(Boolean))] : [];
+        if (!ids.length) return new Map();
+
+        const { data, error } = await ActivityIntelligencePerf.timeAsync(
+            perf,
+            'record-list.versions',
+            result => ({
+                versionCount: ids.length,
+                rows: ((result && result.data) || []).length,
+                failed: Boolean(result && result.error)
+            }),
+            async () => await supabase
+                .from(this.formVersionsTable)
+                .select('form_version_id,form_context,version_number,published_at')
+                .in('form_version_id', ids)
+        );
+
+        if (error) throw this._dbError('getRecordListVersionsByIds', error);
+
+        return new Map((data || []).map(row => {
+            const version = {
+                versionId: row.form_version_id,
+                formContext: row.form_context || DEFAULT_FORM_CONTEXT,
+                versionNumber: row.version_number,
+                publishedAt: row.published_at
+            };
+            return [version.versionId, version];
+        }));
     }
 
     async getAnswersBySubmissionIds(submissionIds, perf) {
@@ -756,6 +947,60 @@ class ActivityIntelligenceSqlReader {
                 publishedAt: formVersion.publishedAt,
                 items: items || []
             } : null
+        };
+    }
+
+    mapRecordListProjectionDto(submission, answerRows, formVersion, items) {
+        const itemsByFormItemId = new Map((items || []).map(item => [item.formItemId, item]));
+        const answers = {};
+        const otherAnswers = {};
+
+        (answerRows || []).forEach(answer => {
+            const item = itemsByFormItemId.get(answer.formItemId);
+            if (!item) return;
+
+            if (answer.otherText) otherAnswers[item.itemKey] = answer.otherText;
+
+            if (answer.valueText !== null && answer.valueText !== undefined) answers[item.itemKey] = answer.valueText;
+            else if (answer.valueNumber !== null && answer.valueNumber !== undefined) answers[item.itemKey] = answer.valueNumber;
+            else if (answer.valueBoolean !== null && answer.valueBoolean !== undefined) answers[item.itemKey] = answer.valueBoolean;
+            else if (answer.valueJsonb !== null && answer.valueJsonb !== undefined) answers[item.itemKey] = answer.valueJsonb;
+        });
+
+        return {
+            ...submission,
+            submissionId: submission.id,
+            answers,
+            otherAnswers,
+            card: null,
+            supplementalSummary: null,
+            supplements: null,
+            formRuntimeSnapshot: formVersion ? {
+                versionId: formVersion.versionId,
+                formContext: formVersion.formContext || DEFAULT_FORM_CONTEXT,
+                versionNumber: formVersion.versionNumber,
+                publishedAt: formVersion.publishedAt,
+                items: items || []
+            } : null
+        };
+    }
+
+    mapRecordListItemDto(item) {
+        if (!item) return null;
+        return {
+            formItemId: item.formItemId,
+            itemKey: item.itemKey,
+            fieldId: item.fieldId,
+            itemId: item.itemId,
+            type: item.type,
+            title: item.title || '',
+            options: item.options || [],
+            optionEntries: item.optionEntries || [],
+            allowOther: Boolean(item.allowOther),
+            settings: item.settings && typeof item.settings === 'object' ? item.settings : {},
+            visible: item.visible !== false,
+            removedInDraft: Boolean(item.removedInDraft),
+            sortOrder: item.sortOrder
         };
     }
 

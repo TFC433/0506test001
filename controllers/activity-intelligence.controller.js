@@ -127,6 +127,13 @@ class ActivityIntelligenceController {
         });
     };
 
+    listRecordListProjections = async (req, res) => {
+        await this._handle(res, async () => {
+            const data = await this.activityIntelligenceService.listRecordListProjections(req.params.activityId, req.query, req.user);
+            res.json({ success: true, data });
+        });
+    };
+
     listFollowUpStates = async (req, res) => {
         await this._handle(res, async () => {
             const data = await this.activityIntelligenceService.listFollowUpStates(req.params.activityId, req.query, req.user);

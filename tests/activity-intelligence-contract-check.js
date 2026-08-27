@@ -125,6 +125,24 @@ function makeHarness(options = {}) {
         if (versionId === IDS.activePublishedVersion) return activeItems;
         return publishedItems;
     };
+    const answerProducingTypes = new Set(['short_text', 'long_text', 'number', 'yes_no', 'single_choice', 'multiple_choice', 'dropdown']);
+    const projectionItemsForVersionId = versionId => itemsForVersionId(versionId)
+        .filter(item => answerProducingTypes.has(item.type))
+        .map(item => ({
+            formItemId: item.formItemId,
+            itemKey: item.itemKey,
+            fieldId: item.fieldId,
+            itemId: item.itemId,
+            type: item.type,
+            title: item.title || '',
+            options: item.options || [],
+            optionEntries: item.optionEntries || [],
+            allowOther: Boolean(item.allowOther),
+            settings: item.settings && typeof item.settings === 'object' ? item.settings : {},
+            visible: item.visible !== false,
+            removedInDraft: Boolean(item.removedInDraft),
+            sortOrder: item.sortOrder
+        }));
     const answerRowsForSubmission = submission => {
         const items = itemsForVersionId(submission.formVersionId);
         return Object.entries(submission.answers || {}).map(([fieldId, value]) => {
@@ -136,7 +154,7 @@ function makeHarness(options = {}) {
                 valueNumber: null,
                 valueBoolean: null,
                 valueJsonb: null,
-                otherText: null
+                otherText: (submission.otherAnswers && submission.otherAnswers[fieldId]) || null
             };
             if (typeof value === 'number') row.valueNumber = value;
             else if (typeof value === 'boolean') row.valueBoolean = value;
@@ -145,6 +163,13 @@ function makeHarness(options = {}) {
             return row;
         });
     };
+    const versionRuntimeForSubmission = submission => ({
+        versionId: submission.formVersionId,
+        formContext: submission.recordContext || 'visitor',
+        versionNumber: submission.formVersionId === IDS.oldVersion ? 1 : 1,
+        publishedAt: submission.formVersionId === IDS.oldVersion ? '2026-07-01T00:00:00.000Z' : '2026-08-01T00:00:00.000Z',
+        items: projectionItemsForVersionId(submission.formVersionId)
+    });
     const formBundleForContext = (activityId, formContext = 'visitor') => {
         if (missingFormContexts.has(formContext) && !initializedFormContexts.has(formContext)) {
             return { published: null, draft: null };
@@ -193,6 +218,54 @@ function makeHarness(options = {}) {
                 if (filters.dateEnd && submission.createdAt.slice(0, 10) > filters.dateEnd) return false;
                 if (filters.recorderDisplayName && submission.createdByDisplayName !== filters.recorderDisplayName) return false;
                 return true;
+            });
+        },
+        async listRecordListProjections(activityId, filters = {}) {
+            calls.listRecordListProjections = { activityId, filters };
+            return [...submissions.values()].filter(submission => {
+                if (submission.activityId !== activityId) return false;
+                if (filters.state && filters.state !== 'all' && submission.status !== filters.state) return false;
+                if (!filters.includeVoid && submission.status === 'void') return false;
+                if (filters.recordContext && submission.recordContext !== filters.recordContext) return false;
+                if (filters.dateStart && submission.createdAt.slice(0, 10) < filters.dateStart) return false;
+                if (filters.dateEnd && submission.createdAt.slice(0, 10) > filters.dateEnd) return false;
+                if (filters.recorderDisplayName && submission.createdByDisplayName !== filters.recorderDisplayName) return false;
+                return true;
+            }).map(submission => {
+                const projectionItems = projectionItemsForVersionId(submission.formVersionId);
+                const itemsByFormItemId = new Map(projectionItems.map(item => [item.formItemId, item]));
+                const answers = {};
+                const otherAnswers = {};
+                answerRowsForSubmission(submission).forEach(answer => {
+                    const item = itemsByFormItemId.get(answer.formItemId);
+                    if (!item) return;
+                    if (answer.otherText) otherAnswers[item.itemKey] = answer.otherText;
+                    if (answer.valueText !== null && answer.valueText !== undefined) answers[item.itemKey] = answer.valueText;
+                    else if (answer.valueNumber !== null && answer.valueNumber !== undefined) answers[item.itemKey] = answer.valueNumber;
+                    else if (answer.valueBoolean !== null && answer.valueBoolean !== undefined) answers[item.itemKey] = answer.valueBoolean;
+                    else if (answer.valueJsonb !== null && answer.valueJsonb !== undefined) answers[item.itemKey] = answer.valueJsonb;
+                });
+                return {
+                    id: submission.id,
+                    submissionId: submission.id,
+                    activityId: submission.activityId,
+                    formVersionId: submission.formVersionId,
+                    recordContext: submission.recordContext,
+                    status: submission.status,
+                    cardId: submission.cardId,
+                    createdByUserId: submission.createdByUserId,
+                    createdByDisplayName: submission.createdByDisplayName,
+                    createdAt: submission.createdAt,
+                    updatedByUserId: submission.updatedByUserId,
+                    updatedByDisplayName: submission.updatedByDisplayName,
+                    updatedAt: submission.updatedAt,
+                    answers,
+                    otherAnswers,
+                    card: null,
+                    supplementalSummary: null,
+                    supplements: null,
+                    formRuntimeSnapshot: versionRuntimeForSubmission(submission)
+                };
             });
         },
         async listFollowUpStatesByActivityId(activityId, filters = {}) {
@@ -1000,7 +1073,7 @@ function assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiS
     assert(managementSource.includes('const contributorOnly = recordIsContributorOnly(record);'));
     assert(managementSource.includes("contributorOnly\n        ? '<span class=\"aim-record-context-label aim-record-context-label-supplemental\">我有補充</span>'"));
     assert(managementSource.includes('aim-record-card-meta-labels'), 'supplemental record-card cues must remain in the metadata label group');
-    assert(managementSource.includes('if (record && !record.supplementalDetailsLoaded) record = await fetchRecordDetails(record.id);'), 'canonical edit must hydrate supplements before opening the drawer');
+    assert(managementSource.includes('if (record && (!state.records.find(r => r.id === record.id) || !record.supplementalDetailsLoaded)) record = await fetchRecordDetails(record.id);'), 'canonical edit must hydrate projections or missing supplements before opening the drawer');
     assert(managementSource.includes('workingAdditionalVisitors: editableAdditionalVisitorRows(record)'), 'canonical edit drawer must hydrate persisted Additional Visitors');
     assert(managementSource.includes('renderRecordDrawerAdditionalVisitors(record, activity, editing)'), 'canonical edit drawer must render Additional Visitors in the same edit session');
     assert(managementSource.includes('recordDrawerAdditionalVisitorsCanAdd(activity)'), 'record edit add affordance must use current Visitor Count');
@@ -3038,7 +3111,7 @@ async function assertDesktopUnifiedVisitorRecordLandingContract(managementSource
         "function applyRoleLanding() { fallbackCalls += 1; ui.view = 'fallback'; }",
         "function canCreateRecord(activity) { return currentUser && currentUser.authenticated && activity && activityStatus(activity).key === 'open'; }",
         "function loadPublishedFormForActivity(activityId) { loadPublishedFormCalls.push(activityId); return Promise.resolve(); }",
-        "function startBackgroundRecordLoadForActivity(activityId, options) { backgroundLoadCalls.push({ activityId, options }); }",
+        "function startBackgroundRecordListLoadForActivity(activityId, options) { backgroundLoadCalls.push({ activityId, options }); }",
         "function statusPill(status) { return `<span class=\"aim-pill\">${status.key}</span>`; }",
         extractFunctionDeclaration(managementSource, 'enterVisitorRecordEntryState'),
         extractFunctionDeclaration(managementSource, 'applyUnifiedVisitorRecordLanding'),
@@ -3350,8 +3423,9 @@ async function assertOverviewLoadOptimizationContract(managementSource, apiSourc
     assert(!managementSource.includes('Promise.all(activities.map(activity => loadRecordsForActivity(activity.id'), 'NO_INITIAL_ALL_ACTIVITY_FULL_SUBMISSION_FANOUT');
     assert(!managementSource.includes('async function refreshOverviewRecords'), 'legacy all-activity full-record refresh helper must be removed');
     assert(managementSource.includes("if (ui.tab === 'records' && ui.records.scope === 'entry')"), 'Records entry must use the staged published-form path');
-    assert(managementSource.includes("startBackgroundRecordLoadForActivity(ui.selectedActivityId, { includeVoid: true });"), 'Records entry must start background full-record hydration');
-    assert(managementSource.includes("else if (ui.tab === 'records' || ui.tab === 'analytics') await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });"), 'Records history and Analytics must still load full records on demand');
+    assert(managementSource.includes("startBackgroundRecordListLoadForActivity(ui.selectedActivityId, { includeVoid: true });"), 'Records entry must start background record-list projection hydration');
+    assert(managementSource.includes("} else if (currentUser.authenticated && ui.selectedActivityId && ui.tab === 'records') {\n      await loadRecordListProjectionsForActivity(ui.selectedActivityId, { includeVoid: true });"), 'Records history must load the record-list projection on demand');
+    assert(managementSource.includes("} else if (currentUser.authenticated && ui.selectedActivityId && ui.tab === 'analytics') {\n      await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });"), 'Analytics must still load full records on demand');
     assert(managementSource.includes("if (ui.tab === 'overview' && ui.view === 'workspace') await loadPublishedFormForActivity(ui.selectedActivityId);"), 'selected activity Overview may load its one published form for field-count display');
 
     const harness = makeHarness();
@@ -3369,6 +3443,113 @@ async function assertOverviewLoadOptimizationContract(managementSource, apiSourc
     assert.strictEqual(activitySummary.low, 2, 'Overview low-completeness count must preserve answered <= 1 semantics for non-void records');
     assert.strictEqual(activitySummary.recentRecords.length, 3, 'Overview recent projection must exclude void records');
     assert.strictEqual(activitySummary.recentRecords[0].id, IDS.activeAiSubmission, 'Overview recent projection must be newest-first');
+}
+
+async function assertRecordListProjectionV1Contract(sources) {
+    const { managementSource, apiSource, routesSource, controllerSource, serviceSource, readerSource } = sources;
+
+    assert(apiSource.includes('listRecordListProjections(activityId, query)'), 'client API must expose the record-list projection request');
+    assert(apiSource.includes('return request(`/activities/${encodeURIComponent(activityId)}/record-list${suffix}`);'), 'record-list API must use the dedicated route');
+    assert(routesSource.includes("router.get('/activities/:activityId/record-list', requireSubmissionListAccess, scopeSubmissionList"), 'record-list route must reuse submission-list auth and scoping');
+    assert(routesSource.indexOf("'/activities/:activityId/record-list'") < routesSource.indexOf("'/activities/:activityId/submissions'"), 'record-list route must be registered before the submissions route');
+    assert(routesSource.includes("router.get('/activities/:activityId/submissions', requireSubmissionListAccess, scopeSubmissionList"), 'full submissions route must remain available');
+    assert(routesSource.includes("router.get('/submissions/:submissionId', requireSubmissionReadAccess"), 'full submission detail route must remain available');
+    assert(controllerSource.includes('listRecordListProjections = async (req, res) =>'), 'controller must expose a record-list projection handler');
+    assert(controllerSource.includes('this.activityIntelligenceService.listRecordListProjections(req.params.activityId, req.query, req.user)'), 'controller must delegate record-list projection reads to the service');
+
+    assert(serviceSource.includes('async listRecordListProjections(activityId, query = {}, user = {})'), 'service must expose listRecordListProjections');
+    assert(serviceSource.includes('const projections = await this.reader.listRecordListProjections(activityId, filters, perf);'), 'service projection read must call the dedicated reader path');
+    assert(serviceSource.includes('await this._enrichRecordListProjectionCards(projections, perf);'), 'record-list projection must use compact card enrichment');
+    assert(serviceSource.includes('await this._enrichRecordListProjectionSummaries(withCards, user, perf);'), 'record-list projection must attach summary-only supplemental data');
+    assert(serviceSource.includes('async listSubmissions(activityId, query = {}, user = {})'), 'full listSubmissions service method must remain');
+    assert(serviceSource.includes('const submissions = await this.reader.listSubmissions(activityId, filters, perf);'), 'full listSubmissions method must keep using the full reader path');
+
+    assert(readerSource.includes('const RECORD_LIST_SUBMISSION_SELECT ='), 'SQL reader must define a narrow submission select for record-list projection');
+    assert(readerSource.includes('const RECORD_LIST_ANSWER_SELECT ='), 'SQL reader must define a narrow answer select for record-list projection');
+    assert(readerSource.includes('const RECORD_LIST_ITEM_SELECT ='), 'SQL reader must define a narrow item select for record-list projection');
+    assert(readerSource.includes("const RECORD_LIST_ANSWER_ITEM_TYPES = new Set(['short_text', 'long_text', 'number', 'yes_no', 'single_choice', 'multiple_choice', 'dropdown']);"), 'record-list projection must only hydrate answer-producing item types');
+    assert(readerSource.includes('async listRecordListProjections(activityId, filters = {}, perf)'), 'SQL reader must expose dedicated record-list projection method');
+    assert(readerSource.includes(".select(RECORD_LIST_SUBMISSION_SELECT)"), 'record-list base query must not use the full submission select');
+    assert(readerSource.includes(".select(RECORD_LIST_ANSWER_SELECT)"), 'record-list answer hydration must not use the full answer select');
+    assert(readerSource.includes(".select(RECORD_LIST_ITEM_SELECT)"), 'record-list item hydration must not use the full item select');
+    assert(readerSource.includes(".in('item_type', Array.from(RECORD_LIST_ANSWER_ITEM_TYPES))"), 'record-list item hydration must filter to answer-producing items');
+    const projectionMapperStart = readerSource.indexOf('mapRecordListProjectionDto(submission, answerRows, formVersion, items)');
+    const projectionMapperEnd = readerSource.indexOf('mapRecordListItemDto(item)', projectionMapperStart);
+    const projectionMapperSource = projectionMapperStart >= 0 && projectionMapperEnd > projectionMapperStart
+        ? readerSource.slice(projectionMapperStart, projectionMapperEnd)
+        : '';
+    assert(readerSource.includes('formRuntimeSnapshot: formVersion ?'), 'record-list payload must expose a compact runtime snapshot');
+    assert(projectionMapperSource && !projectionMapperSource.includes('formSnapshot'), 'record-list DTO must not expose formSnapshot');
+
+    assert(managementSource.includes('recordListProjections: []'), 'frontend state must keep record-list projections separate from full records');
+    assert(extractFunctionDeclaration(managementSource, 'loadRecordListProjectionsForActivity').includes('ActivityIntelligenceApi.listRecordListProjections'), 'frontend record-list loader must call the projection API');
+    assert(extractFunctionDeclaration(managementSource, 'startBackgroundRecordListLoadForActivity').includes('loadRecordListProjectionsForActivity'), 'record entry background load must use projection hydration');
+    assert(extractFunctionDeclaration(managementSource, 'renderRecords').includes('filteredRecordListRows(activity, scope)'), 'Records list rendering must read from record-list projections');
+    assert(extractFunctionDeclaration(managementSource, 'visibleRecordsForContext').includes('filteredRecordListRows(activity, \'all\')'), 'bulk expansion context must use record-list projections');
+    assert(extractFunctionDeclaration(managementSource, 'exportFilteredRecordsCsv').includes('await loadRecordsForActivity(activity.id, { includeVoid: true });'), 'CSV export must still hydrate full records before exporting');
+    assert(extractFunctionDeclaration(managementSource, 'analyticsRecords').includes('return recordsFor(activity.id)'), 'Analytics must still use full records');
+    assert(managementSource.includes("else if (ui.tab === 'analytics') await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });"), 'Analytics tab navigation must still load full records');
+
+    const harness = makeHarness();
+    const rows = await harness.service.listRecordListProjections(IDS.activity, { state: 'all' }, actor());
+    assert.strictEqual(harness.calls.listSubmissions, undefined, 'record-list projection must not call full listSubmissions');
+    assert.strictEqual(harness.calls.listRecordListProjections.activityId, IDS.activity);
+    assert.strictEqual(harness.calls.listRecordListProjections.filters.includeVoid, true, 'state=all must include void records through existing filter normalization');
+    assert.strictEqual(harness.calls.getRawContactByCardId || 0, 0, 'record-list card enrichment must not use repeated single-card lookups');
+    assert.strictEqual(harness.calls.getRawContactsByCardIds.length, 1, 'record-list card enrichment must use one batch lookup');
+    assert.deepStrictEqual(harness.calls.getRawContactsByCardIds[0], [IDS.card], 'record-list batch lookup must deduplicate card IDs');
+    assert.strictEqual(harness.calls.getSupplementSummariesBySubmissionIds, 1, 'record-list must fetch supplemental summaries only once');
+    assert.strictEqual(harness.calls.getSupplementsBySubmissionIds, 1, 'record-list summary path may read supplements only behind the summary helper');
+    assert.strictEqual(rows.length, 4, 'record-list projection must preserve active, field-intelligence, and void row coverage when state=all');
+
+    const emptyHarness = makeHarness();
+    const emptyRows = await emptyHarness.service.listRecordListProjections(IDS.otherActivity, { state: 'all' }, actor());
+    assert.deepStrictEqual(emptyRows, [], 'record-list projection must return an empty array for zero submissions');
+    assert.strictEqual(emptyHarness.calls.getRawContactsByCardIds, undefined, 'zero record-list rows must not call card batch enrichment');
+    assert.strictEqual(emptyHarness.calls.getSupplementSummariesBySubmissionIds, undefined, 'zero record-list rows must not query supplemental summaries');
+
+    const projected = rows.find(row => row.id === IDS.aiSubmission);
+    assert(projected, 'record-list projection must include the visitor submission');
+    assert.strictEqual(projected.submissionId, IDS.aiSubmission);
+    assert.strictEqual(projected.activityId, IDS.activity);
+    assert.strictEqual(projected.formVersionId, IDS.publishedVersion);
+    assert.strictEqual(projected.recordContext, 'visitor');
+    assert.strictEqual(projected.status, 'active');
+    assert.strictEqual(projected.cardId, IDS.card);
+    assert.strictEqual(projected.createdByUserId, 'analyst');
+    assert.strictEqual(projected.createdByDisplayName, 'Analyst');
+    assert.strictEqual(projected.createdAt, '2026-08-15T10:00:00.000Z');
+    assert.strictEqual(projected.updatedByUserId, 'analyst');
+    assert.strictEqual(projected.updatedByDisplayName, 'Analyst');
+    assert.strictEqual(projected.updatedAt, '2026-09-05T10:00:00.000Z');
+    assert(!Object.prototype.hasOwnProperty.call(projected, 'formSnapshot'), 'record-list row must not carry full formSnapshot');
+    assert.strictEqual(projected.supplements, null, 'record-list row must not carry full supplemental details');
+    assert.deepStrictEqual(projected.answers[IDS.choiceKey], [
+        { optionKey: IDS.optionAlpha, label: 'Alpha', value: 'Alpha', note: 'PoC planned for December' },
+        { value: OTHER_CHOICE_VALUE, note: 'custom option should be evaluated next phase' }
+    ]);
+    assert.strictEqual(projected.otherAnswers[IDS.choiceKey], 'Other detail', 'record-list answers must preserve Other text');
+    assert(projected.formRuntimeSnapshot, 'record-list row must include compact runtime metadata');
+    assert.strictEqual(projected.formRuntimeSnapshot.versionId, IDS.publishedVersion);
+    assert(projected.formRuntimeSnapshot.items.some(item => item.formItemId === IDS.longItem), 'record-list runtime snapshot must include answer-producing long_text items');
+    assert(!projected.formRuntimeSnapshot.items.some(item => item.type === 'card_link'), 'record-list runtime snapshot must exclude card_link items');
+    assert(projected.card, 'record-list row with cardId must include compact card summary');
+    assert.strictEqual(projected.card.name, 'Card Name');
+    assert.strictEqual(projected.card.company, 'Card Co');
+    assert.strictEqual(projected.card.position, 'Buyer');
+    assert.strictEqual(projected.card.thumbnailUrl, '/api/external/thumbnail?fileId=drive-1');
+    ['email', 'phone', 'mobile', 'fax', 'address', 'website', 'notes', 'sourceFilename'].forEach(key => {
+        assert.strictEqual(projected.card[key], undefined, `record-list compact card must not expose ${key}`);
+    });
+
+    const oldProjection = rows.find(row => row.id === IDS.oldSubmission);
+    assert.strictEqual(oldProjection.formRuntimeSnapshot.versionId, IDS.oldVersion, 'historical record-list rows must keep their original version id');
+    assert.strictEqual(oldProjection.formRuntimeSnapshot.items[0].formItemId, IDS.oldTextItem, 'historical record-list rows must keep old-version items');
+    assert.strictEqual(oldProjection.answers[IDS.oldTextKey], 'existing answer');
+
+    const fieldProjection = rows.find(row => row.id === IDS.activeAiSubmission);
+    assert.strictEqual(fieldProjection.recordContext, 'field_intelligence');
+    assert.strictEqual(fieldProjection.formRuntimeSnapshot.items[0].formItemId, IDS.activeLongItem);
 }
 
 function assertCardAssistShortTextMappingBuilderContract(managementSource) {
@@ -4969,6 +5150,7 @@ async function main() {
     assertRecordCardMetaResponsiveContract(managementSource, cssSource);
     assertVisitorSupplementalRecordMvpSourceContract(managementSource, apiSource, cssSource, activityIntelligenceSqlSource);
     await assertOverviewLoadOptimizationContract(managementSource, apiSource, routesSource, controllerSource);
+    await assertRecordListProjectionV1Contract({ managementSource, apiSource, routesSource, controllerSource, serviceSource, readerSource });
     assert(managementSource.includes("if (ui.analytics.ai.state === 'loading') return;"));
     assert(managementSource.includes("state === 'loading'"));
     assert(!managementSource.includes('FORM_GEMINI_API_KEY'));

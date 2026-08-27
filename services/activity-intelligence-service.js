@@ -321,6 +321,36 @@ class ActivityIntelligenceService {
         }
     }
 
+    async listRecordListProjections(activityId, query = {}, user = {}) {
+        const perf = ActivityIntelligencePerf.startTrace('record-list', { activityId });
+        let failed = false;
+        let resultCount = 0;
+        try {
+            await ActivityIntelligencePerf.timeAsync(perf, 'record-list.requireActivity', () => ({ activityId }), async () => await this._requireActivity(activityId));
+            const filters = this._normalizeSubmissionFilters(query);
+            ActivityIntelligencePerf.log(perf, 'record-list.filters', {
+                activityId,
+                state: filters.state || '',
+                includeVoid: Boolean(filters.includeVoid),
+                recordContext: filters.recordContext || '',
+                hasDateStart: Boolean(filters.dateStart),
+                hasDateEnd: Boolean(filters.dateEnd),
+                hasRecorderUserId: Boolean(filters.recorderUserId),
+                hasRecorderDisplayName: Boolean(filters.recorderDisplayName)
+            });
+            const projections = await this.reader.listRecordListProjections(activityId, filters, perf);
+            const withCards = await this._enrichRecordListProjectionCards(projections, perf);
+            const result = await this._enrichRecordListProjectionSummaries(withCards, user, perf);
+            resultCount = result.length;
+            return result;
+        } catch (error) {
+            failed = true;
+            throw error;
+        } finally {
+            ActivityIntelligencePerf.finishTrace(perf, { activityId, failed, records: resultCount });
+        }
+    }
+
     async listFollowUpStates(activityId, query = {}, user = {}) {
         await this._requireActivity(activityId);
         const filters = this._normalizeSubmissionFilters({
@@ -2882,6 +2912,73 @@ class ActivityIntelligenceService {
             batched: true
         });
         return enriched;
+    }
+
+    async _enrichRecordListProjectionCards(projections, perf) {
+        const cardIds = (projections || []).map(record => record && record.cardId).filter(Boolean);
+        const uniqueCardIds = [...new Set(cardIds.map(cardId => String(cardId)))];
+        let cardsById = new Map();
+        if (uniqueCardIds.length) {
+            cardsById = await ActivityIntelligencePerf.timeAsync(perf, 'record-list.cards', result => ({
+                records: Array.isArray(projections) ? projections.length : 0,
+                cardCount: uniqueCardIds.length,
+                rows: result && result.size !== undefined ? result.size : 0
+            }), async () => await this.rawContactSqlReader.getRawContactsByCardIds(uniqueCardIds));
+        } else {
+            ActivityIntelligencePerf.log(perf, 'record-list.cards', {
+                records: Array.isArray(projections) ? projections.length : 0,
+                cardCount: 0,
+                rows: 0
+            });
+        }
+
+        return ActivityIntelligencePerf.timeSync(perf, 'record-list.cards_merge', result => ({
+            records: Array.isArray(projections) ? projections.length : 0,
+            cardCount: uniqueCardIds.length,
+            rows: (result || []).length
+        }), () => (projections || []).map(record => {
+            if (!record.cardId) return record;
+            return {
+                ...record,
+                card: this._recordListCardSummaryDto(cardsById.get(String(record.cardId)))
+            };
+        }));
+    }
+
+    async _enrichRecordListProjectionSummaries(projections, user = {}, perf) {
+        if (!Array.isArray(projections) || !projections.length) return projections || [];
+        const actor = this._safeActorFromUser(user);
+        const summaries = await this.reader.getSupplementSummariesBySubmissionIds(
+            projections.map(record => record.id),
+            actor && actor.userId,
+            perf
+        );
+        return ActivityIntelligencePerf.timeSync(perf, 'record-list.supplements_merge', result => ({
+            records: projections.length,
+            summaryCount: summaries.size,
+            rows: (result || []).length
+        }), () => projections.map(record => ({
+            ...record,
+            supplementalSummary: this._supplementSummaryDto(summaries.get(record.id)),
+            supplements: null
+        })));
+    }
+
+    _recordListCardSummaryDto(card) {
+        if (!card) return null;
+        const driveFileId = card.driveFileId || '';
+        return {
+            cardId: card.cardId,
+            name: card.name || '',
+            company: card.company || '',
+            department: card.department || '',
+            position: card.position || card.jobTitle || '',
+            jobTitle: card.jobTitle || card.position || '',
+            driveFileId,
+            driveLink: card.driveLink || '',
+            driveFilename: card.driveFilename || card.sourceFilename || '',
+            thumbnailUrl: driveFileId ? `/api/external/thumbnail?fileId=${encodeURIComponent(driveFileId)}` : null
+        };
     }
 
     async _enrichSubmissionSummaries(submissions, user = {}, perf) {

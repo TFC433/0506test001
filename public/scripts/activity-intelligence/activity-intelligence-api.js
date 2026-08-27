@@ -153,6 +153,15 @@
       return request(`/activities/${encodeURIComponent(activityId)}/submissions${suffix}`);
     },
 
+    listRecordListProjections(activityId, query) {
+      const params = new URLSearchParams();
+      Object.entries(query || {}).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') params.set(key, value);
+      });
+      const suffix = params.toString() ? `?${params.toString()}` : '';
+      return request(`/activities/${encodeURIComponent(activityId)}/record-list${suffix}`);
+    },
+
     listFollowUpStates(activityId) {
       return request(`/activities/${encodeURIComponent(activityId)}/follow-up-states`);
     },
