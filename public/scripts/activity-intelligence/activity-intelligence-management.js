@@ -684,6 +684,7 @@
     const targetActivityId = activityId;
     loadRecordListProjectionsForActivity(targetActivityId, options)
       .then(() => {
+        refreshRecordScopeCounters(targetActivityId);
         if (shouldRefreshPersonalRecordsPanel(targetActivityId)) refreshPersonalRecordsPanel(targetActivityId);
       })
       .catch(() => {});
@@ -783,6 +784,15 @@
         render();
       });
     }
+  }
+
+  function refreshRecordScopeCounters(activityId) {
+    if (!currentUser || !currentUser.authenticated || ui.selectedActivityId !== activityId || ui.tab !== 'records') return;
+    const counts = mobileRecordScopeCounts();
+    const mine = root.querySelector('.aim-mobile-tab[data-scope="mine"]');
+    const all = root.querySelector('.aim-mobile-tab[data-scope="all"]');
+    if (mine) mine.textContent = `我的紀錄(${counts.mine})`;
+    if (all) all.textContent = `全部紀錄(${counts.all})`;
   }
 
   async function loadGuestOwnRecordsForActivity(activityId) {
@@ -1397,7 +1407,7 @@
   function mobileRecordScopeCounts() {
     const activity = selectedActivity();
     if (!activity || !currentUser || !currentUser.authenticated) return { mine: 0, all: 0 };
-    const rows = recordsFor(activity.id).filter(record => record.status !== 'void');
+    const rows = recordListRowsFor(activity.id).filter(record => record.status !== 'void');
     return {
       mine: rows.filter(recordBelongsToCurrentUser).length,
       all: rows.length

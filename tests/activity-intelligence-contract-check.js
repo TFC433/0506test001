@@ -3607,6 +3607,58 @@ function assertRecordsDoubleLoadRemovalV1Contract(managementSource) {
     assert(extractFunctionDeclaration(managementSource, 'exportFilteredRecordsCsv').includes('await loadRecordsForActivity(activity.id, { includeVoid: true });'), 'CSV export must still explicitly hydrate full records');
 }
 
+function assertRecordsCountProjectionConsistencyV1Contract(managementSource) {
+    const countSource = extractFunctionDeclaration(managementSource, 'mobileRecordScopeCounts');
+    assert(countSource.includes('recordListRowsFor(activity.id)'), 'mobile Records counters must derive from record-list projection rows');
+    assert(!countSource.includes('recordsFor(activity.id)'), 'mobile Records counters must not depend on full records');
+    assert(countSource.includes("record.status !== 'void'"), 'mobile Records counters must preserve non-void count semantics');
+    assert(countSource.includes('recordBelongsToCurrentUser'), 'mobile personal count must preserve existing ownership semantics');
+
+    const backgroundProjectionSource = extractFunctionDeclaration(managementSource, 'startBackgroundRecordListLoadForActivity');
+    assert(backgroundProjectionSource.includes('refreshRecordScopeCounters(targetActivityId);'), 'background projection completion must refresh visible Records counters');
+    const counterRefreshSource = extractFunctionDeclaration(managementSource, 'refreshRecordScopeCounters');
+    assert(counterRefreshSource.includes('mobileRecordScopeCounts()'), 'Records counter refresh must use the canonical mobile count helper');
+    assert(counterRefreshSource.includes("mine.textContent = `我的紀錄(${counts.mine})`;"), 'Records counter refresh must update the personal label');
+    assert(counterRefreshSource.includes("all.textContent = `全部紀錄(${counts.all})`;"), 'Records counter refresh must update the all-record label');
+    assert(!counterRefreshSource.includes('loadRecordsForActivity'), 'Records counter refresh must not hydrate full submissions');
+
+    const source = [
+        "let currentUser = { authenticated: true, userId: 'me' };",
+        "const state = { records: [], recordListProjections: [] };",
+        "function selectedActivity() { return { id: 'activity-a' }; }",
+        "function recordListRowsFor(activityId) { return state.recordListProjections.filter(record => record.activityId === activityId); }",
+        extractFunctionDeclaration(managementSource, 'recordHasMyContribution'),
+        extractFunctionDeclaration(managementSource, 'recordBelongsToCurrentUser'),
+        countSource,
+        "({ state, mobileRecordScopeCounts });"
+    ].join('\n');
+    const contract = vm.runInNewContext(source, {});
+
+    contract.state.records = [
+        { id: 'legacy-full-1', activityId: 'activity-a', status: 'active', createdByUserId: 'me' },
+        { id: 'legacy-full-2', activityId: 'activity-a', status: 'active', createdByUserId: 'me' },
+        { id: 'legacy-full-3', activityId: 'activity-a', status: 'active', createdByUserId: 'other' }
+    ];
+    contract.state.recordListProjections = [
+        { id: 'projection-mine', activityId: 'activity-a', status: 'active', createdByUserId: 'me' },
+        { id: 'projection-other', activityId: 'activity-a', status: 'active', createdByUserId: 'other' },
+        { id: 'projection-contribution', activityId: 'activity-a', status: 'active', createdByUserId: 'other', supplementalSummary: { myContribution: { note: 'mine' } } },
+        { id: 'projection-void', activityId: 'activity-a', status: 'void', createdByUserId: 'me' },
+        { id: 'projection-other-activity', activityId: 'activity-b', status: 'active', createdByUserId: 'me' }
+    ];
+    const projectedCounts = contract.mobileRecordScopeCounts();
+    assert.strictEqual(projectedCounts.mine, 2, 'mobile personal Records counter must use projection rows with existing ownership semantics');
+    assert.strictEqual(projectedCounts.all, 3, 'mobile all Records counter must use non-void projection rows');
+
+    contract.state.records = [
+        { id: 'legacy-full-stale', activityId: 'activity-a', status: 'active', createdByUserId: 'me' }
+    ];
+    contract.state.recordListProjections = [];
+    const zeroCounts = contract.mobileRecordScopeCounts();
+    assert.strictEqual(zeroCounts.mine, 0, 'zero projection rows must keep personal count at 0');
+    assert.strictEqual(zeroCounts.all, 0, 'zero projection rows must keep all count at 0');
+}
+
 function assertCardAssistShortTextMappingBuilderContract(managementSource) {
     const source = [
         "const fieldTypes = [['section_heading', 'Section'], ['information_text', 'Info'], ['short_text', 'Short'], ['long_text', 'Long'], ['number', 'Number'], ['yes_no', 'Yes No'], ['single_choice', 'Single'], ['multiple_choice', 'Multiple'], ['dropdown', 'Dropdown']];",
@@ -5207,6 +5259,7 @@ async function main() {
     await assertOverviewLoadOptimizationContract(managementSource, apiSource, routesSource, controllerSource);
     await assertRecordListProjectionV1Contract({ managementSource, apiSource, routesSource, controllerSource, serviceSource, readerSource });
     assertRecordsDoubleLoadRemovalV1Contract(managementSource);
+    assertRecordsCountProjectionConsistencyV1Contract(managementSource);
     assert(managementSource.includes("if (ui.analytics.ai.state === 'loading') return;"));
     assert(managementSource.includes("state === 'loading'"));
     assert(!managementSource.includes('FORM_GEMINI_API_KEY'));
