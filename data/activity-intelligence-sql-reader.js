@@ -6,8 +6,13 @@ const VERSION_SELECT = '*';
 const ITEM_SELECT = '*';
 const SUBMISSION_SELECT = '*';
 const ANSWER_SELECT = '*';
-const ANSWER_HYDRATION_PAGE_SIZE = 500;
+const ANSWER_HYDRATION_PAGE_SIZE = 1000;
+const ANSWER_HYDRATION_CONFIRMED_TERMINAL_PAGE_SIZE = 500;
 const DEFAULT_FORM_CONTEXT = 'visitor';
+
+function shouldStopAnswerHydrationPagination(rowCount) {
+    return rowCount === 0 || rowCount < Math.min(ANSWER_HYDRATION_PAGE_SIZE, ANSWER_HYDRATION_CONFIRMED_TERMINAL_PAGE_SIZE);
+}
 
 class ActivityIntelligenceSqlReader {
     constructor() {
@@ -271,8 +276,8 @@ class ActivityIntelligenceSqlReader {
                     rowCount += pageRows.length;
                     rows.push(...pageRows);
 
-                    if (pageRows.length < ANSWER_HYDRATION_PAGE_SIZE) break;
-                    from += ANSWER_HYDRATION_PAGE_SIZE;
+                    if (shouldStopAnswerHydrationPagination(pageRows.length)) break;
+                    from += pageRows.length;
                 }
 
                 return rows.map(row => this.mapAnswerRow(row));
@@ -503,8 +508,8 @@ class ActivityIntelligenceSqlReader {
                     rowCount += pageRows.length;
                     rows.push(...pageRows);
 
-                    if (pageRows.length < ANSWER_HYDRATION_PAGE_SIZE) break;
-                    from += ANSWER_HYDRATION_PAGE_SIZE;
+                    if (shouldStopAnswerHydrationPagination(pageRows.length)) break;
+                    from += pageRows.length;
                 }
                 return rows.reduce((acc, row) => {
                     const answer = this.mapAnswerRow(row);

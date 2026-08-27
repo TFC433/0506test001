@@ -1873,6 +1873,65 @@ async function assertFollowUpPersistenceV1Contract({ managementSource, apiSource
     await assertRejectsCode(() => writeHarness.service.upsertFollowUpState(IDS.oldSubmission, { mailSent: true, opportunityCreated: 'yes' }, actor()), 'FOLLOW_UP_STATE_INVALID');
 }
 
+function assertAnswerHydrationPaginationPerformanceV1Contract(readerSource) {
+    assert(readerSource.includes('const ANSWER_HYDRATION_PAGE_SIZE = 1000;'), 'Answer hydration page size must use the approved V1 1000-row request size');
+    assert(readerSource.includes('const ANSWER_HYDRATION_CONFIRMED_TERMINAL_PAGE_SIZE = 500;'), 'Answer pagination must retain a confirmed-safe terminal threshold');
+    assert(readerSource.includes('function shouldStopAnswerHydrationPagination(rowCount)'), 'Answer pagination must use a shared completeness guard');
+    assert((readerSource.match(/from \+= pageRows\.length;/g) || []).length >= 2, 'Both answer hydration loops must advance by actual returned row count');
+    assert(!readerSource.includes('from += ANSWER_HYDRATION_PAGE_SIZE;'), 'Answer hydration must not advance by requested page size when server max rows are unproven');
+
+    const overviewMethodSource = readerSource.slice(readerSource.indexOf('async getOverviewAnswerRowsBySubmissionIds'), readerSource.indexOf('async listFormAssistItems'));
+    const submissionsMethodSource = readerSource.slice(readerSource.indexOf('async getAnswersBySubmissionIds'), readerSource.indexOf('async getSupplementSummariesBySubmissionIds'));
+    [overviewMethodSource, submissionsMethodSource].forEach((methodSource, index) => {
+        assert(methodSource.includes(".order('submission_answer_id', { ascending: true })"), `Answer hydration method ${index + 1} must preserve deterministic ordering`);
+        assert(methodSource.includes('shouldStopAnswerHydrationPagination(pageRows.length)'), `Answer hydration method ${index + 1} must use the shared pagination completeness guard`);
+    });
+    assert(overviewMethodSource.includes(".select('submission_id,form_item_id,value_text,value_number,value_boolean,value_jsonb,other_text')"), 'Overview answer projection must remain unchanged');
+    assert(submissionsMethodSource.includes('.select(ANSWER_SELECT)'), 'Submission answer projection must remain unchanged');
+
+    const paginationContract = vm.runInNewContext([
+        'const ANSWER_HYDRATION_PAGE_SIZE = 1000;',
+        'const ANSWER_HYDRATION_CONFIRMED_TERMINAL_PAGE_SIZE = 500;',
+        extractFunctionDeclaration(readerSource, 'shouldStopAnswerHydrationPagination'),
+        `function pageCounts(totalRows, serverCap) {
+            const counts = [];
+            let from = 0;
+            while (true) {
+                const remaining = Math.max(0, totalRows - from);
+                const rows = Math.min(remaining, ANSWER_HYDRATION_PAGE_SIZE, serverCap || ANSWER_HYDRATION_PAGE_SIZE);
+                counts.push(rows);
+                if (shouldStopAnswerHydrationPagination(rows)) break;
+                from += rows;
+            }
+            return counts;
+        }`,
+        `function collectedIndexes(totalRows, serverCap) {
+            const indexes = [];
+            let from = 0;
+            while (true) {
+                const remaining = Math.max(0, totalRows - from);
+                const rows = Math.min(remaining, ANSWER_HYDRATION_PAGE_SIZE, serverCap || ANSWER_HYDRATION_PAGE_SIZE);
+                for (let index = from; index < from + rows; index += 1) indexes.push(index);
+                if (shouldStopAnswerHydrationPagination(rows)) break;
+                from += rows;
+            }
+            return indexes;
+        }`,
+        '({ pageCounts, collectedIndexes });'
+    ].join('\n'), {});
+
+    const assertJsonEqual = (actual, expected, message) => assert.strictEqual(JSON.stringify(actual), JSON.stringify(expected), message);
+    assertJsonEqual(paginationContract.pageCounts(0), [0], 'Zero-row pagination must terminate cleanly');
+    assertJsonEqual(paginationContract.pageCounts(1), [1], 'Single-row pagination must return one short page');
+    assertJsonEqual(paginationContract.pageCounts(1000), [1000, 0], 'Exact page-size pagination must preserve the current extra empty-query correctness behavior');
+    assertJsonEqual(paginationContract.pageCounts(1001), [1000, 1], 'Page-size plus one pagination must return all rows');
+    assertJsonEqual(paginationContract.pageCounts(2000), [1000, 1000, 0], 'Exact multiple pagination must not terminate prematurely');
+    assertJsonEqual(paginationContract.pageCounts(1129), [1000, 129], 'Observed submissions answer rows should structurally reduce to two pages');
+    assertJsonEqual(paginationContract.pageCounts(2393), [1000, 1000, 393], 'Observed overview answer rows should structurally reduce to three pages');
+    assertJsonEqual(paginationContract.pageCounts(1129, 500), [500, 500, 129], 'If the server caps below the requested page size, pagination must continue without truncation');
+    assertJsonEqual(paginationContract.collectedIndexes(2393), Array.from({ length: 2393 }, (_, index) => index), 'Pagination must preserve every row once and in order');
+}
+
 function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
     ['來拜訪公司數（去重）', '同公司重複紀錄數', '無公司名稱', '情報來源數（去重）', '同來源重複紀錄數', '無情報來源'].forEach(label => {
         assert(managementSource.includes(label), `Company KPI label ${label} must exist in source`);
@@ -4903,6 +4962,7 @@ async function main() {
     assertAnalyticsChartTypeImplementationContract(managementSource, cssSource);
     assertFollowUpTabFrontendV1Contract(managementSource, cssSource);
     await assertFollowUpPersistenceV1Contract({ managementSource, apiSource, routesSource, controllerSource, serviceSource, readerSource, writerSource });
+    assertAnswerHydrationPaginationPerformanceV1Contract(readerSource);
     assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource);
     assertLongTextPreviewExplicitDesignerStateContract(managementSource);
     assertVisitorRecordPreviewIdentityContract(managementSource);
