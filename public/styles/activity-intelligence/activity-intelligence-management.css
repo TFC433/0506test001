@@ -1605,9 +1605,9 @@ a:focus-visible {
 
 .aim-follow-up-table td.aim-follow-up-meta-cell {
   color: var(--aim-muted-light, var(--aim-muted));
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 400;
-  line-height: 1.25;
+  line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1632,18 +1632,28 @@ a:focus-visible {
   margin-top: 4px;
 }
 
-.aim-follow-up-reasons span {
+.aim-follow-up-attention-badge {
   display: inline-flex;
   align-items: center;
   min-height: 18px;
-  padding: 1px 6px;
-  border: 1px solid #fde68a;
-  border-radius: 999px;
-  background: #fffbeb;
-  color: #92400e;
+  padding: 1px 5px;
+  border: 1px solid transparent;
+  border-radius: 4px;
   font-size: 11px;
   font-weight: 600;
   line-height: 1.2;
+}
+
+.aim-follow-up-attention-badge-missing {
+  border-color: #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.aim-follow-up-attention-badge-duplicate {
+  border-color: #fecdd3;
+  background: #fff1f2;
+  color: #9f1239;
 }
 
 .aim-follow-up-attention {

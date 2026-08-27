@@ -1493,7 +1493,7 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     const baseTableTdSpecificity = cssSelectorSpecificity('.aim-table td');
     assert(followUpMetaRule, 'Follow-up metadata typography must be scoped through the Follow-up table cell selector');
     assert(followUpMetaSpecificity.classCount > baseTableTdSpecificity.classCount && followUpMetaSpecificity.elementCount >= baseTableTdSpecificity.elementCount, 'Follow-up metadata selector must structurally beat generic .aim-table td typography');
-    assert(followUpMetaRule.includes('font-size: 10px;') && followUpMetaRule.includes('line-height: 1.25;'), 'Follow-up metadata row cells must use the approved smaller metadata tier');
+    assert(followUpMetaRule.includes('font-size: 11px;') && followUpMetaRule.includes('line-height: 1.3;'), 'Follow-up metadata row cells must use the approved readable metadata tier');
     assert(followUpMetaRule.includes('color: var(--aim-muted-light, var(--aim-muted));'), 'Follow-up metadata row cells must preserve the existing muted color fallback');
     assert(!followUpMetaSelector.includes('nth-child') && !followUpMetaRule.includes('nth-child'), 'Follow-up metadata typography must not depend on column indexes');
     assert(!followUpMetaRule.includes('!important'), 'Follow-up metadata specificity repair must not use !important');
@@ -1501,7 +1501,19 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     assert((cssSource.match(/td\.aim-follow-up-meta-cell/g) || []).length === 1, 'Main and Attention Follow-up tables must share one metadata typography rule');
     assert(/\.aim-table th,\s*\.aim-table td\s*\{[^}]*font-size:\s*14px;[^}]*font-weight:\s*400;[^}]*line-height:\s*1\.45;[^}]*\}/.test(cssSource), 'Generic .aim-table td typography must remain unchanged');
     assert(cssSource.includes('.aim-follow-up-attention') && cssSource.includes('border-top: 1px solid var(--aim-border)'), 'Attention Records must be separated below the main table with a subtle divider');
+    const attentionBadgeBaseRule = cssRuleBody('.aim-follow-up-attention-badge');
+    const attentionBadgeMissingRule = cssRuleBody('.aim-follow-up-attention-badge-missing');
+    const attentionBadgeDuplicateRule = cssRuleBody('.aim-follow-up-attention-badge-duplicate');
     assert(cssSource.includes('.aim-follow-up-reasons'), 'Attention reasons must render as compact tags inside the table');
+    assert(attentionBadgeBaseRule.includes('padding: 1px 5px;') && attentionBadgeBaseRule.includes('border-radius: 4px;'), 'Attention reason base badge must own compact rounded-rectangle geometry');
+    assert(attentionBadgeBaseRule.includes('font-size: 11px;') && attentionBadgeBaseRule.includes('font-weight: 600;') && attentionBadgeBaseRule.includes('line-height: 1.2;'), 'Attention reason base badge must own compact typography');
+    assert(!attentionBadgeBaseRule.includes('999px') && !attentionBadgeBaseRule.includes('50%'), 'Attention reason badges must not use pill geometry');
+    assert(attentionBadgeMissingRule.includes('background: #fff7ed;') && attentionBadgeMissingRule.includes('color: #9a3412;') && attentionBadgeMissingRule.includes('border-color: #fed7aa;'), 'Missing Email badge must use restrained amber/orange styling');
+    assert(attentionBadgeDuplicateRule.includes('background: #fff1f2;') && attentionBadgeDuplicateRule.includes('color: #9f1239;') && attentionBadgeDuplicateRule.includes('border-color: #fecdd3;'), 'Duplicate Email badge must use distinct restrained rose/red styling');
+    assert.notStrictEqual(attentionBadgeMissingRule, attentionBadgeDuplicateRule, 'Missing and duplicate Attention reason modifiers must stay visually distinct');
+    assert(!/(aim-follow-up-attention-badge|aim-follow-up-reasons)[^{]*nth-child/.test(cssSource), 'Attention reason styling must not use nth-child or position selectors');
+    assert(!/(^|\n)\.aim-follow-up-reasons span\s*\{/.test(cssSource), 'Attention reason styling must not target plain reason spans');
+    assert(![attentionBadgeBaseRule, attentionBadgeMissingRule, attentionBadgeDuplicateRule].some(rule => rule.includes('!important')), 'Attention reason badge styling must not use !important');
 
     const renderAnalyticsSource = extractFunctionDeclaration(managementSource, 'renderAnalytics');
     const renderMobileAnalysisSource = extractFunctionDeclaration(managementSource, 'renderMobileAnalysis');
@@ -1519,6 +1531,19 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
         assert(tableSource.includes(label), `Shared Follow-up table must include ${label}`);
     });
     assert(!/已建機會|>已寄<|>已建<|>已進</.test(tableSource + extractFunctionDeclaration(managementSource, 'renderFollowUpRow')), 'Manual checkbox cells must not render redundant row text or old opportunity wording');
+    const followUpRowRenderContract = vm.runInNewContext([
+        'const Store = { escapeHtml: value => String(value == null ? "" : value).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;"), formatDateTime: value => value };',
+        'function priorityPill(value) { return String(value || ""); }',
+        extractFunctionDeclaration(managementSource, 'followUpAttentionReasonBadgeClass'),
+        extractFunctionDeclaration(managementSource, 'renderFollowUpRow'),
+        '({ followUpAttentionReasonBadgeClass, renderFollowUpRow });'
+    ].join('\n'), {});
+    const missingReasonHtml = followUpRowRenderContract.renderFollowUpRow({ id: 'missing', rowNumber: 1, priority: '高', company: 'A', contact: 'B', emails: [], attentionReasons: ['無 Email'], recorder: 'R', createdAt: '2026-08-16T01:00:00.000Z' });
+    const duplicateReasonHtml = followUpRowRenderContract.renderFollowUpRow({ id: 'duplicate', rowNumber: 2, priority: '中', company: 'A', contact: 'B', emails: [{ email: 'dup@example.com', sourceLabel: '表單內容' }], attentionReasons: ['重複 Email'], recorder: 'R', createdAt: '2026-08-16T02:00:00.000Z' });
+    assert(missingReasonHtml.includes('class="aim-follow-up-attention-badge aim-follow-up-attention-badge-missing"') && missingReasonHtml.includes('無 Email'), 'Missing Email reason must render with base badge class and missing semantic modifier');
+    assert(duplicateReasonHtml.includes('class="aim-follow-up-attention-badge aim-follow-up-attention-badge-duplicate"') && duplicateReasonHtml.includes('重複 Email'), 'Duplicate Email reason must render with base badge class and duplicate semantic modifier');
+    assert(!/style=/.test(missingReasonHtml + duplicateReasonHtml), 'Attention reason badges must not use inline styles');
+    assert.strictEqual(followUpRowRenderContract.followUpAttentionReasonBadgeClass('其他'), 'aim-follow-up-attention-badge', 'Unknown future Attention reasons must keep the base badge hook only');
     const attentionSource = extractFunctionDeclaration(managementSource, 'renderFollowUpAttentionSection');
     assert(attentionSource.includes('需注意紀錄'), 'Attention section must render below the main table');
     assert(attentionSource.includes('以下紀錄存在 Email 缺漏或重複情況，寄送前請先確認。'), 'Attention section must include the approved explanatory copy');

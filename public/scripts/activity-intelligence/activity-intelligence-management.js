@@ -4621,12 +4621,19 @@
     `;
   }
 
+  function followUpAttentionReasonBadgeClass(reason) {
+    const classes = ['aim-follow-up-attention-badge'];
+    if (reason === '無 Email') classes.push('aim-follow-up-attention-badge-missing');
+    if (reason === '重複 Email') classes.push('aim-follow-up-attention-badge-duplicate');
+    return classes.join(' ');
+  }
+
   function renderFollowUpRow(row) {
     const emailHtml = row.emails.length
       ? row.emails.map(entry => `<div class="aim-follow-up-email-entry">${Store.escapeHtml(entry.email)}</div>`).join('')
       : '<span class="aim-muted-dash">—</span>';
     const reasonHtml = (row.attentionReasons || []).length
-      ? `<div class="aim-follow-up-reasons">${row.attentionReasons.map(reason => `<span>${Store.escapeHtml(reason)}</span>`).join('')}</div>`
+      ? `<div class="aim-follow-up-reasons">${row.attentionReasons.map(reason => `<span class="${Store.escapeHtml(followUpAttentionReasonBadgeClass(reason))}">${Store.escapeHtml(reason)}</span>`).join('')}</div>`
       : '';
     const sourceHtml = row.emails.length
       ? row.emails.map(entry => `<div class="aim-follow-up-email-entry">${Store.escapeHtml(entry.sourceLabel)}</div>`).join('')
