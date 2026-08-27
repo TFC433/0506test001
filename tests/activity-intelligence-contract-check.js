@@ -1551,6 +1551,8 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     assert(attentionSource.includes('目前沒有需要特別確認的 Email 紀錄。'), 'Attention section must include a lightweight empty state');
     assert(!extractFunctionDeclaration(managementSource, 'followUpPriorityField').includes('/優先/'), 'Follow-up priority resolver must not use broad priority-title fuzziness');
     assert(!/optionNotesForRecord|JSON\.stringify|field_intelligence/.test(extractFunctionDeclaration(managementSource, 'followUpTextualAnswerValues')), 'Form-content email extraction must stay limited to textual answer values');
+    assert(extractFunctionDeclaration(managementSource, 'recordPreview').includes("semanticPreviewField(fields, 'job_title')") && extractFunctionDeclaration(managementSource, 'recordPreview').includes("legacyPreviewField(fields, 'fld_job_title'"), '職稱 must use the existing Visitor job-title preview resolver');
+    assert(extractFunctionDeclaration(managementSource, 'followUpRowForRecord').includes('jobTitle: preview.jobTitle ||'), 'Follow-up CSV 職稱 must be sourced from the existing recordPreview jobTitle value');
     const followUpCsvWorkingRowsSource = extractFunctionDeclaration(managementSource, 'followUpCsvWorkingRows');
     assert(followUpCsvWorkingRowsSource.includes('followUpVisitorRecords(activity)') && followUpCsvWorkingRowsSource.includes('includeUnknownPriority: true'), 'Follow-up CSV must derive from the complete Visitor Follow-up dataset, including blank priorities');
     assert(followUpCsvWorkingRowsSource.includes('followUpPartitionRows(allRows)'), 'Follow-up CSV must reuse the existing duplicate classification helper');
@@ -1582,7 +1584,7 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
         'function otherAnswersForRecord(record) { return record.runtimeOtherAnswers || {}; }',
         'function displayAnswerValue(field, value) { return value; }',
         'function cardLinkForRecord(record) { return record.runtimeCardLink || { linked: false, cardId: null, card: null }; }',
-        'function recordPreview(record) { return { company: record.companyName || "", customer: record.personName || "" }; }',
+        'function recordPreview(record) { return { company: record.companyName || "", customer: record.personName || "", jobTitle: record.jobTitle || "" }; }',
         extractFunctionDeclaration(managementSource, 'followUpSelectedPriorities'),
         extractFunctionDeclaration(managementSource, 'followUpVisitorRecords'),
         extractFunctionDeclaration(managementSource, 'followUpPriorityCompatibleField'),
@@ -1647,7 +1649,7 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     });
     contract.state.records = [
         record('r1', { priority: '高', company: 'Acme', person: 'Alice', notes: 'Please email sales@example.com and john@example.com.', rawBlob: { email: 'hidden@example.com' } }, { createdAt: '2026-08-16T04:00:00.000Z', card: { email: 'John@Example.com' }, runtimeCardLink: { linked: true, cardId: 'card-1', card: { email: 'John@Example.com' } } }),
-        record('r2', { priority: '中', company: 'Acme', person: 'Bob', notes: 'bob@example.tw' }, { createdAt: '2026-08-16T03:00:00.000Z', personName: 'Bob' }),
+        record('r2', { priority: '中', company: 'Acme', person: 'Bob', notes: 'bob@example.tw' }, { createdAt: '2026-08-16T03:00:00.000Z', personName: 'Bob', jobTitle: '業務經理' }),
         record('r3', { priority: '低', company: 'Beta', person: 'Cara', notes: '' }, { createdAt: '2026-08-16T02:00:00.000Z', companyName: 'Beta', personName: 'Cara', createdByDisplayName: 'Recorder B' }),
         record('r4', { priority: '暫不追蹤', notes: 'skip@example.com' }),
         record('r5', { priority: '', notes: 'blank@example.com' }),
@@ -1738,30 +1740,37 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     contract.ui.followUp.sortKey = 'company';
     contract.ui.followUp.sortDirection = 'desc';
     const csvHeaders = contract.followUpCsvHeaders();
-    assertJsonEqual(csvHeaders, ['項次', '本次寄送', 'Email檢查', '優先度', '公司名稱', '聯絡人', 'Email', 'Email來源', '已寄 Mail', '已進CRM', '紀錄者', '表單時間'], 'Follow-up CSV fixed V1 headers must match the approved first 12 columns');
+    assertJsonEqual(csvHeaders, ['項次', '優先度', '本次寄送', '聯絡人', '職稱', '公司名稱', 'Email', 'Email來源', 'Email檢查', '紀錄者', '表單時間'], 'Follow-up CSV fixed V1.1 headers must match the approved 11 columns');
+    assert.strictEqual(csvHeaders.length, 11, 'Follow-up CSV V1.1 must have exactly 11 fixed headers');
+    assert.strictEqual(csvHeaders[0], '項次', 'Follow-up CSV 項次 must remain first');
+    assert.strictEqual(csvHeaders[csvHeaders.indexOf('聯絡人') + 1], '職稱', '職稱 must be placed between 聯絡人 and 公司名稱');
+    assert(!csvHeaders.includes('已寄 Mail') && !csvHeaders.includes('已進CRM'), 'Runtime checkbox columns must be removed from CSV headers only');
     const csvWorkingRows = contract.followUpCsvWorkingRows(activity);
     const csvRows = contract.followUpCsvRows(activity);
     const csvRowById = id => csvRows[csvWorkingRows.findIndex(row => row.id === id)];
     assertJsonEqual(csvWorkingRows.map(row => row.id), ['r10', 'r11', 'r1', 'r9', 'r12', 'r2', 'r8', 'r7', 'r3', 'r4', 'r5', 'r6'], 'Follow-up CSV must use deterministic full-export sorting independent of current UI sorting');
     assertJsonEqual(csvWorkingRows.map(row => row.rowNumber), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 'Follow-up CSV 項次 must be continuous after full-export sorting');
     assert.strictEqual(csvRows.length, 12, 'Follow-up CSV must keep one row per non-void Visitor submission');
-    assert.strictEqual(csvRows.filter(row => row[4] === 'Acme').length, 5, 'Follow-up CSV must not dedupe companies');
+    assert(csvRows.every(row => row.length === 11), 'Every Follow-up CSV row must match the 11-column contract');
+    assert.strictEqual(csvRows.filter(row => row[5] === 'Acme').length, 5, 'Follow-up CSV must not dedupe companies');
     assert.strictEqual(csvWorkingRows.some(row => row.id === 'active-1' || row.id === 'void-1'), false, 'Follow-up CSV must exclude Field Intelligence and void submissions without dropping Visitor rows');
-    assert.strictEqual(csvRowById('r10')[1], '是', 'High priority usable Email must default 本次寄送 to 是');
-    assert.strictEqual(csvRowById('r2')[1], '是', 'Medium priority usable Email must default 本次寄送 to 是');
-    assert.strictEqual(csvRowById('r3')[1], '', 'Low priority must default 本次寄送 blank');
-    assert.strictEqual(csvRowById('r4')[1], '', '暫不追蹤 must default 本次寄送 blank');
-    assert.strictEqual(csvRowById('r5')[1], '', 'Blank priority must default 本次寄送 blank');
-    assert.strictEqual(csvRowById('r9')[1], '', 'No Email rows must default 本次寄送 blank');
-    assert.strictEqual(csvRowById('r1')[1], '', 'Duplicate Email rows must default 本次寄送 blank');
-    assert.strictEqual(csvRowById('r10')[2], '可用');
-    assert.strictEqual(csvRowById('r9')[2], '無 Email');
-    assert.strictEqual(csvRowById('r1')[2], '重複 Email');
-    assert.strictEqual(csvRowById('r2')[8], '是', 'Runtime 已寄 Mail state must export as 是 without persistence changes');
-    assert.strictEqual(csvRowById('r1')[9], '是', 'Runtime 已進CRM state must export as 是 without persistence changes');
+    assert.strictEqual(csvRowById('r10')[2], '是', 'High priority usable Email must default 本次寄送 to 是');
+    assert.strictEqual(csvRowById('r2')[2], '是', 'Medium priority usable Email must default 本次寄送 to 是');
+    assert.strictEqual(csvRowById('r3')[2], '', 'Low priority must default 本次寄送 blank');
+    assert.strictEqual(csvRowById('r4')[2], '', '暫不追蹤 must default 本次寄送 blank');
+    assert.strictEqual(csvRowById('r5')[2], '', 'Blank priority must default 本次寄送 blank');
+    assert.strictEqual(csvRowById('r9')[2], '', 'No Email rows must default 本次寄送 blank');
+    assert.strictEqual(csvRowById('r1')[2], '', 'Duplicate Email rows must default 本次寄送 blank');
+    assert.strictEqual(csvRowById('r10')[8], '可用');
+    assert.strictEqual(csvRowById('r9')[8], '無 Email');
+    assert.strictEqual(csvRowById('r1')[8], '重複 Email');
+    assert.strictEqual(csvRowById('r2')[4], '業務經理', '職稱 must export the existing preview jobTitle value');
+    assert.strictEqual(csvRowById('r10')[4], '', 'Missing 職稱 must export blank');
+    assert.strictEqual(csvWorkingRows.find(row => row.id === 'r2').mailSent, true, 'Runtime 已寄 Mail state must remain in Follow-up row state even though it is no longer exported');
+    assert.strictEqual(csvWorkingRows.find(row => row.id === 'r1').opportunityCreated, true, 'Runtime 已進CRM state must remain in Follow-up row state even though it is no longer exported');
     assert.strictEqual(csvRowById('r12')[6], 'other@example.com / sales@example.com', 'Multiple Emails must stay in one CSV cell using the existing slash display convention');
     assert.strictEqual(csvRowById('r1')[7], '名片 / 表單內容 / 表單內容', 'Email來源 must reuse current source labels and slash display convention');
-    assert.strictEqual(csvRowById('r1')[11], '2026-08-16 04:00', '表單時間 must use the stable existing date-time formatter');
+    assert.strictEqual(csvRowById('r1')[10], '2026-08-16 04:00', '表單時間 must use the stable existing date-time formatter');
     assert(contract.followUpCsvFilename({ name: '活動:/名稱' }).includes('活動_名稱-後續追蹤-2026-08-16.csv'), 'Follow-up CSV filename must include a sanitized Activity name and deterministic date');
 }
 

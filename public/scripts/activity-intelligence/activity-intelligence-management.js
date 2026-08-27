@@ -8911,6 +8911,7 @@
       priority,
       company: preview.company || '',
       contact: preview.customer || '',
+      jobTitle: preview.jobTitle || '',
       recorder: record.createdByDisplayName || '',
       emails,
       emailText: emails.map(entry => entry.email).join(' / '),
@@ -9021,7 +9022,7 @@
   }
 
   function followUpCsvHeaders() {
-    return ['項次', '本次寄送', 'Email檢查', '優先度', '公司名稱', '聯絡人', 'Email', 'Email來源', '已寄 Mail', '已進CRM', '紀錄者', '表單時間'];
+    return ['項次', '優先度', '本次寄送', '聯絡人', '職稱', '公司名稱', 'Email', 'Email來源', 'Email檢查', '紀錄者', '表單時間'];
   }
 
   function followUpExportPriorityRank(priority) {
@@ -9066,15 +9067,14 @@
   function followUpCsvRows(activity) {
     return followUpCsvWorkingRows(activity).map(row => [
       row.rowNumber,
-      followUpCsvSendValue(row),
-      followUpCsvEmailCheck(row),
       row.priority || '',
-      row.company || '',
+      followUpCsvSendValue(row),
       row.contact || '',
+      row.jobTitle || '',
+      row.company || '',
       row.emailText || '',
       row.emailSourceText || '',
-      row.mailSent ? '是' : '',
-      row.opportunityCreated ? '是' : '',
+      followUpCsvEmailCheck(row),
       row.recorder || '',
       Store.formatDateTime(row.createdAt) || ''
     ]);
