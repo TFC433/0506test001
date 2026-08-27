@@ -16,6 +16,7 @@ class ActivityIntelligenceSqlReader {
         this.submissionsTable = 'activity_intelligence_submissions';
         this.answersTable = 'activity_intelligence_submission_answers';
         this.supplementsTable = 'activity_intelligence_submission_supplements';
+        this.followUpStatesTable = 'activity_intelligence_submission_follow_up_states';
     }
 
     async listActivities() {
@@ -130,6 +131,38 @@ class ActivityIntelligenceSqlReader {
 
         const submissions = (data || []).map(row => this.mapSubmissionRow(row));
         return await this.hydrateSubmissionDetails(submissions, { search: filters.search });
+    }
+
+    async listFollowUpStatesByActivityId(activityId, filters = {}) {
+        if (!activityId) return [];
+
+        let submissionQuery = supabase
+            .from(this.submissionsTable)
+            .select('submission_id')
+            .eq('activity_id', activityId)
+            .eq('record_context', filters.recordContext || DEFAULT_FORM_CONTEXT);
+
+        if (filters.state && filters.state !== 'all') {
+            submissionQuery = submissionQuery.eq('status', filters.state);
+        } else {
+            submissionQuery = submissionQuery.neq('status', 'void');
+        }
+
+        if (filters.recorderUserId) submissionQuery = submissionQuery.eq('created_by_user_id', filters.recorderUserId);
+
+        const { data: submissionRows, error: submissionError } = await submissionQuery;
+        if (submissionError) throw this._dbError('listFollowUpStatesByActivityId.submissions', submissionError);
+
+        const submissionIds = (submissionRows || []).map(row => row.submission_id).filter(Boolean);
+        if (!submissionIds.length) return [];
+
+        const { data, error } = await supabase
+            .from(this.followUpStatesTable)
+            .select('submission_id,mail_sent,crm_entered,updated_by_user_id,updated_by_display_name,created_at,updated_at')
+            .in('submission_id', submissionIds);
+
+        if (error) throw this._dbError('listFollowUpStatesByActivityId.states', error);
+        return (data || []).map(row => this.mapFollowUpStateRow(row));
     }
 
     async listSubmissionOverviewRows(activityIds, filters = {}) {
@@ -504,6 +537,19 @@ class ActivityIntelligenceSqlReader {
             actorDisplayName: row.actor_display_name,
             cardId: row.card_id,
             payload,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at
+        };
+    }
+
+    mapFollowUpStateRow(row) {
+        if (!row) return null;
+        return {
+            submissionId: row.submission_id,
+            mailSent: Boolean(row.mail_sent),
+            opportunityCreated: Boolean(row.crm_entered),
+            updatedByUserId: row.updated_by_user_id,
+            updatedByDisplayName: row.updated_by_display_name,
             createdAt: row.created_at,
             updatedAt: row.updated_at
         };

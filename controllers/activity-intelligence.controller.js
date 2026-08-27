@@ -127,6 +127,13 @@ class ActivityIntelligenceController {
         });
     };
 
+    listFollowUpStates = async (req, res) => {
+        await this._handle(res, async () => {
+            const data = await this.activityIntelligenceService.listFollowUpStates(req.params.activityId, req.query, req.user);
+            res.json({ success: true, data });
+        });
+    };
+
     getFormAssistSuggestions = async (req, res) => {
         await this._handle(res, async () => {
             const data = await this.activityIntelligenceService.getFormAssistSuggestions(req.params.activityId, req.query);
@@ -182,6 +189,13 @@ class ActivityIntelligenceController {
     updateSubmission = async (req, res) => {
         await this._handle(res, async () => {
             const data = await this.activityIntelligenceService.updateSubmission(req.params.submissionId, req.body, req.user);
+            res.json({ success: true, data });
+        });
+    };
+
+    upsertFollowUpState = async (req, res) => {
+        await this._handle(res, async () => {
+            const data = await this.activityIntelligenceService.upsertFollowUpState(req.params.submissionId, req.body, req.user);
             res.json({ success: true, data });
         });
     };

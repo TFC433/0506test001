@@ -297,6 +297,21 @@ class ActivityIntelligenceService {
         return await this._enrichSubmissionSummaries(enriched, user);
     }
 
+    async listFollowUpStates(activityId, query = {}, user = {}) {
+        await this._requireActivity(activityId);
+        const filters = this._normalizeSubmissionFilters({
+            ...(query || {}),
+            recordContext: DEFAULT_FORM_CONTEXT,
+            state: 'active'
+        });
+        if (user && user.accessClass === 'guest' && user.userId) filters.recorderUserId = user.userId;
+        filters.recordContext = DEFAULT_FORM_CONTEXT;
+        filters.state = 'active';
+        filters.includeVoid = false;
+        const rows = await this.reader.listFollowUpStatesByActivityId(activityId, filters);
+        return rows.map(row => this._followUpStateDto(row));
+    }
+
     async getOverviewSummary(query = {}, user = {}) {
         const activities = await this.reader.listActivities();
         const activityIds = activities.map(activity => activity.id).filter(Boolean);
@@ -410,6 +425,20 @@ class ActivityIntelligenceService {
         });
 
         return this.getSubmission(submissionId, user);
+    }
+
+    async upsertFollowUpState(submissionId, payload = {}, user = {}) {
+        const current = await this._requireEditableVisitorSubmission(submissionId, user);
+        const actor = this._actorFromUser(user);
+        const state = this._normalizeFollowUpStatePayload(payload);
+        const row = await this.writer.upsertFollowUpState({
+            submission_id: current.id,
+            mail_sent: state.mailSent,
+            crm_entered: state.crmEntered,
+            ...this._actorUpdateRow(actor),
+            updated_at: new Date().toISOString()
+        });
+        return this._followUpStateDto(row);
     }
 
     async voidSubmission(submissionId, user = {}) {
@@ -1005,6 +1034,37 @@ class ActivityIntelligenceService {
             state,
             includeVoid: query.includeVoid === 'true' || query.includeVoid === true || state === 'void' || state === 'all',
             search: query.search || query.q || ''
+        };
+    }
+
+    _normalizeFollowUpStatePayload(payload = {}) {
+        const source = payload && typeof payload === 'object' ? payload : {};
+        const mailValue = Object.prototype.hasOwnProperty.call(source, 'mailSent')
+            ? source.mailSent
+            : source.mail_sent;
+        const crmValue = Object.prototype.hasOwnProperty.call(source, 'opportunityCreated')
+            ? source.opportunityCreated
+            : (Object.prototype.hasOwnProperty.call(source, 'crmEntered') ? source.crmEntered : source.crm_entered);
+
+        if (typeof mailValue !== 'boolean' || typeof crmValue !== 'boolean') {
+            throw new ActivityIntelligenceError(400, 'Follow-up state values must be booleans.', 'FOLLOW_UP_STATE_INVALID');
+        }
+
+        return {
+            mailSent: mailValue,
+            crmEntered: crmValue
+        };
+    }
+
+    _followUpStateDto(row) {
+        return {
+            submissionId: row && (row.submissionId || row.submission_id),
+            mailSent: Boolean(row && (row.mailSent !== undefined ? row.mailSent : row.mail_sent)),
+            opportunityCreated: Boolean(row && (row.opportunityCreated !== undefined ? row.opportunityCreated : row.crm_entered)),
+            updatedByUserId: row && (row.updatedByUserId || row.updated_by_user_id) || '',
+            updatedByDisplayName: row && (row.updatedByDisplayName || row.updated_by_display_name) || '',
+            createdAt: row && (row.createdAt || row.created_at) || null,
+            updatedAt: row && (row.updatedAt || row.updated_at) || null
         };
     }
 

@@ -153,6 +153,10 @@
       return request(`/activities/${encodeURIComponent(activityId)}/submissions${suffix}`);
     },
 
+    listFollowUpStates(activityId) {
+      return request(`/activities/${encodeURIComponent(activityId)}/follow-up-states`);
+    },
+
     createSubmission(activityId, payload) {
       return jsonRequest('POST', `/activities/${encodeURIComponent(activityId)}/submissions`, payload);
     },
@@ -163,6 +167,10 @@
 
     updateSubmission(submissionId, payload) {
       return jsonRequest('PATCH', `/submissions/${encodeURIComponent(submissionId)}`, payload);
+    },
+
+    updateFollowUpState(submissionId, payload) {
+      return jsonRequest('PUT', `/submissions/${encodeURIComponent(submissionId)}/follow-up-state`, payload);
     },
 
     saveAdditionalVisitor(submissionId, payload) {

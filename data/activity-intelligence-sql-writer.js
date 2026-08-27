@@ -4,6 +4,7 @@ class ActivityIntelligenceSqlWriter {
     constructor() {
         this.activitiesTable = 'activity_intelligence_activities';
         this.submissionsTable = 'activity_intelligence_submissions';
+        this.followUpStatesTable = 'activity_intelligence_submission_follow_up_states';
     }
 
     async createActivity(payload) {
@@ -88,6 +89,25 @@ class ActivityIntelligenceSqlWriter {
             .maybeSingle();
 
         if (error) throw new Error(`[ActivityIntelligenceSqlWriter] updateSubmissionStatus DB Error: ${error.message}`);
+        return data;
+    }
+
+    async upsertFollowUpState(payload) {
+        const row = {
+            submission_id: payload.submission_id,
+            mail_sent: payload.mail_sent === true,
+            crm_entered: payload.crm_entered === true,
+            updated_by_user_id: payload.updated_by_user_id,
+            updated_by_display_name: payload.updated_by_display_name,
+            updated_at: payload.updated_at
+        };
+        const { data, error } = await supabase
+            .from(this.followUpStatesTable)
+            .upsert(row, { onConflict: 'submission_id' })
+            .select('submission_id,mail_sent,crm_entered,updated_by_user_id,updated_by_display_name,created_at,updated_at')
+            .maybeSingle();
+
+        if (error) throw new Error(`[ActivityIntelligenceSqlWriter] upsertFollowUpState DB Error: ${error.message}`);
         return data;
     }
 

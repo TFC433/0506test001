@@ -195,6 +195,20 @@ function makeHarness(options = {}) {
                 return true;
             });
         },
+        async listFollowUpStatesByActivityId(activityId, filters = {}) {
+            calls.listFollowUpStatesByActivityId = { activityId, filters };
+            return [
+                {
+                    submissionId: IDS.oldSubmission,
+                    mailSent: true,
+                    opportunityCreated: false,
+                    updatedByUserId: 'ops',
+                    updatedByDisplayName: 'Ops',
+                    createdAt: '2026-08-18T00:00:00.000Z',
+                    updatedAt: '2026-08-18T00:00:00.000Z'
+                }
+            ];
+        },
         async listSubmissionOverviewRows(activityIds, filters = {}) {
             calls.listSubmissionOverviewRows = { activityIds, filters };
             const ids = new Set(activityIds || []);
@@ -313,6 +327,18 @@ function makeHarness(options = {}) {
             const current = submissions.get(submissionId);
             if (current) submissions.set(submissionId, { ...current, status });
             return current ? { submission_id: submissionId } : null;
+        },
+        async upsertFollowUpState(payload) {
+            calls.upsertFollowUpState = payload;
+            return {
+                submission_id: payload.submission_id,
+                mail_sent: payload.mail_sent,
+                crm_entered: payload.crm_entered,
+                updated_by_user_id: payload.updated_by_user_id,
+                updated_by_display_name: payload.updated_by_display_name,
+                created_at: '2026-08-18T00:00:00.000Z',
+                updated_at: payload.updated_at
+            };
         },
         async updateActivity(activityId, row) {
             calls.updateActivity = { activityId, row };
@@ -1593,6 +1619,7 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
         extractFunctionDeclaration(managementSource, 'followUpTextualAnswerValues'),
         extractFunctionDeclaration(managementSource, 'extractEmailsFromText'),
         extractFunctionDeclaration(managementSource, 'followUpSubmissionEmails'),
+        extractFunctionDeclaration(managementSource, 'activateFollowUpManualStateActivity'),
         extractFunctionDeclaration(managementSource, 'followUpManualStateForRecord'),
         extractFunctionDeclaration(managementSource, 'followUpRowForRecord'),
         extractFunctionDeclaration(managementSource, 'followUpKpiCounts'),
@@ -1721,10 +1748,10 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     assertJsonEqual(contract.followUpAnalyticsData(activity).rows.map(row => row.id), ['r10', 'r2', 'r8', 'r7'], 'KPI priority scope must support high/medium combinations');
     contract.ui.followUp.priorities = ['高', '中', '低'];
     contract.ui.followUp.manualState.r2 = { mailSent: true, opportunityCreated: false };
-    assert.strictEqual(contract.followUpAnalyticsData(activity).rows.find(row => row.id === 'r2').mailSent, true, '已寄 Mail must remain runtime-only manual state');
+    assert.strictEqual(contract.followUpAnalyticsData(activity).rows.find(row => row.id === 'r2').mailSent, true, '已寄 Mail must use shared Follow-up manual state');
     contract.ui.followUp.manualState.r1 = { mailSent: true, opportunityCreated: true };
     data = contract.followUpAnalyticsData(activity);
-    assert.strictEqual(data.attentionRows.find(row => row.id === 'r1').opportunityCreated, true, '已進CRM must keep the existing runtime state semantics');
+    assert.strictEqual(data.attentionRows.find(row => row.id === 'r1').opportunityCreated, true, '已進CRM must keep the existing Follow-up state semantics');
     assert.strictEqual(data.attentionRows.find(row => row.id === 'r1').opportunityCreated, true, 'Manual checkbox state must be shared across Main and Attention rows by submission');
     contract.ui.followUp.sortKey = 'company';
     contract.ui.followUp.sortDirection = 'desc';
@@ -1744,7 +1771,7 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     assert.strictEqual(csvHeaders.length, 11, 'Follow-up CSV V1.1 must have exactly 11 fixed headers');
     assert.strictEqual(csvHeaders[0], '項次', 'Follow-up CSV 項次 must remain first');
     assert.strictEqual(csvHeaders[csvHeaders.indexOf('聯絡人') + 1], '職稱', '職稱 must be placed between 聯絡人 and 公司名稱');
-    assert(!csvHeaders.includes('已寄 Mail') && !csvHeaders.includes('已進CRM'), 'Runtime checkbox columns must be removed from CSV headers only');
+    assert(!csvHeaders.includes('已寄 Mail') && !csvHeaders.includes('已進CRM'), 'Checkbox columns must remain removed from CSV headers only');
     const csvWorkingRows = contract.followUpCsvWorkingRows(activity);
     const csvRows = contract.followUpCsvRows(activity);
     const csvRowById = id => csvRows[csvWorkingRows.findIndex(row => row.id === id)];
@@ -1766,12 +1793,84 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     assert.strictEqual(csvRowById('r1')[8], '重複 Email');
     assert.strictEqual(csvRowById('r2')[4], '業務經理', '職稱 must export the existing preview jobTitle value');
     assert.strictEqual(csvRowById('r10')[4], '', 'Missing 職稱 must export blank');
-    assert.strictEqual(csvWorkingRows.find(row => row.id === 'r2').mailSent, true, 'Runtime 已寄 Mail state must remain in Follow-up row state even though it is no longer exported');
-    assert.strictEqual(csvWorkingRows.find(row => row.id === 'r1').opportunityCreated, true, 'Runtime 已進CRM state must remain in Follow-up row state even though it is no longer exported');
+    assert.strictEqual(csvWorkingRows.find(row => row.id === 'r2').mailSent, true, '已寄 Mail state must remain in Follow-up row state even though it is no longer exported');
+    assert.strictEqual(csvWorkingRows.find(row => row.id === 'r1').opportunityCreated, true, '已進CRM state must remain in Follow-up row state even though it is no longer exported');
     assert.strictEqual(csvRowById('r12')[6], 'other@example.com / sales@example.com', 'Multiple Emails must stay in one CSV cell using the existing slash display convention');
     assert.strictEqual(csvRowById('r1')[7], '名片 / 表單內容 / 表單內容', 'Email來源 must reuse current source labels and slash display convention');
     assert.strictEqual(csvRowById('r1')[10], '2026-08-16 04:00', '表單時間 must use the stable existing date-time formatter');
     assert(contract.followUpCsvFilename({ name: '活動:/名稱' }).includes('活動_名稱-後續追蹤-2026-08-16.csv'), 'Follow-up CSV filename must include a sanitized Activity name and deterministic date');
+}
+
+async function assertFollowUpPersistenceV1Contract({ managementSource, apiSource, routesSource, controllerSource, serviceSource, readerSource, writerSource }) {
+    assert(apiSource.includes('listFollowUpStates(activityId)') && apiSource.includes('/follow-up-states'), 'Frontend API must expose a batch Follow-up state read by activity');
+    assert(apiSource.includes('updateFollowUpState(submissionId, payload)') && apiSource.includes('/follow-up-state'), 'Frontend API must expose a submission-scoped Follow-up state upsert');
+    assert(managementSource.includes('Promise.all([') && managementSource.includes('window.ActivityIntelligenceApi.listFollowUpStates(activityId)'), 'Record load must batch-read Follow-up states with the activity submissions load');
+    assert(managementSource.includes('applyFollowUpStatesForActivity(activityId, followUpStates || [])'), 'Loaded Follow-up states must hydrate UI state before records are returned');
+    assert(managementSource.includes('manualStateByActivityId') && managementSource.includes('manualStateActivityId'), 'Follow-up manual state must be scoped per activity');
+    assert(managementSource.includes('persistFollowUpManualState(activityId, recordId, manual.saveToken, previous, next)'), 'Follow-up checkbox writes must capture the clicked activity and previous state');
+    assert(managementSource.includes('manual.saveToken = ++followUpSaveRequestSeq'), 'Follow-up checkbox writes must token requests to ignore stale responses');
+    assert(managementSource.includes('if (manual.saveToken !== token) return;'), 'Stale Follow-up save responses must not overwrite newer checkbox intent');
+    assert(managementSource.includes('manual.mailSent = previous.mailSent') && managementSource.includes('manual.opportunityCreated = previous.opportunityCreated'), 'Failed Follow-up saves must roll back optimistic checkbox state');
+    assert(!/localStorage|sessionStorage|indexedDB|document\.cookie/.test(managementSource), 'Follow-up persistence must not use browser-local storage');
+
+    assert(routesSource.includes("router.get('/activities/:activityId/follow-up-states', requireSubmissionListAccess, scopeSubmissionList"), 'Follow-up state read route must use existing submission list access and scope middleware');
+    assert(routesSource.includes("router.put('/submissions/:submissionId/follow-up-state', requireSubmissionUpdateAccess, requireSubmissionAccess"), 'Follow-up state write route must use existing submission update and submission access middleware');
+    assert(controllerSource.includes('listFollowUpStates = async (req, res)') && controllerSource.includes('this.activityIntelligenceService.listFollowUpStates(req.params.activityId, req.query, req.user)'), 'Controller must pass activity id, query, and actor to listFollowUpStates');
+    assert(controllerSource.includes('upsertFollowUpState = async (req, res)') && controllerSource.includes('this.activityIntelligenceService.upsertFollowUpState(req.params.submissionId, req.body, req.user)'), 'Controller must pass submission id, body, and actor to upsertFollowUpState');
+
+    assert(serviceSource.includes('async listFollowUpStates(activityId, query = {}, user = {})'), 'Service must implement batch Follow-up state listing');
+    assert(serviceSource.includes('async upsertFollowUpState(submissionId, payload = {}, user = {})'), 'Service must implement Follow-up state upsert');
+    assert(serviceSource.includes('const current = await this._requireEditableVisitorSubmission(submissionId, user);'), 'Follow-up writes must validate the exact active Visitor submission and existing edit permission');
+    assert(serviceSource.includes('const actor = this._actorFromUser(user);') && serviceSource.includes('...this._actorUpdateRow(actor)'), 'Follow-up writes must derive actor metadata from req.user');
+    assert(serviceSource.includes('updated_at: new Date().toISOString()'), 'Follow-up writes must explicitly update updated_at');
+    assert(serviceSource.includes("_normalizeFollowUpStatePayload") && serviceSource.includes("'FOLLOW_UP_STATE_INVALID'"), 'Follow-up write payload must be allowlisted to booleans');
+    assert(serviceSource.includes('opportunityCreated') && serviceSource.includes('crm_entered'), 'Service must map UI 已進CRM state to crm_entered');
+
+    const readerMethodSource = readerSource.slice(readerSource.indexOf('async listFollowUpStatesByActivityId'), readerSource.indexOf('async listSubmissionOverviewRows'));
+    assert(readerMethodSource.includes("this.followUpStatesTable = 'activity_intelligence_submission_follow_up_states'") || readerSource.includes("this.followUpStatesTable = 'activity_intelligence_submission_follow_up_states'"), 'Reader must use the existing Follow-up state table');
+    assert(readerMethodSource.includes(".eq('activity_id', activityId)") && readerMethodSource.includes(".eq('record_context', filters.recordContext || DEFAULT_FORM_CONTEXT)"), 'Reader must scope Follow-up state reads to the selected Visitor activity submissions');
+    assert(readerMethodSource.includes(".eq('status', filters.state)") && readerMethodSource.includes(".neq('status', 'void')"), 'Reader must avoid void rows for Follow-up state hydration');
+    assert(readerMethodSource.includes(".in('submission_id', submissionIds)"), 'Reader must batch fetch Follow-up state rows by submission id, not N+1');
+    assert(readerSource.includes('mapFollowUpStateRow(row)'), 'Reader must map Follow-up state rows to frontend field names');
+
+    const writerMethodSource = writerSource.slice(writerSource.indexOf('async upsertFollowUpState'), writerSource.indexOf('async _rpc'));
+    assert(writerSource.includes("this.followUpStatesTable = 'activity_intelligence_submission_follow_up_states'"), 'Writer must target the existing Follow-up state table');
+    assert(writerMethodSource.includes(".upsert(row, { onConflict: 'submission_id' })"), 'Writer must upsert by submission_id');
+    assert(writerMethodSource.includes('mail_sent: payload.mail_sent === true') && writerMethodSource.includes('crm_entered: payload.crm_entered === true'), 'Writer must allowlist persisted booleans');
+    assert(writerMethodSource.includes('updated_by_user_id') && writerMethodSource.includes('updated_by_display_name') && writerMethodSource.includes('updated_at'), 'Writer must persist actor metadata and updated_at');
+    assert(!writerMethodSource.includes('created_at:'), 'Writer must not send created_at and must preserve the database default/existing value');
+    assert(!/CREATE\s+TABLE|ALTER\s+TABLE|CREATE\s+POLICY|ROW\s+LEVEL\s+SECURITY/i.test([readerSource, writerSource, serviceSource, routesSource, controllerSource].join('\n')), 'Persistence implementation must not create or alter schema/RLS');
+
+    const readHarness = makeHarness();
+    const readRows = await readHarness.service.listFollowUpStates(IDS.activity, { recorderUserId: 'query-user', state: 'all' }, { accessClass: 'guest', userId: 'guest-user' });
+    assert.strictEqual(readHarness.calls.listFollowUpStatesByActivityId.activityId, IDS.activity, 'Service read must pass selected activity id to reader');
+    assert.strictEqual(readHarness.calls.listFollowUpStatesByActivityId.filters.recordContext, 'visitor', 'Service read must force Visitor scope');
+    assert.strictEqual(readHarness.calls.listFollowUpStatesByActivityId.filters.state, 'active', 'Service read must force active submissions');
+    assert.strictEqual(readHarness.calls.listFollowUpStatesByActivityId.filters.recorderUserId, 'guest-user', 'Guest Follow-up state reads must preserve existing recorder scoping');
+    assert.deepStrictEqual(readRows[0], {
+        submissionId: IDS.oldSubmission,
+        mailSent: true,
+        opportunityCreated: false,
+        updatedByUserId: 'ops',
+        updatedByDisplayName: 'Ops',
+        createdAt: '2026-08-18T00:00:00.000Z',
+        updatedAt: '2026-08-18T00:00:00.000Z'
+    }, 'Service read must return frontend field names and not synthesize absent rows');
+
+    const writeHarness = makeHarness();
+    const saved = await writeHarness.service.upsertFollowUpState(IDS.oldSubmission, { mailSent: true, opportunityCreated: true, ignored: 'nope' }, actor());
+    assert.deepStrictEqual(Object.keys(writeHarness.calls.upsertFollowUpState).sort(), ['crm_entered', 'mail_sent', 'submission_id', 'updated_at', 'updated_by_display_name', 'updated_by_user_id'].sort(), 'Service write payload must be allowlisted');
+    assert.strictEqual(writeHarness.calls.upsertFollowUpState.submission_id, IDS.oldSubmission);
+    assert.strictEqual(writeHarness.calls.upsertFollowUpState.mail_sent, true);
+    assert.strictEqual(writeHarness.calls.upsertFollowUpState.crm_entered, true);
+    assert.strictEqual(writeHarness.calls.upsertFollowUpState.updated_by_user_id, 'real-user');
+    assert.strictEqual(writeHarness.calls.upsertFollowUpState.updated_by_display_name, 'Real User');
+    assert(/\d{4}-\d{2}-\d{2}T/.test(writeHarness.calls.upsertFollowUpState.updated_at), 'Service write must include an ISO updated_at value');
+    assert.strictEqual(saved.submissionId, IDS.oldSubmission);
+    assert.strictEqual(saved.mailSent, true);
+    assert.strictEqual(saved.opportunityCreated, true);
+    assert.strictEqual(saved.createdAt, '2026-08-18T00:00:00.000Z', 'Service response must preserve created_at from DB row');
+    await assertRejectsCode(() => writeHarness.service.upsertFollowUpState(IDS.oldSubmission, { mailSent: true, opportunityCreated: 'yes' }, actor()), 'FOLLOW_UP_STATE_INVALID');
 }
 
 function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
@@ -4783,6 +4882,8 @@ async function main() {
     const routesSource = fs.readFileSync(path.join(__dirname, '..', 'routes', 'activity-intelligence.routes.js'), 'utf8');
     const controllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'activity-intelligence.controller.js'), 'utf8');
     const serviceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'activity-intelligence-service.js'), 'utf8');
+    const readerSource = fs.readFileSync(path.join(__dirname, '..', 'data', 'activity-intelligence-sql-reader.js'), 'utf8');
+    const writerSource = fs.readFileSync(path.join(__dirname, '..', 'data', 'activity-intelligence-sql-writer.js'), 'utf8');
     const externalServiceSource = fs.readFileSync(path.join(__dirname, '..', 'services', 'external-service.js'), 'utf8');
     const externalControllerSource = fs.readFileSync(path.join(__dirname, '..', 'controllers', 'external.controller.js'), 'utf8');
     const contactsSource = fs.readFileSync(path.join(__dirname, '..', 'public', 'scripts', 'contacts', 'contacts.js'), 'utf8');
@@ -4801,6 +4902,7 @@ async function main() {
     await assertRealActiveIntelligenceRuntimeSourceContract(managementSource, cssSource, service);
     assertAnalyticsChartTypeImplementationContract(managementSource, cssSource);
     assertFollowUpTabFrontendV1Contract(managementSource, cssSource);
+    await assertFollowUpPersistenceV1Contract({ managementSource, apiSource, routesSource, controllerSource, serviceSource, readerSource, writerSource });
     assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource);
     assertLongTextPreviewExplicitDesignerStateContract(managementSource);
     assertVisitorRecordPreviewIdentityContract(managementSource);

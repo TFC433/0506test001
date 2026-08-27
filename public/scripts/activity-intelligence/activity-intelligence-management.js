@@ -155,6 +155,7 @@
   const activityAnalyticsChartIds = new Set();
   let formAssistRequestSeq = 0;
   let formAssistDebounceTimer = null;
+  let followUpSaveRequestSeq = 0;
   let mobileFormBreakpointListenerRegistered = false;
   let ui = {
     view: 'overview',
@@ -289,7 +290,9 @@
       priorities: [...followUpDefaultVisiblePriorityValues],
       sortKey: '',
       sortDirection: '',
-      manualState: {}
+      manualState: {},
+      manualStateByActivityId: {},
+      manualStateActivityId: ''
     };
   }
 
@@ -633,7 +636,10 @@
     const force = Boolean(options && options.force);
     const loadKey = `${activityId}:${includeVoid ? 'all' : 'active'}`;
     const current = recordLoadState.get(loadKey);
-    if (!force && current === 'loaded') return recordsFor(activityId);
+    if (!force && current === 'loaded') {
+      activateFollowUpManualStateActivity(activityId);
+      return recordsFor(activityId);
+    }
     if (!force && current === 'loading' && recordLoadPromises.has(loadKey)) {
       return recordLoadPromises.get(loadKey).catch(() => recordsFor(activityId));
     }
@@ -642,9 +648,12 @@
     recordLoadState.set(loadKey, 'loading');
     const loadPromise = (async () => {
       await loadPublishedFormForActivity(activityId);
-      const submissions = await window.ActivityIntelligenceApi.listSubmissions(activityId, {
-        state: includeVoid ? 'all' : 'active'
-      });
+      const [submissions, followUpStates] = await Promise.all([
+        window.ActivityIntelligenceApi.listSubmissions(activityId, {
+          state: includeVoid ? 'all' : 'active'
+        }),
+        window.ActivityIntelligenceApi.listFollowUpStates(activityId)
+      ]);
       const normalized = (submissions || []).map(normalizeSubmissionDto);
       const submissionIds = new Set(normalized.map(record => record.id));
       normalized.forEach(record => locallyCreatedRecordIds.delete(record.id));
@@ -654,6 +663,7 @@
         !submissionIds.has(record.id)
       );
       state.records = state.records.filter(record => record.activityId !== activityId).concat(preservedLocalRecords, normalized);
+      applyFollowUpStatesForActivity(activityId, followUpStates || []);
       recordLoadState.set(loadKey, 'loaded');
       return recordsFor(activityId);
     })();
@@ -7736,11 +7746,48 @@
   function bindFollowUpInputs() {
     if (!ui.followUp) ui.followUp = defaultFollowUpState();
     document.querySelectorAll('.aim-follow-up-manual').forEach(node => node.addEventListener('change', () => {
-      const manual = followUpManualStateForRecord(node.dataset.id);
-      if (node.dataset.field === 'mailSent') manual.mailSent = node.checked;
-      if (node.dataset.field === 'opportunityCreated') manual.opportunityCreated = node.checked;
-      render();
+      updateFollowUpManualField(node.dataset.id, node.dataset.field, node.checked);
     }));
+  }
+
+  function updateFollowUpManualField(recordId, field, checked) {
+    if (!recordId || (field !== 'mailSent' && field !== 'opportunityCreated')) return;
+    const activityId = ui.selectedActivityId || state.selectedActivityId || '';
+    const manual = followUpManualStateForRecord(recordId, activityId);
+    const previous = {
+      mailSent: Boolean(manual.mailSent),
+      opportunityCreated: Boolean(manual.opportunityCreated)
+    };
+    if (field === 'mailSent') manual.mailSent = checked;
+    if (field === 'opportunityCreated') manual.opportunityCreated = checked;
+    const next = {
+      mailSent: Boolean(manual.mailSent),
+      opportunityCreated: Boolean(manual.opportunityCreated)
+    };
+    manual.saveToken = ++followUpSaveRequestSeq;
+    render();
+    persistFollowUpManualState(activityId, recordId, manual.saveToken, previous, next);
+  }
+
+  async function persistFollowUpManualState(activityId, recordId, token, previous, next) {
+    try {
+      if (!window.ActivityIntelligenceApi || typeof window.ActivityIntelligenceApi.updateFollowUpState !== 'function') {
+        throw new Error('Follow-up state save is unavailable.');
+      }
+      const saved = await window.ActivityIntelligenceApi.updateFollowUpState(recordId, next);
+      const manual = followUpManualStateForRecord(recordId, activityId);
+      if (manual.saveToken !== token) return;
+      manual.mailSent = Boolean(saved && saved.mailSent);
+      manual.opportunityCreated = Boolean(saved && saved.opportunityCreated);
+      render();
+    } catch (error) {
+      const manual = followUpManualStateForRecord(recordId, activityId);
+      if (manual.saveToken !== token) return;
+      manual.mailSent = previous.mailSent;
+      manual.opportunityCreated = previous.opportunityCreated;
+      toast(error.message || 'Follow-up state save failed.');
+      render();
+    }
   }
 
   function bindAnalyticsAiPresetInputs() {
@@ -8892,18 +8939,49 @@
     });
   }
 
-  function followUpManualStateForRecord(recordId) {
+  function followUpManualStateForRecord(recordId, activityIdOverride) {
+    const activityId = activityIdOverride || ui.selectedActivityId || state.selectedActivityId || '';
+    activateFollowUpManualStateActivity(activityId);
     const followUp = ui.followUp || defaultFollowUpState();
     if (!followUp.manualState) followUp.manualState = {};
     if (!followUp.manualState[recordId]) followUp.manualState[recordId] = { mailSent: false, opportunityCreated: false };
     return followUp.manualState[recordId];
   }
 
+  function activateFollowUpManualStateActivity(activityId) {
+    if (!ui.followUp) ui.followUp = defaultFollowUpState();
+    const followUp = ui.followUp;
+    const key = activityId || '';
+    if (!followUp.manualStateByActivityId) followUp.manualStateByActivityId = {};
+    if (followUp.manualStateActivityId === key) return;
+    if (followUp.manualStateActivityId) {
+      followUp.manualStateByActivityId[followUp.manualStateActivityId] = followUp.manualState || {};
+    }
+    followUp.manualState = followUp.manualStateByActivityId[key] || {};
+    followUp.manualStateByActivityId[key] = followUp.manualState;
+    followUp.manualStateActivityId = key;
+  }
+
+  function applyFollowUpStatesForActivity(activityId, states) {
+    if (!ui.followUp) ui.followUp = defaultFollowUpState();
+    activateFollowUpManualStateActivity(activityId);
+    ui.followUp.manualState = {};
+    ui.followUp.manualStateByActivityId[activityId || ''] = ui.followUp.manualState;
+    (states || []).forEach(stateRow => {
+      const submissionId = stateRow && stateRow.submissionId;
+      if (!submissionId) return;
+      ui.followUp.manualState[submissionId] = {
+        mailSent: Boolean(stateRow.mailSent),
+        opportunityCreated: Boolean(stateRow.opportunityCreated)
+      };
+    });
+  }
+
   function followUpRowForRecord(record, activity, options = {}) {
     const priority = followUpPriorityValue(record, activity);
     if (!options.includeUnknownPriority && !followUpPriorityValues.includes(priority)) return null;
     const preview = recordPreview(record, activity);
-    const manual = followUpManualStateForRecord(record.id);
+    const manual = followUpManualStateForRecord(record.id, activity && activity.id);
     const emails = followUpSubmissionEmails(record, activity);
     return {
       id: record.id,
