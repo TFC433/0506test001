@@ -157,6 +157,7 @@
   const activityAnalyticsChartIds = new Set();
   let formAssistRequestSeq = 0;
   let formAssistDebounceTimer = null;
+  let otherHistoryRequestSeq = 0;
   let followUpSaveRequestSeq = 0;
   let mobileFormBreakpointListenerRegistered = false;
   let ui = {
@@ -197,6 +198,15 @@
     formAssist: {
       activeFieldId: '',
       kind: '',
+      q: '',
+      loading: false,
+      suggestions: []
+    },
+    otherHistory: {
+      activeActivityId: '',
+      activeFieldId: '',
+      context: '',
+      formContext: '',
       q: '',
       loading: false,
       suggestions: []
@@ -2814,7 +2824,7 @@
 
   function renderOtherHistorySuggestions(field, context, query) {
     if (!fieldHasOtherHistorySuggestionsEnabled(field)) return '';
-    const suggestions = otherHistorySuggestionsForField(field, query, 6);
+    const suggestions = otherHistorySuggestionsForField(field, context, query, 6);
     if (!suggestions.length) return '';
     return `
       <div class="aim-other-history-suggestions" data-other-history-suggestions="${Store.escapeHtml(field.fieldId)}" data-other-history-context="${Store.escapeHtml(context)}">
@@ -2823,36 +2833,21 @@
     `;
   }
 
-  function otherHistorySuggestionsForField(field, query, limit) {
+  function otherHistorySuggestionsForField(field, context, query, limit) {
     if (!fieldHasOtherHistorySuggestionsEnabled(field)) return [];
     const activity = selectedActivity();
     if (!activity) return [];
-    const fieldKey = otherHistoryFieldKey(field);
-    const groups = new Map();
-    recordsFor(activity.id).forEach(record => {
-      if (!record || record.status === 'void') return;
-      const item = otherHistorySnapshotField(record, fieldKey);
-      if (!item) return;
-      const answer = record.answers && (record.answers[item.fieldId] !== undefined ? record.answers[item.fieldId] : record.answers[item.itemKey]);
-      if (!answerHasOther(answer)) return;
-      const otherAnswers = otherAnswersForRecord(record);
-      const value = String((otherAnswers && (otherAnswers[item.fieldId] || otherAnswers[item.itemKey])) || '').trim();
-      if (!value) return;
-      const key = otherHistorySuggestionKey(value);
-      if (!key) return;
-      const current = groups.get(key) || { value, count: 0, latest: '' };
-      current.count += 1;
-      const createdAt = String(record.createdAt || record.updatedAt || '');
-      if (!current.latest || createdAt > current.latest) {
-        current.latest = createdAt;
-        current.value = value;
-      }
-      groups.set(key, current);
-    });
-    const needle = otherHistorySuggestionKey(query || '');
-    return Array.from(groups.values())
-      .filter(item => !needle || otherHistorySuggestionKey(item.value).includes(needle))
-      .sort((a, b) => b.count - a.count || String(b.latest || '').localeCompare(String(a.latest || '')))
+    const history = ui.otherHistory || {};
+    const formContext = otherHistoryFormContext(context, field.fieldId);
+    const q = String(query || '').trim();
+    if (
+      history.activeActivityId !== activity.id ||
+      history.activeFieldId !== field.fieldId ||
+      history.context !== context ||
+      history.formContext !== formContext ||
+      history.q !== q
+    ) return [];
+    return (Array.isArray(history.suggestions) ? history.suggestions : [])
       .slice(0, limit || 6);
   }
 
@@ -2860,11 +2855,27 @@
     return designerItemKey(field);
   }
 
-  function otherHistorySnapshotField(record, fieldKey) {
-    const items = record && record.formRuntimeSnapshot && Array.isArray(record.formRuntimeSnapshot.items)
-      ? record.formRuntimeSnapshot.items
-      : [];
-    return items.map(normalizeDesignerItem).find(item => otherHistoryFieldKey(item) === fieldKey) || null;
+  function otherHistoryFormContext(context, fieldId) {
+    if (context === 'record' && ui.drawer && ui.drawer.id) {
+      const record = state.records.find(item => item.id === ui.drawer.id);
+      return normalizeFormContext(record && record.recordContext);
+    }
+    return activeRecordFormContext();
+  }
+
+  function resetOtherHistoryState() {
+    otherHistoryRequestSeq += 1;
+    ui.otherHistory = { activeActivityId: '', activeFieldId: '', context: '', formContext: '', q: '', loading: false, suggestions: [] };
+  }
+
+  function otherHistoryRequestStillCurrent(seq, activityId, fieldId, context, formContext, q) {
+    const history = ui.otherHistory || {};
+    return seq === otherHistoryRequestSeq &&
+      history.activeActivityId === activityId &&
+      history.activeFieldId === fieldId &&
+      history.context === context &&
+      history.formContext === formContext &&
+      history.q === q;
   }
 
   function otherHistorySuggestionKey(value) {
@@ -7986,10 +7997,10 @@
       else refreshQuickAnswerListIfNeeded(node.dataset.field, before, ui.quickAnswers[node.dataset.field]);
     }));
     rootNode.querySelectorAll('.aim-quick-other-input').forEach(node => {
-      node.addEventListener('focus', () => refreshOtherHistorySuggestions(node));
+      node.addEventListener('focus', () => loadOtherHistorySuggestions(node));
       node.addEventListener('input', () => {
         setQuickOtherAnswer(node.dataset.field, node.value);
-        refreshOtherHistorySuggestions(node);
+        loadOtherHistorySuggestions(node);
         const activity = selectedActivity();
         const visitorField = activity && currentVisitorCountField(activity);
         if (visitorField && visitorField.fieldId === node.dataset.field) refreshQuickAnswerList();
@@ -8044,10 +8055,10 @@
       else refreshRecordDrawerAnswerListIfNeeded(node.dataset.field, before, ui.drawer.working[node.dataset.field]);
     }));
     rootNode.querySelectorAll('.aim-record-other-input').forEach(node => {
-      node.addEventListener('focus', () => refreshOtherHistorySuggestions(node));
+      node.addEventListener('focus', () => loadOtherHistorySuggestions(node));
       node.addEventListener('input', () => {
         setWorkingOther(node.dataset.field, node.value);
-        refreshOtherHistorySuggestions(node);
+        loadOtherHistorySuggestions(node);
         const activity = selectedActivity();
         const visitorField = activity && currentVisitorCountField(activity);
         if (visitorField && visitorField.fieldId === node.dataset.field) render();
@@ -8099,6 +8110,71 @@
       input.focus();
       refreshOtherHistorySuggestions(input);
     }
+  }
+
+  async function loadOtherHistorySuggestions(input) {
+    if (!input) return;
+    const activity = selectedActivity();
+    const fieldId = input.dataset.field;
+    const context = input.classList.contains('aim-record-other-input') ? 'record' : 'quick';
+    const field = runtimeFieldById(fieldId, context);
+    const host = input.closest('.aim-runtime-other-control');
+    if (!activity || !host || !field || !fieldHasOtherHistorySuggestionsEnabled(field)) {
+      resetOtherHistoryState();
+      refreshOtherHistorySuggestions(input);
+      return;
+    }
+    const q = String(input.value || '').trim();
+    const formContext = otherHistoryFormContext(context, fieldId);
+    const fieldKey = otherHistoryFieldKey(field);
+    const seq = otherHistoryRequestSeq + 1;
+    otherHistoryRequestSeq = seq;
+    ui.otherHistory = {
+      activeActivityId: activity.id,
+      activeFieldId: fieldId,
+      context,
+      formContext,
+      q,
+      loading: true,
+      suggestions: []
+    };
+    refreshOtherHistorySuggestions(input);
+    try {
+      const result = await window.ActivityIntelligenceApi.getFormAssistSuggestions(activity.id, {
+        kind: 'other_history',
+        fieldKey,
+        formContext,
+        q
+      });
+      if (!otherHistoryRequestStillCurrent(seq, activity.id, fieldId, context, formContext, q)) return;
+      if (
+        !result ||
+        result.kind !== 'other_history' ||
+        String(result.fieldKey || '') !== fieldKey ||
+        normalizeFormContext(result.formContext) !== formContext
+      ) return;
+      ui.otherHistory = {
+        activeActivityId: activity.id,
+        activeFieldId: fieldId,
+        context,
+        formContext,
+        q,
+        loading: false,
+        suggestions: (result && result.suggestions) || []
+      };
+    } catch (error) {
+      if (!otherHistoryRequestStillCurrent(seq, activity.id, fieldId, context, formContext, q)) return;
+      ui.otherHistory = {
+        activeActivityId: activity.id,
+        activeFieldId: fieldId,
+        context,
+        formContext,
+        q,
+        loading: false,
+        suggestions: []
+      };
+    }
+    refreshOtherHistorySuggestions(input);
   }
 
   function refreshOtherHistorySuggestions(input) {

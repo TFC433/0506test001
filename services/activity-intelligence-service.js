@@ -50,8 +50,9 @@ const FORM_AI_TOOL_ARGUMENT_CONTRACTS = Object.freeze({
         harmlessMetadataKeys: FORM_AI_HARMLESS_TOOL_ARGUMENT_METADATA_KEYS
     })
 });
-const FORM_ASSIST_KINDS = new Set(['person', 'company']);
+const FORM_ASSIST_KINDS = new Set(['person', 'company', 'other_history']);
 const FORM_ASSIST_PRIMARY_LIMIT = 8;
+const FORM_ASSIST_OTHER_HISTORY_LIMIT = 6;
 const FORM_ASSIST_ANSWER_SCAN_LIMIT = 160;
 const FORM_ASSIST_FIXED_KEYS = Object.freeze({
     fld_customer_name: 'customerName',
@@ -417,6 +418,8 @@ class ActivityIntelligenceService {
         if (!FORM_ASSIST_KINDS.has(kind)) {
             throw new ActivityIntelligenceError(400, 'Form assist suggestion kind is invalid.', 'FORM_ASSIST_INVALID_KIND');
         }
+
+        if (kind === 'other_history') return await this._otherHistorySuggestions(activity, query);
 
         const q = String(query.q || query.search || '').trim();
         if (!q) return { kind, query: '', suggestions: [] };
@@ -1286,6 +1289,85 @@ class ActivityIntelligenceService {
         const number = Number(value);
         if (!Number.isFinite(number)) return 0;
         return Math.max(-840, Math.min(840, Math.trunc(number)));
+    }
+
+    async _otherHistorySuggestions(activity, query = {}) {
+        const q = String(query.q || query.search || '').trim();
+        const fieldKey = String(query.fieldKey || query.field_key || query.fieldId || query.field_id || '').trim();
+        if (!fieldKey) {
+            throw new ActivityIntelligenceError(400, 'Other history field key is required.', 'FORM_ASSIST_OTHER_HISTORY_FIELD_REQUIRED');
+        }
+
+        const formContext = this._normalizeFormContext(query.formContext || query.form_context || query.context);
+        const published = await this.reader.getPublishedForm(activity.id, formContext);
+        const field = published && Array.isArray(published.items)
+            ? published.items.find(item => this._otherHistoryFieldKey(item) === fieldKey)
+            : null;
+        if (!this._fieldHasOtherHistorySuggestionsEnabled(field)) {
+            return { kind: 'other_history', query: q, fieldKey, formContext, suggestions: [] };
+        }
+
+        const rows = await this.reader.listOtherHistoryAnswerFacts(activity.id, { fieldKey, formContext });
+        return {
+            kind: 'other_history',
+            query: q,
+            fieldKey,
+            formContext,
+            suggestions: this._otherHistorySuggestionsFromRows(rows, q, FORM_ASSIST_OTHER_HISTORY_LIMIT)
+        };
+    }
+
+    _fieldHasOtherHistorySuggestionsEnabled(field = {}) {
+        const settings = field && field.settings && typeof field.settings === 'object' ? field.settings : {};
+        return Boolean(
+            field &&
+            ['single_choice', 'multiple_choice'].includes(field.type || field.itemType || field.item_type) &&
+            (field.allowOther || settings.allowOther) &&
+            (field.enableOtherHistorySuggestions || settings.enableOtherHistorySuggestions)
+        );
+    }
+
+    _otherHistoryFieldKey(field = {}) {
+        return String(field.itemKey || field.item_key || field.fieldId || field.field_id || field.itemId || field.item_id || '').trim();
+    }
+
+    _otherHistorySuggestionsFromRows(rows = [], query = '', limit = FORM_ASSIST_OTHER_HISTORY_LIMIT) {
+        const groups = new Map();
+        (rows || []).forEach(row => {
+            if (!this._otherHistoryAnswerHasOther(row)) return;
+            const value = String(row.otherText || row.other_text || '').trim();
+            if (!value) return;
+            const key = this._otherHistorySuggestionKey(value);
+            if (!key) return;
+            const current = groups.get(key) || { value, count: 0, latest: '' };
+            current.count += 1;
+            const createdAt = String(row.createdAt || row.created_at || row.updatedAt || row.updated_at || '');
+            if (!current.latest || createdAt > current.latest) {
+                current.latest = createdAt;
+                current.value = value;
+            }
+            groups.set(key, current);
+        });
+        const needle = this._otherHistorySuggestionKey(query);
+        return Array.from(groups.values())
+            .filter(item => !needle || this._otherHistorySuggestionKey(item.value).includes(needle))
+            .sort((a, b) => b.count - a.count || String(b.latest || '').localeCompare(String(a.latest || '')))
+            .slice(0, Math.max(1, Math.min(Number(limit) || FORM_ASSIST_OTHER_HISTORY_LIMIT, FORM_ASSIST_OTHER_HISTORY_LIMIT)));
+    }
+
+    _otherHistoryAnswerHasOther(row = {}) {
+        if (String(row.valueText || row.value_text || '').trim() === OTHER_ANSWER_VALUE) return true;
+        const value = row.valueJsonb !== undefined ? row.valueJsonb : row.value_jsonb;
+        if (!Array.isArray(value)) return false;
+        return value.some(entry => {
+            if (entry === OTHER_ANSWER_VALUE) return true;
+            if (!entry || typeof entry !== 'object') return false;
+            return entry.value === OTHER_ANSWER_VALUE || entry.label === OTHER_ANSWER_VALUE || entry.optionKey === '__other__';
+        });
+    }
+
+    _otherHistorySuggestionKey(value) {
+        return String(value || '').trim().toLocaleLowerCase();
     }
 
     _formAssistSemanticForItem(item = {}) {

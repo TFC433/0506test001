@@ -341,6 +341,72 @@ class ActivityIntelligenceSqlReader {
         return (data || []).map(row => this.mapFormItemRow(row));
     }
 
+    async listOtherHistoryAnswerFacts(activityId, filters = {}) {
+        const fieldKey = String(filters.fieldKey || filters.field_key || '').trim();
+        const formContext = String(filters.formContext || filters.form_context || DEFAULT_FORM_CONTEXT).trim() || DEFAULT_FORM_CONTEXT;
+        if (!activityId || !fieldKey) return [];
+
+        const { data: versions, error: versionError } = await supabase
+            .from(this.formVersionsTable)
+            .select('form_version_id')
+            .eq('activity_id', activityId)
+            .eq('form_context', formContext);
+
+        if (versionError) throw this._dbError('listOtherHistoryAnswerFacts.versions', versionError);
+
+        const versionIds = (versions || []).map(row => row.form_version_id).filter(Boolean);
+        if (!versionIds.length) return [];
+
+        const { data: items, error: itemError } = await supabase
+            .from(this.formItemsTable)
+            .select('form_item_id')
+            .in('form_version_id', versionIds)
+            .eq('item_key', fieldKey);
+
+        if (itemError) throw this._dbError('listOtherHistoryAnswerFacts.items', itemError);
+
+        const formItemIds = [...new Set((items || []).map(row => row.form_item_id).filter(Boolean))];
+        if (!formItemIds.length) return [];
+
+        const { data: submissions, error: submissionError } = await supabase
+            .from(this.submissionsTable)
+            .select('submission_id,created_at,updated_at')
+            .eq('activity_id', activityId)
+            .eq('record_context', formContext)
+            .neq('status', 'void')
+            .order('created_at', { ascending: false });
+
+        if (submissionError) throw this._dbError('listOtherHistoryAnswerFacts.submissions', submissionError);
+
+        const submissionsById = new Map((submissions || [])
+            .filter(row => row && row.submission_id)
+            .map(row => [row.submission_id, row]));
+        const submissionIds = [...submissionsById.keys()];
+        if (!submissionIds.length) return [];
+
+        const { data: answers, error: answerError } = await supabase
+            .from(this.answersTable)
+            .select('submission_id,form_item_id,value_text,value_jsonb,other_text')
+            .in('submission_id', submissionIds)
+            .in('form_item_id', formItemIds)
+            .order('submission_answer_id', { ascending: false });
+
+        if (answerError) throw this._dbError('listOtherHistoryAnswerFacts.answers', answerError);
+
+        return (answers || []).map(row => {
+            const submission = submissionsById.get(row.submission_id) || {};
+            return {
+                submissionId: row.submission_id,
+                formItemId: row.form_item_id,
+                valueText: row.value_text,
+                valueJsonb: row.value_jsonb,
+                otherText: row.other_text,
+                createdAt: submission.created_at,
+                updatedAt: submission.updated_at
+            };
+        });
+    }
+
     async searchSubmissionAnswersByItems(formItemIds, queryText, limit = 120, filters = {}) {
         const ids = Array.isArray(formItemIds) ? formItemIds.filter(Boolean) : [];
         const q = String(queryText || '').trim();

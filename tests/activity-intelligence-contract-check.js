@@ -112,8 +112,10 @@ function makeHarness(options = {}) {
     const missingFormContexts = new Set(options.missingFormContexts || []);
     const initializedFormContexts = new Set(options.initializedFormContexts || []);
     const draftItemsByContext = options.draftItemsByContext || {};
+    const publishedItemsByContext = options.publishedItemsByContext || {};
 
     const itemsForFormContext = formContext => {
+        if (publishedItemsByContext[formContext]) return publishedItemsByContext[formContext];
         if (formContext !== 'field_intelligence') return publishedItems;
         if (missingFormContexts.has(formContext) && initializedFormContexts.has(formContext)) return [];
         return activeItems;
@@ -122,6 +124,8 @@ function makeHarness(options = {}) {
     const draftVersionIdForFormContext = formContext => formContext === 'field_intelligence' ? IDS.activeDraftVersion : IDS.draftVersion;
     const itemsForVersionId = versionId => {
         if (versionId === IDS.oldVersion) return oldItems;
+        if (versionId === IDS.publishedVersion && publishedItemsByContext.visitor) return publishedItemsByContext.visitor;
+        if (versionId === IDS.activePublishedVersion && publishedItemsByContext.field_intelligence) return publishedItemsByContext.field_intelligence;
         if (versionId === IDS.activePublishedVersion) return activeItems;
         return publishedItems;
     };
@@ -307,6 +311,26 @@ function makeHarness(options = {}) {
             calls.getOverviewAnswerRowsBySubmissionIds = submissionIds;
             const ids = new Set(submissionIds || []);
             return [...submissions.values()].filter(submission => ids.has(submission.id)).flatMap(answerRowsForSubmission);
+        },
+        async listOtherHistoryAnswerFacts(activityId, filters = {}) {
+            calls.listOtherHistoryAnswerFacts = { activityId, filters };
+            const fieldKey = filters.fieldKey;
+            const formContext = filters.formContext || 'visitor';
+            return [...submissions.values()].filter(submission => {
+                if (submission.activityId !== activityId) return false;
+                if (submission.status === 'void') return false;
+                if ((submission.recordContext || 'visitor') !== formContext) return false;
+                return true;
+            }).flatMap(submission => answerRowsForSubmission(submission)
+                .filter(row => {
+                    const item = itemsForVersionId(submission.formVersionId).find(candidate => candidate.formItemId === row.formItemId);
+                    return item && (item.itemKey || item.fieldId) === fieldKey;
+                })
+                .map(row => ({
+                    ...row,
+                    createdAt: submission.createdAt,
+                    updatedAt: submission.updatedAt
+                })));
         },
         async getItemsByVersionIds(versionIds) {
             calls.getItemsByVersionIds = versionIds;
@@ -1026,7 +1050,7 @@ async function assertRealActiveIntelligenceRuntimeSourceContract(managementSourc
     assert(!cssSource.includes('aim-prototype-chart'), 'prototype analytics chart styling must be removed');
     assertCardAssistShortTextMappingBuilderContract(managementSource);
     assertActiveIntelligenceAnalyticsV1Contract(managementSource, cssSource);
-    assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, service);
+    await assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, service);
     assertStableVisualAssetsAndActiveBannerSharingContract(managementSource, service);
     await assertDesktopUnifiedVisitorRecordLandingContract(managementSource);
 }
@@ -2300,7 +2324,7 @@ function assertCompanyKpiDedupQualityV1Contract(managementSource, cssSource) {
     assert.strictEqual(contract.companyKpiDerivation(ambiguousName, records, 'visitor').capable, false, 'Ambiguous Company Name must hide the KPI group');
 }
 
-function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, service) {
+async function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, service) {
     assert(managementSource.includes('enableOtherHistorySuggestions'), 'Other history suggestions setting must exist in the frontend source');
     assert(managementSource.includes('啟用「其他」歷史值建議'), 'Builder must expose the approved Other history suggestion label');
     assert(managementSource.includes('從此活動同一題目的過往「其他」內容提供建議，仍可輸入新內容。'), 'Builder must expose the approved Other history suggestion helper');
@@ -2310,6 +2334,9 @@ function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, se
     assert(managementSource.includes("'.aim-other-history-suggestion[data-action=\"other-history-suggestion\"]'"), 'Pointer handling must be scoped to Other history suggestion buttons');
     assert(managementSource.includes('event.preventDefault();\n    applyOtherHistorySuggestion(el);'), 'Pointer selection must prevent blur and write authoritative state');
     assert(!managementSource.includes('ActivityIntelligenceApi.otherHistory'), 'Other history suggestions must not add a new frontend API path');
+    assert(managementSource.includes("kind: 'other_history'"), 'Other history suggestions must use the shared Form Assist suggestion endpoint kind');
+    assert(managementSource.includes('const fieldKey = otherHistoryFieldKey(field);') && managementSource.includes('fieldKey,'), 'Other history requests must carry canonical field identity');
+    assert(!extractFunctionDeclaration(managementSource, 'otherHistorySuggestionsForField').includes('recordsFor('), 'Other history renderer must not read state.records for suggestions');
     assert(cssSource.includes('.aim-other-history-suggestion'), 'Other history suggestions must have compact badge styling');
     assert(cssSource.includes('.aim-runtime-other-control:not(:focus-within) .aim-other-history-suggestions'), 'Other history suggestions must remain focus-scoped');
 
@@ -2326,6 +2353,8 @@ function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, se
 
     const source = [
         'const otherAnswerValue = "其他";',
+        'const formContextVisitorMode = "visitor";',
+        'const formContextFieldIntelligenceMode = "field_intelligence";',
         "const choiceFieldTypes = ['single_choice', 'multiple_choice', 'dropdown'];",
         "const previewPlacementValues = new Set(['none', 'primary', 'badges', 'text']);",
         "const compactPreviewChoiceFieldTypes = new Set(['yes_no', 'single_choice', 'dropdown']);",
@@ -2339,9 +2368,10 @@ function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, se
         'const Store = { clone(value) { return JSON.parse(JSON.stringify(value)); }, escapeHtml(value) { return String(value == null ? "" : value).replace(/[&<>"\']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\\"": "&quot;", "\'": "&#39;" }[char])); } };',
         'let selected = { id: "activity-a" };',
         'const state = { records: [] };',
+        'let ui = { drawer: null, recordContextMode: "visitor", otherHistory: { activeActivityId: "", activeFieldId: "", context: "", formContext: "", q: "", loading: false, suggestions: [] } };',
         'function selectedActivity() { return selected; }',
-        'function recordsFor(activityId) { return state.records.filter(record => record.activityId === activityId); }',
-        'function otherAnswersForRecord(record) { return record.runtimeOtherAnswers || {}; }',
+        'function normalizeFormContext(value) { return value === "field_intelligence" ? "field_intelligence" : "visitor"; }',
+        'function activeRecordFormContext() { return ui.recordContextMode === "field_intelligence" ? "field_intelligence" : "visitor"; }',
         extractFunctionDeclaration(managementSource, 'normalizeOptionEntries'),
         extractFunctionDeclaration(managementSource, 'normalizePreviewPlacement'),
         extractFunctionDeclaration(managementSource, 'designerItemKey'),
@@ -2352,12 +2382,12 @@ function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, se
         extractFunctionDeclaration(managementSource, 'renderOtherHistorySuggestions'),
         extractFunctionDeclaration(managementSource, 'otherHistorySuggestionsForField'),
         extractFunctionDeclaration(managementSource, 'otherHistoryFieldKey'),
-        extractFunctionDeclaration(managementSource, 'otherHistorySnapshotField'),
+        extractFunctionDeclaration(managementSource, 'otherHistoryFormContext'),
         extractFunctionDeclaration(managementSource, 'otherHistorySuggestionKey'),
         extractFunctionDeclaration(managementSource, 'designerItemSignature'),
         extractFunctionDeclaration(managementSource, 'designerItemsEqual'),
         extractFunctionDeclaration(managementSource, 'serializeDraftItems'),
-        '({ state, setSelected(value) { selected = value; }, normalizeDesignerItem, fieldAllowsOtherHistorySuggestions, fieldHasOtherHistorySuggestionsEnabled, otherHistorySuggestionsForField, renderOtherHistorySuggestions, designerItemSignature, designerItemsEqual, serializeDraftItems, answerHasOther });'
+        '({ ui, state, setSelected(value) { selected = value; }, normalizeDesignerItem, fieldAllowsOtherHistorySuggestions, fieldHasOtherHistorySuggestionsEnabled, otherHistorySuggestionsForField, renderOtherHistorySuggestions, designerItemSignature, designerItemsEqual, serializeDraftItems, answerHasOther });'
     ].join('\n');
     const contract = vm.runInNewContext(source, {});
     const field = contract.normalizeDesignerItem({ itemKey: 'field-a', fieldId: 'field-a', type: 'single_choice', title: 'Same Title', options: ['Alpha'], allowOther: true, settings: { enableOtherHistorySuggestions: true } });
@@ -2390,34 +2420,23 @@ function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, se
     assert(managementSource.includes('updateFormDesignDraft({ enableOtherHistorySuggestions: enableOtherHistorySuggestions.checked, settings });'), 'checkbox changes must update the actual field draft settings');
     assert(managementSource.includes('const draft = normalizeDesignerItem(ui.formDesignDraft || {});') && managementSource.includes('design.draft.items[index] = draft;'), 'applyFieldDraft must normalize and apply the current field draft');
 
-    const record = (id, activityId, item, answer, otherText, createdAt, status = 'active') => ({
-        id,
-        activityId,
-        status,
-        createdAt,
-        updatedAt: createdAt,
-        answers: { [item.fieldId]: answer },
-        runtimeOtherAnswers: otherText === undefined ? {} : { [item.fieldId]: otherText },
-        formRuntimeSnapshot: { items: [item] }
-    });
-    contract.state.records = [
-        record('r1', 'activity-a', field, '其他', 'Digital Twin', '2026-08-01T01:00:00.000Z'),
-        record('r2', 'activity-a', field, '其他', 'digital twin', '2026-08-03T01:00:00.000Z'),
-        record('r3', 'activity-a', field, '其他', 'Digital Twin', '2026-08-02T01:00:00.000Z'),
-        record('r4', 'activity-a', field, '其他', 'AI Agent', '2026-08-04T01:00:00.000Z'),
-        record('r5', 'activity-a', field, '其他', 'AI Agent', '2026-08-02T02:00:00.000Z'),
-        record('r6', 'activity-a', field, '其他', 'Edge AI', '2026-08-05T01:00:00.000Z'),
-        record('r7', 'activity-a', field, 'Alpha', 'Official must not count', '2026-08-06T01:00:00.000Z'),
-        record('r8', 'activity-a', field, '其他', '   ', '2026-08-07T01:00:00.000Z'),
-        record('r9', 'activity-a', field, '其他', 'Void must not count', '2026-08-08T01:00:00.000Z', 'void'),
-        record('r10', 'activity-b', field, '其他', 'Other Activity', '2026-08-09T01:00:00.000Z'),
-        record('r11', 'activity-a', sameTitleOtherField, '其他', 'Other Field', '2026-08-10T01:00:00.000Z'),
-        record('r12', 'activity-a', multiField, ['Alpha', '其他'], 'Multi Other', '2026-08-11T01:00:00.000Z')
-    ];
-    ['Topic 1', 'Topic 2', 'Topic 3', 'Topic 4'].forEach((value, index) => {
-        contract.state.records.push(record(`extra-${index}`, 'activity-a', field, '其他', value, `2026-08-${12 + index}T01:00:00.000Z`));
-    });
-    const suggestions = contract.otherHistorySuggestionsForField(field, '', 6);
+    contract.ui.otherHistory = {
+        activeActivityId: 'activity-a',
+        activeFieldId: field.fieldId,
+        context: 'quick',
+        formContext: 'visitor',
+        q: '',
+        loading: false,
+        suggestions: [
+            { value: 'digital twin', count: 3, latest: '2026-08-03T01:00:00.000Z' },
+            { value: 'AI Agent', count: 2, latest: '2026-08-04T01:00:00.000Z' },
+            { value: 'Edge AI', count: 1, latest: '2026-08-05T01:00:00.000Z' },
+            { value: 'Topic 4', count: 1, latest: '2026-08-15T01:00:00.000Z' },
+            { value: 'Topic 3', count: 1, latest: '2026-08-14T01:00:00.000Z' },
+            { value: 'Topic 2', count: 1, latest: '2026-08-13T01:00:00.000Z' }
+        ]
+    };
+    const suggestions = contract.otherHistorySuggestionsForField(field, 'quick', '', 6);
     assert.strictEqual(suggestions.length, 6, 'initial focus must return at most six suggestions');
     assert.strictEqual(suggestions[0].count, 3, 'suggestions must sort by usage count first');
     assert.strictEqual(suggestions[1].value, 'AI Agent', 'recency must break usage-count ties');
@@ -2426,18 +2445,204 @@ function assertOtherHistorySuggestionsV1Contract(managementSource, cssSource, se
     assert(!suggestionJson.includes('Other Activity'), 'other activities must not contribute');
     assert(!suggestionJson.includes('Other Field'), 'same title on another stable field must not contribute');
     assert(!suggestionJson.includes('Void must not count'), 'void submissions must not contribute');
-    assert.strictEqual(contract.otherHistorySuggestionsForField(field, 'agent', 6)[0].value, 'AI Agent', 'typing filter must be case-insensitive for Latin text');
-    assert.strictEqual(contract.otherHistorySuggestionsForField(field, 'DIGITAL', 6)[0].count, 3, 'typing filter must preserve duplicate grouping');
-    assert.strictEqual(contract.otherHistorySuggestionsForField(multiField, '', 6)[0].value, 'Multi Other', 'multiple_choice must use the shared history implementation');
+    contract.ui.otherHistory = { ...contract.ui.otherHistory, q: 'agent', suggestions: [{ value: 'AI Agent', count: 2, latest: '2026-08-04T01:00:00.000Z' }] };
+    assert.strictEqual(contract.otherHistorySuggestionsForField(field, 'quick', 'agent', 6)[0].value, 'AI Agent', 'typing filter must be case-insensitive for Latin text');
+    contract.ui.otherHistory = { ...contract.ui.otherHistory, q: 'DIGITAL', suggestions: [{ value: 'digital twin', count: 3, latest: '2026-08-03T01:00:00.000Z' }] };
+    assert.strictEqual(contract.otherHistorySuggestionsForField(field, 'quick', 'DIGITAL', 6)[0].count, 3, 'typing filter must preserve duplicate grouping');
+    contract.ui.otherHistory = { ...contract.ui.otherHistory, activeFieldId: multiField.fieldId, q: '', suggestions: [{ value: 'Multi Other', count: 1, latest: '2026-08-11T01:00:00.000Z' }] };
+    assert.strictEqual(contract.otherHistorySuggestionsForField(multiField, 'quick', '', 6)[0].value, 'Multi Other', 'multiple_choice must use the shared history implementation');
     assert.strictEqual(contract.answerHasOther(['Alpha', '其他']), true, 'multiple_choice Other selection semantics must remain intact');
-    const beforeNewValue = contract.otherHistorySuggestionsForField(field, 'physical', 6);
+    contract.ui.otherHistory = { ...contract.ui.otherHistory, activeFieldId: field.fieldId, q: 'physical', suggestions: [] };
+    const beforeNewValue = contract.otherHistorySuggestionsForField(field, 'quick', 'physical', 6);
     assert.strictEqual(beforeNewValue.length, 0, 'free-text new values must remain allowed without preexisting history');
-    contract.state.records.push(record('new-value', 'activity-a', field, '其他', 'Physical AI', '2026-08-20T01:00:00.000Z'));
-    assert.strictEqual(contract.otherHistorySuggestionsForField(field, 'physical', 6)[0].value, 'Physical AI', 'new submitted other_text can become a future suggestion');
+    contract.ui.otherHistory = { ...contract.ui.otherHistory, suggestions: [{ value: 'Physical AI', count: 1, latest: '2026-08-20T01:00:00.000Z' }] };
+    assert.strictEqual(contract.otherHistorySuggestionsForField(field, 'quick', 'physical', 6)[0].value, 'Physical AI', 'new submitted other_text can become a future suggestion');
+    contract.ui.otherHistory = { ...contract.ui.otherHistory, q: 'digital', suggestions: [{ value: 'digital twin', count: 3, latest: '2026-08-03T01:00:00.000Z' }] };
     const html = contract.renderOtherHistorySuggestions(field, 'quick', 'digital');
     assert(html.includes('· 3次'), 'badge must display usage count');
     assert(html.includes('data-value="digital twin"') || html.includes('data-value="Digital Twin"'), 'badge value must be only the canonical historical string');
     assert(!html.includes('data-value="Digital Twin · 3次"'), 'badge must not store the count suffix as other_text');
+
+    const historyField = {
+        formItemId: IDS.choiceItem,
+        itemKey: IDS.choiceKey,
+        fieldId: IDS.choiceKey,
+        type: 'single_choice',
+        title: 'Topic',
+        options: ['Alpha'],
+        optionEntries: [],
+        allowOther: true,
+        settings: { allowOther: true, enableOtherHistorySuggestions: true },
+        visible: true,
+        removedInDraft: false
+    };
+    const isolatedField = {
+        ...historyField,
+        formItemId: IDS.numberItem,
+        itemKey: IDS.numberKey,
+        fieldId: IDS.numberKey,
+        title: 'Same Title'
+    };
+    const multiHistoryField = {
+        ...historyField,
+        formItemId: IDS.longItem,
+        itemKey: IDS.longKey,
+        fieldId: IDS.longKey,
+        type: 'multiple_choice',
+        title: 'Multi'
+    };
+    const ineligibleDropdownHistoryField = {
+        ...historyField,
+        formItemId: IDS.boolItem,
+        itemKey: IDS.boolKey,
+        fieldId: IDS.boolKey,
+        type: 'dropdown',
+        title: 'Dropdown'
+    };
+    const activeContextField = {
+        ...historyField,
+        formItemId: IDS.activeLongItem,
+        itemKey: IDS.activeLongKey,
+        fieldId: IDS.activeLongKey,
+        title: 'Active Context'
+    };
+    const historyHarness = makeHarness({
+        publishedItemsByContext: {
+            visitor: [historyField, isolatedField, multiHistoryField, ineligibleDropdownHistoryField],
+            field_intelligence: [activeContextField]
+        }
+    });
+    const historySubmission = (id, answers, otherAnswers, createdAt, status = 'active', recordContext = 'visitor') => ({
+        id,
+        activityId: IDS.activity,
+        formVersionId: recordContext === 'field_intelligence' ? IDS.activePublishedVersion : IDS.publishedVersion,
+        recordContext,
+        status,
+        cardId: null,
+        createdByUserId: 'recorder',
+        createdByDisplayName: 'Recorder',
+        createdAt,
+        updatedByUserId: 'recorder',
+        updatedByDisplayName: 'Recorder',
+        updatedAt: createdAt,
+        answers,
+        otherAnswers
+    });
+    historyHarness.submissions.set('h1', historySubmission('h1', { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: 'Digital Twin' }, '2026-08-01T01:00:00.000Z'));
+    historyHarness.submissions.set('h2', historySubmission('h2', { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: 'digital twin' }, '2026-08-03T01:00:00.000Z'));
+    historyHarness.submissions.set('h3', historySubmission('h3', { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: 'Digital Twin' }, '2026-08-02T01:00:00.000Z'));
+    historyHarness.submissions.set('h4', historySubmission('h4', { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: 'AI Agent' }, '2026-08-04T01:00:00.000Z'));
+    historyHarness.submissions.set('h5', historySubmission('h5', { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: 'AI Agent' }, '2026-08-02T02:00:00.000Z'));
+    historyHarness.submissions.set('h6', historySubmission('h6', { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: '邊緣 AI' }, '2026-08-05T01:00:00.000Z'));
+    historyHarness.submissions.set('h7', historySubmission('h7', { [IDS.choiceKey]: 'Alpha' }, { [IDS.choiceKey]: 'Official must not count' }, '2026-08-06T01:00:00.000Z'));
+    historyHarness.submissions.set('h8', historySubmission('h8', { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: '   ' }, '2026-08-07T01:00:00.000Z'));
+    historyHarness.submissions.set('h9', historySubmission('h9', { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: 'Void must not count' }, '2026-08-08T01:00:00.000Z', 'void'));
+    historyHarness.submissions.set('h10', { ...historySubmission('h10', { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: 'Other Activity' }, '2026-08-09T01:00:00.000Z'), activityId: IDS.otherActivity });
+    historyHarness.submissions.set('h11', historySubmission('h11', { [IDS.numberKey]: OTHER_CHOICE_VALUE }, { [IDS.numberKey]: 'Other Field' }, '2026-08-10T01:00:00.000Z'));
+    historyHarness.submissions.set('h12', historySubmission('h12', { [IDS.longKey]: ['Alpha', OTHER_CHOICE_VALUE] }, { [IDS.longKey]: 'Multi Other' }, '2026-08-11T01:00:00.000Z'));
+    historyHarness.submissions.set('h13', historySubmission('h13', { [IDS.activeLongKey]: OTHER_CHOICE_VALUE }, { [IDS.activeLongKey]: 'Active Context Other' }, '2026-08-12T01:00:00.000Z', 'active', 'field_intelligence'));
+    ['Topic 1', 'Topic 2', 'Topic 3', 'Topic 4'].forEach((value, index) => {
+        historyHarness.submissions.set(`extra-${index}`, historySubmission(`extra-${index}`, { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: value }, `2026-08-${13 + index}T01:00:00.000Z`));
+    });
+    const historyResult = await historyHarness.service.getFormAssistSuggestions(IDS.activity, {
+        kind: 'other_history',
+        fieldKey: IDS.choiceKey,
+        formContext: 'visitor',
+        q: ''
+    });
+    assert.strictEqual(historyResult.kind, 'other_history', 'Other history must use the shared Form Assist route kind');
+    assert.strictEqual(historyResult.fieldKey, IDS.choiceKey, 'response must echo the canonical field identity');
+    assert.strictEqual(historyResult.formContext, 'visitor', 'response must echo form context identity');
+    assert.strictEqual(historyResult.suggestions.length, 6, 'Other history endpoint must preserve the six-item limit');
+    assert.strictEqual(historyResult.suggestions[0].count, 3, 'Other history endpoint must sort by usage count first');
+    assert.strictEqual(historyResult.suggestions[0].value, 'digital twin', 'latest duplicate spelling must be preserved as display value');
+    assert.strictEqual(historyResult.suggestions[1].value, 'AI Agent', 'recency must break usage-count ties');
+    const historyJson = JSON.stringify(historyResult.suggestions);
+    assert(!historyJson.includes('Official must not count'), 'normal predefined options must not become Other-history suggestions');
+    assert(!historyJson.includes('Void must not count'), 'void submissions must not contribute');
+    assert(!historyJson.includes('Other Activity'), 'Other-history source scope must remain the current Activity');
+    assert(!historyJson.includes('Other Field'), 'same-title separate fields must not contaminate suggestions');
+    assert(!historyJson.includes('Active Context Other'), 'different form contexts must not contaminate suggestions');
+    assert.strictEqual(historyHarness.calls.listOtherHistoryAnswerFacts.activityId, IDS.activity, 'Other history must use the narrow reader for the current Activity');
+    assert.deepStrictEqual(historyHarness.calls.listOtherHistoryAnswerFacts.filters, { fieldKey: IDS.choiceKey, formContext: 'visitor' }, 'Other history reader must receive field/context identity only');
+    assert.strictEqual(historyHarness.calls.listSubmissions, undefined, 'Other history suggestions must not load full submissions');
+    const filteredHistory = await historyHarness.service.getFormAssistSuggestions(IDS.activity, {
+        kind: 'other_history',
+        fieldKey: IDS.choiceKey,
+        formContext: 'visitor',
+        q: 'DIGITAL'
+    });
+    assert.strictEqual(filteredHistory.suggestions.length, 1, 'Other history query filtering must be case-insensitive');
+    assert.strictEqual(filteredHistory.suggestions[0].count, 3, 'query filtering must preserve duplicate grouping');
+    const cjkHistory = await historyHarness.service.getFormAssistSuggestions(IDS.activity, {
+        kind: 'other_history',
+        fieldKey: IDS.choiceKey,
+        formContext: 'visitor',
+        q: '邊緣'
+    });
+    assert.strictEqual(cjkHistory.suggestions[0].value, '邊緣 AI', 'CJK Other text must round-trip through backend suggestions');
+    const multiHistory = await historyHarness.service.getFormAssistSuggestions(IDS.activity, {
+        kind: 'other_history',
+        fieldKey: IDS.longKey,
+        formContext: 'visitor',
+        q: ''
+    });
+    assert.strictEqual(multiHistory.suggestions[0].value, 'Multi Other', 'multiple_choice Other history must use the shared endpoint');
+    const activeContextHistory = await historyHarness.service.getFormAssistSuggestions(IDS.activity, {
+        kind: 'other_history',
+        fieldKey: IDS.activeLongKey,
+        formContext: 'field_intelligence',
+        q: ''
+    });
+    assert.strictEqual(activeContextHistory.suggestions[0].value, 'Active Context Other', 'field_intelligence form context must be requestable without Records/Analytics');
+    const ineligibleHistory = await historyHarness.service.getFormAssistSuggestions(IDS.activity, {
+        kind: 'other_history',
+        fieldKey: IDS.boolKey,
+        formContext: 'visitor',
+        q: ''
+    });
+    assert.deepStrictEqual(ineligibleHistory.suggestions, [], 'ineligible fields must not expose Other-history suggestions');
+
+    const loadSource = [
+        'const formContextVisitorMode = "visitor";',
+        'const formContextFieldIntelligenceMode = "field_intelligence";',
+        'let otherHistoryRequestSeq = 0;',
+        'const state = { records: [] };',
+        'let ui = { drawer: null, recordContextMode: "visitor", otherHistory: { activeActivityId: "", activeFieldId: "", context: "", formContext: "", q: "", loading: false, suggestions: [] } };',
+        'let apiCall = null;',
+        'let refreshCount = 0;',
+        'const selected = { id: "activity-a" };',
+        'const field = { itemKey: "field-a", fieldId: "field-a", type: "single_choice", allowOther: true, settings: { enableOtherHistorySuggestions: true } };',
+        'const host = {};',
+        'const input = { dataset: { field: "field-a" }, value: "賣", classList: { contains(value) { return false; } }, closest(selector) { return selector === ".aim-runtime-other-control" ? host : null; } };',
+        'const window = { ActivityIntelligenceApi: { async getFormAssistSuggestions(activityId, query) { apiCall = { activityId, query }; return { kind: "other_history", fieldKey: query.fieldKey, formContext: query.formContext, suggestions: [{ value: "賣玉米", count: 2, latest: "2026-08-20T01:00:00.000Z" }] }; } } };',
+        'function selectedActivity() { return selected; }',
+        'function runtimeFieldById(fieldId, context) { return fieldId === "field-a" && context === "quick" ? field : null; }',
+        'function activeRecordFormContext() { return ui.recordContextMode === "field_intelligence" ? "field_intelligence" : "visitor"; }',
+        'function normalizeFormContext(value) { return value === "field_intelligence" ? "field_intelligence" : "visitor"; }',
+        'function refreshOtherHistorySuggestions() { refreshCount += 1; }',
+        extractFunctionDeclaration(managementSource, 'designerItemKey'),
+        extractFunctionDeclaration(managementSource, 'fieldAllowsOtherHistorySuggestions'),
+        extractFunctionDeclaration(managementSource, 'fieldHasOtherHistorySuggestionsEnabled'),
+        extractFunctionDeclaration(managementSource, 'otherHistoryFieldKey'),
+        extractFunctionDeclaration(managementSource, 'otherHistoryFormContext'),
+        extractFunctionDeclaration(managementSource, 'resetOtherHistoryState'),
+        extractFunctionDeclaration(managementSource, 'otherHistoryRequestStillCurrent'),
+        extractFunctionDeclaration(managementSource, 'loadOtherHistorySuggestions').replace('function loadOtherHistorySuggestions', 'async function loadOtherHistorySuggestions'),
+        '({ ui, state, input, loadOtherHistorySuggestions, apiCall: () => apiCall, refreshCount: () => refreshCount });'
+    ].join('\n');
+    const loadContract = vm.runInNewContext(loadSource, {});
+    await loadContract.loadOtherHistorySuggestions(loadContract.input);
+    assert.strictEqual(loadContract.state.records.length, 0, 'clean Quick Entry Other history must not require loaded records');
+    assert.strictEqual(loadContract.apiCall().activityId, 'activity-a', 'Other history request must target the selected Activity');
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(loadContract.apiCall().query)), {
+        kind: 'other_history',
+        fieldKey: 'field-a',
+        formContext: 'visitor',
+        q: '賣'
+    }, 'Other history request must carry only kind, field, context, and query');
+    assert.strictEqual(loadContract.ui.otherHistory.suggestions[0].value, '賣玉米', 'Other history response must populate transient suggestion state');
+    assert.strictEqual(loadContract.refreshCount(), 2, 'Other history load must refresh before and after the lightweight request');
 
     const selectionSource = [
         'let quickOtherAnswers = {};',
