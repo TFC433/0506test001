@@ -6999,6 +6999,14 @@
   });
 
   root.addEventListener('pointerdown', event => {
+    const assist = event.target.closest('.aim-form-assist-suggestion[data-action]');
+    if (assist) {
+      event.preventDefault();
+      if (assist.dataset.action === 'form-assist-select-person') selectFormAssistPerson(assist.dataset.submissionId || '');
+      if (assist.dataset.action === 'form-assist-select-company') selectFormAssistCompany(assist.dataset.companyName || '');
+      return;
+    }
+
     const el = event.target.closest('.aim-other-history-suggestion[data-action="other-history-suggestion"]');
     if (!el) return;
     event.preventDefault();

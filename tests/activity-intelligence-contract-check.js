@@ -3659,6 +3659,88 @@ function assertRecordsCountProjectionConsistencyV1Contract(managementSource) {
     assert.strictEqual(zeroCounts.all, 0, 'zero projection rows must keep all count at 0');
 }
 
+function assertReleaseStabilizationHistoricalLookupContract(sources) {
+    const { managementSource, apiSource, routesSource, controllerSource, serviceSource } = sources;
+    assert(apiSource.includes('getFormAssistSuggestions(activityId, query)'), 'Form Assist API client must expose historical suggestions');
+    assert(apiSource.includes('/form-assist/suggestions'), 'Form Assist API client must use the existing suggestions endpoint');
+    assert(routesSource.includes("router.get('/activities/:activityId/form-assist/suggestions', requireRole(SUBMISSION_ROLES)"), 'Form Assist suggestions route must remain submission-role protected');
+    assert(controllerSource.includes('getFormAssistSuggestions = async (req, res) =>'), 'controller must expose Form Assist suggestions handler');
+    assert(serviceSource.includes('async getFormAssistSuggestions(activityId, query = {})'), 'service must expose Form Assist suggestions handler');
+    assert(serviceSource.includes("const matchSemantic = kind === 'person' ? 'customerName' : 'companyName';"), 'person/company lookup source semantics must remain explicit');
+    assert(serviceSource.includes('this.reader.getSubmissionsByIds(submissionIds, { activityIds: sourceActivityIds })'), 'Form Assist suggestions must use historical full submissions from configured source activities');
+
+    const renderPersonSource = extractFunctionDeclaration(managementSource, 'renderPersonAssistSuggestion');
+    assert(renderPersonSource.includes('data-action="form-assist-select-person"'), 'person candidates must render the delegated select action');
+    assert(renderPersonSource.includes('data-submission-id='), 'person candidates must carry submission identity for selection');
+    assert(renderPersonSource.includes('item.personName'), 'person candidates must display person name');
+    assert(renderPersonSource.includes('item.companyName') && renderPersonSource.includes('item.jobTitle'), 'person candidates must display company/job metadata');
+
+    const renderCompanySource = extractFunctionDeclaration(managementSource, 'renderCompanyAssistSuggestion');
+    assert(renderCompanySource.includes('data-action="form-assist-select-company"'), 'company candidates must render the delegated select action');
+    assert(renderCompanySource.includes('data-company-name='), 'company candidates must carry company identity for selection');
+    assert(renderCompanySource.includes('item.companyName'), 'company candidates must display company name');
+    assert(renderCompanySource.includes('recentVisitors') && renderCompanySource.includes('historicalCompanyTypes'), 'company candidates must preserve visitor/type summary display');
+
+    const pointerStart = managementSource.indexOf("root.addEventListener('pointerdown'");
+    const clickStart = managementSource.indexOf("root.addEventListener('click'", pointerStart);
+    const pointerSource = pointerStart >= 0 && clickStart > pointerStart ? managementSource.slice(pointerStart, clickStart) : '';
+    assert(pointerSource.includes("'.aim-form-assist-suggestion[data-action]'"), 'Form Assist suggestions must commit on pointerdown before blur can clear candidates');
+    assert(pointerSource.includes("assist.dataset.action === 'form-assist-select-person'"), 'pointerdown must route person candidate selection');
+    assert(pointerSource.includes("assist.dataset.action === 'form-assist-select-company'"), 'pointerdown must route company candidate selection');
+    assert(pointerSource.includes('event.preventDefault();'), 'Form Assist pointerdown must prevent blur-first loss of candidate DOM');
+
+    const clickHandlerSource = managementSource.slice(clickStart, managementSource.indexOf('function bindInputs', clickStart));
+    assert(clickHandlerSource.includes("if (action === 'form-assist-select-person')"), 'click handler must keep person candidate fallback');
+    assert(clickHandlerSource.includes("if (action === 'form-assist-select-company')"), 'click handler must keep company candidate fallback');
+
+    const source = [
+        "const ui = { quickAnswers: {}, formAssist: { activeFieldId: 'personField', kind: 'person', q: 'Ada', loading: false, suggestions: [] } };",
+        "const cardAssistRoles = new Set(['person_name', 'job_title', 'company_name']);",
+        "const otherAnswerValue = '其他';",
+        "const state = { records: [], recordListProjections: [] };",
+        "let resetCount = 0;",
+        "let refreshCount = 0;",
+        "function cardAssistTargetsForSection(sectionId) { return sectionId === 'section-a' ? [{ role: 'person_name', field: { fieldId: 'personField' } }, { role: 'job_title', field: { fieldId: 'jobField' } }, { role: 'company_name', field: { fieldId: 'companyField' } }] : []; }",
+        "function cardAssistSectionForField(fieldId) { return ['personField', 'jobField', 'companyField'].includes(fieldId) ? 'section-a' : ''; }",
+        "function resetFormAssistState() { resetCount += 1; ui.formAssist = { activeFieldId: '', kind: '', q: '', loading: false, suggestions: [] }; }",
+        "function refreshQuickAnswerList() { refreshCount += 1; }",
+        "function setQuickOtherAnswer() {}",
+        extractFunctionDeclaration(managementSource, 'setQuickAnswer'),
+        extractFunctionDeclaration(managementSource, 'quickAnswerIsBlank'),
+        extractFunctionDeclaration(managementSource, 'cardAssistSourceValue'),
+        extractFunctionDeclaration(managementSource, 'fillQuickFormAssistFields'),
+        extractFunctionDeclaration(managementSource, 'selectFormAssistPerson'),
+        extractFunctionDeclaration(managementSource, 'selectFormAssistCompany'),
+        "({ ui, state, fillQuickFormAssistFields, selectFormAssistPerson, selectFormAssistCompany, counts: () => ({ resetCount, refreshCount }) });"
+    ].join('\n');
+    const contract = vm.runInNewContext(source, {});
+
+    contract.ui.formAssist = {
+        activeFieldId: 'personField',
+        kind: 'person',
+        q: 'Ada',
+        loading: false,
+        suggestions: [{
+            submissionId: 'submission-a',
+            personName: 'Ada Lin',
+            jobTitle: 'Procurement Lead',
+            companyName: 'Apex Motion'
+        }]
+    };
+    contract.selectFormAssistPerson('submission-a');
+    assert.strictEqual(contract.ui.quickAnswers.personField, 'Ada Lin', 'person candidate click must autofill mapped person field');
+    assert.strictEqual(contract.ui.quickAnswers.jobField, 'Procurement Lead', 'person candidate click must autofill mapped job-title field');
+    assert.strictEqual(contract.ui.quickAnswers.companyField, 'Apex Motion', 'person candidate click must autofill mapped company field');
+    assert.strictEqual(contract.counts().refreshCount, 1, 'person candidate selection must refresh visible quick-entry inputs');
+
+    contract.ui.quickAnswers = {};
+    contract.ui.formAssist = { activeFieldId: 'companyField', kind: 'company', q: 'Apex', loading: false, suggestions: [] };
+    contract.selectFormAssistCompany('Apex Motion');
+    assert.strictEqual(contract.ui.quickAnswers.companyField, 'Apex Motion', 'company candidate click must autofill mapped company field');
+    assert.strictEqual(contract.ui.quickAnswers.personField, undefined, 'company candidate click must not invent a person autofill value');
+    assert.strictEqual(contract.ui.quickAnswers.jobField, undefined, 'company candidate click must not invent a job-title autofill value');
+}
+
 function assertCardAssistShortTextMappingBuilderContract(managementSource) {
     const source = [
         "const fieldTypes = [['section_heading', 'Section'], ['information_text', 'Info'], ['short_text', 'Short'], ['long_text', 'Long'], ['number', 'Number'], ['yes_no', 'Yes No'], ['single_choice', 'Single'], ['multiple_choice', 'Multiple'], ['dropdown', 'Dropdown']];",
@@ -5260,6 +5342,7 @@ async function main() {
     await assertRecordListProjectionV1Contract({ managementSource, apiSource, routesSource, controllerSource, serviceSource, readerSource });
     assertRecordsDoubleLoadRemovalV1Contract(managementSource);
     assertRecordsCountProjectionConsistencyV1Contract(managementSource);
+    assertReleaseStabilizationHistoricalLookupContract({ managementSource, apiSource, routesSource, controllerSource, serviceSource });
     assert(managementSource.includes("if (ui.analytics.ai.state === 'loading') return;"));
     assert(managementSource.includes("state === 'loading'"));
     assert(!managementSource.includes('FORM_GEMINI_API_KEY'));
