@@ -1478,7 +1478,28 @@ function assertFollowUpTabFrontendV1Contract(managementSource, cssSource) {
     assert(cssSource.includes('.aim-follow-up-table-wrap') && cssSource.includes('overflow-x: auto'), 'Follow-up table must be contained by an overflow-safe wrapper');
     assert(cssSource.includes('.aim-follow-up-kpi-card[aria-pressed="true"]') && cssSource.includes('background: #ecfdf5'), 'Active Follow-up KPI cards must use subtle green treatment');
     assert(!cssSource.includes('.aim-follow-up-meta-head .aim-follow-up-sort-header'), 'Recorder/time headers must keep normal table-header hierarchy');
-    assert(cssSource.includes('.aim-follow-up-meta-cell') && cssSource.includes('font-size: 10px'), 'Follow-up metadata row cells must use a visibly smaller metadata tier');
+    const cssRuleBody = selector => {
+        const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const match = cssSource.match(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`, 'm'));
+        return match ? match[1] : '';
+    };
+    const cssSelectorSpecificity = selector => ({
+        classCount: (selector.match(/\.[a-z0-9_-]+/gi) || []).length,
+        elementCount: (selector.match(/(^|[\s>+~])[a-z][a-z0-9_-]*/gi) || []).length
+    });
+    const followUpMetaSelector = '.aim-follow-up-table td.aim-follow-up-meta-cell';
+    const followUpMetaRule = cssRuleBody(followUpMetaSelector);
+    const followUpMetaSpecificity = cssSelectorSpecificity(followUpMetaSelector);
+    const baseTableTdSpecificity = cssSelectorSpecificity('.aim-table td');
+    assert(followUpMetaRule, 'Follow-up metadata typography must be scoped through the Follow-up table cell selector');
+    assert(followUpMetaSpecificity.classCount > baseTableTdSpecificity.classCount && followUpMetaSpecificity.elementCount >= baseTableTdSpecificity.elementCount, 'Follow-up metadata selector must structurally beat generic .aim-table td typography');
+    assert(followUpMetaRule.includes('font-size: 10px;') && followUpMetaRule.includes('line-height: 1.25;'), 'Follow-up metadata row cells must use the approved smaller metadata tier');
+    assert(followUpMetaRule.includes('color: var(--aim-muted-light, var(--aim-muted));'), 'Follow-up metadata row cells must preserve the existing muted color fallback');
+    assert(!followUpMetaSelector.includes('nth-child') && !followUpMetaRule.includes('nth-child'), 'Follow-up metadata typography must not depend on column indexes');
+    assert(!followUpMetaRule.includes('!important'), 'Follow-up metadata specificity repair must not use !important');
+    assert(!/(^|\n)\.aim-follow-up-meta-cell\s*\{/.test(cssSource), 'Follow-up metadata typography must not keep the old unscoped metadata selector');
+    assert((cssSource.match(/td\.aim-follow-up-meta-cell/g) || []).length === 1, 'Main and Attention Follow-up tables must share one metadata typography rule');
+    assert(/\.aim-table th,\s*\.aim-table td\s*\{[^}]*font-size:\s*14px;[^}]*font-weight:\s*400;[^}]*line-height:\s*1\.45;[^}]*\}/.test(cssSource), 'Generic .aim-table td typography must remain unchanged');
     assert(cssSource.includes('.aim-follow-up-attention') && cssSource.includes('border-top: 1px solid var(--aim-border)'), 'Attention Records must be separated below the main table with a subtle divider');
     assert(cssSource.includes('.aim-follow-up-reasons'), 'Attention reasons must render as compact tags inside the table');
 

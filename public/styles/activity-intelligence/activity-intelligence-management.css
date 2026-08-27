@@ -1574,8 +1574,7 @@ a:focus-visible {
 .aim-follow-up-table td:nth-child(3),
 .aim-follow-up-table td:nth-child(4),
 .aim-follow-up-table td:nth-child(5),
-.aim-follow-up-table td:nth-child(6),
-.aim-follow-up-meta-cell {
+.aim-follow-up-table td:nth-child(6) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1604,11 +1603,14 @@ a:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-.aim-follow-up-meta-cell {
+.aim-follow-up-table td.aim-follow-up-meta-cell {
   color: var(--aim-muted-light, var(--aim-muted));
   font-size: 10px;
   font-weight: 400;
   line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .aim-follow-up-email-list {
