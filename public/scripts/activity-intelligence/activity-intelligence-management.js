@@ -8074,6 +8074,45 @@
     return value === otherAnswerValue || (Array.isArray(value) && value.includes(otherAnswerValue));
   }
 
+  function fieldAllowsOtherValue(field) {
+    return Boolean(field && ['single_choice', 'multiple_choice'].includes(field.type) && field.allowOther);
+  }
+
+  function answerWithOtherSelected(field, currentValue) {
+    if (!fieldAllowsOtherValue(field)) return null;
+    if (field.type === 'multiple_choice') {
+      const values = Array.isArray(currentValue) ? currentValue.slice() : [];
+      if (!values.includes(otherAnswerValue)) values.push(otherAnswerValue);
+      return values;
+    }
+    return otherAnswerValue;
+  }
+
+  function answerValueForContext(context, fieldId) {
+    if (context === 'record') return ui.drawer && ui.drawer.working ? ui.drawer.working[fieldId] : undefined;
+    return ui.quickAnswers[fieldId];
+  }
+
+  function setAnswerForContext(context, fieldId, value) {
+    if (context === 'record') setWorking(fieldId, value);
+    else setQuickAnswer(fieldId, value);
+  }
+
+  function setOtherAnswerForContext(context, fieldId, value) {
+    if (context === 'record') setWorkingOther(fieldId, value);
+    else setQuickOtherAnswer(fieldId, value);
+  }
+
+  function applyOtherValue(field, context, value) {
+    const text = String(value || '').trim();
+    if (!field || !fieldAllowsOtherValue(field) || !text) return false;
+    const nextAnswer = answerWithOtherSelected(field, answerValueForContext(context, field.fieldId));
+    if (nextAnswer === null) return false;
+    setAnswerForContext(context, field.fieldId, nextAnswer);
+    setOtherAnswerForContext(context, field.fieldId, text);
+    return true;
+  }
+
   function refreshQuickAnswerListIfOtherChanged(before, value) {
     if (before !== answerHasOther(value)) refreshQuickAnswerList();
   }
@@ -8101,8 +8140,8 @@
     const context = button && button.dataset ? button.dataset.context : '';
     const value = button && button.dataset ? String(button.dataset.value || '') : '';
     if (!fieldId || !value) return;
-    if (context === 'record') setWorkingOther(fieldId, value);
-    else setQuickOtherAnswer(fieldId, value);
+    const field = runtimeFieldById(fieldId, context);
+    if (!applyOtherValue(field, context, value)) return;
     const inputClass = context === 'record' ? 'aim-record-other-input' : 'aim-quick-other-input';
     const input = document.querySelector(`.${inputClass}[data-field="${cssEscape(fieldId)}"]`);
     if (input) {

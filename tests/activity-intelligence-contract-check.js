@@ -2329,7 +2329,9 @@ async function assertOtherHistorySuggestionsV1Contract(managementSource, cssSour
     assert(managementSource.includes('啟用「其他」歷史值建議'), 'Builder must expose the approved Other history suggestion label');
     assert(managementSource.includes('從此活動同一題目的過往「其他」內容提供建議，仍可輸入新內容。'), 'Builder must expose the approved Other history suggestion helper');
     assert(managementSource.includes('data-action="other-history-suggestion"'), 'Runtime suggestions must be clickable without a second choice system');
-    assert(managementSource.includes('setQuickOtherAnswer(fieldId, value)') && managementSource.includes('setWorkingOther(fieldId, value)'), 'Clicking a suggestion must write only other_text state');
+    assert(managementSource.includes('function applyOtherValue'), 'Other history selection must delegate to a canonical Form Engine Other mutation helper');
+    assert(managementSource.includes('setAnswerForContext(context, field.fieldId') && managementSource.includes('setOtherAnswerForContext(context, field.fieldId'), 'Canonical Other mutation must update both answer identity and other_text state');
+    assert(!extractFunctionDeclaration(managementSource, 'applyOtherHistorySuggestion').includes('field.type ==='), 'Historical Other selection must not own single/multiple choice schema branching');
     assert(managementSource.includes("root.addEventListener('pointerdown'"), 'Other history suggestions must commit on pointerdown before mobile blur can hide the list');
     assert(managementSource.includes("'.aim-other-history-suggestion[data-action=\"other-history-suggestion\"]'"), 'Pointer handling must be scoped to Other history suggestion buttons');
     assert(managementSource.includes('event.preventDefault();\n    applyOtherHistorySuggestion(el);'), 'Pointer selection must prevent blur and write authoritative state');
@@ -2645,27 +2647,109 @@ async function assertOtherHistorySuggestionsV1Contract(managementSource, cssSour
     assert.strictEqual(loadContract.refreshCount(), 2, 'Other history load must refresh before and after the lightweight request');
 
     const selectionSource = [
-        'let quickOtherAnswers = {};',
-        'let workingOther = {};',
+        'const otherAnswerValue = "其他";',
         'let refreshedValue = "";',
         'let focused = false;',
         'let selectedInput = { value: "", focus() { focused = true; } };',
         'const document = { querySelector() { return selectedInput; } };',
+        'const singleField = { fieldId: "field-single", itemKey: "field-single", type: "single_choice", allowOther: true, options: ["Alpha", "Beta"], optionEntries: [{ optionKey: "alpha", label: "Alpha", value: "Alpha" }, { optionKey: "beta", label: "Beta", value: "Beta" }] };',
+        'const multiField = { fieldId: "field-multi", itemKey: "field-multi", type: "multiple_choice", allowOther: true, options: ["Alpha", "Beta"], optionEntries: [{ optionKey: "alpha", label: "Alpha", value: "Alpha" }, { optionKey: "beta", label: "Beta", value: "Beta" }] };',
+        'const noOtherField = { fieldId: "field-no-other", itemKey: "field-no-other", type: "single_choice", allowOther: false, options: ["Alpha"], optionEntries: [{ optionKey: "alpha", label: "Alpha", value: "Alpha" }] };',
+        'const dropdownField = { fieldId: "field-dropdown", itemKey: "field-dropdown", type: "dropdown", allowOther: true, options: ["Alpha"], optionEntries: [{ optionKey: "alpha", label: "Alpha", value: "Alpha" }] };',
+        'const fields = { "field-single": singleField, "field-multi": multiField, "field-no-other": noOtherField, "field-dropdown": dropdownField };',
+        'let ui = { quickAnswers: {}, quickOtherAnswers: {}, drawer: { working: {}, workingOther: {} } };',
         'function cssEscape(value) { return String(value || ""); }',
-        'function setQuickOtherAnswer(fieldId, value) { if (String(value || "").trim()) quickOtherAnswers[fieldId] = value; else delete quickOtherAnswers[fieldId]; }',
-        'function setWorkingOther(fieldId, value) { if (String(value || "").trim()) workingOther[fieldId] = value; else delete workingOther[fieldId]; }',
+        'function runtimeFieldById(fieldId) { return fields[fieldId] || null; }',
+        'function setQuickOtherAnswer(fieldId, value) { if (String(value || "").trim()) ui.quickOtherAnswers[fieldId] = String(value).trim(); else delete ui.quickOtherAnswers[fieldId]; }',
+        'function setWorkingOther(fieldId, value) { if (String(value || "").trim()) ui.drawer.workingOther[fieldId] = String(value).trim(); else delete ui.drawer.workingOther[fieldId]; }',
+        'function setQuickAnswer(fieldId, value) { if (Array.isArray(value) ? value.length : String(value || "").trim()) ui.quickAnswers[fieldId] = value; else delete ui.quickAnswers[fieldId]; if (value !== otherAnswerValue && (!Array.isArray(value) || !value.includes(otherAnswerValue))) setQuickOtherAnswer(fieldId, ""); }',
+        'function setWorking(fieldId, value) { if (Array.isArray(value) ? value.length : String(value || "").trim()) ui.drawer.working[fieldId] = value; else delete ui.drawer.working[fieldId]; if (value !== otherAnswerValue && (!Array.isArray(value) || !value.includes(otherAnswerValue))) setWorkingOther(fieldId, ""); }',
         'function refreshOtherHistorySuggestions(input) { refreshedValue = input.value; }',
+        'function stateSnapshot() { return JSON.parse(JSON.stringify({ quickAnswers: ui.quickAnswers, quickOtherAnswers: ui.quickOtherAnswers, working: ui.drawer.working, workingOther: ui.drawer.workingOther })); }',
+        'function manualQuickOther(field, value, initial) { ui.quickAnswers = {}; ui.quickOtherAnswers = {}; if (initial !== undefined) setQuickAnswer(field.fieldId, initial); const current = field.type === "multiple_choice" ? (Array.isArray(ui.quickAnswers[field.fieldId]) ? ui.quickAnswers[field.fieldId].slice() : []) : null; if (field.type === "multiple_choice") { if (!current.includes(otherAnswerValue)) current.push(otherAnswerValue); setQuickAnswer(field.fieldId, current); } else setQuickAnswer(field.fieldId, otherAnswerValue); setQuickOtherAnswer(field.fieldId, value); return stateSnapshot(); }',
+        extractFunctionDeclaration(managementSource, 'answerHasOther'),
+        extractFunctionDeclaration(managementSource, 'fieldAllowsOtherValue'),
+        extractFunctionDeclaration(managementSource, 'answerWithOtherSelected'),
+        extractFunctionDeclaration(managementSource, 'answerValueForContext'),
+        extractFunctionDeclaration(managementSource, 'setAnswerForContext'),
+        extractFunctionDeclaration(managementSource, 'setOtherAnswerForContext'),
+        extractFunctionDeclaration(managementSource, 'applyOtherValue'),
+        extractFunctionDeclaration(managementSource, 'fieldAllowsOptionNotes'),
+        extractFunctionDeclaration(managementSource, 'optionEntryForValue'),
+        extractFunctionDeclaration(managementSource, 'optionIdentityForValue'),
+        extractFunctionDeclaration(managementSource, 'selectedOptionPayload'),
+        extractFunctionDeclaration(managementSource, 'answerProducingItems'),
+        extractFunctionDeclaration(managementSource, 'payloadAnswersForItems'),
+        extractFunctionDeclaration(managementSource, 'cleanAnswersForItems'),
+        extractFunctionDeclaration(managementSource, 'cleanOtherAnswers'),
         extractFunctionDeclaration(managementSource, 'applyOtherHistorySuggestion'),
-        '({ applyOtherHistorySuggestion, quickOtherAnswers, workingOther, selectedInput, getFocused: () => focused, getRefreshedValue: () => refreshedValue })'
+        '({ ui, singleField, multiField, noOtherField, dropdownField, selectedInput, manualQuickOther, applyOtherHistorySuggestion, applyOtherValue, setQuickAnswer, setQuickOtherAnswer, setWorking, setWorkingOther, cleanAnswersForItems, cleanOtherAnswers, payloadAnswersForItems, stateSnapshot, getFocused: () => focused, getRefreshedValue: () => refreshedValue })'
     ].join('\n');
     const selectionContract = vm.runInNewContext(selectionSource, {});
-    selectionContract.applyOtherHistorySuggestion({ dataset: { field: 'field-a', context: 'quick', value: '賣玉米' } });
-    assert.strictEqual(selectionContract.quickOtherAnswers['field-a'], '賣玉米', 'selecting a counted display badge must write only the historical value to quick other_text state');
-    assert.strictEqual(selectionContract.selectedInput.value, '賣玉米', 'selection must update the live Other input value');
+    const manualSingle = selectionContract.manualQuickOther(selectionContract.singleField, '鞋業', 'Alpha');
+    selectionContract.ui.quickAnswers = { 'field-single': 'Alpha' };
+    selectionContract.ui.quickOtherAnswers = {};
+    selectionContract.applyOtherHistorySuggestion({ dataset: { field: 'field-single', context: 'quick', value: '鞋業' } });
+    assert.deepStrictEqual(selectionContract.stateSnapshot().quickAnswers, manualSingle.quickAnswers, 'single_choice historical Other must match manual selected-answer state');
+    assert.deepStrictEqual(selectionContract.stateSnapshot().quickOtherAnswers, manualSingle.quickOtherAnswers, 'single_choice historical Other must match manual other_text state');
+    assert.strictEqual(selectionContract.ui.quickAnswers['field-single'], '其他', 'single_choice historical Other must replace predefined selection with Other');
+    assert.strictEqual(selectionContract.ui.quickOtherAnswers['field-single'], '鞋業', 'single_choice historical Other must set CJK other_text');
+    assert.strictEqual(selectionContract.selectedInput.value, '鞋業', 'selection must update the live Other input value from canonical state');
     assert.strictEqual(selectionContract.getFocused(), true, 'selection must keep the input interaction stable after writeback');
-    assert.strictEqual(selectionContract.getRefreshedValue(), '賣玉米', 'rerender/refresh must preserve the selected value');
-    selectionContract.applyOtherHistorySuggestion({ dataset: { field: 'field-a', context: 'record', value: 'Record Other' } });
-    assert.strictEqual(selectionContract.workingOther['field-a'], 'Record Other', 'desktop/record click path must remain supported by the shared selector action');
+    assert.strictEqual(selectionContract.getRefreshedValue(), '鞋業', 'rerender/refresh must preserve the selected value');
+
+    const manualMultiple = selectionContract.manualQuickOther(selectionContract.multiField, '鞋業', ['Alpha']);
+    selectionContract.ui.quickAnswers = { 'field-multi': ['Alpha'] };
+    selectionContract.ui.quickOtherAnswers = {};
+    selectionContract.applyOtherHistorySuggestion({ dataset: { field: 'field-multi', context: 'quick', value: '鞋業' } });
+    assert.deepStrictEqual(selectionContract.stateSnapshot().quickAnswers, manualMultiple.quickAnswers, 'multiple_choice historical Other must match manual selected-answer state');
+    assert.deepStrictEqual(selectionContract.stateSnapshot().quickOtherAnswers, manualMultiple.quickOtherAnswers, 'multiple_choice historical Other must match manual other_text state');
+
+    selectionContract.ui.quickAnswers = { 'field-multi': ['Alpha', 'Beta'] };
+    selectionContract.ui.quickOtherAnswers = {};
+    selectionContract.applyOtherHistorySuggestion({ dataset: { field: 'field-multi', context: 'quick', value: '鞋業' } });
+    assert.deepStrictEqual(selectionContract.ui.quickAnswers['field-multi'], ['Alpha', 'Beta', '其他'], 'multiple_choice historical Other must preserve existing normal selections');
+    assert.strictEqual(selectionContract.ui.quickOtherAnswers['field-multi'], '鞋業');
+
+    selectionContract.ui.quickAnswers = { 'field-multi': ['Alpha', '其他'] };
+    selectionContract.ui.quickOtherAnswers = { 'field-multi': 'old' };
+    selectionContract.applyOtherHistorySuggestion({ dataset: { field: 'field-multi', context: 'quick', value: '鞋業' } });
+    assert.strictEqual(selectionContract.ui.quickAnswers['field-multi'].filter(value => value === '其他').length, 1, 'multiple_choice historical Other must not duplicate Other');
+    assert.strictEqual(selectionContract.ui.quickOtherAnswers['field-multi'], '鞋業', 'multiple_choice historical Other must update other_text when Other is already selected');
+
+    selectionContract.setQuickAnswer('field-single', 'Alpha');
+    assert.strictEqual(selectionContract.ui.quickOtherAnswers['field-single'], undefined, 'single_choice change away from Other must keep existing cleanup');
+    selectionContract.setQuickAnswer('field-multi', ['Alpha']);
+    assert.strictEqual(selectionContract.ui.quickOtherAnswers['field-multi'], undefined, 'multiple_choice uncheck Other must keep existing cleanup');
+
+    selectionContract.ui.quickAnswers = {};
+    selectionContract.ui.quickOtherAnswers = {};
+    assert.strictEqual(selectionContract.applyOtherValue(selectionContract.noOtherField, 'quick', '鞋業'), false, 'canonical Other helper must reject fields without allowOther');
+    assert.strictEqual(selectionContract.applyOtherValue(selectionContract.dropdownField, 'quick', '鞋業'), false, 'canonical Other helper must reject unsupported choice types');
+    assert.strictEqual(selectionContract.applyOtherValue(selectionContract.singleField, 'quick', '   '), false, 'canonical Other helper must reject empty historical values');
+
+    selectionContract.ui.quickAnswers = {};
+    selectionContract.ui.quickOtherAnswers = {};
+    selectionContract.ui.drawer.working = { 'field-single': 'Alpha' };
+    selectionContract.ui.drawer.workingOther = {};
+    selectionContract.applyOtherHistorySuggestion({ dataset: { field: 'field-single', context: 'record', value: 'Record Other' } });
+    assert.strictEqual(selectionContract.ui.drawer.working['field-single'], '其他', 'record historical Other must select Other in drawer working state');
+    assert.strictEqual(selectionContract.ui.drawer.workingOther['field-single'], 'Record Other', 'record historical Other must set drawer other_text state');
+    assert.strictEqual(selectionContract.ui.quickAnswers['field-single'], undefined, 'record historical Other must not leak into Quick Entry state');
+
+    const items = [selectionContract.singleField, selectionContract.multiField];
+    const manualSingleAnswers = selectionContract.cleanAnswersForItems(manualSingle.quickAnswers, items);
+    const manualSingleOther = selectionContract.cleanOtherAnswers(manualSingle.quickOtherAnswers, manualSingle.quickAnswers, items);
+    const historicalSingleAnswers = selectionContract.cleanAnswersForItems({ 'field-single': '其他' }, items);
+    const historicalSingleOther = selectionContract.cleanOtherAnswers({ 'field-single': '鞋業' }, { 'field-single': '其他' }, items);
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(selectionContract.payloadAnswersForItems(manualSingleAnswers, items, {}))), JSON.parse(JSON.stringify(selectionContract.payloadAnswersForItems(historicalSingleAnswers, items, {}))), 'single_choice manual/history answer payloads must be equivalent');
+    assert.deepStrictEqual(manualSingleOther, historicalSingleOther, 'single_choice manual/history other_text payloads must be equivalent');
+    const manualMultipleAnswers = selectionContract.cleanAnswersForItems(manualMultiple.quickAnswers, items);
+    const manualMultipleOther = selectionContract.cleanOtherAnswers(manualMultiple.quickOtherAnswers, manualMultiple.quickAnswers, items);
+    const historicalMultipleAnswers = selectionContract.cleanAnswersForItems({ 'field-multi': ['Alpha', '其他'] }, items);
+    const historicalMultipleOther = selectionContract.cleanOtherAnswers({ 'field-multi': '鞋業' }, { 'field-multi': ['Alpha', '其他'] }, items);
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(selectionContract.payloadAnswersForItems(manualMultipleAnswers, items, {}))), JSON.parse(JSON.stringify(selectionContract.payloadAnswersForItems(historicalMultipleAnswers, items, {}))), 'multiple_choice manual/history answer payloads must be equivalent');
+    assert.deepStrictEqual(manualMultipleOther, historicalMultipleOther, 'multiple_choice manual/history other_text payloads must be equivalent');
 }
 
 function assertAnalyticsChartTypeImplementationContract(managementSource, cssSource) {
