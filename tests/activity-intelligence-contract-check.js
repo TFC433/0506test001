@@ -2472,7 +2472,7 @@ async function assertOtherHistorySuggestionsV1Contract(managementSource, cssSour
         type: 'single_choice',
         title: 'Topic',
         options: ['Alpha'],
-        optionEntries: [],
+        optionEntries: [{ optionKey: IDS.optionAlpha, label: 'Alpha', value: 'Alpha' }],
         allowOther: true,
         settings: { allowOther: true, enableOtherHistorySuggestions: true },
         visible: true,
@@ -2514,6 +2514,25 @@ async function assertOtherHistorySuggestionsV1Contract(managementSource, cssSour
             field_intelligence: [activeContextField]
         }
     });
+    const productionChoiceValue = (field, value, otherText = 'fixture') => {
+        const row = historyHarness.service._answerRowForItem(field, value, otherText);
+        assert(row && row.value_jsonb !== undefined, 'test fixture must use production writer-shaped value_jsonb');
+        return row.value_jsonb;
+    };
+    const singleOtherValue = productionChoiceValue(historyField, OTHER_CHOICE_VALUE);
+    const singleNormalValue = productionChoiceValue(historyField, 'Alpha');
+    const multiOtherValue = productionChoiceValue(multiHistoryField, ['Alpha', OTHER_CHOICE_VALUE]);
+    const multiNormalValue = productionChoiceValue(multiHistoryField, ['Alpha']);
+    assert.deepStrictEqual(singleOtherValue, { value: OTHER_CHOICE_VALUE }, 'single_choice Other fixture must match canonical writer object shape');
+    assert.strictEqual(Array.isArray(multiOtherValue), true, 'multiple_choice Other fixture must match canonical writer array shape');
+    assert.strictEqual(historyHarness.service._otherHistoryAnswerHasOther({ valueJsonb: singleOtherValue }), true, 'single object-shaped value_jsonb Other must be detected');
+    assert.strictEqual(historyHarness.service._otherHistoryAnswerHasOther({ valueJsonb: multiOtherValue }), true, 'multiple array-shaped value_jsonb Other must remain detected');
+    assert.strictEqual(historyHarness.service._otherHistoryAnswerHasOther({ valueJsonb: singleNormalValue }), false, 'single normal object-shaped value_jsonb must not be detected as Other');
+    assert.strictEqual(historyHarness.service._otherHistoryAnswerHasOther({ valueJsonb: multiNormalValue }), false, 'multiple normal array-shaped value_jsonb must not be detected as Other');
+    assert.strictEqual(historyHarness.service._otherHistoryAnswerHasOther({ valueText: OTHER_CHOICE_VALUE }), true, 'legacy scalar value_text Other compatibility must remain supported');
+    assert.strictEqual(historyHarness.service._otherHistoryAnswerHasOther({ valueJsonb: [OTHER_CHOICE_VALUE] }), true, 'legacy primitive array Other compatibility must remain supported');
+    assert.strictEqual(historyHarness.service._otherHistoryAnswerHasOther({ valueJsonb: { label: OTHER_CHOICE_VALUE } }), true, 'object label Other compatibility must remain supported');
+    assert.strictEqual(historyHarness.service._otherHistoryAnswerHasOther({ valueJsonb: { optionKey: '__other__' } }), true, 'object optionKey Other compatibility must remain supported');
     const historySubmission = (id, answers, otherAnswers, createdAt, status = 'active', recordContext = 'visitor') => ({
         id,
         activityId: IDS.activity,
@@ -2530,21 +2549,21 @@ async function assertOtherHistorySuggestionsV1Contract(managementSource, cssSour
         answers,
         otherAnswers
     });
-    historyHarness.submissions.set('h1', historySubmission('h1', { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: 'Digital Twin' }, '2026-08-01T01:00:00.000Z'));
-    historyHarness.submissions.set('h2', historySubmission('h2', { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: 'digital twin' }, '2026-08-03T01:00:00.000Z'));
-    historyHarness.submissions.set('h3', historySubmission('h3', { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: 'Digital Twin' }, '2026-08-02T01:00:00.000Z'));
-    historyHarness.submissions.set('h4', historySubmission('h4', { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: 'AI Agent' }, '2026-08-04T01:00:00.000Z'));
-    historyHarness.submissions.set('h5', historySubmission('h5', { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: 'AI Agent' }, '2026-08-02T02:00:00.000Z'));
-    historyHarness.submissions.set('h6', historySubmission('h6', { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: '邊緣 AI' }, '2026-08-05T01:00:00.000Z'));
-    historyHarness.submissions.set('h7', historySubmission('h7', { [IDS.choiceKey]: 'Alpha' }, { [IDS.choiceKey]: 'Official must not count' }, '2026-08-06T01:00:00.000Z'));
-    historyHarness.submissions.set('h8', historySubmission('h8', { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: '   ' }, '2026-08-07T01:00:00.000Z'));
-    historyHarness.submissions.set('h9', historySubmission('h9', { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: 'Void must not count' }, '2026-08-08T01:00:00.000Z', 'void'));
-    historyHarness.submissions.set('h10', { ...historySubmission('h10', { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: 'Other Activity' }, '2026-08-09T01:00:00.000Z'), activityId: IDS.otherActivity });
-    historyHarness.submissions.set('h11', historySubmission('h11', { [IDS.numberKey]: OTHER_CHOICE_VALUE }, { [IDS.numberKey]: 'Other Field' }, '2026-08-10T01:00:00.000Z'));
-    historyHarness.submissions.set('h12', historySubmission('h12', { [IDS.longKey]: ['Alpha', OTHER_CHOICE_VALUE] }, { [IDS.longKey]: 'Multi Other' }, '2026-08-11T01:00:00.000Z'));
-    historyHarness.submissions.set('h13', historySubmission('h13', { [IDS.activeLongKey]: OTHER_CHOICE_VALUE }, { [IDS.activeLongKey]: 'Active Context Other' }, '2026-08-12T01:00:00.000Z', 'active', 'field_intelligence'));
+    historyHarness.submissions.set('h1', historySubmission('h1', { [IDS.choiceKey]: singleOtherValue }, { [IDS.choiceKey]: 'Digital Twin' }, '2026-08-01T01:00:00.000Z'));
+    historyHarness.submissions.set('h2', historySubmission('h2', { [IDS.choiceKey]: singleOtherValue }, { [IDS.choiceKey]: 'digital twin' }, '2026-08-03T01:00:00.000Z'));
+    historyHarness.submissions.set('h3', historySubmission('h3', { [IDS.choiceKey]: singleOtherValue }, { [IDS.choiceKey]: 'Digital Twin' }, '2026-08-02T01:00:00.000Z'));
+    historyHarness.submissions.set('h4', historySubmission('h4', { [IDS.choiceKey]: singleOtherValue }, { [IDS.choiceKey]: 'AI Agent' }, '2026-08-04T01:00:00.000Z'));
+    historyHarness.submissions.set('h5', historySubmission('h5', { [IDS.choiceKey]: singleOtherValue }, { [IDS.choiceKey]: 'AI Agent' }, '2026-08-02T02:00:00.000Z'));
+    historyHarness.submissions.set('h6', historySubmission('h6', { [IDS.choiceKey]: singleOtherValue }, { [IDS.choiceKey]: '鞋業' }, '2026-08-05T01:00:00.000Z'));
+    historyHarness.submissions.set('h7', historySubmission('h7', { [IDS.choiceKey]: singleNormalValue }, { [IDS.choiceKey]: 'Official must not count' }, '2026-08-06T01:00:00.000Z'));
+    historyHarness.submissions.set('h8', historySubmission('h8', { [IDS.choiceKey]: singleOtherValue }, { [IDS.choiceKey]: '   ' }, '2026-08-07T01:00:00.000Z'));
+    historyHarness.submissions.set('h9', historySubmission('h9', { [IDS.choiceKey]: singleOtherValue }, { [IDS.choiceKey]: 'Void must not count' }, '2026-08-08T01:00:00.000Z', 'void'));
+    historyHarness.submissions.set('h10', { ...historySubmission('h10', { [IDS.choiceKey]: singleOtherValue }, { [IDS.choiceKey]: 'Other Activity' }, '2026-08-09T01:00:00.000Z'), activityId: IDS.otherActivity });
+    historyHarness.submissions.set('h11', historySubmission('h11', { [IDS.numberKey]: singleOtherValue }, { [IDS.numberKey]: 'Other Field' }, '2026-08-10T01:00:00.000Z'));
+    historyHarness.submissions.set('h12', historySubmission('h12', { [IDS.longKey]: multiOtherValue }, { [IDS.longKey]: 'Multi Other' }, '2026-08-11T01:00:00.000Z'));
+    historyHarness.submissions.set('h13', historySubmission('h13', { [IDS.activeLongKey]: productionChoiceValue(activeContextField, OTHER_CHOICE_VALUE) }, { [IDS.activeLongKey]: 'Active Context Other' }, '2026-08-12T01:00:00.000Z', 'active', 'field_intelligence'));
     ['Topic 1', 'Topic 2', 'Topic 3', 'Topic 4'].forEach((value, index) => {
-        historyHarness.submissions.set(`extra-${index}`, historySubmission(`extra-${index}`, { [IDS.choiceKey]: OTHER_CHOICE_VALUE }, { [IDS.choiceKey]: value }, `2026-08-${13 + index}T01:00:00.000Z`));
+        historyHarness.submissions.set(`extra-${index}`, historySubmission(`extra-${index}`, { [IDS.choiceKey]: singleOtherValue }, { [IDS.choiceKey]: value }, `2026-08-${13 + index}T01:00:00.000Z`));
     });
     const historyResult = await historyHarness.service.getFormAssistSuggestions(IDS.activity, {
         kind: 'other_history',
@@ -2580,9 +2599,9 @@ async function assertOtherHistorySuggestionsV1Contract(managementSource, cssSour
         kind: 'other_history',
         fieldKey: IDS.choiceKey,
         formContext: 'visitor',
-        q: '邊緣'
+        q: '鞋'
     });
-    assert.strictEqual(cjkHistory.suggestions[0].value, '邊緣 AI', 'CJK Other text must round-trip through backend suggestions');
+    assert.strictEqual(cjkHistory.suggestions[0].value, '鞋業', 'CJK Other text must round-trip through backend suggestions');
     const multiHistory = await historyHarness.service.getFormAssistSuggestions(IDS.activity, {
         kind: 'other_history',
         fieldKey: IDS.longKey,

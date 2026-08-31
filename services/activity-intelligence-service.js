@@ -1358,12 +1358,18 @@ class ActivityIntelligenceService {
     _otherHistoryAnswerHasOther(row = {}) {
         if (String(row.valueText || row.value_text || '').trim() === OTHER_ANSWER_VALUE) return true;
         const value = row.valueJsonb !== undefined ? row.valueJsonb : row.value_jsonb;
-        if (!Array.isArray(value)) return false;
-        return value.some(entry => {
+        return this._persistedChoiceEntries(value).some(entry => {
             if (entry === OTHER_ANSWER_VALUE) return true;
             if (!entry || typeof entry !== 'object') return false;
             return entry.value === OTHER_ANSWER_VALUE || entry.label === OTHER_ANSWER_VALUE || entry.optionKey === '__other__';
         });
+    }
+
+    _persistedChoiceEntries(value) {
+        if (value === null || value === undefined || value === '') return [];
+        if (Array.isArray(value)) return value;
+        if (typeof value === 'object') return [value];
+        return [];
     }
 
     _otherHistorySuggestionKey(value) {
