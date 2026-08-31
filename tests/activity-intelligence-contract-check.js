@@ -3915,6 +3915,85 @@ function assertRecordsDoubleLoadRemovalV1Contract(managementSource) {
     assert(extractFunctionDeclaration(managementSource, 'exportFilteredRecordsCsv').includes('await loadRecordsForActivity(activity.id, { includeVoid: true });'), 'CSV export must still explicitly hydrate full records');
 }
 
+function assertScopedTabRenderV1Contract(managementSource) {
+    const countOccurrences = (source, value) => (source.match(new RegExp(value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length;
+
+    const shellSource = extractFunctionDeclaration(managementSource, 'shell');
+    assert(shellSource.includes('${renderWorkspaceMain(content)}'), 'global shell must use the canonical workspace main helper');
+
+    const mainSource = extractFunctionDeclaration(managementSource, 'renderWorkspaceMain');
+    assert(mainSource.includes('<main class="aim-main">'), 'scoped V1 must keep .aim-main as the replacement boundary');
+    assert(mainSource.includes('${renderPageHeader()}'), 'workspace main must reuse the canonical page header renderer');
+    assert(mainSource.includes('<div class="aim-page-content">${content}</div>'), 'workspace main must preserve the canonical page content wrapper');
+
+    const eligibilitySource = extractFunctionDeclaration(managementSource, 'canUseScopedWorkspaceNavigation');
+    assert(eligibilitySource.includes('!currentUser || !currentUser.authenticated || isGuestUser()'), 'scoped navigation must require authenticated non-guest users');
+    assert(eligibilitySource.includes('if (isMobileFormViewport()) return false;'), 'scoped navigation must leave mobile on the global render path');
+    assert(eligibilitySource.includes('if (hasActiveRootOverlay()) return false;'), 'scoped navigation must leave active root-level overlays on the global render path');
+    assert(eligibilitySource.includes("previous.view !== 'workspace' || ui.view !== 'workspace'"), 'scoped navigation must be workspace-only');
+    assert(eligibilitySource.includes('previous.selectedActivityId !== ui.selectedActivityId'), 'scoped navigation must be same-activity only');
+    assert(eligibilitySource.includes("previous.tab === 'analytics' && ui.tab === 'records' && ui.records.scope === 'entry'"), 'Analytics to Records / Quick Entry must be the only Records V1 destination');
+    assert(eligibilitySource.includes('publishedFormLoadedForActivity(ui.selectedActivityId, activeRecordFormContext())'), 'Analytics to Records / Quick Entry must require warm published form cache for the active record context');
+    assert(eligibilitySource.includes("previous.tab === 'records' && ui.tab === 'analytics' && canUseAnalytics()"), 'Records to Analytics must be the only Analytics V1 destination');
+    assert(eligibilitySource.includes('recordsLoadedForActivity(ui.selectedActivityId)'), 'Records to Analytics must require warm full-record cache');
+
+    const scopedRefreshSource = extractFunctionDeclaration(managementSource, 'refreshWorkspaceNavigationDestination');
+    assert(scopedRefreshSource.includes("root.querySelector('.aim-main')"), 'scoped refresh must target .aim-main');
+    assert(scopedRefreshSource.includes("root.querySelector('.aim-breadcrumb')"), 'scoped refresh must verify breadcrumb exists before localized refresh');
+    assert(scopedRefreshSource.includes("root.querySelector('.aim-sidebar')"), 'scoped refresh must keep sidebar structure stable and only update active state');
+    assert(scopedRefreshSource.includes('disposeActivityAnalyticsCharts();'), 'Analytics leave must call canonical chart disposal');
+    assert(scopedRefreshSource.includes('pendingAnalyticsChartConfigs = [];'), 'scoped chart lifecycle must clear pending chart configs');
+    assert(scopedRefreshSource.includes('analyticsChartRenderToken += 1;'), 'scoped chart lifecycle must invalidate pending chart callbacks');
+    assert(scopedRefreshSource.includes('main.outerHTML = renderWorkspaceMain(renderWorkspace());'), 'scoped refresh must reuse canonical workspace renderers');
+    assert(scopedRefreshSource.includes('refreshWorkspaceBreadcrumb();'), 'scoped refresh must localize breadcrumb refresh');
+    assert(scopedRefreshSource.includes('refreshSidebarActiveState();'), 'scoped refresh must localize sidebar active-state refresh');
+    assert(scopedRefreshSource.includes('bindWorkspacePageInputs(nextMain);'), 'scoped refresh must restore destination direct bindings only inside the new main region');
+    assert(scopedRefreshSource.includes("if (ui.tab === 'analytics') renderActivityAnalyticsCharts();"), 'Analytics enter must create charts only after Analytics DOM exists');
+
+    const sidebarRefreshSource = extractFunctionDeclaration(managementSource, 'refreshSidebarActiveState');
+    assert(sidebarRefreshSource.includes("'.aim-sidebar .aim-nav-item[data-action=\"tab\"]'"), 'sidebar refresh must update existing tab nav nodes only');
+    assert(sidebarRefreshSource.includes("node.setAttribute('aria-current', node.dataset.tab === active ? 'page' : 'false')"), 'sidebar refresh must preserve aria-current active-state semantics');
+
+    const bindInputsSource = extractFunctionDeclaration(managementSource, 'bindInputs');
+    assert(bindInputsSource.includes('bindWorkspacePageInputs(document);'), 'global bindInputs must keep page binding parity through the extracted helper');
+    assert(bindInputsSource.includes('bindActivityDraftField') && bindInputsSource.includes('bindSettingsField'), 'global bindInputs must keep existing dialog/settings direct bindings');
+    assert(bindInputsSource.includes('bindFormDesignTextareas()') && bindInputsSource.includes('bindFormPreviewControls()'), 'global bindInputs must keep Form Designer bindings on global render');
+    assert(bindInputsSource.includes('bindCardPickerSearch()') && bindInputsSource.includes('bindAnalyticsAiPresetInputs()'), 'global bindInputs must keep root-level drawer/dialog binding coverage');
+
+    const pageBindingSource = extractFunctionDeclaration(managementSource, 'bindWorkspacePageInputs');
+    assert(pageBindingSource.includes('bindRecordSearchIn(rootNode);'), 'scoped page binding must restore desktop Records search');
+    assert(pageBindingSource.includes('bindMobileRecordSearchIn(rootNode);'), 'global binding parity must preserve existing mobile search binding');
+    assert(pageBindingSource.includes("bindIn(rootNode, 'aim-record-recorder'"), 'scoped page binding must restore recorder filter binding');
+    assert(pageBindingSource.includes("bindIn(rootNode, 'aim-record-state'"), 'scoped page binding must restore state filter binding');
+    assert(pageBindingSource.includes("bindRecordDateFieldIn(rootNode, 'aim-record-start', 'start')"), 'scoped page binding must restore start-date binding');
+    assert(pageBindingSource.includes("bindRecordDateFieldIn(rootNode, 'aim-record-end', 'end')"), 'scoped page binding must restore end-date binding');
+    assert(pageBindingSource.includes("bindCheckIn(rootNode, 'aim-record-low'"), 'scoped page binding must restore low-completeness filter binding');
+    assert(pageBindingSource.includes("rootNode.querySelectorAll('.aim-record-choice-filter')"), 'scoped page binding must restore choice filter bindings');
+    assert(pageBindingSource.includes("rootNode.querySelectorAll('.aim-show-void-records-input')"), 'scoped page binding must restore show-void bindings');
+    assert(pageBindingSource.includes("bindIn(rootNode, 'aim-analytics-ai-question'"), 'scoped page binding must restore Analytics AI question binding');
+    assert(pageBindingSource.includes("bindCheckIn(rootNode, 'aim-analytics-ai-crm'"), 'scoped page binding must restore Analytics CRM checkbox binding');
+    assert(pageBindingSource.includes('bindFollowUpInputs(rootNode);'), 'scoped page binding must restore Follow-up manual checkbox bindings');
+    assert(pageBindingSource.includes('bindRecordAnswerControls(rootNode);'), 'scoped page binding must restore record drawer answer bindings when present in the scoped region');
+    assert(pageBindingSource.includes('bindQuickAnswerControls(rootNode);'), 'scoped page binding must restore Quick Entry direct bindings');
+    assert(pageBindingSource.includes('bindAutoGrowingTextareasIn(rootNode);'), 'scoped page binding must restore auto-growing textareas');
+
+    const clickStart = managementSource.indexOf("root.addEventListener('click'");
+    const bindInputsStart = managementSource.indexOf('function bindInputs', clickStart);
+    const clickSource = clickStart >= 0 && bindInputsStart > clickStart ? managementSource.slice(clickStart, bindInputsStart) : '';
+    assert(clickSource.includes('const previousNavigation = captureWorkspaceNavigationState();'), 'tab click must capture previous workspace navigation state');
+    assert(clickSource.includes('selectTab(el.dataset.tab);'), 'tab click must preserve canonical selectTab semantics');
+    assert(clickSource.includes('const useScopedNavigation = canUseScopedWorkspaceNavigation(previousNavigation);'), 'tab click must use deterministic scoped eligibility');
+    assert(clickSource.includes("if (ui.tab === 'records' && ui.records.scope === 'entry')"), 'Records entry loader branch must remain explicit');
+    assert(clickSource.includes('startBackgroundRecordListLoadForActivity(ui.selectedActivityId, { includeVoid: true });'), 'Records entry must keep existing projection background load semantics');
+    assert(clickSource.includes("else if (ui.tab === 'analytics') await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });"), 'Analytics navigation must keep existing full-record loader semantics');
+    assert(clickSource.includes('if (useScopedNavigation)') && clickSource.includes('if (!refreshWorkspaceNavigationDestination(previousNavigation)) render();'), 'eligible warm tab navigation must use scoped refresh with global fallback');
+    assert(clickSource.includes("if (action === 'mobile-record-scope'"), 'mobile record scope branch must remain on existing path');
+
+    assert.strictEqual(countOccurrences(managementSource, "root.addEventListener('click'"), 1, 'root click delegation must remain once-only');
+    assert.strictEqual(countOccurrences(managementSource, "root.addEventListener('pointerdown'"), 1, 'root pointerdown delegation must remain once-only');
+    assert.strictEqual(countOccurrences(managementSource, "window.addEventListener('keydown'"), 1, 'window keydown delegation must remain once-only');
+}
+
 function assertRecordsCountProjectionConsistencyV1Contract(managementSource) {
     const countSource = extractFunctionDeclaration(managementSource, 'mobileRecordScopeCounts');
     assert(countSource.includes('recordListRowsFor(activity.id)'), 'mobile Records counters must derive from record-list projection rows');
@@ -5969,6 +6048,7 @@ async function main() {
     await assertOverviewLoadOptimizationContract(managementSource, apiSource, routesSource, controllerSource);
     await assertRecordListProjectionV1Contract({ managementSource, apiSource, routesSource, controllerSource, serviceSource, readerSource });
     assertRecordsDoubleLoadRemovalV1Contract(managementSource);
+    assertScopedTabRenderV1Contract(managementSource);
     assertRecordsCountProjectionConsistencyV1Contract(managementSource);
     assertReleaseStabilizationHistoricalLookupContract({ managementSource, apiSource, routesSource, controllerSource, serviceSource });
     await assertSystemRepairPhase1FormAssistContract({ managementSource, serviceSource }, service);

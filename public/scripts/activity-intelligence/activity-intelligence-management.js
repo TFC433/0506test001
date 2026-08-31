@@ -1277,13 +1277,7 @@
       setFormAuthRootState(false);
       replaceHtmlPreservingStableImages(root, guestShell());
       bindInputs();
-      if (ui.focusQuickFirst) {
-        ui.focusQuickFirst = false;
-        window.setTimeout(() => {
-          const first = document.querySelector('.aim-quick-input:not([disabled])');
-          if (first) first.focus();
-        }, 0);
-      }
+      focusQuickFirstIfNeeded();
       return;
     }
 
@@ -1300,13 +1294,7 @@
     replaceHtmlPreservingStableImages(root, shell(content));
     bindInputs();
     renderActivityAnalyticsCharts();
-    if (ui.focusQuickFirst) {
-      ui.focusQuickFirst = false;
-      window.setTimeout(() => {
-        const first = document.querySelector('.aim-quick-input:not([disabled])');
-        if (first) first.focus();
-      }, 0);
-    }
+    focusQuickFirstIfNeeded();
   }
 
   function shell(content) {
@@ -1323,10 +1311,7 @@
             </div>
           </header>
           ${renderMobileFramework()}
-          <main class="aim-main">
-            ${renderPageHeader()}
-            <div class="aim-page-content">${content}</div>
-          </main>
+          ${renderWorkspaceMain(content)}
         </div>
       </div>
       ${renderDialog()}
@@ -1339,6 +1324,15 @@
       ${renderHardDeleteConfirmDialog()}
       ${renderCardPickerDialog()}
       ${ui.toast ? `<div class="aim-toast" role="status">${Store.escapeHtml(ui.toast)}</div>` : ''}
+    `;
+  }
+
+  function renderWorkspaceMain(content) {
+    return `
+      <main class="aim-main">
+        ${renderPageHeader()}
+        <div class="aim-page-content">${content}</div>
+      </main>
     `;
   }
 
@@ -1422,6 +1416,99 @@
       mine: rows.filter(recordBelongsToCurrentUser).length,
       all: rows.length
     };
+  }
+
+  function captureWorkspaceNavigationState() {
+    return {
+      view: ui.view,
+      tab: ui.tab,
+      recordsScope: ui.records && ui.records.scope,
+      selectedActivityId: ui.selectedActivityId || state.selectedActivityId || ''
+    };
+  }
+
+  function publishedFormLoadedForActivity(activityId, formContext) {
+    const bundle = formBundles.get(formBundleCacheKey(activityId, formContext));
+    return Boolean(bundle && bundle.published && bundle.published.versionId);
+  }
+
+  function hasActiveRootOverlay() {
+    return Boolean(
+      ui.drawer ||
+      ui.dialog ||
+      ui.formDesignConfirm ||
+      ui.analyticsAiConfirm ||
+      ui.formAssistCardImportConfirm ||
+      ui.analyticsChartModal ||
+      ui.companyKpiModal ||
+      ui.hardDeleteConfirm ||
+      ui.cardPicker
+    );
+  }
+
+  function canUseScopedWorkspaceNavigation(previous) {
+    if (!previous || !currentUser || !currentUser.authenticated || isGuestUser()) return false;
+    if (isMobileFormViewport()) return false;
+    if (hasActiveRootOverlay()) return false;
+    if (previous.view !== 'workspace' || ui.view !== 'workspace') return false;
+    if (!ui.selectedActivityId || previous.selectedActivityId !== ui.selectedActivityId) return false;
+    if (previous.tab === 'analytics' && ui.tab === 'records' && ui.records.scope === 'entry') {
+      return publishedFormLoadedForActivity(ui.selectedActivityId, activeRecordFormContext());
+    }
+    if (previous.tab === 'records' && ui.tab === 'analytics' && canUseAnalytics()) {
+      return recordsLoadedForActivity(ui.selectedActivityId);
+    }
+    return false;
+  }
+
+  function refreshWorkspaceNavigationDestination(previous) {
+    const main = root.querySelector('.aim-main');
+    const breadcrumb = root.querySelector('.aim-breadcrumb');
+    const sidebar = root.querySelector('.aim-sidebar');
+    if (!main || !breadcrumb || !sidebar) return false;
+
+    const leavingAnalytics = previous && previous.tab === 'analytics' && ui.tab !== 'analytics';
+    const enteringAnalytics = previous && previous.tab !== 'analytics' && ui.tab === 'analytics';
+    if (leavingAnalytics) disposeActivityAnalyticsCharts();
+    if (leavingAnalytics || enteringAnalytics) {
+      pendingAnalyticsChartConfigs = [];
+      analyticsChartRenderToken += 1;
+    }
+
+    main.outerHTML = renderWorkspaceMain(renderWorkspace());
+    refreshWorkspaceBreadcrumb();
+    refreshSidebarActiveState();
+
+    const nextMain = root.querySelector('.aim-main');
+    if (!nextMain) return false;
+    bindWorkspacePageInputs(nextMain);
+    fitRecordPreviewBadges();
+    if (ui.tab === 'analytics') renderActivityAnalyticsCharts();
+    focusQuickFirstIfNeeded();
+    return true;
+  }
+
+  function refreshWorkspaceBreadcrumb() {
+    const breadcrumb = root.querySelector('.aim-breadcrumb');
+    if (!breadcrumb) return false;
+    breadcrumb.outerHTML = renderBreadcrumb();
+    return true;
+  }
+
+  function refreshSidebarActiveState() {
+    const active = activeModule();
+    root.querySelectorAll('.aim-sidebar .aim-nav-item[data-action="tab"]').forEach(node => {
+      node.setAttribute('aria-current', node.dataset.tab === active ? 'page' : 'false');
+    });
+  }
+
+  function focusQuickFirstIfNeeded() {
+    if (!ui.focusQuickFirst) return;
+    ui.focusQuickFirst = false;
+    window.setTimeout(() => {
+      const first = document.querySelector('.aim-quick-input:not([disabled])');
+      if (first) first.focus();
+    }, 0);
   }
 
   function renderPreAuthGate(options = {}) {
@@ -7069,7 +7156,9 @@
       await chooseCurrentActivity(el.dataset.id);
     }
     if (action === 'tab') {
+      const previousNavigation = captureWorkspaceNavigationState();
       selectTab(el.dataset.tab);
+      const useScopedNavigation = canUseScopedWorkspaceNavigation(previousNavigation);
       if (ui.tab === 'overview' && ui.view === 'workspace') await loadPublishedFormForActivity(ui.selectedActivityId);
       if (ui.tab === 'form') await loadFormBundleForActivity(ui.selectedActivityId, currentFormContext());
       if (ui.tab === 'records' && ui.records.scope === 'entry') {
@@ -7077,6 +7166,11 @@
         startBackgroundRecordListLoadForActivity(ui.selectedActivityId, { includeVoid: true });
       } else if (ui.tab === 'records') await loadRecordListProjectionsForActivity(ui.selectedActivityId, { includeVoid: true });
       else if (ui.tab === 'analytics') await loadRecordsForActivity(ui.selectedActivityId, { includeVoid: true });
+      if (useScopedNavigation) {
+        save();
+        if (!refreshWorkspaceNavigationDestination(previousNavigation)) render();
+        return;
+      }
     }
     if (action === 'sort' && canManageActivities()) sort(el.dataset.key);
     if (action === 'clear-overview' && canManageActivities()) ui.overview = { q: '', status: 'all', sort: 'name', dir: 'asc' };
@@ -7865,43 +7959,49 @@
     bindFormDesignTextareas();
     bindThumbnailMediaControls();
     bindFormPreviewControls();
-    bindRecordSearch();
-    bindMobileRecordSearch();
-    bind('aim-record-recorder', value => { ui.records.recorder = value; }, 'change');
-    bind('aim-record-state', value => {
-      ui.records.state = value;
-      ui.records.showVoidRecords = value !== 'normal';
-    }, 'change');
     bindCardPickerSearch();
-    bindRecordDateField('aim-record-start', 'start');
-    bindRecordDateField('aim-record-end', 'end');
-    bindCheck('aim-record-low', value => { ui.records.low = value; });
-    document.querySelectorAll('.aim-record-choice-filter').forEach(node => node.addEventListener('change', () => {
-      setRecordChoiceFilter(node.dataset.field, node.value, node.checked);
-      save();
-      render();
-    }));
-    document.querySelectorAll('.aim-show-void-records-input').forEach(node => node.addEventListener('change', () => {
-      setVoidRecordsVisibility(node.checked);
-      render();
-    }));
-    bind('aim-analytics-ai-question', value => {
-      ui.analytics.ai.question = value;
-      ui.analytics.ai.inputError = '';
-    }, 'input', false);
-    bindCheck('aim-analytics-ai-crm', value => { ui.analytics.ai.crmContextEnabled = isSuperAdmin() && value; });
     bindAnalyticsAiPresetInputs();
-    bindFollowUpInputs();
-    bindRecordAnswerControls(document);
-    bindQuickAnswerControls(document);
-    bindAutoGrowingTextareas();
+    bindWorkspacePageInputs(document);
     initFormDesignAutoGrow();
     fitRecordPreviewBadges();
   }
 
-  function bindFollowUpInputs() {
+  function bindWorkspacePageInputs(scope) {
+    const rootNode = scope || document;
+    bindRecordSearchIn(rootNode);
+    bindMobileRecordSearchIn(rootNode);
+    bindIn(rootNode, 'aim-record-recorder', value => { ui.records.recorder = value; }, 'change');
+    bindIn(rootNode, 'aim-record-state', value => {
+      ui.records.state = value;
+      ui.records.showVoidRecords = value !== 'normal';
+    }, 'change');
+    bindRecordDateFieldIn(rootNode, 'aim-record-start', 'start');
+    bindRecordDateFieldIn(rootNode, 'aim-record-end', 'end');
+    bindCheckIn(rootNode, 'aim-record-low', value => { ui.records.low = value; });
+    rootNode.querySelectorAll('.aim-record-choice-filter').forEach(node => node.addEventListener('change', () => {
+      setRecordChoiceFilter(node.dataset.field, node.value, node.checked);
+      save();
+      render();
+    }));
+    rootNode.querySelectorAll('.aim-show-void-records-input').forEach(node => node.addEventListener('change', () => {
+      setVoidRecordsVisibility(node.checked);
+      render();
+    }));
+    bindIn(rootNode, 'aim-analytics-ai-question', value => {
+      ui.analytics.ai.question = value;
+      ui.analytics.ai.inputError = '';
+    }, 'input', false);
+    bindCheckIn(rootNode, 'aim-analytics-ai-crm', value => { ui.analytics.ai.crmContextEnabled = isSuperAdmin() && value; });
+    bindFollowUpInputs(rootNode);
+    bindRecordAnswerControls(rootNode);
+    bindQuickAnswerControls(rootNode);
+    bindAutoGrowingTextareasIn(rootNode);
+  }
+
+  function bindFollowUpInputs(scope) {
     if (!ui.followUp) ui.followUp = defaultFollowUpState();
-    document.querySelectorAll('.aim-follow-up-manual').forEach(node => node.addEventListener('change', () => {
+    const rootNode = scope || document;
+    rootNode.querySelectorAll('.aim-follow-up-manual').forEach(node => node.addEventListener('change', () => {
       updateFollowUpManualField(node.dataset.id, node.dataset.field, node.checked);
     }));
   }
@@ -8631,12 +8731,17 @@
   }
 
   function bindRecordDateField(id, key) {
-    const node = document.getElementById(id);
+    bindRecordDateFieldIn(document, id, key);
+  }
+
+  function bindRecordDateFieldIn(scope, id, key) {
+    const rootNode = scope || document;
+    const node = scopedElementById(rootNode, id);
     if (!node) return;
     node.addEventListener('change', () => {
       ui.records[key] = node.value;
       ui.records.filterError = '';
-      const error = document.getElementById('aim-record-date-error');
+      const error = scopedElementById(rootNode, 'aim-record-date-error');
       if (error) error.textContent = '';
     });
   }
@@ -8662,7 +8767,11 @@
   }
 
   function bindRecordSearch() {
-    const node = document.getElementById('aim-record-q');
+    bindRecordSearchIn(document);
+  }
+
+  function bindRecordSearchIn(scope) {
+    const node = scopedElementById(scope || document, 'aim-record-q');
     if (!node) return;
     let composing = false;
     const update = () => {
@@ -8681,7 +8790,11 @@
   }
 
   function bindMobileRecordSearch() {
-    const node = document.getElementById('aim-mobile-record-q');
+    bindMobileRecordSearchIn(document);
+  }
+
+  function bindMobileRecordSearchIn(scope) {
+    const node = scopedElementById(scope || document, 'aim-mobile-record-q');
     if (!node) return;
     let composing = false;
     const update = () => {
@@ -8737,7 +8850,11 @@
 
 
   function bind(id, handler, eventName, rerender) {
-    const node = document.getElementById(id);
+    bindIn(document, id, handler, eventName, rerender);
+  }
+
+  function bindIn(scope, id, handler, eventName, rerender) {
+    const node = scopedElementById(scope || document, id);
     if (!node) return;
     node.addEventListener(eventName || 'input', () => {
       handler(node.value);
@@ -8750,9 +8867,18 @@
   }
 
   function bindCheck(id, handler) {
-    const node = document.getElementById(id);
+    bindCheckIn(document, id, handler);
+  }
+
+  function bindCheckIn(scope, id, handler) {
+    const node = scopedElementById(scope || document, id);
     if (!node) return;
     node.addEventListener('change', () => { handler(node.checked); save(); render(); });
+  }
+
+  function scopedElementById(scope, id) {
+    if (!scope || scope === document || typeof scope.getElementById === 'function') return document.getElementById(id);
+    return scope.querySelector(`#${cssEscape(id)}`);
   }
 
   function selectTab(tabName) {
