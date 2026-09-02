@@ -29,6 +29,8 @@ Every future Gemini/Codex CRM task must follow this order:
 7. Use targeted `rg`/search for runtime linkage when needed.
 8. Stop and report if the task requires out-of-scope files, schema/RLS/GRANT changes, product decisions, or browser/runtime confirmation.
 
+One evidence pass is sufficient when ownership is known, the symptom is confirmed, scope is frozen, product semantics are decided, and the safe implementation boundary is evidenced. Additional forensic passes are required only when a new evidence gap materially blocks safe implementation. This does not weaken ZERO ASSUMPTION; it prevents redundant context gathering after the necessary evidence exists.
+
 ## 3. Necessary Docs Only / Task-Tiered Docs Reading
 
 Reading docs is not free and can waste Gemini/Codex usage.
@@ -51,17 +53,10 @@ Read these only when the task matches the topic:
 
 * `docs/audit-session-log-governance.md`
   Use for audit/session architecture, audit taxonomy, session lifecycle, backend mutation audit hooks, audit redaction rules, or manager-log future work.
-* `docs/echarts-migration-record.md`
-  Use for chart, ECharts, Dashboard analytics, Sales Analysis chart, Taiwan map, or chart style migration work.
-* `docs/highcharts-highmaps-remaining-references-audit.md`
-  Historical Highcharts / Highmaps audit. Use only when reviewing the completed retirement history or verifying `DOC_HISTORY_ONLY` references. Do not treat docs-only Highcharts mentions as active runtime/package/vendor evidence.
+* `docs/activity-intelligence-stage-closure-2026-08.md`
+  Use for Activity Intelligence / FANUC Forms architecture, accepted stage states, protected form semantics, Records performance boundaries, Scoped Tab Render, or the next Records pagination workstream.
 * `docs/schema/audit-logs-v1.sql`
   Keep available for audit/session schema-related tasks when schema evidence is explicitly required.
-
-Weekend Forensics archive:
-
-* `docs/forensics/wknd/results/**`
-  Archived planning-evidence area for the completed Weekend Forensics campaign. It is not mandatory baseline reading for every task. Consult it only when a task uses Weekend Forensics-derived planning, repo-wide LLM safety, source/generated/vendor/archive boundaries, or high-risk planning assumptions. It is not source code, not generated source, not patch target content, and does not authorize cleanup or deletion.
 
 ## 5. Default No-Read Content
 
@@ -253,11 +248,15 @@ Report inspected files and intentionally skipped files.
 
 ## 13. Changelog
 
+### 2026-09-02
+
+* Removed routing to superseded campaign-level forensics and completed chart-migration documents.
+* Added the Activity Intelligence stage archive as a conditional topic document.
+* Clarified that one sufficient evidence pass is enough and additional forensics are only required for material evidence gaps.
+
 ### 2026-07-06
 
 * Recorded completed Highcharts / Highmaps retirement scan rule: docs-only Highcharts mentions are `DOC_HISTORY_ONLY`, while ECharts and `public/assets/maps/taiwan.json` remain active scan targets.
-* Classified `docs/forensics/wknd/results/**` as archived Weekend Forensics planning evidence, not mandatory baseline reading or patch target content.
-* Clarified that Weekend Forensics archive consultation is conditional and does not authorize cleanup or deletion.
 
 ### 2026-06-18
 

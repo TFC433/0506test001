@@ -10,7 +10,7 @@ This document does not authorize deletion or runtime changes by itself. Any futu
 
 - Existing functionality must not be affected.
 - No deletion without evidence.
-- Run read-only forensic before any cleanup patch.
+- Establish current ownership and dependency evidence before any cleanup patch. One sufficient evidence pass is enough when scope and safe boundaries are already known; repeat forensics only for a material evidence gap.
 - Fallback and rollback paths must be preserved unless explicitly approved.
 - Runtime behavior is more important than file count reduction.
 - Generated files must not be hand-edited.
@@ -42,12 +42,15 @@ This document does not authorize deletion or runtime changes by itself. Any futu
 - Sales Analysis `成交類型` donut must not be documented as fully gapless.
 - Highcharts / Highmaps retirement is completed. ECharts and `public/assets/maps/taiwan.json` remain active and must not be removed as part of Highcharts cleanup.
 - CRM RAW Contact SQL authority workstream is closed with UI/Product PASS on 2026-07-15. `public.raw_contact_captures` is the CRM RAW runtime authority; dormant RAW Sheet compatibility code is protected until a separate retirement audit.
+- Activity Intelligence is a reusable Form Designer / Form Engine platform; current questions and fields are not hardcoded product schema.
+- Preserve Form Engine canonical answer semantics, Quick Entry state, Person / Company historical assist, Generic Other single/multiple behavior, projection-owned Records counts, Analytics semantics, and Follow-up semantics.
+- Scoped Tab Render V1 is an opt-in `.aim-main` desktop same-activity warm-navigation boundary. Preserve the authoritative global `render()` fallback and the mobile global-render fallback.
+- Records Projection does not make full-submission Analytics/export/Follow-up consumers obsolete. Answer Hydration and projection paths have consumer-specific boundaries.
 - Current governance docs:
   - `docs/architecture-governance.md`
   - `docs/tfc-crm-ui-style-governance.md`
   - `docs/repo-operational-consolidation-report.md`
-  - `docs/echarts-migration-record.md`
-  - `docs/highcharts-highmaps-remaining-references-audit.md`
+  - `docs/activity-intelligence-stage-closure-2026-08.md`
   - `docs/supabase-access-sop.md`
 
 ## 4. Audit Summary
@@ -157,21 +160,20 @@ Protected boundaries:
 - Do not remove backend/API `salesModel` support as part of frontend UI cleanup.
 - Do not convert the completed Sales Analysis frontend patch series into backend/API/DB work.
 
-## 4.4 2026-07 Weekend Forensics Planning Baseline Caution
+## 4.4 Activity Intelligence Cleanup Boundary
 
-Weekend Forensics is planning-quality evidence only.
+Current performance paths are additive, scoped architecture, not proof that older or broader paths are dead.
 
-It does not approve:
+Do not classify any of the following as obsolete solely because Record List Projection or Scoped Tab Render exists:
 
-- cleanup
-- deletion
-- refactor
-- migration
-- patching
+- the large Activity Intelligence management module;
+- global `render()` fallback;
+- state/cache maps;
+- full-submission consumers for Analytics, Follow-up, export, or detail/edit;
+- mobile global rendering;
+- Form Designer or Form Engine normalization/mutation paths.
 
-Cleanup candidates still require targeted evidence, explicit scope, and human approval before any future patch.
-
-Consult `docs/forensics/wknd/results/17-weekend-planning-baseline.md` before using Weekend Forensics-derived planning.
+Future Records server pagination is a separate, not-yet-implemented workstream. It must preserve filtering, search, sorting, and count correctness together. Cleanup of full-submission consumers, cache ownership, or global rendering requires separate evidence and scope.
 
 ## 4.5 2026-07 RAW Contact SQL Authority Cleanup Boundary
 
@@ -254,6 +256,7 @@ Do not delete or modify these without separate approval:
 - RAW/Sheet compatibility readers and writers.
 - Legacy event reader paths that preserve historical event visibility.
 - Restoring `repomix-packs/**` as tracked source. Local regeneration is allowed through `scripts/**/pack-*.ps1` when explicit context packs are needed.
+- Activity Intelligence Form Engine semantics, Quick Entry state, assist/Other-history behavior, projection counts, Analytics/Follow-up semantics, scoped-render opt-in boundary, global render fallback, or mobile fallback.
 
 This generated-output deletion does not authorize runtime source cleanup, docs archive deletion, fallback removal, charting cleanup, CSS cleanup, route cleanup, SQL-only migration, or removal of other generated/vendor/archive areas.
 
@@ -287,3 +290,12 @@ Recommended minimum validation for runtime cleanup:
 - Static reference search for each changed symbol or selector.
 - Page/module-specific smoke validation approved by the user.
 - Explicit confirmation that accepted baselines remain unchanged.
+
+## 10. Changelog
+
+### 2026-09-02
+
+- Added Activity Intelligence protected product and performance boundaries.
+- Recorded Records server pagination as separate and not implemented.
+- Removed superseded campaign and chart-migration document routing.
+- Aligned cleanup evidence gathering with the one-sufficient-pass governance rule.

@@ -2,7 +2,7 @@
 
 ## 1. Current project architecture summary
 
-TFC CRM is a Node / Express backed operational CRM workspace. The frontend is served from `public/` and communicates with backend `/api` routes. The backend organizes route, controller, service, and data-access ownership across modules such as companies, contacts, opportunities, events, interactions, sales analysis, products, weekly business, and system/dashboard.
+TFC CRM is a Node / Express backed operational CRM workspace. The frontend is served from `public/` and communicates with backend `/api` routes. The backend organizes route, controller, service, and data-access ownership across modules such as companies, contacts, opportunities, events, interactions, sales analysis, Activity Intelligence, products, weekly business, and system/dashboard.
 
 The governance direction is an operational SaaS workspace: restrained, dense, workflow-oriented, and governed by small scoped patches.
 
@@ -49,30 +49,45 @@ Product Cost:
 * `ProductDetailModal` may remain in the repo but is not the active Product Cost table edit path
 * category chip wall / category-order drag UI is legacy / inactive for the current table ordering model
 
+Activity Intelligence / FANUC Forms:
+
+* `public/views/activity-intelligence.html`
+* `public/scripts/activity-intelligence/activity-intelligence-management.js`
+* `public/scripts/activity-intelligence/activity-intelligence-api.js`
+* `public/styles/activity-intelligence/activity-intelligence-management.css`
+* reusable Form Designer / Form Engine platform serving Quick Entry, Records, Analytics, assist/Other-history, detail/edit, and export consumers
+* Records Projection and Answer Hydration performance paths are consumer-specific optimizations; Scoped Tab Render V1 is an opt-in `.aim-main` desktop warm-navigation boundary with global and mobile fallbacks preserved
+* durable accepted-state detail: `docs/activity-intelligence-stage-closure-2026-08.md`
+
 ## 3. Backend access summary
 
 The backend uses an Express API layer. Controllers expose `/api` endpoints, services hold business logic, and data readers/writers access Supabase-backed storage.
+
+Activity Intelligence backend ownership flows through `routes/activity-intelligence.routes.js`, `controllers/activity-intelligence.controller.js`, `services/activity-intelligence-service.js`, `services/activity-intelligence-perf.js`, and the dedicated SQL reader/writer. Its lightweight `/record-list` path is distinct from full-submission consumers.
 
 Supabase access follows the server-side service role pattern:
 
 * `config/supabase.js` creates a Supabase client using `SUPABASE_SERVICE_ROLE_KEY`.
 * Frontend code uses Express `/api` routes rather than direct frontend Supabase table access.
 
-## 4. Current governance docs list
+## 4. Current governance and routing docs list
 
-Current governance docs:
+Current governance and routing docs:
 
 * `docs/architecture-governance.md`
 * `docs/tfc-crm-ui-style-governance.md`
 * `docs/supabase-access-sop.md`
 * `docs/non-breaking-cleanup-roadmap.md`
+* `docs/repo-scan-boundary.md`
+* `docs/audit-session-log-governance.md`
+* `docs/crm-current-state-index.md`
+* `docs/activity-intelligence-stage-closure-2026-08.md`
 
 ## 5. Current UI baseline docs list
 
 Current UI baseline documentation:
 
 * `docs/tfc-crm-ui-style-governance.md`
-* `docs/echarts-migration-record.md`
 * `docs/non-breaking-cleanup-roadmap.md`
 
 ## 6. Current chart migration status
@@ -197,19 +212,19 @@ No backend, DB, schema, migration, route, controller, service, data-access, pack
 
 Detailed rules live in `docs/architecture-governance.md`.
 
-## 8.4 Weekend Forensics Planning Evidence Archive (2026-07-06)
+## 8.4 Activity Intelligence Current Stage
 
-Weekend Forensics completed and its reports are archived under `docs/forensics/wknd/results/`.
+Activity Intelligence / FANUC Forms is a reusable custom-form platform, not a fixed set of hardcoded questions. Form Designer settings normalize into runtime fields; the Form Engine owns canonical answer mutation; Quick Entry, detail/edit, Historical Assist, Analytics, CSV/export, and Records consume that model.
 
-Decision:
+Current accepted stage summary:
 
-```text
-ACCEPT_FOR_PLANNING_WITH_CAUTION
-```
+* Person / Company assist and Generic Other-history single/multiple behavior are Runtime Product PASS.
+* Phase 1 Record List Projection provides a lightweight Records path; Phase 1.1 removed the duplicate full-submissions load; Phase 1.2 restored projection-owned counts.
+* Answer Hydration V1 is functionally accepted, with Overview performance improvement, neutral Submissions performance, and an overall partial performance pass.
+* Scoped Tab Render V1 keeps the stable shell and replaces `.aim-main` for opt-in same-activity desktop warm navigation. It is CODE PASS and NETWORK RUNTIME PASS; full Runtime Product PASS is not claimed.
+* Next workstream is Records server pagination, which is not implemented and must preserve filter, sort, search, and count correctness.
 
-This evidence may guide future planning, but it does not authorize source changes, cleanup, deletion, refactor, migration, patching, or PR creation.
-
-Future Weekend Forensics-derived planning must consult `docs/forensics/wknd/results/17-weekend-planning-baseline.md`.
+Detailed statuses, protected contracts, and future-work separation live in `docs/activity-intelligence-stage-closure-2026-08.md`.
 
 ## 8.5 RAW Contact SQL Authority Closure Archive (2026-07-15)
 

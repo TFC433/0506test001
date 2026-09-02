@@ -1,6 +1,6 @@
 # CRM Current State Index
 
-Last Updated: 2026-07-15
+Last Updated: 2026-09-02
 
 ## 1. Global Rules & Index Usage
 
@@ -11,7 +11,6 @@ Last Updated: 2026-07-15
 * ChatGPT = architecture, scope freeze, and CODE PASS / NG judgment.
 * Gemini = evidence-only repo/docs forensics.
 * Codex = frozen minimal patch executor.
-* Weekend Forensics routing: use `docs/forensics/wknd/results/17-weekend-planning-baseline.md` and `docs/forensics/wknd/results/16-gemini-final-qa-summary.md` only as routing references for Weekend Forensics-derived planning; this index remains non-authoritative and does not authorize cleanup.
 
 ## 2. Protected Boundaries
 
@@ -26,7 +25,7 @@ Last Updated: 2026-07-15
 
 ### Dashboard & Analytics
 
-* Docs: `docs/tfc-crm-ui-style-governance.md`, `docs/repo-operational-consolidation-report.md`, `docs/echarts-migration-record.md`
+* Docs: `docs/tfc-crm-ui-style-governance.md`, `docs/repo-operational-consolidation-report.md`, `docs/architecture-governance.md`
 * Owners: `public/dashboard.html`, `public/scripts/dashboard/*`, `public/scripts/map-manager.js`
 * Baseline: Dashboard is the analytics / KPI / chart / filter tab / widget control baseline. Dashboard trend uses ECharts. Highcharts / Highmaps are not current runtime dependencies. Dashboard RAW contact stats start concurrently with `/api/dashboard` and remain failure-isolated from the main Dashboard render.
 
@@ -47,10 +46,20 @@ Last Updated: 2026-07-15
 
 ### Charting / Maps
 
-* Docs: `docs/architecture-governance.md`, `docs/echarts-migration-record.md`, `docs/repo-operational-consolidation-report.md`
+* Docs: `docs/architecture-governance.md`, `docs/repo-operational-consolidation-report.md`
 * Owners: `public/dashboard.html`, `public/scripts/services/charting.js`, `public/scripts/dashboard/dashboard_widgets.js`, `public/scripts/sales/sales-analysis-components.js`, `public/scripts/map-manager.js`
 * Baseline: Active chart stack is ECharts. Dashboard trend and Sales Analysis charts use ECharts. Taiwan map uses ECharts plus `public/assets/maps/taiwan.json`, which remains active and must be preserved.
 * Highcharts status: Highcharts / Highmaps full retirement completed on 2026-07-06 with UI/Product PASS. Event charts legacy module was removed because it was loaded but UI-unreachable. Highcharts / Highmaps are not current runtime, package, vendor, setup, or `node_modules` dependencies.
+
+### Activity Intelligence / FANUC Forms
+
+* Docs: `docs/activity-intelligence-stage-closure-2026-08.md`, `docs/architecture-governance.md`, `docs/non-breaking-cleanup-roadmap.md`
+* Frontend owners: `public/scripts/activity-intelligence/activity-intelligence-management.js`, `public/scripts/activity-intelligence/activity-intelligence-api.js`, `public/styles/activity-intelligence/activity-intelligence-management.css`, `public/views/activity-intelligence.html`
+* Backend owners: `routes/activity-intelligence.routes.js`, `controllers/activity-intelligence.controller.js`, `services/activity-intelligence-service.js`, `services/activity-intelligence-perf.js`, `data/activity-intelligence-sql-reader.js`, `data/activity-intelligence-sql-writer.js`
+* Contract checks: `tests/activity-intelligence-contract-check.js`
+* Baseline: reusable Form Designer → Schema / Settings → Normalized Runtime Field → Form Engine → Canonical Answer Model → consumer architecture. Person / Company Assist and Generic Other single/multiple are Runtime Product PASS. Records Projection and projection-owned counts are accepted; Answer Hydration V1 is an overall partial performance pass.
+* Scoped rendering: Scoped Tab Render V1 is CODE PASS and NETWORK RUNTIME PASS only. The `.aim-main` desktop same-activity warm-navigation boundary is opt-in; global `render()` and mobile remain fallbacks.
+* Next: Records server pagination is not implemented. Preserve filter, sort, count, Analytics, and Follow-up semantics; route durable detail and exact status language to the stage archive.
 
 ### Opportunity Detail / Activity Hub
 

@@ -357,6 +357,19 @@ Forensics must separate:
 
 These are NOT the same problem.
 
+Forensics is evidence gathering, not a mandatory repeating ceremony. One evidence pass is sufficient when ownership is known, the runtime symptom is confirmed, scope is frozen, product semantics are already decided, and the safe implementation boundary is evidenced. At that point, proceed to the scoped implementation and proportional validation.
+
+Additional forensic passes are required only when a new evidence gap materially blocks safe implementation. Do not require a loop of forensics, planning, more forensics, implementation planning, and more forensics for an already-understood task. This rule preserves ZERO ASSUMPTION: it changes the number of redundant passes, not the evidence standard.
+
+When a feature previously reached Runtime/Product PASS and becomes NG after performance optimization:
+
+1. identify the first contract divergence;
+2. reconnect the original reusable contract;
+3. prefer minimal alignment with the optimized data path;
+4. do not redesign the feature;
+5. do not introduce field- or activity-specific hardcoding;
+6. do not broaden the repair into a new architecture workstream unless evidence requires it.
+
 ---
 
 # 5. Minimal Diff Governance
@@ -1929,34 +1942,21 @@ Do not convert this frontend UI cleanup into backend/API/DB work.
 
 ---
 
-# 28.6 Weekend Forensics Governance Archive (2026-07-06)
+# 28.6 Activity Intelligence Reusable Platform Governance (2026-09)
 
-The Weekend Forensics campaign is completed and archived as planning-quality evidence only.
+Activity Intelligence / FANUC Forms is a reusable custom-form platform. Its durable dependency is:
 
-Completed archive scope:
+```text
+Form Designer → Schema / Settings → Normalized Runtime Field → Form Engine → Canonical Answer Model → consumers
+```
 
-* 15 Codex forensic reports completed.
-* Gemini final QA completed.
-* Planning baseline accepted with caution: `ACCEPT_FOR_PLANNING_WITH_CAUTION`.
-* Results archived under `docs/forensics/wknd/results/`.
-* Future Weekend Forensics-derived planning must consult `docs/forensics/wknd/results/17-weekend-planning-baseline.md`.
+Consumers include Quick Entry, Edit / Detail, Historical Assist, Analytics, CSV/export, and Records views. Current questions and fields must not be treated as hardcoded product schema.
 
-This archive does not authorize:
+The Form Engine owns canonical answer mutation. Historical suggestions provide candidates only; consumer layers must not independently reimplement field-type semantics. Person / Company assist and Generic Other-history are reusable capabilities governed by field semantics and settings, not fixed activity or business-field labels.
 
-* cleanup
-* patching
-* deletion
-* refactor
-* migration
-* PR creation
+Performance optimization must preserve every accepted Product PASS contract, including Form Designer behavior, Form Engine semantics, canonical answer ownership, Quick Entry state, Person and Company assist, Generic Other-history, Records counts, Analytics semantics, and Follow-up semantics. Scoped rendering, projections, hydration changes, or future pagination do not imply semantic redesign.
 
-Runtime UNKNOWNs remain preserved and must not be treated as resolved by this archive:
-
-* production fallback traffic
-* browser CSS / DOM cascade
-* controller internal role logic
-* runtime chart rendering
-* non-JSON API response behavior
+The detailed accepted stage state and exact PASS boundaries live in `docs/activity-intelligence-stage-closure-2026-08.md`.
 
 ---
 
@@ -2288,6 +2288,13 @@ and disciplined data lifecycle governance.
 
 # Changelog
 
+## 2026-09-02
+
+* Added durable Activity Intelligence reusable-platform and canonical-answer governance.
+* Added the regression-restoration rule for Product PASS behavior affected by performance optimization.
+* Clarified that one sufficient evidence pass is enough and additional forensics are required only for material evidence gaps.
+* Removed routing to superseded campaign-level forensic artifacts.
+
 ## 2026-07-15
 
 * Archived completed CRM RAW Contact SQL authority cutover with UI/Product PASS.
@@ -2299,9 +2306,6 @@ and disciplined data lifecycle governance.
 * Archived completed Highcharts / Highmaps full retirement with UI/Product PASS.
 * Recorded ECharts as the active chart stack and `public/assets/maps/taiwan.json` as active preserved map data for the ECharts Taiwan map.
 * Classified remaining Highcharts documentation references as `DOC_HISTORY_ONLY` and prohibited reintroducing Highcharts without explicit new product/architecture approval.
-* Archived completed Weekend Forensics campaign as planning-quality governance evidence only.
-* Recorded 15 completed Codex reports, Gemini final QA completion, `ACCEPT_FOR_PLANNING_WITH_CAUTION`, archive path `docs/forensics/wknd/results/`, and mandatory consultation of `docs/forensics/wknd/results/17-weekend-planning-baseline.md` for future Weekend Forensics-derived planning.
-* Reconfirmed that the archive does not authorize cleanup, patching, deletion, refactor, migration, or PR creation, and that runtime UNKNOWNs remain unresolved.
 
 ## 2026-07-02
 

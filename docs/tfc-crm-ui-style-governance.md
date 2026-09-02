@@ -416,6 +416,8 @@ When in doubt, preserve the accepted baseline and document the reason before cha
 
 The Dashboard and Opportunity Detail remain the dual UI baselines.
 
+Activity Intelligence has a module-local accepted UI/Product baseline; it is not a third global CRM UI baseline. Performance changes must preserve its accepted Form Designer, Quick Entry, Records, and Analytics behavior while continuing to use the relevant global analytics or workflow principles locally.
+
 Dashboard is the analytics / KPI / chart / filter tab / widget control baseline. Current accepted chart patterns include Apache ECharts for Dashboard trend work, inline compact filter tabs, chart preview modal support, restrained business color scales, and no decorative rainbow charting unless a business semantic requires it.
 
 Opportunity Detail is the operational workflow / high-density CRM / Activity Hub / relationship context / inline editing baseline. Workflow pages must stay dense, low-noise, and oriented around record context, relationship context, and inline operational actions.
@@ -540,3 +542,15 @@ Product-facing invariants:
 Do not introduce user-visible labels, warnings, placeholder changes, or layout changes merely to expose the RAW SQL authority cutover.
 
 Do not hardcode dynamic business labels or identities while working around RAW contact display/action flows.
+
+## 15.4 Activity Intelligence Module-Local Baseline
+
+Activity Intelligence / FANUC Forms must preserve its accepted reusable Form Designer / Form Engine semantics and current Quick Entry, Records, and Analytics product behavior during performance work. Scoped Tab Render is an opt-in performance boundary, not permission to redesign the module, change canonical answer behavior, or replace the Dashboard and Opportunity Detail global baselines.
+
+Detailed contract and acceptance status belongs in `docs/activity-intelligence-stage-closure-2026-08.md`, not in this UI governance document.
+
+## 16. Changelog
+
+### 2026-09-02
+
+* Recorded Activity Intelligence as a module-local accepted UI/Product baseline without changing the Dashboard and Opportunity Detail global dual baselines.
