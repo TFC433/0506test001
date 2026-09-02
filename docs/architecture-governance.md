@@ -1971,6 +1971,9 @@ Current charting source of truth:
 * Sales Analysis charts use ECharts.
 * Taiwan map uses ECharts with `public/assets/maps/taiwan.json`.
 * `public/assets/maps/taiwan.json` is active and must be preserved for the ECharts Taiwan map.
+* The current Taiwan map data contract normalizes county names from `台` to `臺`, normalizes the historical alias `桃園縣` to `桃園市`, and excludes `澎湖縣`, `金門縣`, and `連江縣` from the rendered map.
+* Compatible county normalization must be applied to both GeoJSON feature names and opportunity county data so ECharts joins remain aligned.
+* These are current map-data compatibility rules and must not be removed or changed as incidental chart cleanup, GeoJSON replacement, or map refactor.
 
 Completed retirement scope:
 
