@@ -94,13 +94,7 @@ class InteractionService {
             }
 
             // 5. Sort (Time Descending - Logic from old Reader)
-            results.sort((a, b) => {
-                const dateA = new Date(a.interactionTime);
-                const dateB = new Date(b.interactionTime);
-                if (isNaN(dateB)) return -1;
-                if (isNaN(dateA)) return 1;
-                return dateB - dateA;
-            });
+            this._sortInteractionsByTimeDescending(results);
 
             // 6. Pagination
             const pageSize = 20; // Default fallback since config from InteractionReader is removed
@@ -136,6 +130,38 @@ class InteractionService {
             console.error('[InteractionService] searchInteractions Error:', error);
             throw error;
         }
+    }
+
+    /**
+     * Consumer-specific Activity Timeline read boundary.
+     * Keeps the legacy interaction ordering semantics without loading or
+     * enriching the complete opportunity/company datasets.
+     */
+    async getActivityTimelineInteractions() {
+        if (!this.interactionSqlReader
+            || typeof this.interactionSqlReader.getActivityTimelineInteractions !== 'function') {
+            throw new Error('[InteractionService] Activity Timeline interaction reader not configured.');
+        }
+
+        try {
+            const rows = await this.interactionSqlReader.getActivityTimelineInteractions();
+            const results = (rows || []).map(item => ({ ...item }));
+            this._sortInteractionsByTimeDescending(results);
+            return results;
+        } catch (error) {
+            console.error('[InteractionService] Activity Timeline SQL Read Failed:', error);
+            return [];
+        }
+    }
+
+    _sortInteractionsByTimeDescending(interactions) {
+        return interactions.sort((a, b) => {
+            const dateA = new Date(a.interactionTime);
+            const dateB = new Date(b.interactionTime);
+            if (isNaN(dateB)) return -1;
+            if (isNaN(dateA)) return 1;
+            return dateB - dateA;
+        });
     }
 
     /**

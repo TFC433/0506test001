@@ -149,6 +149,27 @@ class InteractionSqlReader {
     }
 
     /**
+     * Get only the interaction facts required to classify, filter, order and
+     * render Activity Timeline rows. Related display names are intentionally
+     * resolved by ActivityTimelineService after merged-page selection.
+     * @returns {Promise<Array<Object>>} Array of lightweight Interaction DTOs
+     */
+    async getActivityTimelineInteractions() {
+        try {
+            const { data, error } = await supabase
+                .from(this.tableName)
+                .select('interaction_id, opportunity_id, company_id, interaction_time, interaction_type, event_title, content_summary, recorder');
+
+            if (error) throw new Error(`[InteractionSqlReader] DB Error: ${error.message}`);
+            return (data || []).map(row => this._mapRowToDto(row));
+
+        } catch (error) {
+            console.error('[InteractionSqlReader] getActivityTimelineInteractions Error:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Get all interactions
      * @returns {Promise<Array<Object>>} Array of Interaction DTOs
      */

@@ -15,7 +15,7 @@ Last Updated: 2026-09-07
 ## CURRENT WORKSTREAM / Performance Routing
 
 * Completed state: Activity Intelligence shared-v1 is implemented with `RECORDS_PERFORMANCE_CODE_PASS` and `TARGETED_LOCAL_RUNTIME_SMOKE_PASS`. Exact implementation, fixture evidence, observed bytes, and incomplete smoke coverage are owned by [the Activity Intelligence stage archive](activity-intelligence-stage-closure-2026-08.md#records-shared-runtime-snapshots-2026-09-07).
-* D — NEXT_WORKSTREAM_CONSTRAINT / RECOMMENDATION: the current direction is **CRM-wide performance modernization**. The leading next candidate is **Interactions / CRM Activity Timeline**: a Timeline-specific lightweight interaction read plus opportunity/company name enrichment after final-page selection. This slice is not implemented or started by the docs pass.
+* A — CURRENT_REPO_VERIFIED: **Interactions / CRM Activity Timeline Performance V1** now uses a Timeline-specific lightweight interaction read plus opportunity/company name enrichment after final-page selection. Targeted static/unit validation establishes code-level structural and contract evidence only; it is not a Runtime Product or Production Performance PASS.
 * The original five-candidate engineering ranking, risks, confidence, execution-path evidence, and Sheet classifications are owned by [roadmap §4.6](non-breaking-cleanup-roadmap.md#46-crm-wide-performance-engineering-ranking-2026-09-07). Ranking is repository-based priority, not runtime telemetry or a separately chosen implementation sequence.
 * Unless explicitly reopened, current scope excludes broad Activity Intelligence optimization, Analytics data boundary, Follow-up projection, management-module modularization, broad Google Sheet/dead-code cleanup, and company fuzzy reconciliation.
 * Evidence labels A–D follow [architecture governance](architecture-governance.md#evidence-classification-and-durable-ownership). Historical acceptance and runtime observations do not imply full Product or Production Performance PASS.
@@ -86,7 +86,7 @@ Last Updated: 2026-09-07
 
 * Docs: `docs/architecture-governance.md`, `docs/non-breaking-cleanup-roadmap.md`
 * A — CURRENT_REPO_VERIFIED owners: `public/scripts/interactions.js`, `routes/system.routes.js`, `controllers/system.controller.js`, `services/activity-timeline-service.js`, `services/interaction-service.js`, `data/interaction-sql-reader.js`.
-* Current CRM Activity Timeline entry: `/api/activity-timeline` → `getActivityTimeline()` → `searchInteractions('', 1, true)`. The current broad read/enrichment remains; the proposed dedicated projection is future work. This overview is distinct from the Opportunity Detail Activity Hub.
+* Current CRM Activity Timeline entry: `/api/activity-timeline` → `getActivityTimeline()` → `getActivityTimelineInteractions()`. The Timeline reads a narrow interaction projection, preserves merged-source pagination ownership, and batch-hydrates opportunity/company labels only for final-page interaction rows. General `searchInteractions()` behavior remains available to its existing callers. This overview is distinct from the Opportunity Detail Activity Hub.
 * Boundary: preserve record classification, time/order rules, audit visibility, filtering, counts and pagination. Opportunity Activity Hub soft-void/tombstone rules remain governed separately.
 
 ### Opportunity List

@@ -29,15 +29,23 @@ class ActivityTimelineService {
         const targetType = this._normalizeString(options.target_type);
         const targetId = this._normalizeString(options.target_id);
 
-        const [enabledEventTypes, interactionResult] = await Promise.all([
+        const [enabledEventTypes, interactions] = await Promise.all([
             this._getEnabledAuditEventTypes(),
-            this.interactionService.searchInteractions('', 1, true)
+            this.interactionService.getActivityTimelineInteractions()
         ]);
 
-        let interactionItems = (interactionResult.data || [])
+        const interactionContextByItem = new Map();
+        let interactionItems = (interactions || [])
             .map(item => this._classifyInteraction(item, enabledEventTypes))
             .filter(result => result.include)
-            .map(result => this._mapInteractionToTimelineItem(result.item, result.businessEventType))
+            .map(result => {
+                const timelineItem = this._mapInteractionToTimelineItem(result.item, result.businessEventType);
+                interactionContextByItem.set(timelineItem, {
+                    opportunityId: result.item.opportunityId,
+                    companyId: result.item.companyId
+                });
+                return timelineItem;
+            })
             .filter(item => this._matchesTargetFilter(item, targetType, targetId));
 
         let auditItems = [];
@@ -52,7 +60,8 @@ class ActivityTimelineService {
             .sort((a, b) => this._getTimeValue(b.time) - this._getTimeValue(a.time));
 
         const start = (page - 1) * limit;
-        const data = mergedItems.slice(start, start + limit);
+        const selectedItems = mergedItems.slice(start, start + limit);
+        const data = await this._enrichVisibleInteractionItems(selectedItems, interactionContextByItem);
         const totalItems = mergedItems.length;
         const total = Math.max(Math.ceil(totalItems / limit), 1);
 
@@ -67,6 +76,49 @@ class ActivityTimelineService {
                 hasPrev: page > 1
             }
         };
+    }
+
+    async _enrichVisibleInteractionItems(items = [], interactionContextByItem = new Map()) {
+        const visibleInteractions = items
+            .map(item => ({ item, context: interactionContextByItem.get(item) }))
+            .filter(entry => entry.item.source === 'interaction' && entry.context);
+
+        if (visibleInteractions.length === 0) return items;
+
+        const opportunityIds = visibleInteractions
+            .map(entry => entry.context.opportunityId)
+            .filter(Boolean);
+        const opportunityNames = await this._fetchOpportunityNameMap(opportunityIds);
+
+        const companyIds = visibleInteractions
+            .filter(entry => !entry.context.opportunityId || !opportunityNames.has(entry.context.opportunityId))
+            .map(entry => entry.context.companyId)
+            .filter(Boolean);
+        const companyNames = await this._fetchCompanyNameMap(companyIds);
+
+        return items.map(item => {
+            const context = interactionContextByItem.get(item);
+            if (item.source !== 'interaction' || !context) return item;
+
+            const targetLabel = this._resolveInteractionTargetLabel(context, opportunityNames, companyNames);
+            return {
+                ...item,
+                targetLabel,
+                businessAnchor: targetLabel
+            };
+        });
+    }
+
+    _resolveInteractionTargetLabel(context = {}, opportunityNames = new Map(), companyNames = new Map()) {
+        if (context.opportunityId && opportunityNames.has(context.opportunityId)) {
+            return opportunityNames.get(context.opportunityId) || '';
+        }
+        if (context.companyId && companyNames.has(context.companyId)) {
+            return companyNames.get(context.companyId) || '';
+        }
+        if (context.opportunityId) return '\u672a\u77e5\u6a5f\u6703';
+        if (context.companyId) return '\u672a\u77e5\u516c\u53f8';
+        return '\u672a\u6307\u5b9a';
     }
 
     async _getEnabledAuditEventTypes() {
