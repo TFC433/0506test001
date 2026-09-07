@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document is the durable handoff for the completed Activity Intelligence / FANUC Forms stage. It records accepted architecture, protected product contracts, performance milestones, and the next workstream without serving as a chronological implementation diary.
+This document is the durable handoff for the completed Activity Intelligence / FANUC Forms stage. It records accepted architecture, protected product contracts, performance milestones, and deferred Activity Intelligence candidates. Current CRM-wide workstream routing belongs to `docs/crm-current-state-index.md`.
 
 ## Product and architecture identity
 
@@ -142,9 +142,10 @@ An already-PASS product contract must not be redesigned merely to improve render
 
 ```text
 RECORDS_PERFORMANCE_CODE_PASS
+TARGETED_LOCAL_RUNTIME_SMOKE_PASS
 ```
 
-Repository evidence showed that `/record-list` repeated the same version's complete runtime item metadata in each row. Client initialization normalized those items three times per record: for answer values, option notes, and the runtime snapshot. This slice removes that repeated transport and preparation work without changing the logical Records dataset.
+A — CURRENT_REPO_VERIFIED: the completed shared-v1 implementation is owned by `services/activity-intelligence-service.js` and `public/scripts/activity-intelligence/activity-intelligence-management.js`; contract coverage lives in `tests/activity-intelligence-contract-check.js`. The pre-patch repository path repeated the same version's complete runtime item metadata in each row and normalized items three times per record. This slice removes that repeated transport and preparation work without changing the logical Records dataset.
 
 The Records loader now opts into `runtimeSnapshots=shared-v1`. Inside the existing `{ success, data }` response, `data` contains `{ runtimeSnapshots: 'shared-v1', records, formRuntimeSnapshots }`. Each record replaces its inline snapshot with a zero-based `formRuntimeSnapshotRef`; `null` preserves a missing snapshot. The service deduplicates snapshots by their persisted `versionId`, retaining historical versions and form contexts. Requests without the supported opt-in still return the original array, and the new frontend accepts that legacy array for compatibility with older servers.
 
@@ -152,9 +153,25 @@ The client prepares each shared snapshot and its field lookup once per response.
 
 Structural effect: for N records, V distinct versions and F fields per version, repeated snapshot serialization and initialization field normalization fall from O(N × F) to O(V × F). Per-record answers, server answer hydration, browser full-dataset ownership, filtering and rendering remain in place. This is not server pagination and does not reduce SQL row counts.
 
-Validation: `node tests/activity-intelligence-contract-check.js` passed, including actual client normalizer parity across current/historical versions, visitor/field-intelligence contexts, void records, Other text, option notes, cards and summaries; empty/missing snapshots; invalid references; array compatibility; and fresh preparation on reload. A synthetic 200-record, five-field, single-version fixture reduced serialized JSON from 650,381 to 303,796 bytes and initialization field-normalizer calls from 3,000 to 5. These are repository fixture measurements, not browser/production timings or a Runtime Product PASS. Changed JavaScript syntax, diff whitespace and UTF-8/BOM checks passed. No database or Sheet changes were made.
+B — HISTORICAL_ACCEPTANCE (reported implementation validation, 2026-09-07): `node tests/activity-intelligence-contract-check.js` passed, including actual client normalizer parity across current/historical versions, visitor/field-intelligence contexts, void records, Other text, option notes, cards and summaries; empty/missing snapshots; invalid references; array compatibility; and fresh preparation on reload. A synthetic 200-record, five-field, single-version fixture reduced serialized JSON from 650,381 to 303,796 bytes and initialization field-normalizer calls from 3,000 to 5. These are structural repository/test measurements, not browser/production timings or a Runtime Product PASS. Changed JavaScript syntax, diff whitespace and UTF-8/BOM checks passed. No database or Sheet changes were made. This documentation pass did not rerun those checks.
 
-## Next performance workstream
+### Targeted local runtime evidence (2026-09-07)
+
+C — HISTORICAL_RUNTIME_OBSERVATION: the supplied local Browser/CDP session tested `http://localhost:3001`, Activity **2026台北自動化國際大展**, Records workspace, as Local Dev User with the role switched to `super_admin` for full-record visibility.
+
+| Observed surface | Result |
+| --- | --- |
+| `/record-list` transport | Actual shared-v1 response: 133 records, 2 shared form-version snapshots, 0 per-record inline snapshots. No duplicated inline legacy snapshot payload was observed. |
+| Actual size | Response body: 292,221 bytes; CDP transferred size: 292,495 bytes. No pre-patch runtime size was measured or inferred. |
+| Counts | UI: 120 valid and 13 void records; 120 + 13 = 133. |
+| Console and ordering | No new Console error observed; time ordering appeared correct in the inspected records. |
+| Representative search/filter | Checked representative behavior; IoT: 73, Day 1: 24, void: 13 records. |
+| Detail / Edit | Visitor Detail and read-only Edit loaded; existing answers and Other value `刀具壽命` were preserved. No save was performed. |
+| Historical snapshots | Visitor v31 and field_intelligence v19 were observed. This does not establish exhaustive field/answer/option parity across both versions. |
+
+B — HISTORICAL_ACCEPTANCE: the acceptance level for this evidence is **TARGETED_LOCAL_RUNTIME_SMOKE_PASS** alongside **RECORDS_PERFORMANCE_CODE_PASS**. The broader browser regression suite was intentionally stopped before completion; Mine and exhaustive Quick Entry smoke were not completed. No data mutation was performed. This is not FULL_RUNTIME_PRODUCT_PASS, PRODUCTION_PERFORMANCE_PASS, browser-wide acceptance closure, or a production latency improvement claim. This documentation pass did not use Browser/CDP or collect new runtime evidence.
+
+## Deferred Activity Intelligence performance candidate
 
 ```text
 RECORDS_SERVER_PAGINATION_NOT_IMPLEMENTED
@@ -162,7 +179,7 @@ RECORDS_SERVER_PAGINATION_NOT_IMPLEMENTED
 
 Current `/record-list` remains application-level unpaginated. Records filtering, search, sorting, and count ownership are still largely frontend-based. Naive server pagination would break filter, sort, or count correctness; a future server-pagination workstream must preserve those contracts together.
 
-Records server pagination is separate from Scoped Tab Render. Analytics / Follow-up full-submission and data-boundary work also remain separate future workstreams. This archive does not design or authorize any of them.
+D — NEXT_WORKSTREAM_CONSTRAINT / RECOMMENDATION: Records server pagination remains an Activity Intelligence-specific candidate, ranked #5 in the CRM-wide engineering ranking in [the roadmap](non-breaking-cleanup-roadmap.md#46-crm-wide-performance-engineering-ranking-2026-09-07). It is not automatically the next CRM-wide workstream. Records server pagination is separate from Scoped Tab Render. Analytics / Follow-up full-submission and data-boundary work also remain separate future workstreams. This archive does not design or authorize any of them.
 
 ## Handoff boundary
 

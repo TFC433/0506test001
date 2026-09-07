@@ -52,9 +52,9 @@ Task-tiered reading:
 Read these only when the task matches the topic:
 
 * `docs/audit-session-log-governance.md`
-  Use for audit/session architecture, audit taxonomy, session lifecycle, backend mutation audit hooks, audit redaction rules, or manager-log future work.
+  Use for audit/session architecture, audit taxonomy, session lifecycle, backend mutation audit hooks, audit redaction rules, or current/future log-viewer boundaries.
 * `docs/activity-intelligence-stage-closure-2026-08.md`
-  Use for Activity Intelligence / FANUC Forms architecture, accepted stage states, protected form semantics, Records performance boundaries, Scoped Tab Render, or the next Records pagination workstream.
+  Use for Activity Intelligence / FANUC Forms architecture, accepted stage states, protected form semantics, Records performance boundaries, Scoped Tab Render, or the deferred Activity Intelligence Records pagination candidate. CRM-wide current workstream routing belongs to `docs/crm-current-state-index.md`; the engineering ranking belongs to `docs/non-breaking-cleanup-roadmap.md` §4.6. This routing does not require a new broad forensic pass.
 * `docs/schema/audit-logs-v1.sql`
   Keep available for audit/session schema-related tasks when schema evidence is explicitly required.
 
@@ -247,6 +247,10 @@ Report inspected files and intentionally skipped files.
 ```
 
 ## 13. Changelog
+
+### 2026-09-07
+
+* Corrected conditional topic routing for deferred Records pagination and existing log-viewer boundaries; retained minimum-sufficient-evidence and focused-reading policies unchanged.
 
 ### 2026-09-02
 

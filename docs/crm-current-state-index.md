@@ -1,6 +1,6 @@
 # CRM Current State Index
 
-Last Updated: 2026-09-02
+Last Updated: 2026-09-07
 
 ## 1. Global Rules & Index Usage
 
@@ -11,6 +11,14 @@ Last Updated: 2026-09-02
 * ChatGPT = architecture, scope freeze, and CODE PASS / NG judgment.
 * Gemini = evidence-only repo/docs forensics.
 * Codex = frozen minimal patch executor.
+
+## CURRENT WORKSTREAM / Performance Routing
+
+* Completed state: Activity Intelligence shared-v1 is implemented with `RECORDS_PERFORMANCE_CODE_PASS` and `TARGETED_LOCAL_RUNTIME_SMOKE_PASS`. Exact implementation, fixture evidence, observed bytes, and incomplete smoke coverage are owned by [the Activity Intelligence stage archive](activity-intelligence-stage-closure-2026-08.md#records-shared-runtime-snapshots-2026-09-07).
+* D — NEXT_WORKSTREAM_CONSTRAINT / RECOMMENDATION: the current direction is **CRM-wide performance modernization**. The leading next candidate is **Interactions / CRM Activity Timeline**: a Timeline-specific lightweight interaction read plus opportunity/company name enrichment after final-page selection. This slice is not implemented or started by the docs pass.
+* The original five-candidate engineering ranking, risks, confidence, execution-path evidence, and Sheet classifications are owned by [roadmap §4.6](non-breaking-cleanup-roadmap.md#46-crm-wide-performance-engineering-ranking-2026-09-07). Ranking is repository-based priority, not runtime telemetry or a separately chosen implementation sequence.
+* Unless explicitly reopened, current scope excludes broad Activity Intelligence optimization, Analytics data boundary, Follow-up projection, management-module modularization, broad Google Sheet/dead-code cleanup, and company fuzzy reconciliation.
+* Evidence labels A–D follow [architecture governance](architecture-governance.md#evidence-classification-and-durable-ownership). Historical acceptance and runtime observations do not imply full Product or Production Performance PASS.
 
 ## 2. Protected Boundaries
 
@@ -59,8 +67,8 @@ Last Updated: 2026-09-02
 * Contract checks: `tests/activity-intelligence-contract-check.js`
 * Baseline: reusable Form Designer → Schema / Settings → Normalized Runtime Field → Form Engine → Canonical Answer Model → consumer architecture. Person / Company Assist and Generic Other single/multiple are Runtime Product PASS. Records Projection and projection-owned counts are accepted; Answer Hydration V1 is an overall partial performance pass.
 * Scoped rendering: Scoped Tab Render V1 is CODE PASS and NETWORK RUNTIME PASS only. The `.aim-main` desktop same-activity warm-navigation boundary is opt-in; global `render()` and mobile remain fallbacks.
-* Next: Records server pagination is not implemented. Preserve filter, sort, count, Analytics, and Follow-up semantics; route durable detail and exact status language to the stage archive.
-* Records transport (2026-09-07): shared runtime snapshots are `RECORDS_PERFORMANCE_CODE_PASS` only. The loader opts into one snapshot per version and prepares its field metadata once per response; the original array API remains compatible. Full-dataset ownership and SQL hydration remain unchanged. Fixture evidence and the wire contract live in the stage archive.
+* Deferred: Records server pagination is not implemented and is CRM-wide candidate #5, not the automatic next CRM-wide workstream. Preserve filter, search, sort, count, Analytics, and Follow-up semantics.
+* Records transport: shared-v1 is completed at the CODE PASS and targeted local smoke levels stated above. Legacy compatibility and full-dataset ownership remain protected; the stage archive owns the wire contract and acceptance limits.
 
 ### Opportunity Detail / Activity Hub
 
@@ -76,9 +84,10 @@ Last Updated: 2026-09-02
 
 ### Interactions / Activity Timeline
 
-* Docs: `docs/architecture-governance.md`
-* Owners: [Evidence Gap - Forensics Required]
-* Baseline: Activity Hub uses governed interaction/timeline record classes; event reports use soft void plus tombstone, not hard delete, and system records stay hidden unless explicitly shown.
+* Docs: `docs/architecture-governance.md`, `docs/non-breaking-cleanup-roadmap.md`
+* A — CURRENT_REPO_VERIFIED owners: `public/scripts/interactions.js`, `routes/system.routes.js`, `controllers/system.controller.js`, `services/activity-timeline-service.js`, `services/interaction-service.js`, `data/interaction-sql-reader.js`.
+* Current CRM Activity Timeline entry: `/api/activity-timeline` → `getActivityTimeline()` → `searchInteractions('', 1, true)`. The current broad read/enrichment remains; the proposed dedicated projection is future work. This overview is distinct from the Opportunity Detail Activity Hub.
+* Boundary: preserve record classification, time/order rules, audit visibility, filtering, counts and pagination. Opportunity Activity Hub soft-void/tombstone rules remain governed separately.
 
 ### Opportunity List
 
@@ -101,8 +110,8 @@ Last Updated: 2026-09-02
 ### Audit / User Session Log
 
 * Docs: `docs/audit-session-log-governance.md`
-* Owners: [Evidence Gap - Forensics Required]
-* Baseline: `user_sessions` and `system_audit_logs` are backend-only audit/session tables; sensitive long fields, including `todoItems` / `todo_items`, must be redacted from raw `changes`.
+* Owners: `public/scripts/interactions.js`, `routes/system.routes.js`; detailed logging ownership remains in audit governance.
+* Baseline: `user_sessions` and `system_audit_logs` have backend-owned access, with current frontend read views through protected Express routes. Sensitive long fields, including `todoItems` / `todo_items`, must be redacted from raw `changes`; audit records are not business sorting sources.
 
 ### Product Cost
 

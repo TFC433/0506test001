@@ -2,7 +2,7 @@
 
 ## 1. Purpose
 
-This roadmap is for non-breaking cleanup planning only. It records historical residue, compatibility paths, and future cleanup candidates found during static forensics so the repo can improve maintainability without changing current CRM behavior.
+This roadmap owns future/deferred cleanup and non-breaking performance planning. It records historical residue, compatibility paths, and repository-evidence engineering priorities without changing current CRM behavior. Current workstream navigation lives in `docs/crm-current-state-index.md`; §4.6 owns the CRM-wide performance ranking.
 
 This document does not authorize deletion or runtime changes by itself. Any future cleanup patch must be separately approved and validated.
 
@@ -46,6 +46,7 @@ This document does not authorize deletion or runtime changes by itself. Any futu
 - Preserve Form Engine canonical answer semantics, Quick Entry state, Person / Company historical assist, Generic Other single/multiple behavior, projection-owned Records counts, Analytics semantics, and Follow-up semantics.
 - Scoped Tab Render V1 is an opt-in `.aim-main` desktop same-activity warm-navigation boundary. Preserve the authoritative global `render()` fallback and the mobile global-render fallback.
 - Records Projection does not make full-submission Analytics/export/Follow-up consumers obsolete. Answer Hydration and projection paths have consumer-specific boundaries.
+- Shared-v1 is completed with CODE PASS and targeted local runtime smoke only; preserve legacy transport compatibility, historical version metadata and record-owned answers. Exact acceptance and structural/runtime evidence belong to `docs/activity-intelligence-stage-closure-2026-08.md`.
 - Current governance docs:
   - `docs/architecture-governance.md`
   - `docs/tfc-crm-ui-style-governance.md`
@@ -173,7 +174,7 @@ Do not classify any of the following as obsolete solely because Record List Proj
 - mobile global rendering;
 - Form Designer or Form Engine normalization/mutation paths.
 
-Future Records server pagination is a separate, not-yet-implemented workstream. It must preserve filtering, search, sorting, and count correctness together. Cleanup of full-submission consumers, cache ownership, or global rendering requires separate evidence and scope.
+Future Records server pagination is a separate, not-yet-implemented Activity Intelligence candidate, CRM-wide rank #5 in §4.6. It is not the automatic CRM-wide next workstream. It must preserve filtering, search, sorting, and count correctness together. Cleanup of full-submission consumers, cache ownership, or global rendering requires separate evidence and scope.
 
 ## 4.5 2026-07 RAW Contact SQL Authority Cleanup Boundary
 
@@ -204,6 +205,42 @@ Protected boundaries:
 * do not copy `cardId` into `rowIndex`;
 * do not bulk-migrate `contacts.source_id` without separate approval;
 * do not merge OCR validation into the completed CRM workstream.
+
+## 4.6 CRM-wide performance engineering ranking (2026-09-07)
+
+This is the original repository-only engineering priority ranking from the supplied 2026-09-07 triage. That triage considered the whole CRM, used execution-path evidence, and made no code/docs changes or Browser/CDP measurements. The docs consolidation did not rerun the triage or collect runtime telemetry. Evidence classes follow `docs/architecture-governance.md`.
+
+D — NEXT_WORKSTREAM_CONSTRAINT / RECOMMENDATION: all five proposed slices remain future work. Risk and confidence below are engineering judgments, not benchmarks. **CRM Activity Timeline is the leading next CRM-wide candidate.** This ranking is not an implementation sequence: a later explicit User/engineering decision may choose a different sequence, but must identify that decision separately without reordering this ranking.
+
+| Rank | Candidate / expected direction | Repo-only fix possible | Regression risk | Confidence |
+| --- | --- | --- | --- | --- |
+| #1 | CRM Activity Timeline — lightweight interaction read + enrichment only after final-page selection | YES | MEDIUM | HIGH |
+| #2 | Opportunity Detail selective RAW contact hydration | YES | MEDIUM | HIGH |
+| #3 | Dashboard / Weekly Business single-week query boundary | YES | LOW | HIGH |
+| #4 | RAW Contacts true query pagination | YES | HIGH | HIGH |
+| #5 | Activity Intelligence Records Server Pagination | YES | HIGH | HIGH |
+
+### Execution-path evidence and non-breaking constraints
+
+The current implementation descriptions below are A — CURRENT_REPO_VERIFIED execution-path evidence carried forward from the supplied triage. Proposed changes and preservation requirements are D — NEXT_WORKSTREAM_CONSTRAINT / RECOMMENDATION, not implemented optimizations.
+
+1. **Interactions / CRM Activity Timeline.** Current: `/api/activity-timeline` → `getActivityTimeline()` → `searchInteractions('', 1, true)`, owned by `services/activity-timeline-service.js` and `services/interaction-service.js`. It broadly reads interactions, opportunities and companies, enriches interaction names and sorts before Timeline classification/filtering, audit merge, re-sort and final-page slicing. Proposed slice: a Timeline-specific lightweight interaction projection, followed by opportunity/company name enrichment only for the selected final page. Preserve classification, visibility, filters, audit-fetch caps, count semantics, time ordering/ties, unknown-name fallbacks, route/response/render contracts and general interaction search behavior; audit-fetch/count redesign is separate.
+2. **Opportunities / Opportunity Detail.** Current: `/api/opportunities/:id/details` → `getOpportunityDetails()` → `getRawContacts()`, owned by `services/opportunity-service.js` and `data/raw-contact-sql-reader.js`. Opening one opportunity reads RAW contacts with `select('*')`, maps the complete dataset, then selects same-company/linked-source candidates; it also broadly reads companies. Proposed slice: narrow candidate selection and hydrate only the needed RAW records. Preserve existing company-name normalization, linked-source identity and person deduplication. Naive SQL string equality is not equivalent; company fuzzy reconciliation is not this candidate.
+3. **Dashboard / Weekly Business.** Current: Dashboard → `getWeeklyDetails(weekId)` → `getEntriesForWeek()` → broad historical weekly read, owned by `services/dashboard-service.js` and `services/weekly-business-service.js` with weekly readers. Mapping/normalization precedes week filtering. Proposed slice: move the single-week boundary toward the SQL/read layer while preserving existing Sheet fallback and response behavior.
+4. **RAW Contacts.** Current: initial Contacts load → `/api/contacts?q=` → `getPotentialContacts(9999)` → broad RAW load, owned by `public/scripts/contacts/contacts.js`, `services/contact-service.js` and `data/raw-contact-sql-reader.js`. The frontend holds/copies/searches the whole dataset while commonly showing only an initial subset; the backend may also perform lazy auto-tag write-back. Proposed true query pagination requires parity for search, count and lazy auto-tag behavior. Do not blindly connect a different paged reader. Preserve SQL RAW authority, canonical `cardId`, positive legacy `rowIndex`, and `contacts.source_id` compatibility.
+5. **Activity Intelligence / FANUC Forms.** Current: shared-v1 removes repeated version metadata and initialization, but `/record-list` remains application-level unpaginated and the browser owns complete answer projections for search/filter/sort/render. Proposed pagination must first place full-dataset query/filter/sort/count ownership at the correct server/query boundary. Preserve canonical form semantics, historical versions, Other/Assist, projection counts and other full-submission consumers. The [stage archive](activity-intelligence-stage-closure-2026-08.md#records-shared-runtime-snapshots-2026-09-07) owns completed shared-v1 evidence; it does not establish pagination acceptance.
+
+### Sheet / Google integration classifications
+
+The supplied repository triage supports these current path classifications (A — CURRENT_REPO_VERIFIED); retaining their compatibility/ownership is a future-work constraint (D — NEXT_WORKSTREAM_CONSTRAINT / RECOMMENDATION). They are path classifications, not additional evidence classes.
+
+| Path | Classification | Protected boundary |
+| --- | --- | --- |
+| Weekly Business Sheet fallback | COMPATIBILITY_REQUIRED | A SQL single-week optimization must retain fallback behavior. |
+| Google Calendar usage | ACTIVE_OR_PROTECTED | Active integration ownership remains; overlap does not prove removable duplication. |
+| Product Sheet reader | ACTIVE_OR_PROTECTED | Active product data path remains protected. |
+
+No Sheet path was proven **OBSOLETE_CONFIRMED** by this triage. Modernization remains domain-by-domain; SQL existence does not authorize deleting Sheet fallback. Broad Google Sheet cleanup is not the next workstream. Neither Analytics data boundary, Follow-up projection, management-module modularization nor broad dead-code cleanup is opened by this ranking.
 
 ## 5. Candidate Classification Rules
 
@@ -237,6 +274,8 @@ Protected boundaries:
 | C16 | Generated repomix snapshots | `repomix-packs/**` | Removed generated output | Generated AI context output is not source-of-truth, not runtime source, and should not be version-controlled. | Keep `scripts/**/pack-*.ps1`; regenerate packs locally only when needed. |
 
 ## 7. Safe Next Tasks
+
+These are cleanup-backlog options, not the current CRM-wide performance priority or a chosen implementation sequence. Use §4.6 and `docs/crm-current-state-index.md` for that routing.
 
 - Product Cost modal reachability audit, no patch.
 - Debug-log inventory and gating policy, no patch.
@@ -292,6 +331,11 @@ Recommended minimum validation for runtime cleanup:
 - Explicit confirmation that accepted baselines remain unchanged.
 
 ## 10. Changelog
+
+### 2026-09-07
+
+* Preserved the original five-candidate CRM-wide engineering ranking, separated future sequencing from ranking, and recorded Sheet/Google compatibility classifications.
+* Routed completed shared-v1 acceptance to the stage archive and corrected Records pagination from automatic next workstream to deferred CRM-wide candidate #5.
 
 ### 2026-09-02
 

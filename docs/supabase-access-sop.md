@@ -18,12 +18,14 @@ Repo evidence:
 * Controllers expose Express `/api` routes for CRM modules.
 * Frontend scripts use API routes rather than direct frontend table access through `supabase-js`.
 
-Prior DB audit evidence from the task context:
+Prior DB audit evidence from the task context (C — HISTORICAL_RUNTIME_OBSERVATION; limited to the tables and time covered by that audit, not a current all-table assertion):
 
 * Existing live DB audit showed no `anon` / `authenticated` grants on public CRM tables.
 * Existing public tables have grants mainly for `postgres` and `service_role`.
-* RLS is false on existing CRM tables.
+* RLS was false on the CRM tables inspected in that prior audit.
 * `pg_policies` returned no rows.
+
+No live grants/RLS inventory was refreshed in the 2026-09-07 documentation pass. Do not extrapolate these historical observations to all current tables; the governed audit/session access boundary in §5A remains applicable.
 
 ## 3. Impact of Supabase 2026 GRANT change
 
@@ -57,7 +59,7 @@ Backend-only audit/session tables:
 * `public.user_sessions`
 * `public.system_audit_logs`
 
-These are canonical backend-only CRM audit/session infrastructure tables. They should be accessed through backend services using server-side credentials, not exposed as frontend Data API tables. RLS remains enabled for these tables. Do not copy schema details into this SOP; use `docs/audit-session-log-governance.md` for governance and `docs/schema/audit-logs-v1.sql` for schema reference when audit/schema work is explicitly in scope.
+These are canonical backend-only CRM audit/session infrastructure tables. They should be accessed through backend services using server-side credentials, not exposed as frontend Data API tables. The governed requirement is to keep RLS enabled for these tables; this is not a fresh assertion of deployed DB configuration. Do not copy schema details into this SOP; use `docs/audit-session-log-governance.md` for governance and `docs/schema/audit-logs-v1.sql` for schema reference when audit/schema work is explicitly in scope.
 
 ### B. Frontend direct Supabase table
 

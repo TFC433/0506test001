@@ -61,7 +61,7 @@ Activity Intelligence / FANUC Forms:
 
 ## 3. Backend access summary
 
-The backend uses an Express API layer. Controllers expose `/api` endpoints, services hold business logic, and data readers/writers access Supabase-backed storage.
+The backend uses an Express API layer. Controllers expose `/api` endpoints, services hold business logic, and data readers/writers retain domain-specific Supabase and Google Sheet/integration paths. Modernization is domain-by-domain; the CRM is not globally SQL-only.
 
 Activity Intelligence backend ownership flows through `routes/activity-intelligence.routes.js`, `controllers/activity-intelligence.controller.js`, `services/activity-intelligence-service.js`, `services/activity-intelligence-perf.js`, and the dedicated SQL reader/writer. Its lightweight `/record-list` path is distinct from full-submission consumers.
 
@@ -108,7 +108,7 @@ Highcharts / Highmaps full retirement completed on 2026-07-06 with UI/Product PA
 
 ## 7. Current security / Supabase posture
 
-Current posture is backend-owned CRM data access through Express and Supabase `service_role`. Task-context DB audit evidence says existing public CRM tables do not grant `anon` / `authenticated`, RLS is false on existing CRM tables, and no policies were returned by `pg_policies`.
+The governed posture is backend-owned CRM data access through Express and Supabase `service_role`. Prior task-context grants/RLS findings are C — HISTORICAL_RUNTIME_OBSERVATION, not a current all-table permission inventory. Their scope and the audit/session-table access rules are owned by `docs/supabase-access-sop.md`; no live DB security re-audit was performed for this documentation consolidation.
 
 The current decision is no immediate DB permission change and no broad grants to `anon` / `authenticated`.
 
@@ -222,7 +222,8 @@ Current accepted stage summary:
 * Phase 1 Record List Projection provides a lightweight Records path; Phase 1.1 removed the duplicate full-submissions load; Phase 1.2 restored projection-owned counts.
 * Answer Hydration V1 is functionally accepted, with Overview performance improvement, neutral Submissions performance, and an overall partial performance pass.
 * Scoped Tab Render V1 keeps the stable shell and replaces `.aim-main` for opt-in same-activity desktop warm navigation. It is CODE PASS and NETWORK RUNTIME PASS; full Runtime Product PASS is not claimed.
-* Next workstream is Records server pagination, which is not implemented and must preserve filter, sort, search, and count correctness.
+* Shared-v1 form-version snapshot deduplication is completed with `RECORDS_PERFORMANCE_CODE_PASS` and `TARGETED_LOCAL_RUNTIME_SMOKE_PASS`. Detailed fixture results, actual local response bytes, observed historical versions and incomplete smoke coverage belong to the stage archive. Full Product/Production performance acceptance is not claimed.
+* Records server pagination remains unimplemented and is CRM-wide engineering candidate #5, not the automatic next CRM-wide workstream. It must preserve filter, sort, search, and count correctness.
 
 Detailed statuses, protected contracts, and future-work separation live in `docs/activity-intelligence-stage-closure-2026-08.md`.
 
@@ -264,7 +265,15 @@ Scope and non-goals:
 * OCR-side ingestion and cross-repository end-to-end closure remain separate pending validation unless independently evidenced;
 * the entire CRM is not declared Google-Sheet-free.
 
-## 9. Recommended next actions ranked by safety
+## 9. Current CRM-wide performance direction (2026-09-07)
+
+D — NEXT_WORKSTREAM_CONSTRAINT / RECOMMENDATION: CRM-wide performance modernization now leads current routing. The leading candidate is Interactions / CRM Activity Timeline: a dedicated lightweight interaction read plus opportunity/company name enrichment after final-page selection. That slice remains unimplemented. The original five-candidate ranking, execution-path evidence, risks and Sheet classifications are owned by [roadmap §4.6](non-breaking-cleanup-roadmap.md#46-crm-wide-performance-engineering-ranking-2026-09-07); [the current-state index](crm-current-state-index.md#current-workstream--performance-routing) is the entry point.
+
+The supplied triage was repository-only engineering prioritization, not runtime telemetry or measured performance ranking. Ranking and a later chosen implementation sequence are separate. Existing Weekly Business fallback and active Google Calendar/Product Sheet paths remain protected; no Sheet path was proven obsolete, and broad Sheet cleanup is not the next workstream.
+
+### General action-safety guidance
+
+The following is general safety guidance, not the CRM-wide candidate ranking or a chosen implementation sequence:
 
 1. Documentation review.
 2. Read-only audits.

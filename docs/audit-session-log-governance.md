@@ -6,7 +6,7 @@ The Audit / Session Log system is manager-readable business and audit event trac
 
 Audit instrumentation is backend-owned and is attached to meaningful CRM mutations. Existing business workflows, response shapes, and timeline behavior must remain unchanged.
 
-`system_audit_logs` is the backend foundation for future admin or manager log viewers. No frontend audit viewer or manager log viewer was implemented in this chapter.
+`system_audit_logs` is the backend foundation for admin or manager log readers. Historically, no frontend viewer was implemented in this backend foundation chapter. A — CURRENT_REPO_VERIFIED (2026-09-07): the current repo does include audit/session read views in `public/scripts/interactions.js`, using `/api/audit-logs` and `/api/user-sessions`; `routes/system.routes.js` protects both routes with `requireRole('super_admin')`. This source check establishes their existence, not new runtime/Product acceptance. Table access remains backend-owned.
 
 ### Audit Logs Are Not Business Sorting Sources
 
@@ -179,7 +179,7 @@ DevProjects update:
 * No separate batch summary audit was added.
 * No separate `opportunity_upgraded_from_contact` row was added.
 * System-generated Interactions are not double-audited; only explicit `InteractionController` CRUD is audited.
-* Frontend audit viewer / manager log viewer is future work.
+* Frontend viewer work was outside the original backend foundation chapter. Current read-view existence is recorded in §1; any further viewer work requires its own scope and must preserve logging/redaction rules.
 
 ## 10. Rules for Future Patches
 

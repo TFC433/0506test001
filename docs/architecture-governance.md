@@ -1958,6 +1958,21 @@ Performance optimization must preserve every accepted Product PASS contract, inc
 
 The detailed accepted stage state and exact PASS boundaries live in `docs/activity-intelligence-stage-closure-2026-08.md`.
 
+Shared-v1 Records transport is a version-metadata sharing boundary, not a change to canonical answers or full-dataset query ownership. Preserve legacy array response compatibility, historical version identity, record-owned answers/Other notes, and the rich detail/edit path. Detailed wire shape and acceptance evidence belong to the stage archive; CRM-wide priorities belong to `docs/non-breaking-cleanup-roadmap.md`, reached through `docs/crm-current-state-index.md`.
+
+## Evidence classification and durable ownership
+
+Use these four evidence classes when recording implementation, acceptance, observations, or future direction:
+
+| Class | Meaning | Boundary |
+| --- | --- | --- |
+| A — CURRENT_REPO_VERIFIED | Current implementation supported by repository source | Does not establish runtime acceptance or deployed DB state. |
+| B — HISTORICAL_ACCEPTANCE | Previously reported acceptance/check result, with its scope retained | A past CODE PASS or Product PASS must not be widened. |
+| C — HISTORICAL_RUNTIME_OBSERVATION | Observations from a specified runtime session | Local smoke and measured bytes do not establish production latency or exhaustive coverage. |
+| D — NEXT_WORKSTREAM_CONSTRAINT / RECOMMENDATION | Future candidate, sequencing decision, or required compatibility constraint | A recommendation is neither implementation nor authorization to begin work. |
+
+Acceptance statuses and cleanup classifications are not additional evidence classes. Keep detailed evidence with its domain owner and use concise routing references elsewhere. Repository engineering priority is distinct from runtime telemetry and from a later chosen implementation sequence.
+
 ---
 
 # 28.7 Highcharts / Highmaps Retirement Governance Archive (2026-07-06)
@@ -2290,6 +2305,10 @@ and disciplined data lifecycle governance.
 ---
 
 # Changelog
+
+## 2026-09-07
+
+* Recorded shared-v1 compatibility boundaries and the four evidence classes; routed implementation/acceptance detail and CRM-wide recommendations to their durable owners.
 
 ## 2026-09-02
 
