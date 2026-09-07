@@ -138,6 +138,22 @@ Performance, rendering, projection, and data-ownership work must preserve:
 
 An already-PASS product contract must not be redesigned merely to improve rendering or data ownership. Scoped rendering or a lightweight data path does not make global fallback, cache maps, or full-submission consumers obsolete.
 
+## Records shared runtime snapshots (2026-09-07)
+
+```text
+RECORDS_PERFORMANCE_CODE_PASS
+```
+
+Repository evidence showed that `/record-list` repeated the same version's complete runtime item metadata in each row. Client initialization normalized those items three times per record: for answer values, option notes, and the runtime snapshot. This slice removes that repeated transport and preparation work without changing the logical Records dataset.
+
+The Records loader now opts into `runtimeSnapshots=shared-v1`. Inside the existing `{ success, data }` response, `data` contains `{ runtimeSnapshots: 'shared-v1', records, formRuntimeSnapshots }`. Each record replaces its inline snapshot with a zero-based `formRuntimeSnapshotRef`; `null` preserves a missing snapshot. The service deduplicates snapshots by their persisted `versionId`, retaining historical versions and form contexts. Requests without the supported opt-in still return the original array, and the new frontend accepts that legacy array for compatibility with older servers.
+
+The client prepares each shared snapshot and its field lookup once per response. Records share that normalized metadata, while answer values and option notes remain record-owned. There is no persistent metadata cache; reloads prepare fresh objects. Rich submission normalization keeps its original behavior unless the Records adapter supplies prepared metadata. Shared snapshot metadata is read-only consumer input; editing continues through the existing rich detail/edit path.
+
+Structural effect: for N records, V distinct versions and F fields per version, repeated snapshot serialization and initialization field normalization fall from O(N × F) to O(V × F). Per-record answers, server answer hydration, browser full-dataset ownership, filtering and rendering remain in place. This is not server pagination and does not reduce SQL row counts.
+
+Validation: `node tests/activity-intelligence-contract-check.js` passed, including actual client normalizer parity across current/historical versions, visitor/field-intelligence contexts, void records, Other text, option notes, cards and summaries; empty/missing snapshots; invalid references; array compatibility; and fresh preparation on reload. A synthetic 200-record, five-field, single-version fixture reduced serialized JSON from 650,381 to 303,796 bytes and initialization field-normalizer calls from 3,000 to 5. These are repository fixture measurements, not browser/production timings or a Runtime Product PASS. Changed JavaScript syntax, diff whitespace and UTF-8/BOM checks passed. No database or Sheet changes were made.
+
 ## Next performance workstream
 
 ```text

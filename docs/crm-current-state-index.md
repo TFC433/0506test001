@@ -60,6 +60,7 @@ Last Updated: 2026-09-02
 * Baseline: reusable Form Designer → Schema / Settings → Normalized Runtime Field → Form Engine → Canonical Answer Model → consumer architecture. Person / Company Assist and Generic Other single/multiple are Runtime Product PASS. Records Projection and projection-owned counts are accepted; Answer Hydration V1 is an overall partial performance pass.
 * Scoped rendering: Scoped Tab Render V1 is CODE PASS and NETWORK RUNTIME PASS only. The `.aim-main` desktop same-activity warm-navigation boundary is opt-in; global `render()` and mobile remain fallbacks.
 * Next: Records server pagination is not implemented. Preserve filter, sort, count, Analytics, and Follow-up semantics; route durable detail and exact status language to the stage archive.
+* Records transport (2026-09-07): shared runtime snapshots are `RECORDS_PERFORMANCE_CODE_PASS` only. The loader opts into one snapshot per version and prepares its field metadata once per response; the original array API remains compatible. Full-dataset ownership and SQL hydration remain unchanged. Fixture evidence and the wire contract live in the stage archive.
 
 ### Opportunity Detail / Activity Hub
 

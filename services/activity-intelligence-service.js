@@ -343,6 +343,7 @@ class ActivityIntelligenceService {
             const withCards = await this._enrichRecordListProjectionCards(projections, perf);
             const result = await this._enrichRecordListProjectionSummaries(withCards, user, perf);
             resultCount = result.length;
+            if (query.runtimeSnapshots === 'shared-v1') return this._packRecordListRuntimeSnapshots(result);
             return result;
         } catch (error) {
             failed = true;
@@ -3006,6 +3007,24 @@ class ActivityIntelligenceService {
             batched: true
         });
         return enriched;
+    }
+
+    _packRecordListRuntimeSnapshots(projections) {
+        const formRuntimeSnapshots = [];
+        const refsByVersionId = new Map();
+        const records = projections.map(({ formRuntimeSnapshot, ...record }) => {
+            let formRuntimeSnapshotRef = null;
+            if (formRuntimeSnapshot) {
+                const versionId = formRuntimeSnapshot.versionId;
+                if (!refsByVersionId.has(versionId)) {
+                    refsByVersionId.set(versionId, formRuntimeSnapshots.length);
+                    formRuntimeSnapshots.push(formRuntimeSnapshot);
+                }
+                formRuntimeSnapshotRef = refsByVersionId.get(versionId);
+            }
+            return { ...record, formRuntimeSnapshotRef };
+        });
+        return { runtimeSnapshots: 'shared-v1', records, formRuntimeSnapshots };
     }
 
     async _enrichRecordListProjectionCards(projections, perf) {

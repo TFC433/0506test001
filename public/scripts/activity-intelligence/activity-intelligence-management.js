@@ -670,9 +670,10 @@
     const loadPromise = (async () => {
       await loadPublishedFormForActivity(activityId);
       const projections = await window.ActivityIntelligenceApi.listRecordListProjections(activityId, {
-        state: includeVoid ? 'all' : 'active'
+        state: includeVoid ? 'all' : 'active',
+        runtimeSnapshots: 'shared-v1'
       });
-      const normalized = (projections || []).map(normalizeRecordListProjectionDto);
+      const normalized = normalizeRecordListResponse(projections);
       mergeRecordListProjections(activityId, normalized);
       recordListLoadState.set(loadKey, 'loaded');
       return recordListRowsFor(activityId);
@@ -839,7 +840,7 @@
     return normalized;
   }
 
-  function normalizeSubmissionDto(submission) {
+  function normalizeSubmissionDto(submission, preparedRuntime) {
     const formSnapshot = submission && (submission.formSnapshot || submission.formRuntimeSnapshot);
     const card = normalizeRawCard(submission && submission.card);
     const snapshotItems = formSnapshot && formSnapshot.items;
@@ -853,14 +854,14 @@
       recordContext: submission.recordContext || 'visitor',
       status: submission.status || 'active',
       cardId: submission.cardId || (card && card.cardId) || null,
-      answers: normalizeAnswerValues(rawAnswers, snapshotItems),
+      answers: normalizeAnswerValues(rawAnswers, snapshotItems, preparedRuntime && preparedRuntime.itemMap),
       runtimeOtherAnswers: submission.otherAnswers || submission.runtimeOtherAnswers || {},
-      runtimeOptionNotes: extractOptionNotes(rawAnswers, snapshotItems),
+      runtimeOptionNotes: extractOptionNotes(rawAnswers, snapshotItems, preparedRuntime && preparedRuntime.itemMap),
       runtimeCardLink: card ? { linked: true, cardId: card.cardId, card } : (submission.cardId ? { linked: true, cardId: submission.cardId, card: null } : { linked: false, cardId: null, card: null }),
       supplementalSummary: normalizeSupplementalSummary(submission.supplementalSummary),
       supplements: normalizeSupplements(submission.supplements),
       supplementalDetailsLoaded: Boolean(submission.supplements),
-      formRuntimeSnapshot: formSnapshot ? {
+      formRuntimeSnapshot: preparedRuntime && preparedRuntime.snapshot ? preparedRuntime.snapshot : formSnapshot ? {
         versionId: formSnapshot.versionId,
         formContext: formSnapshot.formContext || 'visitor',
         versionNumber: formSnapshot.versionNumber,
@@ -948,8 +949,8 @@
     };
   }
 
-  function extractOptionNotes(answers, items) {
-    const itemMap = new Map(((items || []).map(normalizeDesignerItem)).map(item => [item.fieldId, item]));
+  function extractOptionNotes(answers, items, preparedItemMap) {
+    const itemMap = preparedItemMap || new Map(((items || []).map(normalizeDesignerItem)).map(item => [item.fieldId, item]));
     return Object.entries(answers || {}).reduce((acc, [fieldId, value]) => {
       const item = itemMap.get(fieldId);
       if (!fieldAllowsOptionNotes(item)) return acc;
@@ -967,8 +968,8 @@
     }, {});
   }
 
-  function normalizeAnswerValues(answers, items) {
-    const itemMap = new Map(((items || []).map(normalizeDesignerItem)).map(item => [item.fieldId, item]));
+  function normalizeAnswerValues(answers, items, preparedItemMap) {
+    const itemMap = preparedItemMap || new Map(((items || []).map(normalizeDesignerItem)).map(item => [item.fieldId, item]));
     return Object.entries(answers || {}).reduce((acc, [fieldId, value]) => {
       acc[fieldId] = normalizeAnswerValue(value, itemMap.get(fieldId));
       return acc;
@@ -6098,8 +6099,38 @@
     };
   }
 
-  function normalizeRecordListProjectionDto(submission) {
-    const normalized = normalizeSubmissionDto(submission);
+  function normalizeRecordListResponse(response) {
+    // Older servers and other callers retain the original per-record DTO contract.
+    if (Array.isArray(response) || !response) return (response || []).map(row => normalizeRecordListProjectionDto(row));
+    if (response.runtimeSnapshots !== 'shared-v1' || !Array.isArray(response.records) || !Array.isArray(response.formRuntimeSnapshots)) {
+      throw new Error('Invalid record list response.');
+    }
+    // Request-local preparation: historical versions and form contexts stay distinct.
+    const runtimes = response.formRuntimeSnapshots.map(snapshot => {
+      const items = (snapshot.items || []).map(normalizeDesignerItem);
+      return {
+        snapshot: {
+          versionId: snapshot.versionId,
+          formContext: snapshot.formContext || 'visitor',
+          versionNumber: snapshot.versionNumber,
+          publishedAt: snapshot.publishedAt || '',
+          items
+        },
+        itemMap: new Map(items.map(item => [item.fieldId, item]))
+      };
+    });
+    return response.records.map(({ formRuntimeSnapshotRef, ...row }) => {
+      if (formRuntimeSnapshotRef === null) return normalizeRecordListProjectionDto({ ...row, formRuntimeSnapshot: null });
+      if (!Number.isInteger(formRuntimeSnapshotRef) || formRuntimeSnapshotRef < 0 || !runtimes[formRuntimeSnapshotRef]) {
+        throw new Error('Invalid record list runtime reference.');
+      }
+      const runtime = runtimes[formRuntimeSnapshotRef];
+      return normalizeRecordListProjectionDto({ ...row, formRuntimeSnapshot: response.formRuntimeSnapshots[formRuntimeSnapshotRef] }, runtime);
+    });
+  }
+
+  function normalizeRecordListProjectionDto(submission, preparedRuntime) {
+    const normalized = normalizeSubmissionDto(submission, preparedRuntime);
     return {
       id: normalized.id,
       submissionId: normalized.submissionId,

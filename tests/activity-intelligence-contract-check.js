@@ -3753,6 +3753,85 @@ async function assertOverviewLoadOptimizationContract(managementSource, apiSourc
     assert.strictEqual(activitySummary.recentRecords[0].id, IDS.activeAiSubmission, 'Overview recent projection must be newest-first');
 }
 
+async function assertRecordListSharedRuntimeContract(managementSource, rows) {
+    const loader = extractFunctionDeclaration(managementSource, 'loadRecordListProjectionsForActivity');
+    assert(loader.includes("runtimeSnapshots: 'shared-v1'"), 'Records loader must opt into shared transport through the existing API wrapper');
+    assert(loader.includes('normalizeRecordListResponse(projections)'), 'Records loader must prepare the shared response before merging projection state');
+    const harness = makeHarness();
+    const packed = await harness.service.listRecordListProjections(IDS.activity, { state: 'all', runtimeSnapshots: 'shared-v1' }, actor());
+    const unpack = response => response.records.map(({ formRuntimeSnapshotRef, ...row }) => ({
+        ...row,
+        formRuntimeSnapshot: formRuntimeSnapshotRef === null ? null : response.formRuntimeSnapshots[formRuntimeSnapshotRef]
+    }));
+    assert.strictEqual(packed.runtimeSnapshots, 'shared-v1');
+    assert.deepStrictEqual(unpack(JSON.parse(JSON.stringify(packed))), JSON.parse(JSON.stringify(rows)), 'wire round trip must preserve every record, answer, context, historical version, card and summary in order');
+    assert.strictEqual(packed.formRuntimeSnapshots.length, new Set(rows.map(row => row.formRuntimeSnapshot.versionId)).size);
+    assert(packed.records.every(row => !Object.hasOwn(row, 'formRuntimeSnapshot')), 'shared response must not serialize per-row snapshots');
+    assert.strictEqual(harness.calls.listSubmissions, undefined, 'shared transport must not add a full submission load');
+    const empty = await harness.service.listRecordListProjections(IDS.otherActivity, { runtimeSnapshots: 'shared-v1' }, actor());
+    assert.deepStrictEqual(empty, { runtimeSnapshots: 'shared-v1', records: [], formRuntimeSnapshots: [] });
+    assert.deepStrictEqual(await harness.service.listRecordListProjections(IDS.activity, { state: 'all', runtimeSnapshots: 'unknown' }, actor()), rows, 'only the explicitly supported format opts in');
+
+    const helpers = [
+        'normalizeRecordListResponse', 'normalizeRecordListProjectionDto', 'normalizeSubmissionDto',
+        'normalizeAnswerValues', 'normalizeAnswerValue', 'extractOptionNotes', 'optionLabel',
+        'normalizeSupplementalSummary', 'normalizeSupplements', 'normalizeContribution',
+        'normalizeRawCard', 'rawCardImageUrl', 'normalizeOptionEntries', 'normalizePreviewPlacement',
+        'fieldAllowsOptionNotes', 'optionIdentityForValue', 'optionEntryForValue', 'hasValue'
+    ];
+    const constants = ['choiceFieldTypes', 'yesNoOptions', 'otherAnswerValue', 'previewPlacementValues', 'previewChoiceFieldTypes', 'compactPreviewChoiceFieldTypes', 'cardAssistRoles'];
+    const source = [
+        ...constants.map(name => managementSource.match(new RegExp(`  const ${name} = [^\\r\\n]+`))[0]),
+        'const Store = { clone: value => JSON.parse(JSON.stringify(value)) };',
+        'function fieldTypeLabel(type) { return type; }',
+        'function newUuid() { throw new Error("Fixtures must use persisted field and option identities"); }',
+        'let normalizationCount = 0;',
+        extractFunctionDeclaration(managementSource, 'normalizeDesignerItem').replace('function normalizeDesignerItem(', 'function normalizeDesignerItemOriginal('),
+        'function normalizeDesignerItem(item) { normalizationCount += 1; return normalizeDesignerItemOriginal(item); }',
+        ...helpers.map(name => extractFunctionDeclaration(managementSource, name)),
+        '({ normalizeRecordListResponse, normalizeSubmissionDto, count: () => normalizationCount, reset: () => { normalizationCount = 0; } });'
+    ].join('\n');
+    const client = vm.runInNewContext(source, {});
+    const plain = value => JSON.parse(JSON.stringify(value));
+    const legacyNormalized = client.normalizeRecordListResponse(plain(rows));
+    const sharedNormalized = client.normalizeRecordListResponse(plain(packed));
+    assert.deepStrictEqual(plain(sharedNormalized), plain(legacyNormalized), 'actual client normalizers must preserve all consumer inputs, including Other and option notes');
+    assert.strictEqual(client.normalizeRecordListResponse(empty).length, 0);
+    assert.strictEqual(client.normalizeRecordListResponse(null).length, 0);
+    assert.deepStrictEqual(plain(rows.map(client.normalizeSubmissionDto)), plain(rows.map(row => client.normalizeSubmissionDto(row))), 'Array.map indices must not be interpreted as prepared runtimes on rich paths');
+
+    const missing = { ...rows[0], id: 'missing-runtime', formRuntimeSnapshot: null };
+    const missingPacked = harness.service._packRecordListRuntimeSnapshots([missing]);
+    assert.deepStrictEqual(unpack(missingPacked), [missing]);
+    assert.deepStrictEqual(plain(client.normalizeRecordListResponse(missingPacked)), plain(client.normalizeRecordListResponse([missing])));
+    assert.throws(() => client.normalizeRecordListResponse({ ...packed, records: [{ formRuntimeSnapshotRef: 999 }] }), /Invalid record list runtime reference/);
+    assert.throws(() => client.normalizeRecordListResponse({ records: [] }), /Invalid record list response/);
+
+    const repeatedRow = rows.find(row => row.id === IDS.aiSubmission);
+    const largeRows = Array.from({ length: 200 }, (_, index) => ({ ...repeatedRow, id: `record-${index}`, submissionId: `record-${index}` }));
+    const before = JSON.stringify(largeRows);
+    const largePacked = harness.service._packRecordListRuntimeSnapshots(largeRows);
+    assert.strictEqual(JSON.stringify(largeRows), before, 'packing must not mutate reader projections');
+    client.reset();
+    const oldClientRows = client.normalizeRecordListResponse(JSON.parse(before));
+    const oldCalls = client.count();
+    client.reset();
+    const newClientRows = client.normalizeRecordListResponse(plain(largePacked));
+    const newCalls = client.count();
+    assert.deepStrictEqual(plain(newClientRows), plain(oldClientRows));
+    assert.strictEqual(newCalls, repeatedRow.formRuntimeSnapshot.items.length, 'shared fields must normalize only once per version per response');
+    assert.strictEqual(oldCalls, 3 * largeRows.length * newCalls, 'legacy initialization normalizes fields for answers, notes and snapshots for every record');
+    assert.strictEqual(newClientRows[0].formRuntimeSnapshot, newClientRows[199].formRuntimeSnapshot, 'browser rows must share prepared metadata');
+    assert.notStrictEqual(newClientRows[0].answers, newClientRows[199].answers, 'answers must remain record-owned');
+    assert.notStrictEqual(newClientRows[0].runtimeOptionNotes, newClientRows[199].runtimeOptionNotes, 'option notes must remain record-owned');
+    const reloaded = client.normalizeRecordListResponse(plain(largePacked));
+    assert.notStrictEqual(reloaded[0].formRuntimeSnapshot, newClientRows[0].formRuntimeSnapshot, 'a reload must prepare fresh metadata without a persistent cache');
+    const oldBytes = Buffer.byteLength(before);
+    const newBytes = Buffer.byteLength(JSON.stringify(largePacked));
+    assert(newBytes < oldBytes, 'shared transport must reduce bytes for repeated-version records');
+    console.log(`Records shared-runtime fixture (200 records): JSON bytes ${oldBytes} -> ${newBytes}; field normalizations ${oldCalls} -> ${newCalls}.`);
+}
+
 async function assertRecordListProjectionV1Contract(sources) {
     const { managementSource, apiSource, routesSource, controllerSource, serviceSource, readerSource } = sources;
 
@@ -3858,6 +3937,7 @@ async function assertRecordListProjectionV1Contract(sources) {
     const fieldProjection = rows.find(row => row.id === IDS.activeAiSubmission);
     assert.strictEqual(fieldProjection.recordContext, 'field_intelligence');
     assert.strictEqual(fieldProjection.formRuntimeSnapshot.items[0].formItemId, IDS.activeLongItem);
+    await assertRecordListSharedRuntimeContract(managementSource, rows);
 }
 
 function assertRecordsDoubleLoadRemovalV1Contract(managementSource) {
