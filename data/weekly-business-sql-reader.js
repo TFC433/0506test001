@@ -75,6 +75,32 @@ class WeeklyBusinessSqlReader {
     }
 
     /**
+     * Get weekly business entries for one requested week.
+     * @param {string} weekId
+     * @returns {Promise<Array<Object>>} Array of Weekly Business DTOs
+     */
+    async getWeeklyBusinessEntriesByWeekId(weekId) {
+        if (!weekId) throw new Error('WeeklyBusinessSqlReader: weekId is required');
+
+        try {
+            const { data, error } = await supabase
+                .from(this.tableName)
+                .select('*')
+                .eq('week_id', weekId);
+
+            if (error) {
+                throw new Error(`[WeeklyBusinessSqlReader] DB Error: ${error.message}`);
+            }
+
+            return (data || []).map(row => this._mapRowToDto(row));
+
+        } catch (error) {
+            console.error('[WeeklyBusinessSqlReader] getWeeklyBusinessEntriesByWeekId Error:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Maps Raw SQL Row to DTO
      * Strict adherence to provided schema.
      * snake_case -> camelCase

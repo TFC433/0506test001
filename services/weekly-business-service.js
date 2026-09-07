@@ -42,17 +42,19 @@ class WeeklyBusinessService {
     //  Internal Accessor (Read Convergence & View Normalization)
     // ============================================================
 
-    async _fetchInternal(mode) {
+    async _fetchInternal(mode, options = {}) {
         try {
             if (this.weeklyBusinessSqlReader) {
-                if (mode === 'SUMMARY' || mode === 'ENTRIES') {
-                     const sqlEntries = await this.weeklyBusinessSqlReader.getWeeklyBusinessEntries();
-                     console.log(`[WeeklyService] Read source=SQL (mode=${mode})`);
-                     
-                     if (mode === 'SUMMARY') {
-                         return sqlEntries;
-                     }
-                     return sqlEntries.map(entry => this._normalizeEntry(entry));
+                if (mode === 'SUMMARY') {
+                    const sqlEntries = await this.weeklyBusinessSqlReader.getWeeklyBusinessEntries();
+                    console.log(`[WeeklyService] Read source=SQL (mode=${mode})`);
+                    return sqlEntries;
+                }
+
+                if (mode === 'ENTRIES') {
+                    const sqlEntries = await this.weeklyBusinessSqlReader.getWeeklyBusinessEntriesByWeekId(options.weekId);
+                    console.log(`[WeeklyService] Read source=SQL (mode=${mode}, weekId=${options.weekId})`);
+                    return sqlEntries.map(entry => this._normalizeEntry(entry));
                 }
             }
         } catch (error) {
@@ -114,7 +116,7 @@ class WeeklyBusinessService {
 
     async getEntriesForWeek(weekId) {
         try {
-            const allEntries = await this._fetchInternal('ENTRIES');
+            const allEntries = await this._fetchInternal('ENTRIES', { weekId });
             let entries = allEntries.filter(entry => entry.weekId === weekId);
             entries.sort((a, b) => new Date(b.date) - new Date(a.date));
 
