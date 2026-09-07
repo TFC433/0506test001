@@ -23,6 +23,33 @@ class RawContactSqlReader {
         }
     }
 
+    /**
+     * Lightweight identity/company discovery for Opportunity Detail.
+     * Full RAW contact fields are hydrated separately by card ID after the
+     * existing application company-name normalization selects candidates.
+     */
+    async getRawContactIdentityIndex() {
+        try {
+            const { data, error } = await supabase
+                .from(this.tableName)
+                .select('card_id, name, company, captured_at')
+                .order('captured_at', { ascending: false, nullsFirst: false });
+
+            if (error) {
+                throw new Error(`[RawContactSqlReader] DB Error: ${error.message}`);
+            }
+
+            return (data || []).map(row => ({
+                cardId: row.card_id,
+                name: row.name,
+                company: row.company
+            }));
+        } catch (error) {
+            console.error('[RawContactSqlReader] getRawContactIdentityIndex Error:', error);
+            throw error;
+        }
+    }
+
     async getRawContactsPage(options = {}) {
         const page = this._normalizePositiveInteger(options.page, 1);
         const pageSize = this._normalizePositiveInteger(options.pageSize, 50);

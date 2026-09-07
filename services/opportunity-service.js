@@ -628,8 +628,9 @@ class OpportunityService {
             }
 
             const rawReader = this.rawContactSqlReader;
-            if (rawReader && typeof rawReader.getRawContacts === 'function') {
-                const rawContacts = await rawReader.getRawContacts();
+            if (rawReader
+                && typeof rawReader.getRawContactIdentityIndex === 'function'
+                && typeof rawReader.getRawContactsByCardIds === 'function') {
                 const mapRawContact = (raw) => ({
                     cardId: raw.cardId || raw.card_id || '',
                     name: raw.name || raw['姓名'] || '',
@@ -649,19 +650,43 @@ class OpportunityService {
                     status: raw.status || raw['狀態'] || '',
                     source: raw.source || 'RAW'
                 });
-                const mappedRawContacts = (rawContacts || [])
+                const rawIdentityIndex = normalizedOppCompany
+                    ? await rawReader.getRawContactIdentityIndex()
+                    : [];
+                const sameCompanyCardIds = normalizedOppCompany
+                    ? (rawIdentityIndex || [])
+                        .filter(contact => Boolean((contact.name || '').toString().trim()))
+                        .filter(contact => {
+                            const normalizedCompany = this._normalizeCompanyName(contact.companyName || contact.company);
+                            return Boolean(
+                                normalizedCompany &&
+                                normalizedCompany === normalizedOppCompany
+                            );
+                        })
+                        .map(contact => contact.cardId || contact.card_id || '')
+                        .filter(Boolean)
+                    : [];
+                const linkedSourceCardIds = linkedContacts
+                    .map(linkedContact => resolveSourceIdentifier(linkedContact.sourceId || linkedContact.source_id))
+                    .filter(Boolean);
+                const requiredCardIds = Array.from(new Set([...sameCompanyCardIds, ...linkedSourceCardIds]));
+                const rawContactsByCardId = requiredCardIds.length > 0
+                    ? await rawReader.getRawContactsByCardIds(requiredCardIds)
+                    : new Map();
+                const mappedRawContacts = requiredCardIds
+                    .map(cardId => rawContactsByCardId.get(String(cardId)))
+                    .filter(Boolean)
                     .map(mapRawContact)
                     .filter(contact => Boolean((contact.name || '').toString().trim()));
-
-                const rawSameCompanyContacts = normalizedOppCompany
-                    ? mappedRawContacts.filter(contact => {
-                        const normalizedCompany = this._normalizeCompanyName(contact.companyName || contact.company);
-                        return Boolean(
-                            normalizedCompany &&
-                            normalizedCompany === normalizedOppCompany
-                        );
-                    })
-                    : [];
+                const sameCompanyCardIdSet = new Set(sameCompanyCardIds.map(cardId => String(cardId)));
+                const rawSameCompanyContacts = mappedRawContacts.filter(contact => {
+                    if (!sameCompanyCardIdSet.has(String(contact.cardId || ''))) return false;
+                    const normalizedCompany = this._normalizeCompanyName(contact.companyName || contact.company);
+                    return Boolean(
+                        normalizedCompany &&
+                        normalizedCompany === normalizedOppCompany
+                    );
+                });
 
                 const rawPotentialContacts = rawSameCompanyContacts;
 
